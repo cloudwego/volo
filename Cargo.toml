@@ -1,0 +1,3 @@
+[workspace]
+members = ["volo", "volo-grpc", "volo-thrift"]
+resolver = "2"

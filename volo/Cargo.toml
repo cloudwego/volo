@@ -1,0 +1,25 @@
+[package]
+name = "volo"
+version = "0.0.1"
+edition = "2021"
+description = "Volo."
+documentation = "https://docs.rs/volo"
+readme = "README.md"
+# homepage = "https://cloudwego.io/"
+# repository = "https://github.com/cloudwego/volo"
+license = "MIT OR Apache-2.0"
+authors = [
+    "Pure White <wudi.daniel@bytedance.com>",
+    "Xu Shuai <john.xu@bytedance.com>",
+    "Liu YiFei <egbert.liu@bytedance.com>",
+    "Chen FeiTong <chenfeitong@bytedance.com>",
+]
+categories = ["asynchronous", "network-programming", "web-programming"]
+keywords = ["async", "rpc", "thrift", "grpc", "protobuf"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
