@@ -78,11 +78,7 @@ where
                         .await
                         .context("discover instance error")?,
                     _ => {
-                        return self
-                            .service
-                            .call(cx, req.clone())
-                            .await
-                            .map_err(Into::<BoxError>::into);
+                        return self.service.call(cx, req.clone()).await.map_err(Into::into);
                     }
                 };
                 let mut call_count = 0;
