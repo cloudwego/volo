@@ -1,0 +1,21 @@
+[workspace]
+members = [
+  "volo",
+  "volo-build",
+  "volo-cli",
+  "volo-grpc",
+  "volo-macros",
+  "volo-thrift",
+]
+resolver = "2"
+
+[profile.release]
+opt-level = 3
+debug = false
+rpath = false
+lto = true
+debug-assertions = false
+codegen-units = 1
+panic = 'unwind'
+incremental = false
+overflow-checks = false

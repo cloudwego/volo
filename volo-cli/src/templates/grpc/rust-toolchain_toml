@@ -1,0 +1,4 @@
+[toolchain]
+# TODO: Due to a bug in the rustc compiler, we temporarily lock the version now and will switch to nightly when problem solved.
+# Related issue: https://github.com/rust-lang/rust/issues/100267.
+channel = "nightly-2022-07-31"

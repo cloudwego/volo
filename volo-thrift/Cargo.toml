@@ -1,0 +1,43 @@
+[package]
+name = "volo-thrift"
+version = "0.1.0"
+edition = "2021"
+description = "Thrift RPC framework implementation of volo."
+documentation = "https://docs.rs/volo-thrift"
+readme = "README.md"
+homepage = "https://www.cloudwego.io/docs/volo/"
+repository = "https://github.com/cloudwego/volo"
+license = "MIT OR Apache-2.0"
+authors = ["Volo Team <volo@cloudwego.io>"]
+categories = ["asynchronous", "network-programming", "web-programming"]
+keywords = ["async", "rpc", "thrift"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+volo = { version = "0.1", path = "../volo" }
+pilota = "0.1"
+motore = "0.1"
+
+tokio = { version = "1", features = [
+    "time",
+    "macros",
+    "rt",
+    "signal",
+    "parking_lot",
+] }
+parking_lot = "0.12"
+async-trait = "0.1"
+bytes = "1"
+tracing = "0.1"
+futures = "0.3"
+pin-project = "1"
+linked-hash-map = "0.5"
+lazy_static = "1"
+smol_str = "0.1"
+metainfo = "0.6"
+num_enum = "0.5"
+anyhow = "1"

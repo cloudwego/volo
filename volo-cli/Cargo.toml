@@ -1,0 +1,42 @@
+[package]
+name = "volo-cli"
+version = "0.1.0"
+edition = "2021"
+description = """
+volo-cli is the command line interface for volo, which provides
+the ability to generate default project layout and manage the
+idls used.
+"""
+documentation = "https://docs.rs/volo-cli"
+readme = "README.md"
+homepage = "https://www.cloudwego.io/docs/volo/"
+repository = "https://github.com/cloudwego/volo"
+license = "MIT OR Apache-2.0"
+authors = ["Volo Team <volo@cloudwego.io>"]
+categories = ["command-line-utilities"]
+keywords = ["thrift", "grpc", "protobuf", "volo", "cli"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+pilota-thrift-parser = "0.1"
+volo-build = { version = "0.1", path = "../volo-build" }
+
+heck = "0.4"
+itertools = "0.10"
+anyhow = "1"
+clap = { version = "3", features = ["wrap_help", "derive"] }
+colored = "2"
+lazy_static = "1"
+log = "0.4"
+normpath = "0.3"
+pretty_env_logger = "0.4"
+run_script = "0.9"
+regex = "1"
+same-file = "1"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+update-informer = "0.5"

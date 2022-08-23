@@ -1,0 +1,39 @@
+[package]
+name = "volo"
+version = "0.1.0"
+edition = "2021"
+description = """
+Volo is a high-performance and strong-extensibility Rust RPC framework that helps developers build microservices.
+"""
+documentation = "https://docs.rs/volo"
+readme = "README.md"
+homepage = "https://www.cloudwego.io/docs/volo/"
+repository = "https://github.com/cloudwego/volo"
+license = "MIT OR Apache-2.0"
+authors = ["Volo Team <volo@cloudwego.io>"]
+categories = ["asynchronous", "network-programming", "web-programming"]
+keywords = ["async", "rpc", "thrift", "grpc", "protobuf"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+anyhow = "1"
+motore = "0.1"
+tokio = { version = "1", features = ["net", "time", "sync", "io-util"] }
+pin-project = "1"
+futures = "0.3"
+tokio-stream = { version = "0.1", features = ["net"] }
+tower = "0.4"
+async-trait = "0.1"
+socket2 = "0.4"
+lazy_static = "1"
+metainfo = "0.6"
+tracing = "0.1"
+once_cell = "1.9"
+rand = "0.8"
+dashmap = "5.3"
+smol_str = "0.1"
+async-broadcast = "0.4"

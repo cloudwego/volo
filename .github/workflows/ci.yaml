@@ -1,0 +1,87 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+env:
+  RUST_BACKTRACE: 1
+  CARGO_TERM_COLOR: always
+
+jobs:
+  ci-pass:
+    name: CI is green
+    runs-on: ubuntu-latest
+    needs:
+      - test-linux
+      - test-linux-aarch64
+      - test-macos
+      # - test-windows
+      - lint
+    steps:
+      - run: exit 0
+
+  test-linux:
+    runs-on: [self-hosted, X64]
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@nightly
+    - uses: Swatinem/rust-cache@v1
+    - name: Run tests
+      run: |
+        cargo check
+        cargo test
+
+  test-linux-aarch64:
+    runs-on: [self-hosted, arm]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v1
+      - name: Run tests
+        run: |
+          cargo check
+          cargo test
+
+  test-macos:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@nightly
+    - uses: Swatinem/rust-cache@v1
+    - name: Run tests
+      run: |
+        cargo check
+        cargo test
+
+  # test-windows:
+  #   runs-on: windows-latest
+
+  #   steps:
+  #   - uses: actions/checkout@v3
+  #   - uses: dtolnay/rust-toolchain@nightly
+  #   - uses: Swatinem/rust-cache@v1
+  #   - name: Run tests
+  #     run: |
+  #       cargo check
+  #       cargo test
+
+  lint:
+    runs-on: [self-hosted, X64]
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rustfmt, clippy
+    - uses: Swatinem/rust-cache@v1
+    - uses: actions-rs/clippy-check@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+    - name: Format check
+      run: |
+        cargo fmt -- --check

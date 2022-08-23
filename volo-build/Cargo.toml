@@ -1,0 +1,45 @@
+[package]
+name = "volo-build"
+version = "0.1.0"
+edition = "2021"
+description = "Compile thrift and protobuf idls into rust code at compile-time."
+documentation = "https://docs.rs/volo-build"
+readme = "README.md"
+homepage = "https://www.cloudwego.io/docs/volo/"
+repository = "https://github.com/cloudwego/volo"
+license = "MIT OR Apache-2.0"
+authors = ["Volo Team <volo@cloudwego.io>"]
+keywords = ["thrift", "grpc", "protobuf", "volo", "build"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+pilota-build = "0.1"
+
+anyhow = "1"
+nom = "7"
+proc-macro2 = "1"
+heck = "0.4"
+quote = "1"
+paste = "1"
+async-trait = "0.1"
+pathdiff = "0.2"
+normpath = "0.3"
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+lazy_static = "1"
+dirs = "4"
+url_path = "0.1"
+itertools = "0"
+syn = { version = "1", features = [
+  "full",
+  "visit",
+  "visit-mut",
+  "extra-traits",
+] }
+once_cell = "1"
+tempfile = "3"
+walkdir = "2"

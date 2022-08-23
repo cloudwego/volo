@@ -1,0 +1,67 @@
+[package]
+name = "volo-grpc"
+version = "0.1.0"
+edition = "2021"
+description = "gRPC framework implementation of volo."
+documentation = "https://docs.rs/volo-grpc"
+readme = "README.md"
+homepage = "https://www.cloudwego.io/docs/volo/"
+repository = "https://github.com/cloudwego/volo"
+license = "MIT OR Apache-2.0"
+authors = ["Volo Team <volo@cloudwego.io>"]
+categories = ["asynchronous", "network-programming", "web-programming"]
+keywords = ["async", "rpc", "grpc", "protobuf"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[badges]
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+volo = { version = "0.1", path = "../volo" }
+
+motore = "0.1"
+
+tokio = { version = "1", features = ["time", "rt", "net", "sync"] }
+tower = { version = "0.4", features = [
+    "buffer",
+    "limit",
+    "make",
+    "util",
+    "discover",
+    "balance",
+] }
+anyhow = "1"
+hyper = { version = "0.14", features = ["full"] }
+hyper-timeout = { version = "0.4" }
+thiserror = "1"
+prost = "0.11"
+futures = "0.3"
+futures-util = "0.3"
+tokio-util = { version = "0.7", features = ["codec", "compat"] }
+tracing = "0.1"
+bytes = "1"
+metainfo = "0.6"
+pin-project = "1"
+http = "0.2"
+h2 = "0.3"
+byteorder = "1"
+newtype = "0.2"
+index_list = "0.2"
+bitvec = "1"
+# convert_case = "0.5"
+socket2 = "0.4"
+smol_str = "0.1"
+async-trait = "0.1"
+http-body = "0.4"
+percent-encoding = "2"
+base64 = "0.13"
+tokio-stream = "0.1"
+async-stream = "0.3"
+regex = "1"
+futures-core = "0.3"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+async-trait = "0.1"
+tracing-subscriber = "0.3"
