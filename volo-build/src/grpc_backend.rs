@@ -89,6 +89,7 @@ impl VoloGrpcBackend {
             let (mut metadata, extensions, message_stream) = resp.into_parts();
             let mut message_stream = match message_stream {
                 #resp_enum_name::#variant_name(stream) => stream,
+                #[allow(unreachable_patterns)]
                 _ => return Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
             };
         };
@@ -127,6 +128,7 @@ impl VoloGrpcBackend {
             let (mut metadata, extensions, message_stream) = req.into_parts();
             let mut message_stream = match message_stream {
                 #req_enum_name::#variant_name(stream) => stream,
+                #[allow(unreachable_patterns)]
                 _ => return Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
             };
         };
@@ -454,7 +456,7 @@ impl CodegenBackend for VoloGrpcBackend {
                     async move {
                         match cx.rpc_info.method().unwrap().as_str() {
                             #(#req_matches)*
-                            path @ _ => {
+                            path => {
                                 let path = path.to_string();
                                 Err(::volo_grpc::Status::unimplemented(::std::format!("Unimplemented http path: {}", path)))
                             }
