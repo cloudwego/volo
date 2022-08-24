@@ -14,7 +14,7 @@ We really appreciate the work that the `hyper` team have done.
 
 # Tonic
 
-We've copied and modified some code of ['tonic'](https://github.com/hyperium/tonic).
+We've copied and modified some code of [`tonic`](https://github.com/hyperium/tonic).
 We really appreciate the work that the `tonic` team have done.
 
-'Tonic' is licensed under the MIT license, and a copy can be found under the `licenses/tonic` directory.
+`Tonic` is licensed under the MIT license, and a copy can be found under the `licenses/tonic` directory.
