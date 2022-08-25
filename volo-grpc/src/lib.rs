@@ -12,7 +12,7 @@ pub mod codec;
 pub mod codegen;
 pub mod context;
 pub mod layer;
-mod message;
+pub mod message;
 pub mod metadata;
 pub mod request;
 pub mod response;
