@@ -5,7 +5,7 @@
 #![feature(generic_associated_types)]
 #![feature(type_alias_impl_trait)]
 
-mod body;
+pub mod body;
 pub mod client;
 pub mod codec;
 #[doc(hidden)]
@@ -14,8 +14,8 @@ pub mod context;
 pub mod layer;
 mod message;
 pub mod metadata;
-mod request;
-mod response;
+pub mod request;
+pub mod response;
 pub mod server;
 pub mod status;
 pub mod transport;
