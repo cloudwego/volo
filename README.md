@@ -107,7 +107,7 @@ For the full list, you may refer to the [CREDITS.md](https://github.com/cloudweg
 [Volo-rs]: https://github.com/volo-rs
 [Motore]: https://github.com/cloudwego/motore
 [Pilota]: https://github.com/cloudwego/pilota
-[Metainfo]: https://github.com/lust-rs/metainfo
+[Metainfo]: https://github.com/cloudwego/metainfo
 [volo]: https://docs.rs/volo
 [volo-thrift]: https://docs.rs/volo-thrift
 [volo-grpc]: https://docs.rs/volo-grpc
