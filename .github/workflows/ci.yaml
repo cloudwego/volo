@@ -28,7 +28,7 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: dtolnay/rust-toolchain@nightly
-    - uses: Swatinem/rust-cache@v1
+    # - uses: Swatinem/rust-cache@v1
     - name: Run tests
       run: |
         cargo check
@@ -40,7 +40,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
-      - uses: Swatinem/rust-cache@v1
+      # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
           cargo check
@@ -78,7 +78,7 @@ jobs:
     - uses: dtolnay/rust-toolchain@nightly
       with:
         components: rustfmt, clippy
-    - uses: Swatinem/rust-cache@v1
+    # - uses: Swatinem/rust-cache@v1
     - uses: actions-rs/clippy-check@v1
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
