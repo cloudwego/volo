@@ -1,4 +1,4 @@
-name: Security audit
+name: 'Security Audit'
 on:
   pull_request:
   push:
@@ -6,7 +6,7 @@ on:
       - '**/Cargo.toml'
       - '**/Cargo.lock'
 jobs:
-  security_audit:
+  security-audit:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
