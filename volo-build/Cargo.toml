@@ -1,6 +1,6 @@
 [package]
 name = "volo-build"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Compile thrift and protobuf idls into rust code at compile-time."
 documentation = "https://docs.rs/volo-build"

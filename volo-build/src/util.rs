@@ -191,7 +191,7 @@ pub fn get_repo_latest_commit_id(repo: &str, r#ref: &str) -> anyhow::Result<Stri
             );
         }
     }
-    let commit_id = commit_list[0][1];
+    let commit_id = commit_list[0][0];
     Ok(commit_id.into())
 }
 
