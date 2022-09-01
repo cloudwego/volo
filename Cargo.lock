@@ -370,9 +370,9 @@ dependencies = [
 
 [[package]]
 name = "fsio"
-version = "0.3.1"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de6fce87c901c64837f745e7fffddeca1de8e054b544ba82c419905d40a0e1be"
+checksum = "dad0ce30be0cc441b325c5d705c8b613a0ca0d92b6a8953d41bd236dc09a36d0"
 dependencies = [
  "dunce",
  "rand",
@@ -1339,9 +1339,9 @@ dependencies = [
 
 [[package]]
 name = "run_script"
-version = "0.9.0"
+version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5dd85213e37f76b40186ee781cf3a689b05c518c3102c987acf679c573d8e4ef"
+checksum = "7fdc55b3a7ad58e02de47eaf7a854c6791c8421da48ff296c152317d3beaf230"
 dependencies = [
  "fsio",
 ]
@@ -2000,7 +2000,7 @@ dependencies = [
 
 [[package]]
 name = "volo-cli"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "anyhow",
  "clap",

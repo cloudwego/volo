@@ -1,6 +1,6 @@
 [package]
 name = "volo-cli"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = """
 volo-cli is the command line interface for volo, which provides
@@ -34,7 +34,7 @@ lazy_static = "1"
 log = "0.4"
 normpath = "0.3"
 pretty_env_logger = "0.4"
-run_script = "0.9"
+run_script = "0.10"
 regex = "1"
 same-file = "1"
 serde = { version = "1", features = ["derive"] }
