@@ -13,14 +13,18 @@ pub use callopt::CallOpt;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{BoxCloneService, Service},
+    BoxError, ServiceExt,
 };
 use volo::{
     context::{Endpoint, Role, RpcInfo},
+    discovery::{Discover, DummyDiscover},
+    loadbalance::{random::WeightedRandomBalance, MkLbLayer},
     net::Address,
 };
 
 use crate::{
     context::{ClientContext, Config},
+    layer::loadbalance::LbConfig,
     transport::ClientTransport,
     Request, Response, Status,
 };
@@ -33,38 +37,100 @@ pub trait SetClient<T, U> {
 }
 
 /// [`ClientBuilder`] provides a [builder-like interface][builder] to construct a [`Client`].
-pub struct ClientBuilder<C, L, T, U> {
+pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     http2_config: Http2Config,
     rpc_config: Config,
     callee_name: smol_str::SmolStr,
     caller_name: smol_str::SmolStr,
     // Maybe address use Arc avoid memory alloc.
     target: Option<Address>,
-    layer: L,
+    inner_layer: IL,
+    outer_layer: OL,
     service_client: C,
+    mk_lb: LB,
     _marker: PhantomData<fn(T, U)>,
 }
 
-impl<C, T, U> ClientBuilder<C, Identity, T, U> {
+impl<C, T, U>
+    ClientBuilder<
+        Identity,
+        Identity,
+        C,
+        LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>,
+        T,
+        U,
+    >
+{
+    #[allow(clippy::type_complexity)]
     /// Creates a new [`ClientBuilder`].
     pub fn new(
         service_client: C,
         service_name: impl AsRef<str>,
-    ) -> ClientBuilder<C, Identity, T, U> {
+    ) -> ClientBuilder<
+        Identity,
+        Identity,
+        C,
+        LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>,
+        T,
+        U,
+    > {
         ClientBuilder {
             http2_config: Default::default(),
             rpc_config: Default::default(),
             callee_name: service_name.into(),
             caller_name: "".into(),
             target: None,
-            layer: Identity::new(),
+            inner_layer: Identity::new(),
+            outer_layer: Identity::new(),
             service_client,
+            mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
         }
     }
 }
 
-impl<C, L, T, U> ClientBuilder<C, L, T, U>
+impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, U>
+where
+    C: SetClient<T, U>,
+{
+    pub fn load_balance<NLB>(
+        self,
+        load_balance: NLB,
+    ) -> ClientBuilder<IL, OL, C, LbConfig<NLB, DISC>, T, U> {
+        ClientBuilder {
+            http2_config: self.http2_config,
+            rpc_config: self.rpc_config,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
+            service_client: self.service_client,
+            mk_lb: self.mk_lb.load_balance(load_balance),
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn discover<NDISC>(
+        self,
+        discover: NDISC,
+    ) -> ClientBuilder<IL, OL, C, LbConfig<LB, NDISC>, T, U> {
+        ClientBuilder {
+            http2_config: self.http2_config,
+            rpc_config: self.rpc_config,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
+            service_client: self.service_client,
+            mk_lb: self.mk_lb.discover(discover),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U>
 where
     C: SetClient<T, U>,
 {
@@ -213,15 +279,34 @@ where
         self
     }
 
+    pub fn mk_load_balance<NLB>(self, mk_load_balance: NLB) -> ClientBuilder<IL, OL, C, NLB, T, U> {
+        ClientBuilder {
+            http2_config: self.http2_config,
+            rpc_config: self.rpc_config,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
+            service_client: self.service_client,
+            mk_lb: mk_load_balance,
+            _marker: PhantomData,
+        }
+    }
+
     /// Sets the address for the rpc call.
     ///
-    /// Default is None.
-    pub fn target<A: Into<Address>>(mut self, target: A) -> Self {
+    /// If the address is set, the call will be sent to the address directly.
+    ///
+    /// The client will skip the discovery and loadbalance Service if this is set.
+    pub fn address<A: Into<Address>>(mut self, target: A) -> Self {
         self.target = Some(target.into());
         self
     }
 
     /// Adds a new layer to the client.
+    ///
+    /// The layer's `Service` should be `Send + Clone + 'static'`.
     ///
     /// # Order
     ///
@@ -229,37 +314,125 @@ where
     ///
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
-    /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<O>(self, layer: O) -> ClientBuilder<C, Stack<O, L>, T, U> {
+    /// After we call `.layer_inner(baz)`, we will get: foo -> bar -> baz.
+    ///
+    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    pub fn layer_inner<Inner>(
+        self,
+        layer: Inner,
+    ) -> ClientBuilder<Stack<Inner, IL>, OL, C, LB, T, U> {
         ClientBuilder {
             http2_config: self.http2_config,
             rpc_config: self.rpc_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
-            layer: Stack::new(layer, self.layer),
+            inner_layer: Stack::new(layer, self.inner_layer),
+            outer_layer: self.outer_layer,
             service_client: self.service_client,
+            mk_lb: self.mk_lb,
+            _marker: self._marker,
+        }
+    }
+
+    /// Adds a new outer layer to the client.
+    ///
+    /// The layer's `Service` should be `Send + Clone + 'static'`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_outer(baz)`, we will get: foo -> bar -> baz.
+    ///
+    /// The overall order for layers is: [outer] -> LoadBalance -> inner -> transport.
+    pub fn layer_outer<Outer>(
+        self,
+        layer: Outer,
+    ) -> ClientBuilder<IL, Stack<Outer, OL>, C, LB, T, U> {
+        ClientBuilder {
+            http2_config: self.http2_config,
+            rpc_config: self.rpc_config,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            inner_layer: self.inner_layer,
+            outer_layer: Stack::new(layer, self.outer_layer),
+            service_client: self.service_client,
+            mk_lb: self.mk_lb,
+            _marker: self._marker,
+        }
+    }
+
+    /// Adds a new outer layer to the client.
+    ///
+    /// The layer's `Service` should be `Send + Clone + 'static'`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_outer_front(baz)`, we will get: baz -> foo -> bar.
+    ///
+    /// The overall order for layers is: [outer] -> LoadBalance -> inner -> transport.
+    pub fn layer_outer_front<Outer>(
+        self,
+        layer: Outer,
+    ) -> ClientBuilder<IL, Stack<OL, Outer>, C, LB, T, U> {
+        ClientBuilder {
+            http2_config: self.http2_config,
+            rpc_config: self.rpc_config,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            inner_layer: self.inner_layer,
+            outer_layer: Stack::new(self.outer_layer, layer),
+            service_client: self.service_client,
+            mk_lb: self.mk_lb,
             _marker: self._marker,
         }
     }
 }
 
-impl<T, U, C, L> ClientBuilder<C, L, T, U>
+impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U>
 where
     C: SetClient<T, U>,
-    T: 'static,
+    LB: MkLbLayer<IL::Service>,
+    LB::Layer: Layer<IL::Service>,
+    <LB::Layer as Layer<IL::Service>>::Service:
+        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
+    <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Error:
+        Into<BoxError>,
+    IL: Layer<ClientTransport<U>>,
+    OL:
+        Layer<
+            BoxCloneService<
+                ClientContext,
+                Request<T>,
+                Response<U>,
+                <<LB::Layer as Layer<IL::Service>>::Service as Service<
+                    ClientContext,
+                    Request<T>,
+                >>::Error,
+            >,
+        >,
+    OL::Service:
+        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
+    <OL::Service as Service<ClientContext, Request<T>>>::Error: Send + Into<BoxError>,
+    T: 'static + Send,
 {
     /// Builds a new [`Client`].
-    pub fn build(self) -> C
-    where
-        L: Layer<ClientTransport<U>>,
-        L::Service: Service<ClientContext, Request<T>, Response = Response<U>, Error = Status>
-            + Clone
-            + Send
-            + 'static,
-    {
+    pub fn build(self) -> C {
         let transport = ClientTransport::new(&self.http2_config, &self.rpc_config);
-        let transport = self.layer.layer(transport);
+        let transport = self.outer_layer.layer(BoxCloneService::new(
+            self.mk_lb.make().layer(self.inner_layer.layer(transport)),
+        ));
+
+        let transport = transport.map_err(|err| Status::from_error(err.into()));
         let transport = BoxCloneService::new(transport);
 
         self.service_client.set_client(Client {

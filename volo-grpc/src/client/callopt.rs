@@ -45,6 +45,8 @@ pub struct CallOpt {
     /// Sets the callee tags for the call.
     pub callee_tags: TypeMap,
     /// Sets the address for the call.
+    ///
+    /// The client will skip the discovery and loadbalance Service if this is set.
     pub address: Option<Address>,
     pub config: Config,
     /// Sets the caller tags for the call.

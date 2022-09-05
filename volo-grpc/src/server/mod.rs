@@ -10,7 +10,7 @@ use motore::{
     builder::ServiceBuilder,
     layer::{Identity, Layer, Stack},
     service::Service,
-    BoxError,
+    BoxError, ServiceExt,
 };
 use tower::Layer as TowerLayer;
 use volo::{context::Endpoint, net::Address, spawn};
@@ -147,10 +147,9 @@ impl<S, L> Server<S, L> {
     pub async fn run<A: volo::net::MakeIncoming, T, U>(self, incoming: A) -> Result<(), BoxError>
     where
         L: Layer<S>,
-        L::Service: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>
-            + Clone
-            + Send
-            + 'static,
+        L::Service:
+            Service<ServerContext, Request<T>, Response = Response<U>> + Clone + Send + 'static,
+        <L::Service as Service<ServerContext, Request<T>>>::Error: Into<BoxError> + Send,
         S: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>
             + Send
             + Clone
@@ -162,6 +161,7 @@ impl<S, L> Server<S, L> {
         let service = ServiceBuilder::new()
             .layer(self.layer)
             .service(self.service);
+        let service = service.map_err(|err| Status::from_error(err.into()));
         while let Some(conn) = incoming.try_next().await? {
             let peer_addr = conn.info.peer_addr.clone();
             let service = HyperAdaptorLayer::new(peer_addr).layer(service.clone());
@@ -215,8 +215,8 @@ impl<T, U> HyperAdaptorLayer<T, U> {
     }
 }
 
-impl<T, S, U> tower::Layer<S> for HyperAdaptorLayer<T, U> {
-    type Service = HyperAdaptorService<T, S, U>;
+impl<S, T, U> tower::Layer<S> for HyperAdaptorLayer<T, U> {
+    type Service = HyperAdaptorService<S, T, U>;
 
     fn layer(&self, inner: S) -> Self::Service {
         HyperAdaptorService {
@@ -232,13 +232,13 @@ impl<T, S, U> tower::Layer<S> for HyperAdaptorLayer<T, U> {
 /// request will first come to hyper's `tower::Service`, then `HyperAdaptorService`,
 /// finally our's `motore::Service`.
 #[derive(Clone)]
-pub struct HyperAdaptorService<T, S, U> {
+pub struct HyperAdaptorService<S, T, U> {
     inner: S,
     peer_addr: Option<Address>,
     _marker: PhantomData<(T, U)>,
 }
 
-impl<T, S, U> tower::Service<hyper::Request<hyper::Body>> for HyperAdaptorService<T, S, U>
+impl<S, T, U> tower::Service<hyper::Request<hyper::Body>> for HyperAdaptorService<S, T, U>
 where
     S: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>
         + Clone
@@ -248,7 +248,7 @@ where
     U: SendEntryMessage,
 {
     type Response = hyper::Response<Body>;
-    type Error = Status;
+    type Error = BoxError;
     type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(

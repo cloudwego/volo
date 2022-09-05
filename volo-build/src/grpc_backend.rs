@@ -379,8 +379,10 @@ impl CodegenBackend for VoloGrpcBackend {
                 pub fn new(
                     service_name: impl AsRef<str>,
                 ) -> ::volo_grpc::client::ClientBuilder<
-                    #client_name,
                     ::volo::layer::Identity,
+                    ::volo::layer::Identity,
+                    #client_name,
+                    ::volo_grpc::layer::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<()>, ::volo::discovery::DummyDiscover>,
                     #req_enum_name_send,
                     #resp_enum_name_recv,
                 > {
