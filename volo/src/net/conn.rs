@@ -7,8 +7,11 @@ use std::{
 use pin_project::pin_project;
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
-    net::{tcp, unix, TcpStream, UnixStream},
+    net::{tcp, TcpStream},
 };
+
+#[cfg(not(target_os = "windows"))]
+use tokio::net::{unix, UnixStream};
 
 use super::Address;
 
@@ -21,18 +24,60 @@ pub trait DynStream: AsyncRead + AsyncWrite + Send + 'static {}
 
 impl<T> DynStream for T where T: AsyncRead + AsyncWrite + Send + 'static {}
 
+#[cfg(target_os = "windows")]
+#[pin_project(project = IoStreamProj)]
+pub enum ConnStream {
+    Tcp(#[pin] TcpStream),
+}
+
+#[cfg(not(target_os = "windows"))]
 #[pin_project(project = IoStreamProj)]
 pub enum ConnStream {
     Tcp(#[pin] TcpStream),
     Unix(#[pin] UnixStream),
 }
 
+#[cfg(target_os = "windows")]
+#[pin_project(project = OwnedWriteHalfProj)]
+pub enum OwnedWriteHalf {
+    Tcp(#[pin] tcp::OwnedWriteHalf),
+}
+
+#[cfg(not(target_os = "windows"))]
 #[pin_project(project = OwnedWriteHalfProj)]
 pub enum OwnedWriteHalf {
     Tcp(#[pin] tcp::OwnedWriteHalf),
     Unix(#[pin] unix::OwnedWriteHalf),
 }
 
+#[cfg(target_os = "windows")]
+impl AsyncWrite for OwnedWriteHalf {
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        match self.project() {
+            OwnedWriteHalfProj::Tcp(half) => half.poll_write(cx, buf),
+        }
+    }
+
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        match self.project() {
+            OwnedWriteHalfProj::Tcp(half) => half.poll_flush(cx),
+        }
+
+    }
+
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        match self.project() {
+            OwnedWriteHalfProj::Tcp(half) => half.poll_shutdown(cx),
+        }
+
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
 impl AsyncWrite for OwnedWriteHalf {
     fn poll_write(
         self: Pin<&mut Self>,
@@ -60,12 +105,33 @@ impl AsyncWrite for OwnedWriteHalf {
     }
 }
 
+#[cfg(target_os = "windows")]
+#[pin_project(project = OwnedReadHalfProj)]
+pub enum OwnedReadHalf {
+    Tcp(#[pin] tcp::OwnedReadHalf),
+}
+
+#[cfg(not(target_os = "windows"))]
 #[pin_project(project = OwnedReadHalfProj)]
 pub enum OwnedReadHalf {
     Tcp(#[pin] tcp::OwnedReadHalf),
     Unix(#[pin] unix::OwnedReadHalf),
 }
 
+#[cfg(target_os = "windows")]
+impl AsyncRead for OwnedReadHalf {
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<Result<(), io::Error>> {
+        match self.project() {
+            OwnedReadHalfProj::Tcp(half) => half.poll_read(cx, buf),
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
 impl AsyncRead for OwnedReadHalf {
     fn poll_read(
         self: Pin<&mut Self>,
@@ -79,6 +145,20 @@ impl AsyncRead for OwnedReadHalf {
     }
 }
 
+#[cfg(target_os = "windows")]
+impl ConnStream {
+    #[allow(clippy::type_complexity)]
+    pub fn into_split(self) -> (OwnedReadHalf, OwnedWriteHalf) {
+        match self {
+            ConnStream::Tcp(stream) => {
+                let (rh, wh) = stream.into_split();
+                (OwnedReadHalf::Tcp(rh), OwnedWriteHalf::Tcp(wh))
+            }
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
 impl ConnStream {
     #[allow(clippy::type_complexity)]
     pub fn into_split(self) -> (OwnedReadHalf, OwnedWriteHalf) {
@@ -103,6 +183,7 @@ impl From<TcpStream> for ConnStream {
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 impl From<UnixStream> for ConnStream {
     #[inline]
     fn from(s: UnixStream) -> Self {
@@ -110,6 +191,21 @@ impl From<UnixStream> for ConnStream {
     }
 }
 
+#[cfg(target_os = "windows")]
+impl AsyncRead for ConnStream {
+    #[inline]
+    fn poll_read(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &mut ReadBuf<'_>,
+    ) -> Poll<io::Result<()>> {
+        match self.project() {
+            IoStreamProj::Tcp(s) => s.poll_read(cx, buf),
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
 impl AsyncRead for ConnStream {
     #[inline]
     fn poll_read(
@@ -124,6 +220,36 @@ impl AsyncRead for ConnStream {
     }
 }
 
+#[cfg(target_os = "windows")]
+impl AsyncWrite for ConnStream {
+    #[inline]
+    fn poll_write(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        buf: &[u8],
+    ) -> Poll<Result<usize, io::Error>> {
+        match self.project() {
+            IoStreamProj::Tcp(s) => s.poll_write(cx, buf),
+        }
+
+    }
+
+    #[inline]
+    fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        match self.project() {
+            IoStreamProj::Tcp(s) => s.poll_flush(cx),
+        }
+    }
+
+    #[inline]
+    fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
+        match self.project() {
+            IoStreamProj::Tcp(s) => s.poll_shutdown(cx),
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
 impl AsyncWrite for ConnStream {
     #[inline]
     fn poll_write(
@@ -154,6 +280,17 @@ impl AsyncWrite for ConnStream {
     }
 }
 
+#[cfg(target_os = "windows")]
+impl ConnStream {
+    #[inline]
+    pub fn peer_addr(&self) -> Option<Address> {
+        match self {
+            ConnStream::Tcp(s) => s.peer_addr().map(Address::from).ok(),
+        }
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
 impl ConnStream {
     #[inline]
     pub fn peer_addr(&self) -> Option<Address> {
@@ -163,7 +300,6 @@ impl ConnStream {
         }
     }
 }
-
 pub struct Conn {
     pub stream: ConnStream,
     pub info: ConnInfo,
