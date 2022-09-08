@@ -128,6 +128,8 @@ impl<S, L> Server<S, L> {
 
     /// Adds a new inner layer to the server.
     ///
+    /// The layer's `Service` should be `Send + Clone + 'static`.
+    ///
     /// # Order
     ///
     /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
@@ -138,6 +140,25 @@ impl<S, L> Server<S, L> {
     pub fn layer<O>(self, layer: O) -> Server<S, Stack<O, L>> {
         Server {
             layer: Stack::new(layer, self.layer),
+            service: self.service,
+            http2_config: self.http2_config,
+        }
+    }
+
+    /// Adds a new front layer to the server.
+    ///
+    /// The layer's `Service` should be `Send + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
+    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>> {
+        Server {
+            layer: Stack::new(self.layer, layer),
             service: self.service,
             http2_config: self.http2_config,
         }
