@@ -30,7 +30,7 @@ where
         endpoint: &'future Endpoint,
         discover: &'future D,
     ) -> Self::GetFut<'future, 'iter>;
-    /// `reblance` is the callback method be used in service discovering subscription.
+    /// `rebalance` is the callback method be used in service discovering subscription.
     fn rebalance(&self, changes: Change<D::Key>);
 }
 
