@@ -614,13 +614,20 @@ mod test {
 
     use tokio::{
         io::{AsyncRead, AsyncWrite},
-        net::UnixStream,
+        net::TcpStream,
     };
 
+    #[cfg(target_family = "unix")]
+    use tokio::net::UnixStream;
     use super::*;
 
+    #[cfg(target_family = "unix")]
     #[pin_project]
     struct MockConnection(#[pin] UnixStream);
+
+    #[cfg(target_family = "windows")]
+    #[pin_project]
+    struct MockConnection(#[pin] TcpStream);
 
     impl Poolable for MockConnection {
         fn reuseable(&self) -> bool {

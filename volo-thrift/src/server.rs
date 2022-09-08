@@ -162,15 +162,6 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
         let mut incoming = incoming.make_incoming().await?;
         info!("[VOLO] server start at: {:?}", incoming);
 
-        // graceful shutdown
-        #[cfg(target_family = "unix")]
-        let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-        #[cfg(target_family = "unix")]
-        let mut sighup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
-        #[cfg(target_family = "unix")]
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
-
         let conn_cnt = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let gconn_cnt = conn_cnt.clone();
         let (exit_notify, exit_flag, exit_mark) = (
@@ -208,24 +199,34 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
             }
         });
 
-        // graceful shutdown handler
+
         #[cfg(target_family = "unix")]
-        tokio::select! {
-            _ = sigint.recv() => {}
-            _ = sighup.recv() => {}
-            _ = sigterm.recv() => {}
-            res = handler => {
-                match res {
-                    Ok(res) => {
-                        match res {
-                            Ok(()) => {}
-                            Err(e) => return Err(Box::new(e))
-                        };
+        {
+            // graceful shutdown
+            let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+            let mut sighup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
+            let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+
+            // graceful shutdown handler
+            tokio::select! {
+                _ = sigint.recv() => {}
+                _ = sighup.recv() => {}
+                _ = sigterm.recv() => {}
+                res = handler => {
+                    match res {
+                        Ok(res) => {
+                            match res {
+                                Ok(()) => {}
+                                Err(e) => return Err(Box::new(e))
+                            };
+                        }
+                        Err(e) => return Err(Box::new(e)),
                     }
-                    Err(e) => return Err(Box::new(e)),
                 }
             }
         }
+
+        // graceful shutdown handler for windows
         #[cfg(target_family = "windows")]
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
