@@ -7,20 +7,14 @@ use std::{borrow::Cow, fmt, net::Ipv6Addr, path::Path};
 
 pub use incoming::{Incoming, MakeIncoming};
 
-#[cfg(not(target_os = "windows"))]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Address {
     Ip(std::net::SocketAddr),
+    #[cfg(target_family = "unix")]
     Unix(Cow<'static, Path>),
 }
 
-#[cfg(target_os = "windows")]
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Address {
-    Ip(std::net::SocketAddr),
-}
 
-#[cfg(target_os = "windows")]
 impl Address {
     pub fn favor_dual_stack(self) -> Self {
         match self {
@@ -31,22 +25,7 @@ impl Address {
                     self
                 }
             }
-        }
-
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-impl Address {
-    pub fn favor_dual_stack(self) -> Self {
-        match self {
-            Address::Ip(addr) => {
-                if addr.ip().is_unspecified() && should_favor_ipv6() {
-                    Address::Ip((Ipv6Addr::UNSPECIFIED, addr.port()).into())
-                } else {
-                    self
-                }
-            }
+            #[cfg(target_family = "unix")]
             _ => self,
         }
     }
@@ -57,21 +36,11 @@ fn should_favor_ipv6() -> bool {
     !probed.ipv4 || probed.ipv4_mapped_ipv6
 }
 
-
-#[cfg(target_os = "windows")]
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Address::Ip(addr) => write!(f, "{}", addr),
-        }
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-impl fmt::Display for Address {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Address::Ip(addr) => write!(f, "{}", addr),
+            #[cfg(target_family = "unix")]
             Address::Unix(_) => write!(f, "-"),
         }
     }
@@ -83,14 +52,14 @@ impl From<std::net::SocketAddr> for Address {
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_family = "unix")]
 impl From<Cow<'static, Path>> for Address {
     fn from(addr: Cow<'static, Path>) -> Self {
         Address::Unix(addr)
     }
 }
 
-#[cfg(not(target_os = "windows"))]
+#[cfg(target_family = "unix")]
 impl TryFrom<tokio::net::unix::SocketAddr> for Address {
     type Error = std::io::Error;
 
