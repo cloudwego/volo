@@ -58,7 +58,7 @@ jobs:
         cargo check
         cargo test
 
-   test-windows:
+  test-windows:
      runs-on: windows-latest
 
      steps:
