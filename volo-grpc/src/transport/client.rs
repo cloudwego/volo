@@ -141,7 +141,6 @@ where
     }
 }
 
-#[cfg(target_os = "windows")]
 fn build_uri(addr: Address, path: &str) -> hyper::Uri {
     match addr {
         Address::Ip(ip) => hyper::Uri::builder()
@@ -150,18 +149,7 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
             .path_and_query(path)
             .build()
             .expect("fail to build ip uri"),
-    }
-}
-
-#[cfg(not(target_os = "windows"))]
-fn build_uri(addr: Address, path: &str) -> hyper::Uri {
-    match addr {
-        Address::Ip(ip) => hyper::Uri::builder()
-            .scheme(http::uri::Scheme::HTTP)
-            .authority(ip.to_string())
-            .path_and_query(path)
-            .build()
-            .expect("fail to build ip uri"),
+        #[cfg(target_family = "unix")]
         Address::Unix(unix) => hyper::Uri::builder()
             .scheme("http+unix")
             .authority(unix.display().to_string())
