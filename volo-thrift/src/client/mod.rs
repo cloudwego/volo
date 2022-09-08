@@ -323,7 +323,7 @@ where
     ///
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
-    /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
+    /// After we call `.layer_inner(baz)`, we will get: foo -> bar -> baz.
     ///
     /// The overall order for layers is: Timeout -> outer -> LoadBalance -> [inner] -> transport.
     pub fn layer_inner<Inner>(
@@ -393,7 +393,7 @@ where
     ///
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
-    /// After we call `.layer_outer(baz)`, we will get: baz -> foo -> bar.
+    /// After we call `.layer_outer_front(baz)`, we will get: baz -> foo -> bar.
     ///
     /// The overall order for layers is: Timeout -> [outer] -> LoadBalance -> inner -> transport.
     pub fn layer_outer_front<Outer>(

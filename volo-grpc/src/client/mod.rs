@@ -306,7 +306,7 @@ where
 
     /// Adds a new layer to the client.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static'`.
+    /// The layer's `Service` should be `Send + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -337,7 +337,7 @@ where
 
     /// Adds a new outer layer to the client.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static'`.
+    /// The layer's `Service` should be `Send + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -368,7 +368,7 @@ where
 
     /// Adds a new outer layer to the client.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static'`.
+    /// The layer's `Service` should be `Send + Clone + 'static`.
     ///
     /// # Order
     ///
