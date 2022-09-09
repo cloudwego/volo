@@ -5,9 +5,11 @@ use std::{
 };
 
 use pin_project::pin_project;
+#[cfg(target_family = "unix")]
+use tokio::net::{unix, UnixStream};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
-    net::{tcp, unix, TcpStream, UnixStream},
+    net::{tcp, TcpStream},
 };
 
 use super::Address;
@@ -24,12 +26,14 @@ impl<T> DynStream for T where T: AsyncRead + AsyncWrite + Send + 'static {}
 #[pin_project(project = IoStreamProj)]
 pub enum ConnStream {
     Tcp(#[pin] TcpStream),
+    #[cfg(target_family = "unix")]
     Unix(#[pin] UnixStream),
 }
 
 #[pin_project(project = OwnedWriteHalfProj)]
 pub enum OwnedWriteHalf {
     Tcp(#[pin] tcp::OwnedWriteHalf),
+    #[cfg(target_family = "unix")]
     Unix(#[pin] unix::OwnedWriteHalf),
 }
 
@@ -41,6 +45,7 @@ impl AsyncWrite for OwnedWriteHalf {
     ) -> Poll<Result<usize, io::Error>> {
         match self.project() {
             OwnedWriteHalfProj::Tcp(half) => half.poll_write(cx, buf),
+            #[cfg(target_family = "unix")]
             OwnedWriteHalfProj::Unix(half) => half.poll_write(cx, buf),
         }
     }
@@ -48,6 +53,7 @@ impl AsyncWrite for OwnedWriteHalf {
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.project() {
             OwnedWriteHalfProj::Tcp(half) => half.poll_flush(cx),
+            #[cfg(target_family = "unix")]
             OwnedWriteHalfProj::Unix(half) => half.poll_flush(cx),
         }
     }
@@ -55,6 +61,7 @@ impl AsyncWrite for OwnedWriteHalf {
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.project() {
             OwnedWriteHalfProj::Tcp(half) => half.poll_shutdown(cx),
+            #[cfg(target_family = "unix")]
             OwnedWriteHalfProj::Unix(half) => half.poll_shutdown(cx),
         }
     }
@@ -63,6 +70,7 @@ impl AsyncWrite for OwnedWriteHalf {
 #[pin_project(project = OwnedReadHalfProj)]
 pub enum OwnedReadHalf {
     Tcp(#[pin] tcp::OwnedReadHalf),
+    #[cfg(target_family = "unix")]
     Unix(#[pin] unix::OwnedReadHalf),
 }
 
@@ -74,6 +82,7 @@ impl AsyncRead for OwnedReadHalf {
     ) -> Poll<Result<(), io::Error>> {
         match self.project() {
             OwnedReadHalfProj::Tcp(half) => half.poll_read(cx, buf),
+            #[cfg(target_family = "unix")]
             OwnedReadHalfProj::Unix(half) => half.poll_read(cx, buf),
         }
     }
@@ -87,6 +96,7 @@ impl ConnStream {
                 let (rh, wh) = stream.into_split();
                 (OwnedReadHalf::Tcp(rh), OwnedWriteHalf::Tcp(wh))
             }
+            #[cfg(target_family = "unix")]
             ConnStream::Unix(stream) => {
                 let (rh, wh) = stream.into_split();
                 (OwnedReadHalf::Unix(rh), OwnedWriteHalf::Unix(wh))
@@ -103,6 +113,7 @@ impl From<TcpStream> for ConnStream {
     }
 }
 
+#[cfg(target_family = "unix")]
 impl From<UnixStream> for ConnStream {
     #[inline]
     fn from(s: UnixStream) -> Self {
@@ -119,6 +130,7 @@ impl AsyncRead for ConnStream {
     ) -> Poll<io::Result<()>> {
         match self.project() {
             IoStreamProj::Tcp(s) => s.poll_read(cx, buf),
+            #[cfg(target_family = "unix")]
             IoStreamProj::Unix(s) => s.poll_read(cx, buf),
         }
     }
@@ -133,6 +145,7 @@ impl AsyncWrite for ConnStream {
     ) -> Poll<Result<usize, io::Error>> {
         match self.project() {
             IoStreamProj::Tcp(s) => s.poll_write(cx, buf),
+            #[cfg(target_family = "unix")]
             IoStreamProj::Unix(s) => s.poll_write(cx, buf),
         }
     }
@@ -141,6 +154,7 @@ impl AsyncWrite for ConnStream {
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.project() {
             IoStreamProj::Tcp(s) => s.poll_flush(cx),
+            #[cfg(target_family = "unix")]
             IoStreamProj::Unix(s) => s.poll_flush(cx),
         }
     }
@@ -149,6 +163,7 @@ impl AsyncWrite for ConnStream {
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.project() {
             IoStreamProj::Tcp(s) => s.poll_shutdown(cx),
+            #[cfg(target_family = "unix")]
             IoStreamProj::Unix(s) => s.poll_shutdown(cx),
         }
     }
@@ -159,11 +174,11 @@ impl ConnStream {
     pub fn peer_addr(&self) -> Option<Address> {
         match self {
             ConnStream::Tcp(s) => s.peer_addr().map(Address::from).ok(),
+            #[cfg(target_family = "unix")]
             ConnStream::Unix(s) => s.peer_addr().ok().and_then(|s| Address::try_from(s).ok()),
         }
     }
 }
-
 pub struct Conn {
     pub stream: ConnStream,
     pub info: ConnInfo,
