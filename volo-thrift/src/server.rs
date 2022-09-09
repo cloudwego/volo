@@ -145,16 +145,16 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
         self,
         incoming: A,
     ) -> Result<(), BoxError>
-        where
-            L: Layer<S>,
-            MkE: MkEncoder,
-            MkD: MkDecoder,
-            L::Service: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static + Sync,
-            <L::Service as Service<ServerContext, Req>>::Error: Into<BoxError> + Send,
-            S: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
-            S::Error: Into<BoxError>,
-            Req: EntryMessage + Send + 'static,
-            Resp: EntryMessage + Send + 'static + Size + Sync,
+    where
+        L: Layer<S>,
+        MkE: MkEncoder,
+        MkD: MkDecoder,
+        L::Service: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static + Sync,
+        <L::Service as Service<ServerContext, Req>>::Error: Into<BoxError> + Send,
+        S: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
+        S::Error: Into<BoxError>,
+        Req: EntryMessage + Send + 'static,
+        Resp: EntryMessage + Send + 'static + Size + Sync,
     {
         // init server
         let service = self.layer.layer(self.service);
@@ -199,13 +199,15 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
             }
         });
 
-
         #[cfg(target_family = "unix")]
         {
             // graceful shutdown
-            let mut sigint = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
-            let mut sighup = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
-            let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+            let mut sigint =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())?;
+            let mut sighup =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::hangup())?;
+            let mut sigterm =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
 
             // graceful shutdown handler
             tokio::select! {

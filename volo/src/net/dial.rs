@@ -1,12 +1,11 @@
 use std::{io, net::TcpStream as StdTcpStream};
 
-use tokio::{
-    net::{TcpStream},
-    time::{timeout, Duration},
-};
-
 #[cfg(target_family = "unix")]
 use tokio::net::UnixStream;
+use tokio::{
+    net::TcpStream,
+    time::{timeout, Duration},
+};
 
 use super::{conn::Conn, Address};
 

@@ -14,7 +14,6 @@ pub enum Address {
     Unix(Cow<'static, Path>),
 }
 
-
 impl Address {
     pub fn favor_dual_stack(self) -> Self {
         match self {

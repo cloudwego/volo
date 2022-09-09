@@ -159,7 +159,6 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     #[test]

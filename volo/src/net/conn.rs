@@ -5,13 +5,12 @@ use std::{
 };
 
 use pin_project::pin_project;
+#[cfg(target_family = "unix")]
+use tokio::net::{unix, UnixStream};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
     net::{tcp, TcpStream},
 };
-
-#[cfg(target_family = "unix")]
-use tokio::net::{unix, UnixStream};
 
 use super::Address;
 
@@ -30,7 +29,6 @@ pub enum ConnStream {
     #[cfg(target_family = "unix")]
     Unix(#[pin] UnixStream),
 }
-
 
 #[pin_project(project = OwnedWriteHalfProj)]
 pub enum OwnedWriteHalf {
@@ -89,7 +87,6 @@ impl AsyncRead for OwnedReadHalf {
         }
     }
 }
-
 
 impl ConnStream {
     #[allow(clippy::type_complexity)]

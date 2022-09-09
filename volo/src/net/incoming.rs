@@ -5,11 +5,10 @@ use std::{
 
 use futures::Stream;
 use pin_project::pin_project;
-use tokio::net::{TcpListener};
-use tokio_stream::wrappers::{TcpListenerStream};
-
+use tokio::net::TcpListener;
 #[cfg(target_family = "unix")]
 use tokio::net::UnixListener;
+use tokio_stream::wrappers::TcpListenerStream;
 #[cfg(target_family = "unix")]
 use tokio_stream::wrappers::UnixListenerStream;
 
