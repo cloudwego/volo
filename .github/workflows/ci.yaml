@@ -17,7 +17,7 @@ jobs:
       - test-linux
       - test-linux-aarch64
       - test-macos
-      test-windows
+      - test-windows
       - lint
     steps:
       - run: exit 0
