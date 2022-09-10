@@ -1,7 +1,9 @@
 use std::{io, net::TcpStream as StdTcpStream};
 
+#[cfg(target_family = "unix")]
+use tokio::net::UnixStream;
 use tokio::{
-    net::{TcpStream, UnixStream},
+    net::TcpStream,
     time::{timeout, Duration},
 };
 
@@ -57,6 +59,7 @@ impl MakeConnection {
                 stream.set_nodelay(true)?;
                 Ok(Conn::from(stream))
             }
+            #[cfg(target_family = "unix")]
             Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
         }
     }

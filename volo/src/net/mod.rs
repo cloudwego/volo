@@ -10,6 +10,7 @@ pub use incoming::{Incoming, MakeIncoming};
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Address {
     Ip(std::net::SocketAddr),
+    #[cfg(target_family = "unix")]
     Unix(Cow<'static, Path>),
 }
 
@@ -23,6 +24,7 @@ impl Address {
                     self
                 }
             }
+            #[cfg(target_family = "unix")]
             _ => self,
         }
     }
@@ -37,6 +39,7 @@ impl fmt::Display for Address {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Address::Ip(addr) => write!(f, "{}", addr),
+            #[cfg(target_family = "unix")]
             Address::Unix(_) => write!(f, "-"),
         }
     }
@@ -48,12 +51,14 @@ impl From<std::net::SocketAddr> for Address {
     }
 }
 
+#[cfg(target_family = "unix")]
 impl From<Cow<'static, Path>> for Address {
     fn from(addr: Cow<'static, Path>) -> Self {
         Address::Unix(addr)
     }
 }
 
+#[cfg(target_family = "unix")]
 impl TryFrom<tokio::net::unix::SocketAddr> for Address {
     type Error = std::io::Error;
 
