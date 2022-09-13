@@ -149,6 +149,7 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
             .path_and_query(path)
             .build()
             .expect("fail to build ip uri"),
+        #[cfg(target_family = "unix")]
         Address::Unix(unix) => hyper::Uri::builder()
             .scheme("http+unix")
             .authority(unix.display().to_string())
