@@ -21,6 +21,8 @@ maintenance = { status = "actively-developed" }
 volo = { version = "0.1", path = "../volo" }
 
 motore = "0.1"
+metainfo = "0.6"
+
 
 tokio = { version = "1", features = ["time", "rt", "net", "sync"] }
 tower = { version = "0.4", features = [
@@ -40,7 +42,6 @@ futures-util = "0.3"
 tokio-util = { version = "0.7", features = ["codec", "compat"] }
 tracing = "0.1"
 bytes = "1"
-metainfo = "0.6"
 pin-project = "1"
 http = "0.2"
 h2 = "0.3"

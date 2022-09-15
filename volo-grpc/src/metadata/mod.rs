@@ -24,3 +24,11 @@ pub mod errors {
         value::ToStrError,
     };
 }
+
+pub const DESTINATION_SERVICE: &str = "destination-service";
+pub const DESTINATION_METHOD: &str = "destination-method";
+pub const DESTINATION_ADDR: &str = "destination-addr";
+
+pub const SOURCE_SERVICE: &str = "source-service";
+
+pub const HEADER_TRANS_REMOTE_ADDR: &str = "rip";

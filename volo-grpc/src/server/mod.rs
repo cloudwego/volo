@@ -2,10 +2,14 @@
 //!
 //! This module contains the low level component to build a gRPC server.
 
-use std::{marker::PhantomData, time::Duration};
+use std::{
+    cell::RefCell, marker::PhantomData, net::SocketAddr, str::FromStr, sync::Arc, time::Duration,
+};
 
 use futures::{Future, TryStreamExt};
+use http::{HeaderMap, HeaderValue};
 use hyper::server::conn::Http;
+use metainfo::{Backward, Forward};
 use motore::{
     builder::ServiceBuilder,
     layer::{Identity, Layer, Stack},
@@ -13,13 +17,20 @@ use motore::{
     BoxError, ServiceExt,
 };
 use tower::Layer as TowerLayer;
-use volo::{context::Endpoint, net::Address, spawn};
+use volo::{
+    context::{Context, Endpoint},
+    net::Address,
+    spawn,
+};
 
 use crate::{
     body::Body,
     codec::decode::Kind,
     context::ServerContext,
     message::{RecvEntryMessage, SendEntryMessage},
+    metadata::{
+        MetadataKey, MetadataMap, DESTINATION_SERVICE, HEADER_TRANS_REMOTE_ADDR, SOURCE_SERVICE,
+    },
     Request, Response, Status,
 };
 
@@ -179,12 +190,17 @@ impl<S, L> Server<S, L> {
         U: Send + 'static + SendEntryMessage,
     {
         let mut incoming = incoming.make_incoming().await?;
+        tracing::info!("[VOLO] server start at: {:?}", incoming);
+
         let service = ServiceBuilder::new()
             .layer(self.layer)
             .service(self.service);
         let service = service.map_err(|err| Status::from_error(err.into()));
+
         while let Some(conn) = incoming.try_next().await? {
+            tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
             let peer_addr = conn.info.peer_addr.clone();
+
             let service = HyperAdaptorLayer::new(peer_addr).layer(service.clone());
             // init server
             let server = Self::create_http_server(&self.http2_config);
@@ -283,32 +299,104 @@ where
         let mut inner = self.inner.clone();
         let peer_addr = self.peer_addr.clone();
 
-        async move {
+        metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
             let mut cx = ServerContext::default();
-            let mut endpoint = Endpoint::new("".into());
-            endpoint.address = peer_addr.clone();
-            cx.rpc_info.caller = Some(endpoint);
             cx.rpc_info.method = Some(req.uri().path().into());
 
             let (parts, body) = req.into_parts();
-            let body = trans!(T::from_body(
+
+            extract_metadata(&parts.headers, &mut cx, peer_addr)?;
+
+            let message = trans!(T::from_body(
                 cx.rpc_info.method.as_deref(),
                 body,
                 Kind::Request
             ));
-            let volo_req = Request::from_http_parts(parts, body);
+            let volo_req = Request::from_http_parts(parts, message);
 
             let volo_resp = trans!(inner.call(&mut cx, volo_req).await);
 
-            let (mut parts, body) = volo_resp.into_http().into_parts();
-            parts.headers.insert(
+            let (mut metadata, extensions, message) = volo_resp.into_parts();
+
+            insert_metadata(&mut metadata)?;
+
+            let mut resp = hyper::Response::new(Body::new(message.into_body()));
+            *resp.headers_mut() = metadata.into_headers();
+            *resp.extensions_mut() = extensions;
+            resp.headers_mut().insert(
                 http::header::CONTENT_TYPE,
                 http::header::HeaderValue::from_static("application/grpc"),
             );
-            let bytes_stream = body.into_body();
-            Ok(hyper::Response::from_parts(parts, Body::new(bytes_stream)))
-        }
+
+            Ok(resp)
+        })
     }
+}
+
+fn extract_metadata(
+    headers: &HeaderMap<HeaderValue>,
+    cx: &mut ServerContext,
+    peer_addr: Option<Address>,
+) -> Result<(), BoxError> {
+    metainfo::METAINFO.with(|metainfo| {
+        let mut metainfo = metainfo.borrow_mut();
+
+        // caller
+        if let Some(source_service) = headers.get(SOURCE_SERVICE) {
+            let source_service = Arc::<str>::from(source_service.to_str().map_err(Box::new)?);
+            let mut caller = Endpoint::new(source_service.into());
+            if let Some(ad) = headers.get(HEADER_TRANS_REMOTE_ADDR) {
+                let addr = ad.to_str().map_err(Box::new)?.parse::<SocketAddr>();
+                if let Ok(addr) = addr {
+                    caller.set_address(volo::net::Address::from(addr));
+                }
+            }
+            if caller.address.is_none() {
+                caller.address = peer_addr;
+            }
+            cx.rpc_info_mut().caller = Some(caller);
+        }
+
+        // callee
+        if let Some(destination_service) = headers.get(DESTINATION_SERVICE) {
+            let destination_service =
+                Arc::<str>::from(destination_service.to_str().map_err(Box::new)?);
+            let callee = Endpoint::new(destination_service.into());
+            cx.rpc_info_mut().callee = Some(callee);
+        }
+
+        // persistent and transient
+        for (k, v) in headers.into_iter() {
+            let k = k.as_str();
+            let v = v.to_str().map_err(Box::new)?;
+            if k.starts_with(metainfo::HTTP_PREFIX_PERSISTENT) {
+                metainfo.strip_http_prefix_and_set_persistent(k.to_owned(), v.to_owned());
+            } else if k.starts_with(metainfo::HTTP_PREFIX_TRANSIENT) {
+                metainfo.strip_http_prefix_and_set_upstream(k.to_owned(), v.to_owned());
+            }
+        }
+
+        Ok::<(), BoxError>(())
+    })
+}
+
+fn insert_metadata(metadata: &mut MetadataMap) -> Result<(), BoxError> {
+    metainfo::METAINFO.with(|metainfo| {
+        let metainfo = metainfo.borrow_mut();
+
+        // backward
+        if let Some(at) = metainfo.get_all_backward_transients() {
+            for (key, value) in at {
+                let key = metainfo::HTTP_PREFIX_BACKWARD.to_owned() + key;
+                metadata.insert(
+                    MetadataKey::from_str(key.as_str()).map_err(Box::new)?,
+                    value.parse().map_err(Box::new)?,
+                );
+            }
+        }
+
+        Ok::<(), BoxError>(())
+    })
 }
 
 const DEFAULT_KEEPALIVE_TIMEOUT_SECS: Duration = Duration::from_secs(20);
