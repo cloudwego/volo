@@ -1,13 +1,13 @@
 //! These codes are copied from `tonic/src/status.rs` and may be modified by us.
 
-use std::{borrow::Cow, error::Error, fmt};
+use std::{borrow::Cow, error::Error, fmt, str::FromStr};
 
 use bytes::Bytes;
-use http::header::{HeaderMap, HeaderValue};
+use http::header::{HeaderMap, HeaderName, HeaderValue};
+use metainfo::Backward;
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
 use tower::BoxError;
 use tracing::{debug, trace, warn};
-use volo::Unwrap;
 
 use crate::{body::Body, metadata::MetadataMap};
 
@@ -621,8 +621,22 @@ impl Status {
             http::header::HeaderValue::from_static("application/grpc"),
         );
 
-        // SAFETY: parameters controlled by volo-grpc are guaranteed to be valid.
-        self.add_header(&mut parts.headers).volo_unwrap();
+        metainfo::METAINFO.with(|metainfo| {
+            let metainfo = metainfo.borrow_mut();
+
+            // backward
+            if let Some(at) = metainfo.get_all_backward_transients() {
+                for (key, value) in at {
+                    let key = metainfo::HTTP_PREFIX_BACKWARD.to_owned() + key;
+                    parts.headers.insert(
+                        HeaderName::from_str(key.as_str()).unwrap(),
+                        value.parse().unwrap(),
+                    );
+                }
+            }
+        });
+
+        self.add_header(&mut parts.headers).unwrap();
 
         http::Response::from_parts(parts, Body::new(Box::pin(futures::stream::empty())))
     }

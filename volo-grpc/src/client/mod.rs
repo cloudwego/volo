@@ -7,7 +7,7 @@
 
 mod callopt;
 
-use std::{marker::PhantomData, sync::Arc, time::Duration};
+use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
 
 pub use callopt::CallOpt;
 use motore::{
@@ -489,7 +489,17 @@ impl<T, U> Client<T, U> {
         req: Request<T>,
     ) -> Result<Response<U>, Status> {
         let mut cx = ClientContext::new(self.make_rpc_info(path));
-        self.transport.call(&mut cx, req).await
+        let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
+
+        let mk_call = async { self.transport.call(&mut cx, req).await };
+
+        if has_metainfo {
+            mk_call.await
+        } else {
+            metainfo::METAINFO
+                .scope(RefCell::new(metainfo::MetaInfo::default()), mk_call)
+                .await
+        }
     }
 
     #[inline]
