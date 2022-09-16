@@ -2,7 +2,7 @@ use std::{io, marker::PhantomData};
 
 use futures::Future;
 use motore::service::{Service, UnaryService};
-use pilota::thrift::EntryMessage;
+use pilota::thrift::{new_transport_error, TransportErrorKind};
 use volo::{
     net::{dial::MakeConnection, Address},
     Unwrap,
@@ -13,7 +13,7 @@ use crate::{
     context::ClientContext,
     protocol::TMessageType,
     transport::pool::{Config, PooledMakeTransport, ThriftTransport},
-    Error, Size, ThriftMessage,
+    EntryMessage, Size, ThriftMessage,
 };
 
 #[derive(Clone)]
@@ -98,7 +98,7 @@ where
 {
     type Response = Option<ThriftMessage<Resp>>;
 
-    type Error = Error;
+    type Error = crate::Error;
 
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx where Self:'cx;
 
@@ -120,10 +120,10 @@ where
             let resp = transport.send(cx, req, oneway).await;
             if let Ok(None) = resp {
                 if !oneway {
-                    return Err(crate::error::new_transport_error(
-                        crate::TransportErrorKind::EndOfFile,
+                    return Err(crate::Error::Pilota(new_transport_error(
+                        TransportErrorKind::EndOfFile,
                         "an unexpected end of file from server",
-                    ));
+                    )));
                 }
             }
             if cx.transport.should_reuse && resp.is_ok() {

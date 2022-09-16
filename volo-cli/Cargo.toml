@@ -22,7 +22,7 @@ keywords = ["thrift", "grpc", "protobuf", "volo", "cli"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-pilota-thrift-parser = "0.1"
+pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota", branch = "main" }
 volo-build = { version = "0.1", path = "../volo-build" }
 
 heck = "0.4"

@@ -12,12 +12,12 @@ use std::{
 use bytes::{Buf, BufMut, BytesMut};
 use metainfo::{Backward, Forward};
 use num_enum::TryFromPrimitive;
+use pilota::thrift::{new_protocol_error, ProtocolErrorKind};
 use tracing::{trace, warn};
 use volo::context::{Endpoint, Role};
 
 use crate::{
     context::{Config, ThriftContext},
-    error::{new_protocol_error, ProtocolErrorKind},
     tags::TransportType,
 };
 
@@ -395,8 +395,7 @@ impl TTHeaderDecoder for DefaultTTHeaderCodec {
                                                 "invalid header key which is not utf-8 {:?}: {}",
                                                 key, e
                                             ),
-                                        )
-                                    })?
+                            )})?
                                     .to_string(),
                                 from_utf8(&value)
                                     .map_err(|e| {
@@ -454,7 +453,7 @@ impl TTHeaderDecoder for DefaultTTHeaderCodec {
                     _ => {
                         let msg = format!("unexpected info id in ttheader: {}", info_id);
                         warn!("[VOLO] {}", msg);
-                        return Err(new_protocol_error(ProtocolErrorKind::Unknown, msg));
+                        return Err(crate::Error::Pilota(new_protocol_error(ProtocolErrorKind::Unknown, msg)));
                     }
                 }
             }

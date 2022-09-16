@@ -5,8 +5,7 @@ use std::{
 };
 
 use metainfo::MetaInfo;
-use motore::{service::Service, BoxError};
-use pilota::thrift::EntryMessage;
+use motore::service::Service;
 use tokio::sync::futures::Notified;
 use tracing::*;
 use volo::volo_unreachable;
@@ -15,7 +14,7 @@ use crate::{
     codec::{framed::Framed, Decoder, Encoder},
     context::ServerContext,
     protocol::TMessageType,
-    DummyMessage, Error, Size, ThriftMessage,
+    DummyMessage, EntryMessage, Error, Size, ThriftMessage,
 };
 
 pub async fn serve<Svc, Req, Resp, E, D>(
@@ -25,7 +24,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     mut service: Svc,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
-    Svc::Error: Into<BoxError>,
+    Svc::Error: Into<crate::Error>,
     Req: EntryMessage,
     Resp: EntryMessage + Size,
     E: Encoder,
@@ -54,8 +53,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
 
                 match msg {
                     Ok(Some(ThriftMessage { data: Ok(req), .. })) => {
-                        let resp =
-                            crate::transport::server::handle(&mut cx, &mut service, req).await;
+                        let resp = service.call(&mut cx, req).await;
 
                         if exit_mark.load(Ordering::Relaxed) {
                             cx.transport.set_conn_reset(true);
@@ -66,7 +64,9 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 Ok(_) => TMessageType::Reply,
                                 Err(_) => TMessageType::Exception,
                             });
-                            let msg = ThriftMessage::mk_server_resp(&cx, resp).unwrap();
+                            let msg =
+                                ThriftMessage::mk_server_resp(&cx, resp.map_err(|e| e.into()))
+                                    .unwrap();
                             if let Err(e) = framed.send(&mut cx, msg).await {
                                 // log it
                                 error!("[VOLO] server send response error: {:?}", e,);
@@ -84,7 +84,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                     Err(e) => {
                         error!("{:?}", e);
                         cx.msg_type = Some(TMessageType::Exception);
-                        if !matches!(e, Error::Transport(_)) {
+                        if !matches!(e, Error::Pilota(pilota::thrift::error::Error::Transport(_))) {
                             let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e))
                                 .unwrap();
                             if let Err(e) = framed.send(&mut cx, msg).await {

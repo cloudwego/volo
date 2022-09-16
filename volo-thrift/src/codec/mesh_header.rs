@@ -3,11 +3,11 @@
 use std::{collections::HashMap, net::SocketAddr, str::from_utf8};
 
 use bytes::{Buf, BytesMut};
+use pilota::thrift::{new_protocol_error, ProtocolErrorKind};
 
 use crate::{
     codec::tt_header::{HEADER_CONNECTION_READY_TO_RESET, HEADER_TRANS_REMOTE_ADDR},
     context::ThriftContext,
-    error::{new_protocol_error, ProtocolErrorKind},
 };
 
 /// +-------------2Byte-------------|-------------2Byte--------------+

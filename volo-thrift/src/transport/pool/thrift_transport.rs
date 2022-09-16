@@ -1,6 +1,5 @@
 use std::sync::atomic::AtomicUsize;
 
-use pilota::thrift::EntryMessage;
 use pin_project::pin_project;
 use volo::{
     net::conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
@@ -11,7 +10,7 @@ use super::Poolable;
 use crate::{
     codec::{Decoder, Encoder, DEFAULT_BUFFER_SIZE},
     context::{ClientContext, ThriftContext},
-    ApplicationError, ApplicationErrorKind, Error, Size, ThriftMessage,
+    ApplicationError, ApplicationErrorKind, EntryMessage, Error, Size, ThriftMessage,
 };
 
 lazy_static::lazy_static! {

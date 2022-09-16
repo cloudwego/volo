@@ -612,12 +612,11 @@ where
 mod test {
     use std::io;
 
+    use tokio::io::{AsyncRead, AsyncWrite};
+    #[cfg(target_family = "windows")]
+    use tokio::net::TcpStream;
     #[cfg(target_family = "unix")]
     use tokio::net::UnixStream;
-    use tokio::{
-        io::{AsyncRead, AsyncWrite},
-        net::TcpStream,
-    };
 
     use super::*;
 

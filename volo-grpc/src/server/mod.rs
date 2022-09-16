@@ -181,7 +181,7 @@ impl<S, L> Server<S, L> {
         L: Layer<S>,
         L::Service:
             Service<ServerContext, Request<T>, Response = Response<U>> + Clone + Send + 'static,
-        <L::Service as Service<ServerContext, Request<T>>>::Error: Into<BoxError> + Send,
+        <L::Service as Service<ServerContext, Request<T>>>::Error: Into<Status> + Send,
         S: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>
             + Send
             + Clone
@@ -195,7 +195,7 @@ impl<S, L> Server<S, L> {
         let service = ServiceBuilder::new()
             .layer(self.layer)
             .service(self.service);
-        let service = service.map_err(|err| Status::from_error(err.into()));
+        let service = service.map_err(|err| err.into());
 
         while let Some(conn) = incoming.try_next().await? {
             tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
@@ -229,7 +229,7 @@ impl<S, L> Server<S, L> {
     }
 }
 
-macro_rules! trans {
+macro_rules! status_to_http {
     ($result:expr) => {
         match $result {
             Ok(value) => value,
@@ -237,6 +237,7 @@ macro_rules! trans {
         }
     };
 }
+
 /// A layer that adapts a `motore::Service` to `tower::Service`.
 pub struct HyperAdaptorLayer<T, U> {
     peer_addr: Option<Address>,
@@ -277,15 +278,13 @@ pub struct HyperAdaptorService<S, T, U> {
 
 impl<S, T, U> tower::Service<hyper::Request<hyper::Body>> for HyperAdaptorService<S, T, U>
 where
-    S: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>
-        + Clone
-        + Send
-        + 'static,
+    S: Service<ServerContext, Request<T>, Response = Response<U>> + Clone + Send + 'static,
+    S::Error: Into<Status>,
     T: RecvEntryMessage,
     U: SendEntryMessage,
 {
     type Response = hyper::Response<Body>;
-    type Error = BoxError;
+    type Error = Status;
     type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
     fn poll_ready(
@@ -305,20 +304,26 @@ where
 
             let (parts, body) = req.into_parts();
 
-            extract_metadata(&parts.headers, &mut cx, peer_addr)?;
+            status_to_http!(extract_metadata(&parts.headers, &mut cx, peer_addr));
 
-            let message = trans!(T::from_body(
+            let message = status_to_http!(T::from_body(
                 cx.rpc_info.method.as_deref(),
                 body,
                 Kind::Request
             ));
+
             let volo_req = Request::from_http_parts(parts, message);
 
-            let volo_resp = trans!(inner.call(&mut cx, volo_req).await);
+            let volo_resp = match inner.call(&mut cx, volo_req).await {
+                Ok(resp) => resp,
+                Err(err) => {
+                    return Ok(err.into().to_http());
+                }
+            };
 
             let (mut metadata, extensions, message) = volo_resp.into_parts();
 
-            insert_metadata(&mut metadata)?;
+            status_to_http!(insert_metadata(&mut metadata));
 
             let mut resp = hyper::Response::new(Body::new(message.into_body()));
             *resp.headers_mut() = metadata.into_headers();
@@ -337,16 +342,16 @@ fn extract_metadata(
     headers: &HeaderMap<HeaderValue>,
     cx: &mut ServerContext,
     peer_addr: Option<Address>,
-) -> Result<(), BoxError> {
+) -> Result<(), Status> {
     metainfo::METAINFO.with(|metainfo| {
         let mut metainfo = metainfo.borrow_mut();
 
         // caller
         if let Some(source_service) = headers.get(SOURCE_SERVICE) {
-            let source_service = Arc::<str>::from(source_service.to_str().map_err(Box::new)?);
+            let source_service = Arc::<str>::from(source_service.to_str()?);
             let mut caller = Endpoint::new(source_service.into());
             if let Some(ad) = headers.get(HEADER_TRANS_REMOTE_ADDR) {
-                let addr = ad.to_str().map_err(Box::new)?.parse::<SocketAddr>();
+                let addr = ad.to_str()?.parse::<SocketAddr>();
                 if let Ok(addr) = addr {
                     caller.set_address(volo::net::Address::from(addr));
                 }
@@ -359,8 +364,7 @@ fn extract_metadata(
 
         // callee
         if let Some(destination_service) = headers.get(DESTINATION_SERVICE) {
-            let destination_service =
-                Arc::<str>::from(destination_service.to_str().map_err(Box::new)?);
+            let destination_service = Arc::<str>::from(destination_service.to_str()?);
             let callee = Endpoint::new(destination_service.into());
             cx.rpc_info_mut().callee = Some(callee);
         }
@@ -368,7 +372,7 @@ fn extract_metadata(
         // persistent and transient
         for (k, v) in headers.into_iter() {
             let k = k.as_str();
-            let v = v.to_str().map_err(Box::new)?;
+            let v = v.to_str()?;
             if k.starts_with(metainfo::HTTP_PREFIX_PERSISTENT) {
                 metainfo.strip_http_prefix_and_set_persistent(k.to_owned(), v.to_owned());
             } else if k.starts_with(metainfo::HTTP_PREFIX_TRANSIENT) {
@@ -376,11 +380,11 @@ fn extract_metadata(
             }
         }
 
-        Ok::<(), BoxError>(())
+        Ok::<(), Status>(())
     })
 }
 
-fn insert_metadata(metadata: &mut MetadataMap) -> Result<(), BoxError> {
+fn insert_metadata(metadata: &mut MetadataMap) -> Result<(), Status> {
     metainfo::METAINFO.with(|metainfo| {
         let metainfo = metainfo.borrow_mut();
 
@@ -388,14 +392,11 @@ fn insert_metadata(metadata: &mut MetadataMap) -> Result<(), BoxError> {
         if let Some(at) = metainfo.get_all_backward_transients() {
             for (key, value) in at {
                 let key = metainfo::HTTP_PREFIX_BACKWARD.to_owned() + key;
-                metadata.insert(
-                    MetadataKey::from_str(key.as_str()).map_err(Box::new)?,
-                    value.parse().map_err(Box::new)?,
-                );
+                metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
             }
         }
 
-        Ok::<(), BoxError>(())
+        Ok::<(), Status>(())
     })
 }
 

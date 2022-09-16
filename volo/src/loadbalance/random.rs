@@ -4,7 +4,7 @@ use std::{future::Future, hash::Hash, sync::Arc};
 use dashmap::{mapref::entry::Entry, DashMap};
 use rand::Rng;
 
-use super::LoadBalance;
+use super::{error::LoadBalanceError, LoadBalance};
 use crate::{
     context::Endpoint,
     discovery::{Change, Discover, Instance},
@@ -116,9 +116,9 @@ where
     D: Discover,
 {
     type InstanceIter<'iter> = InstancePicker;
-    type Error = D::Error;
+
     type GetFut<'future, 'iter> =
-        impl Future<Output = Result<Self::InstanceIter<'iter>, Self::Error>> + Send;
+        impl Future<Output = Result<Self::InstanceIter<'iter>, LoadBalanceError>> + Send;
 
     fn get_picker<'future, 'iter>(
         &'iter self,
@@ -130,8 +130,12 @@ where
             let weighted_list = match self.router.entry(key) {
                 Entry::Occupied(e) => e.get().clone(),
                 Entry::Vacant(e) => {
-                    let instances =
-                        Arc::new(WeightedInstances::from(discover.discover(endpoint).await?));
+                    let instances = Arc::new(WeightedInstances::from(
+                        discover
+                            .discover(endpoint)
+                            .await
+                            .map_err(|err| err.into())?,
+                    ));
                     e.insert(instances).value().clone()
                 }
             };

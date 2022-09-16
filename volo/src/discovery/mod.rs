@@ -15,7 +15,7 @@ use std::{
 
 use async_broadcast::Receiver;
 
-use crate::{context::Endpoint, net::Address};
+use crate::{context::Endpoint, loadbalance::error::LoadBalanceError, net::Address};
 
 /// [`Instance`] contains information of an instance from the target service.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +30,7 @@ pub trait Discover: Send + Sync + 'static {
     /// `Key` identifies a group of instances, such as the cluster name.
     type Key: Hash + PartialEq + Eq + Send + Sync + Clone + 'static;
     /// `Error` is the discovery error.
-    type Error: std::error::Error + Send + Sync;
+    type Error: Into<LoadBalanceError>;
     /// `DiscFut` is a Future object which returns a discovery result.
     type DiscFut<'future>: Future<Output = Result<Vec<Arc<Instance>>, Self::Error>> + Send + 'future;
 
@@ -182,6 +182,12 @@ impl Discover for DummyDiscover {
 
     fn watch(&self) -> Option<Receiver<Change<Self::Key>>> {
         None
+    }
+}
+
+impl From<Infallible> for LoadBalanceError {
+    fn from(_: Infallible) -> Self {
+        unreachable!()
     }
 }
 
