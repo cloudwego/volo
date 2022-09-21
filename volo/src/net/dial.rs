@@ -1,9 +1,10 @@
-use std::{io, net::TcpStream as StdTcpStream};
+use std::io;
 
+use socket2::{Domain, Protocol, Socket, Type};
 #[cfg(target_family = "unix")]
 use tokio::net::UnixStream;
 use tokio::{
-    net::TcpStream,
+    net::{TcpSocket, TcpStream},
     time::{timeout, Duration},
 };
 
@@ -40,19 +41,30 @@ impl MakeConnection {
         match addr {
             Address::Ip(addr) => {
                 let stream = if let Some(cfg) = self.cfg {
-                    let stream = if let Some(conn_timeout) = cfg.connect_timeout {
-                        StdTcpStream::connect_timeout(&addr, conn_timeout)?
-                    } else {
-                        StdTcpStream::connect(&addr)?
+                    let domain = Domain::for_address(addr);
+                    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
+                    socket.set_nonblocking(true)?;
+                    socket.set_read_timeout(cfg.read_write_timeout)?;
+                    socket.set_write_timeout(cfg.read_write_timeout)?;
+
+                    #[cfg(unix)]
+                    let socket = unsafe {
+                        use std::os::unix::io::{FromRawFd, IntoRawFd};
+                        TcpSocket::from_raw_fd(socket.into_raw_fd())
                     };
-                    stream.set_nonblocking(true)?;
-                    stream.set_read_timeout(cfg.read_write_timeout)?;
-                    stream.set_write_timeout(cfg.read_write_timeout)?;
-                    let stream = TcpStream::from_std(stream)?;
+                    #[cfg(windows)]
+                    let socket = unsafe {
+                        use std::os::windows::io::{FromRawSocket, IntoRawSocket};
+                        TcpSocket::from_raw_socket(socket.into_raw_socket())
+                    };
+
+                    let connect = socket.connect(addr);
+
                     if let Some(conn_timeout) = cfg.connect_timeout {
-                        timeout(conn_timeout, stream.writable()).await??;
+                        timeout(conn_timeout, connect).await??
+                    } else {
+                        connect.await?
                     }
-                    stream
                 } else {
                     TcpStream::connect(addr).await?
                 };
