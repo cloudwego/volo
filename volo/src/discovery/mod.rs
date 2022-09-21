@@ -222,6 +222,6 @@ mod tests {
                 tags: Default::default(),
             }),
         ];
-        assert!(resp == expected);
+        assert_eq!(resp, expected);
     }
 }
