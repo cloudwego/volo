@@ -3,7 +3,7 @@
 //! aborted.
 
 use futures::Future;
-use motore::{layer::Layer, service::Service, BoxError};
+use motore::{layer::Layer, service::Service};
 
 use crate::context::ClientContext;
 
@@ -16,11 +16,11 @@ impl<Req, S> Service<ClientContext, Req> for Timeout<S>
 where
     Req: 'static + Send,
     S: Service<ClientContext, Req> + 'static + Send,
-    S::Error: Send + Sync + Into<BoxError>,
+    S::Error: Send + Sync + Into<crate::Error>,
 {
     type Response = S::Response;
 
-    type Error = BoxError;
+    type Error = crate::Error;
 
     type Future<'cx> = impl Future<Output = Result<S::Response, Self::Error>> + 'cx;
 
@@ -37,7 +37,7 @@ where
                             r = self.inner.call(cx, req) => {
                                 r.map_err(Into::into)
                             },
-                            _ = sleep => Err(std::io::Error::new(std::io::ErrorKind::TimedOut, "service time out").into()),
+                            _ = sleep => Err(crate::Error::Pilota(std::io::Error::new(std::io::ErrorKind::TimedOut, "service time out").into())),
                         }
                     }
                     None => self.inner.call(cx, req).await.map_err(Into::into),

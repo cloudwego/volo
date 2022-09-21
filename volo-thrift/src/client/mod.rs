@@ -14,10 +14,9 @@ use std::{
 use futures::Future;
 use motore::{
     layer::{Identity, Layer, Stack},
-    service::{BoxCloneService, Service, ServiceExt},
-    BoxError,
+    service::{BoxCloneService, Service},
 };
-use pilota::thrift::{EntryMessage, TMessageType};
+use pilota::thrift::TMessageType;
 use tokio::time::Duration;
 use volo::{
     context::{Context, Endpoint, Role, RpcInfo},
@@ -35,7 +34,7 @@ use crate::{
     error::{Error, Result},
     tags::TransportType,
     transport::{pingpong, pool},
-    Size, ThriftMessage,
+    EntryMessage, Size, ThriftMessage,
 };
 
 mod callopt;
@@ -463,10 +462,13 @@ where
     <LB::Layer as Layer<IL::Service>>::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error:
-        Into<BoxError>,
+        Into<crate::Error>,
     Req: EntryMessage + Send + 'static + Size + Sync + Clone,
     Resp: EntryMessage + Send + 'static,
     IL: Layer<MessageService<Resp, MkE, MkD>>,
+    IL::Service:
+        Service<ClientContext, Req, Response = Option<Resp>> + Sync + Clone + Send + 'static,
+    <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<crate::Error>,
     OL: Layer<
         BoxCloneService<
             ClientContext,
@@ -476,7 +478,7 @@ where
         >,
     >,
     OL::Service: Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone,
-    <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<BoxError>,
+    <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<crate::Error>,
 {
     /// Build volo client.
     pub fn build(self) -> C {
@@ -500,7 +502,6 @@ where
                 ))),
         );
 
-        let transport = transport.map_err(Into::<crate::Error>::into);
         let transport = BoxCloneService::new(transport);
 
         self.service_client.set_client(Client {
@@ -523,7 +524,7 @@ where
 /// One important thing is that the `CallOpt` will not be cloned, because
 /// it's designed to be per-request.
 pub struct Client<Req, Resp> {
-    transport: BoxCloneService<ClientContext, Req, Option<Resp>, Error>,
+    transport: BoxCloneService<ClientContext, Req, Option<Resp>, crate::Error>,
     callopt: Option<CallOpt>,
     inner: Arc<ClientInner>,
 }

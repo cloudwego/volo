@@ -20,8 +20,8 @@ keywords = ["async", "rpc", "thrift", "grpc", "protobuf"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-anyhow = "1"
-motore = "0.1"
+motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
+
 tokio = { version = "1", features = ["net", "time", "sync", "io-util"] }
 pin-project = "1"
 futures = "0.3"
@@ -37,3 +37,4 @@ rand = "0.8"
 dashmap = "5.3"
 smol_str = "0.1"
 async-broadcast = "0.4"
+thiserror = "1"

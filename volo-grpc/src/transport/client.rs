@@ -175,13 +175,7 @@ fn insert_metadata(metadata: &mut MetadataMap, cx: &mut ClientContext) -> Result
         if let Some(ap) = metainfo.get_all_persistents() {
             for (key, value) in ap {
                 let key = metainfo::HTTP_PREFIX_PERSISTENT.to_owned() + key;
-                metadata.insert(
-                    MetadataKey::from_str(key.as_str())
-                        .map_err(|err| Status::from_error(Box::new(err)))?,
-                    value
-                        .parse()
-                        .map_err(|err| Status::from_error(Box::new(err)))?,
-                );
+                metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
             }
         }
 
@@ -189,51 +183,23 @@ fn insert_metadata(metadata: &mut MetadataMap, cx: &mut ClientContext) -> Result
         if let Some(at) = metainfo.get_all_transients() {
             for (key, value) in at {
                 let key = metainfo::HTTP_PREFIX_TRANSIENT.to_owned() + key;
-                metadata.insert(
-                    MetadataKey::from_str(key.as_str())
-                        .map_err(|err| Status::from_error(Box::new(err)))?,
-                    value
-                        .parse()
-                        .map_err(|err| Status::from_error(Box::new(err)))?,
-                );
+                metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
             }
         }
 
         // caller
         if let Some(caller) = cx.rpc_info.caller.as_ref() {
-            metadata.insert(
-                SOURCE_SERVICE,
-                caller
-                    .service_name()
-                    .parse()
-                    .map_err(|err| Status::from_error(Box::new(err)))?,
-            );
+            metadata.insert(SOURCE_SERVICE, caller.service_name().parse()?);
         }
 
         // callee
         if let Some(callee) = cx.rpc_info.callee.as_ref() {
-            metadata.insert(
-                DESTINATION_SERVICE,
-                callee
-                    .service_name()
-                    .parse()
-                    .map_err(|err| Status::from_error(Box::new(err)))?,
-            );
+            metadata.insert(DESTINATION_SERVICE, callee.service_name().parse()?);
             if let Some(method) = cx.rpc_info.method() {
-                metadata.insert(
-                    DESTINATION_METHOD,
-                    method
-                        .parse()
-                        .map_err(|err| Status::from_error(Box::new(err)))?,
-                );
+                metadata.insert(DESTINATION_METHOD, method.parse()?);
             }
             if let Some(addr) = callee.address() {
-                metadata.insert(
-                    DESTINATION_ADDR,
-                    addr.to_string()
-                        .parse()
-                        .map_err(|err| Status::from_error(Box::new(err)))?,
-                );
+                metadata.insert(DESTINATION_ADDR, addr.to_string().parse()?);
             }
         }
 
@@ -250,10 +216,7 @@ fn extract_metadata(
 
         // callee
         if let Some(ad) = headers.get(HEADER_TRANS_REMOTE_ADDR) {
-            let maybe_addr = ad
-                .to_str()
-                .map_err(|err| Status::from_error(Box::new(err)))?
-                .parse::<SocketAddr>();
+            let maybe_addr = ad.to_str()?.parse::<SocketAddr>();
             if let (Some(callee), Ok(addr)) = (cx.rpc_info_mut().callee.as_mut(), maybe_addr) {
                 callee.set_address(volo::net::Address::from(addr));
             }
@@ -262,7 +225,7 @@ fn extract_metadata(
         // backward
         for (k, v) in headers.into_iter() {
             let k = k.as_str();
-            let v = v.to_str().map_err(|err| Status::from_error(err.into()))?;
+            let v = v.to_str()?;
             if k.starts_with(metainfo::HTTP_PREFIX_BACKWARD) {
                 metainfo.strip_rpc_prefix_and_set_backward_downstream(k.to_owned(), v.to_owned());
             }

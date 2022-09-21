@@ -43,7 +43,7 @@ impl VoloThriftBackend {
                             Self::#variant_names(#decode_variants)
                         }),*
                         _ => {
-                            return Err(::pilota::thrift::new_application_error(::pilota::thrift::ApplicationErrorKind::UnknownMethod,  format!("unknown method {}", msg_ident.name)));
+                            return Err(::volo_thrift::error::new_application_error(::volo_thrift::error::ApplicationErrorKind::UnknownMethod,  format!("unknown method {}", msg_ident.name)));
                         },
                     })
                 }
@@ -53,23 +53,23 @@ impl VoloThriftBackend {
             let decode_async = mk_decode(true);
             quote! {
                 #[::async_trait::async_trait]
-                impl ::pilota::thrift::EntryMessage for #req_name {
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::Error> {
+                impl ::volo_thrift::EntryMessage for #req_name {
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::volo_thrift::Error> {
                         match self {
                             #(Self::#variant_names(value) => {
-                                ::pilota::thrift::Message::encode(value, protocol)
+                                ::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())
                             }),*
                         }
                     }
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::Error> {
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::volo_thrift::Error> {
                        #decode
                     }
 
                     async fn decode_async<R>(
                         protocol: &mut ::pilota::thrift::TAsyncBinaryProtocol<R>,
                         msg_ident: &::pilota::thrift::TMessageIdentifier
-                    ) -> ::core::result::Result<Self, ::pilota::thrift::Error>
+                    ) -> ::core::result::Result<Self, ::volo_thrift::Error>
                     where
                         R: ::pilota::AsyncRead + ::core::marker::Unpin + ::core::marker::Send {
                             #decode_async
@@ -100,7 +100,7 @@ impl VoloThriftBackend {
                             Self::#variant_names(#decode_item)
                         }),*
                         _ => {
-                            return Err(::pilota::thrift::new_application_error(::pilota::thrift::ApplicationErrorKind::UnknownMethod,  format!("unknown method {}", msg_ident.name)));
+                            return Err(::volo_thrift::error::new_application_error(::volo_thrift::error::ApplicationErrorKind::UnknownMethod,  format!("unknown method {}", msg_ident.name)));
                         },
                     })
                 }
@@ -110,25 +110,25 @@ impl VoloThriftBackend {
             let decode_async = mk_decode(true);
             quote! {
                 #[::async_trait::async_trait]
-                impl ::pilota::thrift::EntryMessage for #res_name {
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::Error> {
+                impl ::volo_thrift::EntryMessage for #res_name {
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::volo_thrift::Error> {
                         match self {
                             #(
                                 Self::#variant_names(value) => {
-                                    ::pilota::thrift::Message::encode(value, protocol)
+                                    ::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())
                                 }
                             )*
                         }
                     }
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::Error> {
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::volo_thrift::Error> {
                        #decode
                     }
 
                     async fn decode_async<R>(
                         protocol: &mut ::pilota::thrift::TAsyncBinaryProtocol<R>,
                         msg_ident: &::pilota::thrift::TMessageIdentifier,
-                    ) -> ::core::result::Result<Self, ::pilota::thrift::Error>
+                    ) -> ::core::result::Result<Self, ::volo_thrift::Error>
                     where
                         R: ::pilota::AsyncRead + ::core::marker::Unpin + ::core::marker::Send {
                             #decode_async
@@ -268,7 +268,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
                         let name = format_ident!("{}", v.name.to_upper_camel_case());
                         quote! {
-                            #res_name::#enum_variant(#result_path::#name(err)) => Err(::pilota::thrift::ResponseError::UserException(#exception::#name(err)))
+                            #res_name::#enum_variant(#result_path::#name(err)) => Err(::volo_thrift::error::ResponseError::UserException(#exception::#name(err)))
                         }
                     }).collect::<Vec<_>>(),
                     _ => panic!()
@@ -276,7 +276,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             });
 
             quote! {
-                pub async fn #name(&mut self #(, #req_fields)*) -> ::std::result::Result<#resp_type, ::pilota::thrift::ResponseError<#exception>> {
+                pub async fn #name(&mut self #(, #req_fields)*) -> ::std::result::Result<#resp_type, ::volo_thrift::error::ResponseError<#exception>> {
                     let req = #req_name::#enum_variant(#anonymous_args_name {
                         #(#req_field_names),*
                     });
@@ -320,7 +320,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
                         let name = format_ident!("{}", v.name.to_upper_camel_case());
                         quote! {
-                            Err(::pilota::thrift::UserError::UserException(#exception::#name(err))) => #method_result_path::#name(err)
+                            Err(::volo_thrift::error::UserError::UserException(#exception::#name(err))) => #method_result_path::#name(err)
                         }
                     }).collect::<Vec<_>>(),
                     _ => panic!()
@@ -333,7 +333,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     match inner.#name(#(args.#args),*).await {
                         Ok(resp) => #method_result_path::Ok(resp),
                         #(#convert_exceptions,)*
-                        Err(::pilota::thrift::UserError::Other(err)) => return Err(err),
+                        Err(::volo_thrift::error::UserError::Other(err)) => return Err(err),
                     }
                 }
             } else {
@@ -444,10 +444,29 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
     fn codegen_service_method(
         &self,
-        service_def_id: DefId,
+        _service_def_id: DefId,
         method: &rir::Method,
     ) -> proc_macro2::TokenStream {
-        self.inner.codegen_service_method(service_def_id, method)
+        let name = format_ident!("{}", method.name.to_snake_case());
+        let ret_ty = self.inner.codegen_item_ty(method.ret.kind.clone());
+        let args = method.args.iter().map(|a| {
+            let ty = self.inner.codegen_item_ty(a.ty.kind.clone());
+            let ident = format_ident!("{}", a.name);
+            quote! {
+                #ident: #ty
+            }
+        });
+
+        let exception = if let Some(p) = &method.exceptions {
+            let exception = self.inner.cur_related_item_path(p.did);
+            quote! { ::volo_thrift::error::UserError<#exception> }
+        } else {
+            quote!(::volo_thrift::AnyhowError)
+        };
+
+        quote::quote! {
+            async fn #name(&self, #(#args),*) -> ::core::result::Result<#ret_ty,#exception>;
+        }
     }
 
     fn codegen_enum_impl(

@@ -1,13 +1,12 @@
 use std::{fmt::Debug, future::Future, sync::Arc};
 
-use anyhow::{anyhow, Context as _};
-use motore::{BoxError, Service};
+use motore::Service;
 use tracing::warn;
 use volo::{
     context::Context,
     discovery::Discover,
-    loadbalance::{LoadBalance, MkLbLayer},
-    Layer,
+    loadbalance::{error::LoadBalanceError, LoadBalance, MkLbLayer},
+    Layer, Unwrap,
 };
 
 use crate::Request;
@@ -80,12 +79,13 @@ where
     D: Discover,
     LB: LoadBalance<D>,
     S: Service<Cx, Request<T>> + 'static + Send,
-    S::Error: Into<BoxError> + Debug,
+    LoadBalanceError: Into<S::Error>,
+    S::Error: Debug,
     T: Send + 'static,
 {
     type Response = S::Response;
 
-    type Error = BoxError;
+    type Error = S::Error;
 
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
     where
@@ -100,38 +100,36 @@ where
             "must set callee endpoint before load balance service"
         );
         async move {
-            if let Some(info) = &cx.rpc_info().callee {
-                let mut picker = match &info.address {
-                    None => self
-                        .load_balance
-                        .get_picker(info, &self.discover)
-                        .await
-                        .context("discover instance error")?,
-                    _ => {
-                        return self.service.call(cx, req).await.map_err(Into::into);
-                    }
-                };
+            let callee = cx.rpc_info().callee().volo_unwrap();
 
-                if let Some(addr) = picker.next() {
-                    if let Some(callee) = cx.rpc_info_mut().callee_mut() {
-                        callee.address = Some(addr.clone())
-                    }
-
-                    match self.service.call(cx, req).await {
-                        Ok(resp) => {
-                            return Ok(resp);
-                        }
-                        Err(err) => {
-                            tracing::warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
-                        }
-                    }
-                } else {
-                    tracing::warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
+            let mut picker = match &callee.address {
+                None => self
+                    .load_balance
+                    .get_picker(callee, &self.discover)
+                    .await
+                    .map_err(|err| err.into())?,
+                _ => {
+                    return self.service.call(cx, req).await.map_err(Into::into);
                 }
-                Err(anyhow!("load balance call reaches end").into())
+            };
+
+            if let Some(addr) = picker.next() {
+                if let Some(callee) = cx.rpc_info_mut().callee_mut() {
+                    callee.address = Some(addr.clone())
+                }
+
+                match self.service.call(cx, req).await {
+                    Ok(resp) => {
+                        return Ok(resp);
+                    }
+                    Err(err) => {
+                        tracing::warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
+                    }
+                }
             } else {
-                Err(anyhow!("load balance get empty endpoint").into())
+                tracing::warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
             }
+            Err(LoadBalanceError::Retry).map_err(|err| err.into())?
         }
     }
 }

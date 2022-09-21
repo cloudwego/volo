@@ -1,5 +1,5 @@
 use bytes::{Buf, BytesMut};
-use pilota::thrift::EntryMessage;
+use pilota::thrift::{new_protocol_error, ProtocolErrorKind};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use tracing::trace;
 use volo::util::buf_reader::BufReader;
@@ -8,9 +8,8 @@ use self::tt_header::{TTHeaderDecoder, TTHeaderEncoder};
 use crate::{
     context::ThriftContext,
     error::Result,
-    new_protocol_error,
     protocol::{binary::TAsyncBinaryProtocol, rw_ext::WriteExt, TBinaryProtocol},
-    ProtocolErrorKind, Size, ThriftMessage,
+    EntryMessage, Size, ThriftMessage,
 };
 
 pub mod framed;
@@ -85,10 +84,10 @@ impl<TT: Send + TTHeaderEncoder> DefaultEncoder<TT> {
             let header_size = self.ttheader_encoder.encode(cx, &mut self.buffer, size)?;
             trace!("[VOLO] encode message ttheader size: {}", header_size);
             if header_size > MAX_TTHEADER_SIZE {
-                return Err(new_protocol_error(
+                return Err(crate::Error::Pilota(new_protocol_error(
                     ProtocolErrorKind::SizeLimit,
                     "TTHeader size too large".to_string(),
-                ));
+                )));
             }
             if header_size > DEFAULT_TTHEADER_SIZE {
                 // we need to enlarge the buffer as ttheader used more than we expected
@@ -103,13 +102,15 @@ impl<TT: Send + TTHeaderEncoder> DefaultEncoder<TT> {
             // not contain self
             size -= 4;
             if size > self.max_frame_size {
-                return Err(new_protocol_error(
+                return Err(crate::Error::Pilota(new_protocol_error(
                     ProtocolErrorKind::SizeLimit,
                     format!("Frame of length {} is too large.", size),
-                ));
+                )));
             }
             // encode size
-            self.buffer.write_u32(size as u32)?;
+            self.buffer
+                .write_u32(size as u32)
+                .map_err(Into::<pilota::thrift::error::Error>::into)?;
             trace!("[VOLO] encode message framed header size: {}", size);
             trace!(
                 "[VOLO] encode message framed buffer length: {}",
@@ -196,10 +197,10 @@ where
                 codec_type = CodecType::TTHeaderFramed;
                 self.bytes.advance(4);
             } else if !is_binary(self.bytes.as_ref()) {
-                return Err(new_protocol_error(
+                return Err(crate::Error::Pilota(new_protocol_error(
                     ProtocolErrorKind::BadVersion,
                     "Unknown version".to_string(),
-                ));
+                )));
             }
             self.codec_type = Some(codec_type);
             // 3. decode item
@@ -219,10 +220,10 @@ where
         } else if is_binary(buf) {
             codec_type = CodecType::Buffered;
         } else {
-            return Err(new_protocol_error(
+            return Err(crate::Error::Pilota(new_protocol_error(
                 ProtocolErrorKind::BadVersion,
                 "Unknown version".to_string(),
-            ));
+            )));
         }
         self.codec_type = Some(codec_type);
         // 3. decode item

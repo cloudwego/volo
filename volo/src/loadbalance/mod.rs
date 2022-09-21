@@ -1,9 +1,10 @@
+pub mod error;
 mod layer;
 pub mod random;
 
 use std::future::Future;
 
-use self::layer::LoadBalanceLayer;
+use self::{error::LoadBalanceError, layer::LoadBalanceLayer};
 use crate::{
     context::Endpoint,
     discovery::{Change, Discover},
@@ -17,10 +18,9 @@ where
 {
     /// `InstanceIter` is an iterator of [`crate::discovery::Instance`].
     type InstanceIter<'iter>: Iterator<Item = Address> + Send + 'iter;
-    /// `Error` is the error of the `get_picker` result.
-    type Error: std::error::Error + Send + Sync;
+
     /// `GetFut` is the return type of `get_picker`.
-    type GetFut<'future, 'iter>: Future<Output = Result<Self::InstanceIter<'iter>, Self::Error>>
+    type GetFut<'future, 'iter>: Future<Output = Result<Self::InstanceIter<'iter>, LoadBalanceError>>
         + Send; // remove +'future temporarily, see https://github.com/rust-lang/rust/issues/100013
 
     /// `get_picker` allows to get an instance iterator of a specified endpoint from self or

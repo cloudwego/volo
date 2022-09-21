@@ -10,7 +10,6 @@ use motore::{
     service::Service,
     BoxError,
 };
-use pilota::thrift::EntryMessage;
 use tokio::sync::Notify;
 use tracing::info;
 
@@ -19,7 +18,7 @@ use crate::{
         framed::Framed, tt_header, MakeServerDecoder, MakeServerEncoder, MkDecoder, MkEncoder,
     },
     context::ServerContext,
-    Result, Size,
+    EntryMessage, Result, Size,
 };
 
 pub struct Server<S, L, Req, MkE, MkD> {
@@ -150,9 +149,9 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
         MkE: MkEncoder,
         MkD: MkDecoder,
         L::Service: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static + Sync,
-        <L::Service as Service<ServerContext, Req>>::Error: Into<BoxError> + Send,
+        <L::Service as Service<ServerContext, Req>>::Error: Into<crate::Error> + Send,
         S: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
-        S::Error: Into<BoxError>,
+        S::Error: Into<crate::Error>,
         Req: EntryMessage + Send + 'static,
         Resp: EntryMessage + Send + 'static + Size + Sync,
     {
@@ -283,7 +282,7 @@ async fn handle_conn<Req, Svc, Resp, MkE, MkD>(
     MkD: MkDecoder,
     Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
     Svc::Error: Send,
-    Svc::Error: Into<BoxError>,
+    Svc::Error: Into<crate::Error>,
     Req: EntryMessage + Send + 'static,
     Resp: EntryMessage + Send + 'static + Size,
 {

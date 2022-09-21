@@ -19,8 +19,9 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 volo = { version = "0.1", path = "../volo" }
-pilota = "0.1"
-motore = "0.1"
+pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" }
+motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
+metainfo = "0.6"
 
 tokio = { version = "1", features = [
     "time",
@@ -38,6 +39,6 @@ pin-project = "1"
 linked-hash-map = "0.5"
 lazy_static = "1"
 smol_str = "0.1"
-metainfo = "0.6"
 num_enum = "0.5"
 anyhow = "1"
+thiserror = "1"

@@ -1,4 +1,3 @@
-use pilota::thrift::EntryMessage;
 use tokio::io::AsyncWriteExt;
 use volo::{
     net::conn::{OwnedReadHalf, OwnedWriteHalf},
@@ -6,7 +5,7 @@ use volo::{
 };
 
 use super::{Decoder, Encoder, DEFAULT_BUFFER_SIZE};
-use crate::{context::ThriftContext, ThriftMessage};
+use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
 
 pub struct Framed<E, D> {
     encoder: E,

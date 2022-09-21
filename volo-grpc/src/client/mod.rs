@@ -13,7 +13,7 @@ pub use callopt::CallOpt;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{BoxCloneService, Service},
-    BoxError, ServiceExt,
+    ServiceExt,
 };
 use volo::{
     context::{Endpoint, Role, RpcInfo},
@@ -406,8 +406,11 @@ where
     <LB::Layer as Layer<IL::Service>>::Service:
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Error:
-        Into<BoxError>,
+        Into<Status>,
     IL: Layer<ClientTransport<U>>,
+    IL::Service:
+        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
+    <IL::Service as Service<ClientContext, Request<T>>>::Error: Into<Status>,
     OL:
         Layer<
             BoxCloneService<
@@ -422,7 +425,7 @@ where
         >,
     OL::Service:
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
-    <OL::Service as Service<ClientContext, Request<T>>>::Error: Send + Into<BoxError>,
+    <OL::Service as Service<ClientContext, Request<T>>>::Error: Send + Into<Status>,
     T: 'static + Send,
 {
     /// Builds a new [`Client`].
@@ -432,7 +435,7 @@ where
             self.mk_lb.make().layer(self.inner_layer.layer(transport)),
         ));
 
-        let transport = transport.map_err(|err| Status::from_error(err.into()));
+        let transport = transport.map_err(|err| err.into());
         let transport = BoxCloneService::new(transport);
 
         self.service_client.set_client(Client {

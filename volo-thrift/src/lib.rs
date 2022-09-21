@@ -5,7 +5,7 @@
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 
-mod error;
+pub mod error;
 mod message;
 mod message_wrapper;
 mod protocol;
@@ -17,6 +17,7 @@ pub mod codec;
 pub mod context;
 pub mod server;
 pub mod tags;
+pub use anyhow::Error as AnyhowError;
 pub use error::*;
 pub use message::{EntryMessage, Message, Size};
 pub use message_wrapper::*;

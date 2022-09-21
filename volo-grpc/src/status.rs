@@ -1,13 +1,13 @@
 //! These codes are copied from `tonic/src/status.rs` and may be modified by us.
 
-use std::{borrow::Cow, error::Error, fmt, str::FromStr};
+use std::{borrow::Cow, error::Error, fmt};
 
 use bytes::Bytes;
-use http::header::{HeaderMap, HeaderName, HeaderValue};
-use metainfo::Backward;
+use http::header::{HeaderMap, HeaderValue};
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
 use tower::BoxError;
 use tracing::{debug, trace, warn};
+use volo::loadbalance::error::LoadBalanceError;
 
 use crate::{body::Body, metadata::MetadataMap};
 
@@ -621,21 +621,6 @@ impl Status {
             http::header::HeaderValue::from_static("application/grpc"),
         );
 
-        metainfo::METAINFO.with(|metainfo| {
-            let metainfo = metainfo.borrow_mut();
-
-            // backward
-            if let Some(at) = metainfo.get_all_backward_transients() {
-                for (key, value) in at {
-                    let key = metainfo::HTTP_PREFIX_BACKWARD.to_owned() + key;
-                    parts.headers.insert(
-                        HeaderName::from_str(key.as_str()).unwrap(),
-                        value.parse().unwrap(),
-                    );
-                }
-            }
-        });
-
         self.add_header(&mut parts.headers).unwrap();
 
         http::Response::from_parts(parts, Body::new(Box::pin(futures::stream::empty())))
@@ -738,6 +723,42 @@ impl From<std::io::Error> for Status {
             _ => Code::Unknown,
         };
         Status::new(code, err.to_string())
+    }
+}
+
+impl From<http::header::ToStrError> for Status {
+    fn from(err: http::header::ToStrError) -> Self {
+        Status::invalid_argument(err.to_string())
+    }
+}
+
+impl From<crate::metadata::errors::InvalidMetadataKey> for Status {
+    fn from(err: crate::metadata::errors::InvalidMetadataKey) -> Self {
+        Status::invalid_argument(err.to_string())
+    }
+}
+
+impl From<crate::metadata::errors::InvalidMetadataValue> for Status {
+    fn from(err: crate::metadata::errors::InvalidMetadataValue) -> Self {
+        Status::invalid_argument(err.to_string())
+    }
+}
+
+impl From<crate::metadata::errors::ToStrError> for Status {
+    fn from(err: crate::metadata::errors::ToStrError) -> Self {
+        Status::invalid_argument(err.to_string())
+    }
+}
+
+impl From<BoxError> for Status {
+    fn from(err: BoxError) -> Self {
+        Status::from_error(err)
+    }
+}
+
+impl From<LoadBalanceError> for Status {
+    fn from(err: LoadBalanceError) -> Self {
+        Status::unknown(err.to_string())
     }
 }
 
