@@ -967,7 +967,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.1.1"
-source = "git+https://github.com/cloudwego/pilota?branch=main#c190263f858a1c679b55f4e14cefab0ae1f65aa9"
+source = "git+https://github.com/cloudwego/pilota?branch=main#8a6f89399ab50e2b267e766b6ddd8d07f734f0ab"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -984,12 +984,13 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.1.9"
-source = "git+https://github.com/cloudwego/pilota?branch=main#c190263f858a1c679b55f4e14cefab0ae1f65aa9"
+source = "git+https://github.com/cloudwego/pilota?branch=main#8a6f89399ab50e2b267e766b6ddd8d07f734f0ab"
 dependencies = [
  "fxhash",
  "heck 0.4.0",
  "itertools",
  "lazy_static",
+ "normpath",
  "paste",
  "petgraph",
  "phf",
@@ -1000,6 +1001,7 @@ dependencies = [
  "quote",
  "salsa",
  "scoped-tls",
+ "smol_str",
  "syn",
  "tracing",
  "tracing-subscriber",
@@ -1008,7 +1010,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.2.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#c190263f858a1c679b55f4e14cefab0ae1f65aa9"
+source = "git+https://github.com/cloudwego/pilota?branch=main#8a6f89399ab50e2b267e766b6ddd8d07f734f0ab"
 dependencies = [
  "nom",
 ]
@@ -1296,9 +1298,9 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustix"
-version = "0.35.9"
+version = "0.35.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72c825b8aa8010eb9ee99b75f05e10180b9278d161583034d7574c9d617aeada"
+checksum = "af895b90e5c071badc3136fc10ff0bcfc98747eadbaf43ed8f214e07ba8f8477"
 dependencies = [
  "bitflags",
  "errno",
@@ -1394,18 +1396,18 @@ checksum = "e25dfac463d778e353db5be2449d1cce89bd6fd23c9f1ea21310ce6e5a1b29c4"
 
 [[package]]
 name = "serde"
-version = "1.0.144"
+version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f747710de3dcd43b88c9168773254e809d8ddbdf9653b84e2554ab219f17860"
+checksum = "728eb6351430bccb993660dfffc5a72f91ccc1295abaa8ce19b27ebe4f75568b"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.144"
+version = "1.0.145"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94ed3a816fb1d101812f83e789f888322c34e291f894f19590dc310963e87a00"
+checksum = "81fa1584d3d1bcacd84c277a0dfe21f5b0f6accf4a23d04d4c6d61f1af522b4c"
 dependencies = [
  "proc-macro2",
  "quote",

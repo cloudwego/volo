@@ -6,7 +6,7 @@ use pilota_build::{
     rir,
     rir::Method,
     tags::protobuf::{ClientStreaming, ServerStreaming},
-    CodegenBackend, Context, DefId,
+    CodegenBackend, Context, DefId, IdentName,
 };
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
@@ -153,7 +153,7 @@ impl VoloGrpcBackend {
     }
 
     fn build_server_call(&self, method: &Method) -> TokenStream {
-        let method_name = format_ident!("{}", method.name.to_snake_case());
+        let method_name = self.cx.rust_name(method.def_id).as_syn_ident();
         quote! {
             let resp = inner.#method_name(req).await;
         }
@@ -195,7 +195,7 @@ impl CodegenBackend for VoloGrpcBackend {
             self.cx.node_contains_tag::<ServerStreaming>(method.def_id),
         );
 
-        let name = format_ident!("{}", method.name.to_snake_case());
+        let name = self.cx.rust_name(method.def_id).as_syn_ident();
 
         quote::quote! {
             async fn #name(&self, #(#args),*) -> ::std::result::Result<#ret_ty>;
@@ -203,7 +203,7 @@ impl CodegenBackend for VoloGrpcBackend {
     }
 
     fn codegen_service_impl(&self, def_id: DefId, stream: &mut TokenStream, s: &rir::Service) {
-        let service_name = format_ident!("{}", s.name.to_upper_camel_case());
+        let service_name = self.cx.rust_name(def_id).as_syn_ident();
         let server_name = format_ident!("{}Server", service_name);
         let client_builder_name = format_ident!("{}ClientBuilder", service_name);
         let client_name = format_ident!("{}Client", service_name);
@@ -224,7 +224,11 @@ impl CodegenBackend for VoloGrpcBackend {
             .collect::<Vec<_>>();
 
         let req_matches = s.methods.iter().map(|method| {
-            let variant_name = format_ident!("{}", method.name.to_upper_camel_case());
+            let variant_name = self
+                .cx
+                .rust_name(method.def_id)
+                .upper_camel_ident()
+                .as_syn_ident();
             let path = format!("/{}.{}/{}", package, s.name, method.name);
             let client_streaming = self.cx.node_contains_tag::<ClientStreaming>(method.def_id);
             let input_ty = &method.args[0].ty;
@@ -260,7 +264,12 @@ impl CodegenBackend for VoloGrpcBackend {
         let enum_variant_names = s
             .methods
             .iter()
-            .map(|method| format_ident!("{}", method.name.to_upper_camel_case()))
+            .map(|method| {
+                self.cx
+                    .rust_name(method.def_id)
+                    .upper_camel_ident()
+                    .as_syn_ident()
+            })
             .collect::<Vec<_>>();
 
         let req_tys = s
@@ -275,7 +284,7 @@ impl CodegenBackend for VoloGrpcBackend {
             .collect::<Vec<_>>();
 
         let client_methods = s.methods.iter().map(|method| {
-            let method_name = format_ident!("{}", method.name.to_snake_case());
+            let method_name = self.cx.rust_name(method.def_id).as_syn_ident();
 
             let path = format!("/{}.{}/{}", package, s.name, method.name);
             let input_ty = &method.args[0].ty;
@@ -285,7 +294,7 @@ impl CodegenBackend for VoloGrpcBackend {
             let output_ty = &method.ret;
             let server_streaming = self.cx.node_contains_tag::<ServerStreaming>(method.def_id);
 
-            let variant_name = format_ident!("{}", method.name.to_upper_camel_case());
+            let variant_name = self.cx.rust_name(method.def_id).upper_camel_ident().as_syn_ident();
 
             let resp_ty = self.client_output_ty(output_ty.clone(), server_streaming);
 

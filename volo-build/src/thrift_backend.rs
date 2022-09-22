@@ -1,7 +1,8 @@
 use std::sync::Arc;
 
 use pilota_build::{
-    codegen::thrift::DecodeHelper, db::RirDatabase, rir, rir::Method, Context, DefId, ThriftBackend,
+    codegen::thrift::DecodeHelper, db::RirDatabase, rir, rir::Method, Context, DefId, IdentName,
+    ThriftBackend,
 };
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
@@ -14,12 +15,17 @@ pub struct VoloThriftBackend {
 
 impl VoloThriftBackend {
     fn codegen_service_anonymous_type(&self, stream: &mut TokenStream, def_id: DefId) {
-        let service_name = format_ident!("{}", self.cx.symbol_name(def_id).to_upper_camel_case());
+        let service_name = self.cx.rust_name(def_id).as_syn_ident();
         let methods = self.cx.service_methods(def_id);
         let methods_names = methods.iter().map(|m| &**m.name).collect::<Vec<_>>();
         let variant_names = methods
             .iter()
-            .map(|m| format_ident!("{}", m.name.to_upper_camel_case()))
+            .map(|m| {
+                self.cx
+                    .rust_name(m.def_id)
+                    .upper_camel_ident()
+                    .as_syn_ident()
+            })
             .collect::<Vec<_>>();
         let args_names = methods
             .iter()
@@ -175,7 +181,10 @@ impl VoloThriftBackend {
                 let ident = format_ident!(
                     "{}{}{}",
                     target_service.name,
-                    method.name.to_upper_camel_case(),
+                    self.cx
+                        .rust_name(method.def_id)
+                        .upper_camel_ident()
+                        .as_syn_ident(),
                     suffix,
                 );
                 let mut path: syn::Path = self.cx.cur_related_item_path(def_id);
@@ -187,7 +196,10 @@ impl VoloThriftBackend {
                 let ident = format_ident!(
                     "{}{}{}",
                     service_name,
-                    method.name.to_upper_camel_case(),
+                    self.cx
+                        .rust_name(method.def_id)
+                        .upper_camel_ident()
+                        .as_syn_ident(),
                     suffix
                 );
                 quote!(#ident)
@@ -218,9 +230,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         &self,
         def_id: DefId,
         stream: &mut proc_macro2::TokenStream,
-        s: &rir::Service,
+        _s: &rir::Service,
     ) {
-        let service_name = format_ident!("{}", s.name.to_upper_camel_case());
+        let service_name = self.cx.rust_name(def_id).as_syn_ident();
         let server_name = format_ident!("{}Server", service_name);
         let client_name = format_ident!("{}Client", service_name);
         let client_builder_name = format_ident!("{}Builder", client_name);
@@ -230,7 +242,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         let all_methods = self.cx.service_methods(def_id);
 
         let client_methods = all_methods.iter().map(|m| {
-            let name = format_ident!("{}", m.name.to_snake_case());
+            let name = self.cx.rust_name(m.def_id).as_syn_ident();
             let resp_type = self.cx.codegen_item_ty(m.ret.kind.clone());
             let req_fields = m.args.iter().map(|a| {
                 let name = format_ident!("{}", a.name);
@@ -240,7 +252,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 }
             });
             let method_name_str = &**m.name;
-            let enum_variant = format_ident!("{}", m.name.to_upper_camel_case());
+            let enum_variant = self.cx.rust_name(m.def_id).upper_camel_ident().as_syn_ident();
             let result_path = self.method_result_path(&service_name, m);
             let oneway = m.oneway;
             let none = if m.oneway {
@@ -266,7 +278,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }).flat_map(|e| {
                 match &*e {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
-                        let name = format_ident!("{}", v.name.to_upper_camel_case());
+                        let name = self.cx.rust_name(v.did).as_syn_ident();
                         quote! {
                             #res_name::#enum_variant(#result_path::#name(err)) => Err(::volo_thrift::error::ResponseError::UserException(#exception::#name(err)))
                         }
@@ -293,12 +305,15 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }
         });
 
-        let variants = all_methods
-            .iter()
-            .map(|m| format_ident!("{}", m.name.to_upper_camel_case()));
+        let variants = all_methods.iter().map(|m| {
+            self.cx
+                .rust_name(m.def_id)
+                .upper_camel_ident()
+                .as_syn_ident()
+        });
 
         let user_handler = all_methods.iter().map(|m| {
-            let name = format_ident!("{}", m.name.to_snake_case());
+            let name = self.cx.rust_name(m.def_id).as_syn_ident();
             let args = m.args.iter().map(|a| format_ident!("{}", a.name));
             let has_exception = m.exceptions.is_some();
             let method_result_path = self.method_result_path(&service_name, m);
@@ -318,7 +333,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     .flat_map(|e| {
                         match &*e {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
-                        let name = format_ident!("{}", v.name.to_upper_camel_case());
+                        let name = self.cx.rust_name(v.did).as_syn_ident();
                         quote! {
                             Err(::volo_thrift::error::UserError::UserException(#exception::#name(err))) => #method_result_path::#name(err)
                         }
@@ -447,7 +462,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         _service_def_id: DefId,
         method: &rir::Method,
     ) -> proc_macro2::TokenStream {
-        let name = format_ident!("{}", method.name.to_snake_case());
+        let name = self.cx.rust_name(method.def_id).as_syn_ident();
         let ret_ty = self.inner.codegen_item_ty(method.ret.kind.clone());
         let args = method.args.iter().map(|a| {
             let ty = self.inner.codegen_item_ty(a.ty.kind.clone());
