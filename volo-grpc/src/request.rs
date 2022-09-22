@@ -67,7 +67,7 @@ impl<T> Request<T> {
     }
 
     pub fn from_http_parts(parts: http::request::Parts, message: T) -> Self {
-        Request {
+        Self {
             metadata: MetadataMap::from_headers(parts.headers),
             message,
             extensions: parts.extensions,
