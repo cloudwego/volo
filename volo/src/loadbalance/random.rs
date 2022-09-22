@@ -175,7 +175,7 @@ mod tests {
         let lb = WeightedRandomBalance::with_discover(&discover);
         let picker = lb.get_picker(&empty, &discover).await.unwrap();
         let all = picker.collect::<Vec<_>>();
-        assert!(all.len() == 2);
-        assert!(all[0] != all[1]);
+        assert_eq!(all.len(), 2);
+        assert_ne!(all[0], all[1]);
     }
 }
