@@ -17,7 +17,7 @@ pub struct Request<T> {
 impl<T> Request<T> {
     /// Create a new [`Request`].
     pub fn new(message: T) -> Self {
-        Request {
+        Self {
             metadata: MetadataMap::new(),
             message,
             extensions: Extensions::new(),
@@ -63,7 +63,7 @@ impl<T> Request<T> {
 
     pub fn from_http(http: http::Request<T>) -> Self {
         let (parts, message) = http.into_parts();
-        Request::from_http_parts(parts, message)
+        Self::from_http_parts(parts, message)
     }
 
     pub fn from_http_parts(parts: http::request::Parts, message: T) -> Self {
