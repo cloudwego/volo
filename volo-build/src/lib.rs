@@ -88,6 +88,14 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
+    pub fn must_gen_items(
+        mut self,
+        items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>,
+    ) -> Self {
+        self.pilota_builder = self.pilota_builder.must_gen_items(items);
+        self
+    }
+
     fn get_out_dir(&self) -> anyhow::Result<PathBuf> {
         self.out_dir
             .clone()
