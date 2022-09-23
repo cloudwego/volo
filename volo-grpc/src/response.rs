@@ -16,7 +16,7 @@ pub struct Response<T> {
 impl<T> Response<T> {
     /// Create a new gRPC response.
     pub fn new(message: T) -> Self {
-        Response {
+        Self {
             metadata: MetadataMap::new(),
             message,
             extensions: Extensions::new(),
