@@ -302,9 +302,9 @@ where
             let mut cx = ServerContext::default();
             cx.rpc_info.method = Some(req.uri().path().into());
 
-            let (parts, body) = req.into_parts();
+            let (mut parts, body) = req.into_parts();
 
-            status_to_http!(extract_metadata(&parts.headers, &mut cx, peer_addr));
+            status_to_http!(extract_metadata(&mut parts.headers, &mut cx, peer_addr));
 
             let message = status_to_http!(T::from_body(
                 cx.rpc_info.method.as_deref(),
@@ -339,7 +339,7 @@ where
 }
 
 fn extract_metadata(
-    headers: &HeaderMap<HeaderValue>,
+    headers: &mut HeaderMap<HeaderValue>,
     cx: &mut ServerContext,
     peer_addr: Option<Address>,
 ) -> Result<(), Status> {
@@ -347,10 +347,10 @@ fn extract_metadata(
         let mut metainfo = metainfo.borrow_mut();
 
         // caller
-        if let Some(source_service) = headers.get(SOURCE_SERVICE) {
+        if let Some(source_service) = headers.remove(SOURCE_SERVICE) {
             let source_service = Arc::<str>::from(source_service.to_str()?);
             let mut caller = Endpoint::new(source_service.into());
-            if let Some(ad) = headers.get(HEADER_TRANS_REMOTE_ADDR) {
+            if let Some(ad) = headers.remove(HEADER_TRANS_REMOTE_ADDR) {
                 let addr = ad.to_str()?.parse::<SocketAddr>();
                 if let Ok(addr) = addr {
                     caller.set_address(volo::net::Address::from(addr));
@@ -363,21 +363,27 @@ fn extract_metadata(
         }
 
         // callee
-        if let Some(destination_service) = headers.get(DESTINATION_SERVICE) {
+        if let Some(destination_service) = headers.remove(DESTINATION_SERVICE) {
             let destination_service = Arc::<str>::from(destination_service.to_str()?);
             let callee = Endpoint::new(destination_service.into());
             cx.rpc_info_mut().callee = Some(callee);
         }
 
         // persistent and transient
+        let mut vec = Vec::with_capacity(headers.len());
         for (k, v) in headers.into_iter() {
             let k = k.as_str();
             let v = v.to_str()?;
             if k.starts_with(metainfo::HTTP_PREFIX_PERSISTENT) {
+                vec.push(k.to_owned());
                 metainfo.strip_http_prefix_and_set_persistent(k.to_owned(), v.to_owned());
             } else if k.starts_with(metainfo::HTTP_PREFIX_TRANSIENT) {
+                vec.push(k.to_owned());
                 metainfo.strip_http_prefix_and_set_upstream(k.to_owned(), v.to_owned());
             }
+        }
+        for k in vec {
+            headers.remove(k);
         }
 
         Ok::<(), Status>(())

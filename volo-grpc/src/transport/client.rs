@@ -138,9 +138,9 @@ where
                     return Err(status);
                 }
             }
-            let (parts, body) = resp.into_parts();
+            let (mut parts, body) = resp.into_parts();
             let body = U::from_body(Some(path), body, Kind::Response(status_code))?;
-            extract_metadata(&parts.headers, cx)?;
+            extract_metadata(&mut parts.headers, cx)?;
 
             let resp = hyper::Response::from_parts(parts, body);
 
@@ -208,14 +208,14 @@ fn insert_metadata(metadata: &mut MetadataMap, cx: &mut ClientContext) -> Result
 }
 
 fn extract_metadata(
-    headers: &HeaderMap<HeaderValue>,
+    headers: &mut HeaderMap<HeaderValue>,
     cx: &mut ClientContext,
 ) -> Result<(), Status> {
     metainfo::METAINFO.with(|metainfo| {
         let mut metainfo = metainfo.borrow_mut();
 
         // callee
-        if let Some(ad) = headers.get(HEADER_TRANS_REMOTE_ADDR) {
+        if let Some(ad) = headers.remove(HEADER_TRANS_REMOTE_ADDR) {
             let maybe_addr = ad.to_str()?.parse::<SocketAddr>();
             if let (Some(callee), Ok(addr)) = (cx.rpc_info_mut().callee.as_mut(), maybe_addr) {
                 callee.set_address(volo::net::Address::from(addr));
@@ -223,12 +223,17 @@ fn extract_metadata(
         }
 
         // backward
+        let mut vec = Vec::with_capacity(headers.len());
         for (k, v) in headers.into_iter() {
             let k = k.as_str();
             let v = v.to_str()?;
             if k.starts_with(metainfo::HTTP_PREFIX_BACKWARD) {
-                metainfo.strip_rpc_prefix_and_set_backward_downstream(k.to_owned(), v.to_owned());
+                vec.push(k.to_owned());
+                metainfo.strip_http_prefix_and_set_backward_downstream(k.to_owned(), v.to_owned());
             }
+        }
+        for k in vec {
+            headers.remove(k);
         }
 
         Ok::<(), Status>(())
