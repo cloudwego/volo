@@ -27,8 +27,8 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     Svc::Error: Into<crate::Error>,
     Req: EntryMessage,
     Resp: EntryMessage + Size,
-    E: Encoder,
-    D: Decoder,
+    E: Encoder + Send,
+    D: Decoder + Send,
 {
     tokio::pin!(notified);
 

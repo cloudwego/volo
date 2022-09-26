@@ -42,3 +42,8 @@ smol_str = "0.1"
 num_enum = "0.5"
 anyhow = "1"
 thiserror = "1"
+fxhash = "0.2"
+
+[features]
+# multiplex is unstable and we don't provide backward compatibility
+multiplex = []

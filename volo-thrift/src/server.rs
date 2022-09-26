@@ -27,6 +27,8 @@ pub struct Server<S, L, Req, MkE, MkD> {
     mk_encoder: MkE,
     mk_decoder: MkD,
     _marker: PhantomData<fn(Req)>,
+    #[cfg(feature = "multiplex")]
+    multiplex: bool,
 }
 
 impl<S, Req>
@@ -48,6 +50,8 @@ impl<S, Req>
             service,
             layer: Identity::new(),
             _marker: PhantomData,
+            #[cfg(feature = "multiplex")]
+            multiplex: false,
         }
     }
 }
@@ -71,6 +75,8 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
             mk_encoder: self.mk_encoder,
             mk_decoder: self.mk_decoder,
             _marker: PhantomData,
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -92,6 +98,8 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
             mk_encoder: self.mk_encoder,
             mk_decoder: self.mk_decoder,
             _marker: PhantomData,
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -114,6 +122,8 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
             mk_encoder: MakeServerEncoder::new(tt_encoder),
             mk_decoder: self.mk_decoder,
             _marker: PhantomData,
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -136,6 +146,8 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
             mk_encoder: self.mk_encoder,
             mk_decoder: MakeServerDecoder::new(tt_decoder),
             _marker: PhantomData,
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -151,7 +163,7 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
         L::Service: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static + Sync,
         <L::Service as Service<ServerContext, Req>>::Error: Into<crate::Error> + Send,
         S: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
-        S::Error: Into<crate::Error>,
+        S::Error: Into<crate::Error> + Send,
         Req: EntryMessage + Send + 'static,
         Resp: EntryMessage + Send + 'static + Size + Sync,
     {
@@ -180,6 +192,31 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
                         conn_cnt.fetch_add(1, Ordering::Relaxed);
                         let service = service.clone();
 
+                        #[cfg(feature = "multiplex")]
+                        if self.multiplex {
+                            tokio::spawn(handle_conn_multiplex(
+                                conn,
+                                service,
+                                self.mk_encoder.clone(),
+                                self.mk_decoder.clone(),
+                                exit_notify_inner.clone(),
+                                exit_flag_inner.clone(),
+                                exit_mark_inner.clone(),
+                                conn_cnt.clone(),
+                            ));
+                        } else {
+                            tokio::spawn(handle_conn(
+                                conn,
+                                service,
+                                self.mk_encoder.clone(),
+                                self.mk_decoder.clone(),
+                                exit_notify_inner.clone(),
+                                exit_flag_inner.clone(),
+                                exit_mark_inner.clone(),
+                                conn_cnt.clone(),
+                            ));
+                        }
+                        #[cfg(not(feature = "multiplex"))]
                         tokio::spawn(handle_conn(
                             conn,
                             service,
@@ -265,6 +302,22 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
         }
         Ok(())
     }
+
+    #[cfg(feature = "multiplex")]
+    /// Use multiplexing to handle multiple requests in one connection.
+    ///
+    /// Not recommend for most users.
+    #[doc(hidden)]
+    pub fn multiplex(self, multiplex: bool) -> Server<S, L, Req, MkE, MkD> {
+        Server {
+            layer: self.layer,
+            service: self.service,
+            mk_encoder: self.mk_encoder,
+            mk_decoder: self.mk_decoder,
+            _marker: PhantomData,
+            multiplex,
+        }
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -301,7 +354,46 @@ async fn handle_conn<Req, Svc, Resp, MkE, MkD>(
 
     let framed = Framed::new(stream, encoder, decoder);
 
-    tracing::trace!("[VOLO] handle conn by pingpong");
+    tracing::trace!("[VOLO] handle conn by ping-pong");
     crate::transport::pingpong::serve(framed, notified, exit_mark, service).await;
+    conn_cnt.fetch_sub(1, Ordering::Relaxed);
+}
+
+#[cfg(feature = "multiplex")]
+#[allow(clippy::too_many_arguments)]
+async fn handle_conn_multiplex<Req, Svc, Resp, MkE, MkD>(
+    conn: volo::net::conn::Conn,
+    service: Svc,
+    mk_encoder: MkE,
+    mk_decoder: MkD,
+    exit_notify: Arc<Notify>,
+    exit_flag: Arc<parking_lot::RwLock<bool>>,
+    exit_mark: Arc<std::sync::atomic::AtomicBool>,
+    conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
+) where
+    MkE: MkEncoder,
+    MkD: MkDecoder,
+    Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
+    Svc::Error: Into<crate::Error> + Send,
+    Req: EntryMessage + Send + 'static,
+    Resp: EntryMessage + Send + 'static + Size,
+{
+    // get read lock and create Notified
+    let notified = {
+        let r = exit_flag.read();
+        if *r {
+            return;
+        }
+        exit_notify.notified()
+    };
+
+    let stream = conn.stream;
+    let encoder = mk_encoder.mk_encoder(None);
+    let decoder = mk_decoder.mk_decoder(None);
+
+    let framed = Framed::new(stream, encoder, decoder);
+
+    tracing::info!("[VOLO] handle conn by multiplex");
+    crate::transport::multiplex::serve(framed, notified, exit_mark, service).await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }

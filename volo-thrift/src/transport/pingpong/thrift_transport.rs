@@ -6,10 +6,10 @@ use volo::{
     util::buf_reader::BufReader,
 };
 
-use super::Poolable;
 use crate::{
     codec::{Decoder, Encoder, DEFAULT_BUFFER_SIZE},
     context::{ClientContext, ThriftContext},
+    transport::pool::Poolable,
     ApplicationError, ApplicationErrorKind, EntryMessage, Error, Size, ThriftMessage,
 };
 
@@ -32,13 +32,13 @@ impl<E, D> ThriftTransport<E, D> {
                 read_half: BufReader::with_capacity(DEFAULT_BUFFER_SIZE, rh),
                 decoder,
                 id,
-                reuseable: true,
+                reusable: true,
             },
             write_half: WriteHalf {
                 write_half: wh,
                 encoder,
                 id,
-                reuseable: true,
+                reusable: true,
             },
         }
     }
@@ -47,6 +47,7 @@ impl<E, D> ThriftTransport<E, D> {
         (self.read_half, self.write_half)
     }
 }
+
 impl<E, D> ThriftTransport<E, D>
 where
     E: Encoder,
@@ -69,7 +70,7 @@ where
 pub struct ReadHalf<D> {
     read_half: BufReader<OwnedReadHalf>,
     decoder: D,
-    reuseable: bool,
+    reusable: bool,
     id: usize,
 }
 
@@ -111,7 +112,7 @@ where
 pub struct WriteHalf<E> {
     write_half: OwnedWriteHalf,
     encoder: E,
-    reuseable: bool,
+    reusable: bool,
     id: usize,
 }
 
@@ -137,13 +138,7 @@ where
 }
 
 impl<TTEncoder, TTDecoder> Poolable for ThriftTransport<TTEncoder, TTDecoder> {
-    fn reuseable(&self) -> bool {
-        self.read_half.reuseable && self.write_half.reuseable
+    fn reusable(&self) -> bool {
+        self.read_half.reusable && self.write_half.reusable
     }
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn tests() {}
 }
