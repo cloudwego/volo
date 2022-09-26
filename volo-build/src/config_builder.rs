@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Ok;
+use itertools::Itertools;
 use pilota_build::BoxClonePlugin;
 
 use crate::{
@@ -103,10 +104,7 @@ impl ConfigBuilder {
             }
 
             for idl in entry.idls {
-                if let Some(includes) = idl.includes {
-                    builder = builder.includes(includes);
-                }
-                let path = if let Source::Git(GitSource {
+                let (path, includes) = if let Source::Git(GitSource {
                     ref repo, ref lock, ..
                 }) = idl.source
                 {
@@ -125,12 +123,19 @@ impl ConfigBuilder {
                     );
                     download_files_from_git(task)?;
 
-                    dir.join(&idl.path)
+                    (
+                        dir.join(&idl.path),
+                        idl.includes
+                            .unwrap_or_default()
+                            .into_iter()
+                            .map(|v| dir.join(v))
+                            .collect_vec(),
+                    )
                 } else {
-                    idl.path.to_path_buf()
+                    (idl.path.to_path_buf(), idl.includes.unwrap_or_default())
                 };
 
-                builder = builder.add_service(path);
+                builder = builder.add_service(path).includes(includes);
             }
 
             builder.write()?;
