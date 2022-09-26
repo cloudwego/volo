@@ -17,6 +17,7 @@ pub struct MessageMeta {
     pub(crate) seq_id: i32,
 }
 
+#[derive(Debug)]
 pub struct ThriftMessage<M> {
     pub(crate) data: Result<M, crate::Error>,
     pub(crate) meta: MessageMeta,

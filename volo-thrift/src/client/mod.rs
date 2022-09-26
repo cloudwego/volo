@@ -15,6 +15,7 @@ use futures::Future;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{BoxCloneService, Service},
+    utils::Either,
 };
 use pilota::thrift::TMessageType;
 use tokio::time::Duration;
@@ -61,11 +62,13 @@ pub struct ClientBuilder<IL, OL, C, Req, Resp, MkE, MkD, LB> {
     outer_layer: OL,
     codec_type: CodecType,
     service_client: C,
-    pipeline: bool,
     mk_encoder: MkE,
     mk_decoder: MkD,
     mk_lb: LB,
     _marker: PhantomData<(*const Req, *const Resp)>,
+
+    #[cfg(feature = "multiplex")]
+    multiplex: bool,
 }
 
 impl<C, Req, Resp>
@@ -93,7 +96,6 @@ where
             outer_layer: Identity::new(),
             codec_type: CodecType::TTHeaderFramed,
             service_client,
-            pipeline: false,
             mk_encoder: MakeClientEncoder {
                 tt_encoder: DefaultTTHeaderCodec,
             },
@@ -102,6 +104,9 @@ where
             },
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
+
+            #[cfg(feature = "multiplex")]
+            multiplex: false,
         }
     }
 }
@@ -125,11 +130,13 @@ where
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
-            pipeline: self.pipeline,
             _marker: PhantomData,
             mk_encoder: self.mk_encoder,
             mk_decoder: self.mk_decoder,
             mk_lb: self.mk_lb.load_balance(load_balance),
+
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -147,11 +154,13 @@ where
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
-            pipeline: self.pipeline,
             _marker: PhantomData,
             mk_encoder: self.mk_encoder,
             mk_decoder: self.mk_decoder,
             mk_lb: self.mk_lb.discover(discover),
+
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -222,11 +231,13 @@ where
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
-            pipeline: self.pipeline,
             _marker: PhantomData,
             mk_encoder: self.mk_encoder,
             mk_decoder: self.mk_decoder,
             mk_lb: mk_load_balance,
+
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -253,11 +264,13 @@ where
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
-            pipeline: self.pipeline,
             _marker: PhantomData,
             mk_encoder: MakeClientEncoder { tt_encoder },
             mk_decoder: self.mk_decoder,
             mk_lb: self.mk_lb,
+
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -284,11 +297,13 @@ where
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
-            pipeline: self.pipeline,
             _marker: PhantomData,
             mk_encoder: self.mk_encoder,
             mk_decoder: MakeClientDecoder { tt_decoder },
             mk_lb: self.mk_lb,
+
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -339,11 +354,13 @@ where
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
             service_client: self.service_client,
-            pipeline: self.pipeline,
             _marker: PhantomData,
             mk_encoder: self.mk_encoder,
             mk_decoder: self.mk_decoder,
             mk_lb: self.mk_lb,
+
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -374,11 +391,13 @@ where
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
             service_client: self.service_client,
-            pipeline: self.pipeline,
             _marker: PhantomData,
             mk_encoder: self.mk_encoder,
             mk_decoder: self.mk_decoder,
             mk_lb: self.mk_lb,
+
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
@@ -409,18 +428,54 @@ where
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
             service_client: self.service_client,
-            pipeline: self.pipeline,
             _marker: PhantomData,
             mk_encoder: self.mk_encoder,
             mk_decoder: self.mk_decoder,
             mk_lb: self.mk_lb,
+
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
+        }
+    }
+
+    #[cfg(feature = "multiplex")]
+    /// Enable multiplexing for the client.
+    #[doc(hidden)]
+    pub fn multiplex(self, multiplex: bool) -> ClientBuilder<IL, OL, C, Req, Resp, E, D, LB> {
+        ClientBuilder {
+            config: self.config,
+            pool: self.pool,
+            caller_name: self.caller_name,
+            callee_name: self.callee_name,
+            address: self.address,
+            codec_type: self.codec_type,
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
+            service_client: self.service_client,
+            _marker: PhantomData,
+            mk_encoder: self.mk_encoder,
+            mk_decoder: self.mk_decoder,
+            mk_lb: self.mk_lb,
+
+            multiplex,
         }
     }
 }
 
 #[derive(Clone)]
-pub struct MessageService<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> {
+pub struct MessageService<Resp, MkE, MkD>
+where
+    Resp: EntryMessage + Send + 'static,
+    MkE: MkEncoder + 'static,
+    MkD: MkDecoder + 'static,
+{
+    #[cfg(not(feature = "multiplex"))]
     inner: pingpong::Client<Resp, MkE, MkD>,
+    #[cfg(feature = "multiplex")]
+    inner: Either<
+        pingpong::Client<Resp, MkE, MkD>,
+        crate::transport::multiplex::Client<Resp, MkE, MkD>,
+    >,
 }
 
 impl<Req, Resp, MkE, MkD> Service<ClientContext, Req> for MessageService<Resp, MkE, MkD>
@@ -432,7 +487,7 @@ where
 {
     type Response = Option<Resp>;
 
-    type Error = crate::Error;
+    type Error = Error;
 
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx + Send where Self:'cx;
 
@@ -469,6 +524,7 @@ where
     IL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + Sync + Clone + Send + 'static,
     <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<crate::Error>,
+    MkD: MkDecoder + 'static,
     OL: Layer<
         BoxCloneService<
             ClientContext,
@@ -486,21 +542,38 @@ where
             self.config.connect_timeout(),
             self.config.read_write_timeout(),
         );
+        let msg_svc = MessageService {
+            #[cfg(not(feature = "multiplex"))]
+            inner: pingpong::Client::new(
+                MakeConnection::new(Some(mc_cfg)),
+                self.codec_type,
+                self.pool,
+                self.mk_encoder,
+                self.mk_decoder,
+            ),
+            #[cfg(feature = "multiplex")]
+            inner: if !self.multiplex {
+                Either::A(pingpong::Client::new(
+                    MakeConnection::new(Some(mc_cfg)),
+                    self.codec_type,
+                    self.pool,
+                    self.mk_encoder,
+                    self.mk_decoder,
+                ))
+            } else {
+                Either::B(crate::transport::multiplex::Client::new(
+                    MakeConnection::new(Some(mc_cfg)),
+                    self.codec_type,
+                    self.pool,
+                    self.mk_encoder,
+                    self.mk_decoder,
+                ))
+            },
+        };
 
-        let transport = TimeoutLayer::new().layer(
-            self.outer_layer
-                .layer(BoxCloneService::new(self.mk_lb.make().layer(
-                    self.inner_layer.layer(MessageService {
-                        inner: pingpong::Client::new(
-                            MakeConnection::new(Some(mc_cfg)),
-                            self.codec_type,
-                            self.pool,
-                            self.mk_encoder,
-                            self.mk_decoder,
-                        ),
-                    }),
-                ))),
-        );
+        let transport = TimeoutLayer::new().layer(self.outer_layer.layer(BoxCloneService::new(
+            self.mk_lb.make().layer(self.inner_layer.layer(msg_svc)),
+        )));
 
         let transport = BoxCloneService::new(transport);
 

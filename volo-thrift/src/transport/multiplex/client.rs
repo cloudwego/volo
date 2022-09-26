@@ -13,21 +13,33 @@ use crate::{
     context::ClientContext,
     protocol::TMessageType,
     transport::{
-        pingpong::thrift_transport::ThriftTransport,
+        multiplex::thrift_transport::ThriftTransport,
         pool::{Config, PooledMakeTransport},
     },
-    EntryMessage, Size, ThriftMessage,
+    EntryMessage, Error, Size, ThriftMessage,
 };
 
-#[derive(Clone)]
-pub struct MakeTransport<MkE, MkD> {
+pub struct MakeTransport<MkE, MkD, Resp> {
     make_connection: MakeConnection,
     codec_type: CodecType,
     mk_encoder: MkE,
     mk_decoder: MkD,
+    _phantom: PhantomData<fn() -> Resp>,
 }
 
-impl<E, D> MakeTransport<E, D> {
+impl<MkE: Clone, MkD: Clone, Resp> Clone for MakeTransport<MkE, MkD, Resp> {
+    fn clone(&self) -> Self {
+        Self {
+            make_connection: self.make_connection.clone(),
+            codec_type: self.codec_type,
+            mk_decoder: self.mk_decoder.clone(),
+            mk_encoder: self.mk_encoder.clone(),
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<E, D, Resp> MakeTransport<E, D, Resp> {
     #[allow(unused)]
     pub fn new(
         make_connection: MakeConnection,
@@ -40,12 +52,18 @@ impl<E, D> MakeTransport<E, D> {
             codec_type,
             mk_decoder,
             mk_encoder,
+            _phantom: PhantomData,
         }
     }
 }
 
-impl<E: MkEncoder + 'static, D: MkDecoder + 'static> UnaryService<Address> for MakeTransport<E, D> {
-    type Response = ThriftTransport<E::Target, D::Target>;
+impl<E, D, Resp> UnaryService<Address> for MakeTransport<E, D, Resp>
+where
+    E: MkEncoder + Send + 'static,
+    D: MkDecoder + Send + 'static,
+    Resp: EntryMessage + Send + 'static,
+{
+    type Response = ThriftTransport<E::Target, Resp>;
     type Error = io::Error;
     type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>>;
 
@@ -60,13 +78,23 @@ impl<E: MkEncoder + 'static, D: MkDecoder + 'static> UnaryService<Address> for M
     }
 }
 
-pub struct Client<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> {
+pub struct Client<Resp, MkE, MkD>
+where
+    MkE: MkEncoder + Send + 'static,
+    MkD: MkDecoder + Send + 'static,
+    Resp: EntryMessage + Send + 'static,
+{
     #[allow(clippy::type_complexity)]
-    make_transport: PooledMakeTransport<MakeTransport<MkE, MkD>, Address>,
+    make_transport: PooledMakeTransport<MakeTransport<MkE, MkD, Resp>, Address>,
     _maker: PhantomData<Resp>,
 }
 
-impl<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> Clone for Client<Resp, MkE, MkD> {
+impl<Resp, MkE, MkD> Clone for Client<Resp, MkE, MkD>
+where
+    MkE: MkEncoder + Send + 'static,
+    MkD: MkDecoder + Send + 'static,
+    Resp: EntryMessage + Send + 'static,
+{
     fn clone(&self) -> Self {
         Self {
             make_transport: self.make_transport.clone(),
@@ -75,7 +103,12 @@ impl<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> Clone for Client<
     }
 }
 
-impl<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> Client<Resp, MkE, MkD> {
+impl<Resp, MkE, MkD> Client<Resp, MkE, MkD>
+where
+    MkE: MkEncoder + Send + 'static,
+    MkD: MkDecoder + Send + 'static,
+    Resp: EntryMessage + Send + 'static,
+{
     pub fn new(
         make_connection: MakeConnection,
         codec_type: CodecType,
@@ -93,15 +126,16 @@ impl<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> Client<Resp, MkE,
     }
 }
 
-impl<Req, Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static>
-    Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkE, MkD>
+impl<Req, Resp, MkE, MkD> Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkE, MkD>
 where
     Req: Send + 'static + EntryMessage + Size,
-    Resp: EntryMessage,
+    Resp: EntryMessage + Send + 'static,
+    MkE: MkEncoder + Send + 'static,
+    MkD: MkDecoder + Send + 'static,
 {
     type Response = Option<ThriftMessage<Resp>>;
 
-    type Error = crate::Error;
+    type Error = Error;
 
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx where Self:'cx;
 

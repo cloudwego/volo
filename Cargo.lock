@@ -1997,6 +1997,7 @@ dependencies = [
  "async-trait",
  "bytes",
  "futures",
+ "fxhash",
  "lazy_static",
  "linked-hash-map",
  "metainfo",

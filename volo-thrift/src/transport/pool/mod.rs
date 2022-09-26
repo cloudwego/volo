@@ -3,7 +3,6 @@
 
 mod make_transport;
 mod started;
-pub mod thrift_transport;
 
 use std::{
     collections::HashMap,
@@ -25,7 +24,6 @@ pub use make_transport::PooledMakeTransport;
 use motore::{service::UnaryService, BoxError};
 use pin_project::pin_project;
 use started::Started as _;
-pub use thrift_transport::{ReadHalf, ThriftTransport, WriteHalf};
 use tokio::{
     sync::oneshot,
     time::{interval, Duration, Instant, Interval},
@@ -34,7 +32,7 @@ use volo::Unwrap;
 
 pub trait Poolable: Sized {
     // check if the connection is opened
-    fn reuseable(&self) -> bool;
+    fn reusable(&self) -> bool;
 
     /// Reserve this connection.
     ///
@@ -141,7 +139,7 @@ impl<'a, Key: Debug, T: Poolable + 'a> IdlePopper<'a, Key, T> {
         while let Some(entry) = self.list.pop() {
             // If the connection has been closed, or is older than our idle
             // timeout, simply drop it and keep looking...
-            if !entry.inner.reuseable() {
+            if !entry.inner.reusable() {
                 tracing::trace!("[VOLO] removing closed connection for {:?}", self.key);
                 continue;
             }
@@ -370,7 +368,7 @@ where
 
     pub(crate) fn reuse(mut self) {
         let inner = self.t.take().volo_unwrap();
-        if !inner.reuseable() {
+        if !inner.reusable() {
             // If we *already* know the connection is done here,
             // it shouldn't be re-inserted back into the pool.
             return;
@@ -488,7 +486,7 @@ where
         self.idle.retain(|key, values| {
             values.retain(|entry| {
                 // TODO: check has_idle && remove the (idle, waiters) key
-                if !entry.inner.reuseable() {
+                if !entry.inner.reusable() {
                     tracing::trace!("[VOLO] idle interval evicting closed for {:?}", key);
                     return false;
                 }
@@ -604,64 +602,6 @@ where
                 }
             }
             return Poll::Ready(());
-        }
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::io;
-
-    use tokio::io::{AsyncRead, AsyncWrite};
-    #[cfg(target_family = "windows")]
-    use tokio::net::TcpStream;
-    #[cfg(target_family = "unix")]
-    use tokio::net::UnixStream;
-
-    use super::*;
-
-    #[cfg(target_family = "unix")]
-    #[pin_project]
-    struct MockConnection(#[pin] UnixStream);
-
-    #[cfg(target_family = "windows")]
-    #[pin_project]
-    struct MockConnection(#[pin] TcpStream);
-
-    impl Poolable for MockConnection {
-        fn reuseable(&self) -> bool {
-            true
-        }
-    }
-
-    impl AsyncRead for MockConnection {
-        fn poll_read(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &mut tokio::io::ReadBuf<'_>,
-        ) -> Poll<io::Result<()>> {
-            self.project().0.poll_read(cx, buf)
-        }
-    }
-
-    impl AsyncWrite for MockConnection {
-        fn poll_write(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-            buf: &[u8],
-        ) -> Poll<Result<usize, io::Error>> {
-            self.project().0.poll_write(cx, buf)
-        }
-
-        fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
-            self.project().0.poll_flush(cx)
-        }
-
-        fn poll_shutdown(
-            self: Pin<&mut Self>,
-            cx: &mut Context<'_>,
-        ) -> Poll<Result<(), io::Error>> {
-            self.project().0.poll_shutdown(cx)
         }
     }
 }
