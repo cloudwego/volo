@@ -81,7 +81,7 @@ impl Init {
         Ok((service_name.as_str().into(), namespace))
     }
 
-    fn parse_thrift(&self, contents: String) -> anyhow::Result<(String, String)> {
+    fn parse_thrift(&self, contents: String) -> anyhow::Result<(String, Option<String>)> {
         let (_remain, res) =
             pilota_thrift_parser::File::parse(contents.as_str()).expect("parse thrift idl failed");
         let service = res
@@ -103,13 +103,14 @@ impl Init {
         let namespace = res
             .package
             .map(|p| p.segments.iter().map(|s| &**s).join("::"))
-            .unwrap_or_else(|| {
-                res.path
-                    .file_name()
-                    .unwrap()
-                    .to_string_lossy()
-                    .trim_end_matches(".rs")
-                    .to_string()
+            .or_else(|| {
+                Some(
+                    res.path
+                        .file_name()?
+                        .to_string_lossy()
+                        .trim_end_matches(".rs")
+                        .to_string(),
+                )
             });
         Ok((service_name, namespace))
     }
@@ -174,11 +175,15 @@ impl Init {
         Ok(())
     }
 
-    fn copy_thrift_template(&self, contents: String) -> anyhow::Result<()> {
-        let (service_name, namespace) = self.parse_thrift(contents)?;
+    fn copy_thrift_template(&self, contents: String, filename: &str) -> anyhow::Result<()> {
+        let (service_name, mut namespace) = self.parse_thrift(contents)?;
         let name = self.name.replace('.', "_").replace('-', "_");
         let cwd = std::env::current_dir()?;
         let folder = cwd.as_path();
+        if namespace.is_none() {
+            namespace = Some(filename.to_string());
+        }
+        let namespace = unsafe { namespace.unwrap_unchecked() };
 
         // root dirs
         crate::templates_to_target_file!(
@@ -262,7 +267,10 @@ impl CliCommand for Init {
             if self.is_grpc_project() {
                 self.copy_grpc_template(contents)?;
             } else {
-                self.copy_thrift_template(contents)?;
+                self.copy_thrift_template(
+                    contents,
+                    self.idl.file_name().unwrap().to_str().unwrap(),
+                )?;
             }
 
             let mut idl = Idl::new();
