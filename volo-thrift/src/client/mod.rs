@@ -541,6 +541,7 @@ where
         let mc_cfg = volo::net::dial::Config::new(
             self.config.connect_timeout(),
             self.config.read_write_timeout(),
+            self.config.read_write_timeout(),
         );
         let msg_svc = MessageService {
             #[cfg(not(feature = "multiplex"))]

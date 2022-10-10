@@ -18,14 +18,20 @@ pub struct MakeConnection {
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Config {
     connect_timeout: Option<Duration>,
-    read_write_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
+    write_timeout: Option<Duration>,
 }
 
 impl Config {
-    pub fn new(connect_timeout: Option<Duration>, read_write_timeout: Option<Duration>) -> Self {
+    pub fn new(
+        connect_timeout: Option<Duration>,
+        read_timeout: Option<Duration>,
+        write_timeout: Option<Duration>,
+    ) -> Self {
         Self {
             connect_timeout,
-            read_write_timeout,
+            read_timeout,
+            write_timeout,
         }
     }
 }
@@ -44,8 +50,8 @@ impl MakeConnection {
                     let domain = Domain::for_address(addr);
                     let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
                     socket.set_nonblocking(true)?;
-                    socket.set_read_timeout(cfg.read_write_timeout)?;
-                    socket.set_write_timeout(cfg.read_write_timeout)?;
+                    socket.set_read_timeout(cfg.read_timeout)?;
+                    socket.set_write_timeout(cfg.write_timeout)?;
 
                     #[cfg(unix)]
                     let socket = unsafe {

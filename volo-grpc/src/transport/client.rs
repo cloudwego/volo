@@ -5,13 +5,13 @@ use http::{
     header::{CONTENT_TYPE, TE},
     HeaderMap, HeaderValue,
 };
-use hyper::{client::HttpConnector, Client as HyperClient};
-use hyper_timeout::TimeoutConnector;
+use hyper::Client as HyperClient;
 use metainfo::{Backward, Forward};
 use motore::Service;
 use tower::{util::ServiceExt, Service as TowerService};
 use volo::{context::Context, net::Address, Unwrap};
 
+use super::connect::Connector;
 use crate::{
     client::Http2Config,
     codec::decode::Kind,
@@ -26,7 +26,7 @@ use crate::{
 /// A simple wrapper of [`hyper::client::client`] that implements [`Service`]
 /// to make outgoing requests.
 pub struct ClientTransport<U> {
-    http_client: HyperClient<TimeoutConnector<HttpConnector>>,
+    http_client: HyperClient<Connector>,
     _marker: PhantomData<fn(U)>,
 }
 
@@ -43,17 +43,11 @@ impl<U> ClientTransport<U> {
     /// Creates a new [`ClientTransport`] by setting the underlying connection
     /// with the given config.
     pub fn new(http2_config: &Http2Config, rpc_config: &Config) -> Self {
-        let mut connector = HttpConnector::new();
-        connector.enforce_http(false);
-        connector.set_nodelay(http2_config.tcp_nodelay);
-        connector.set_keepalive(http2_config.tcp_keepalive);
-        let mut connector = TimeoutConnector::new(connector);
-        if let Some(connect_timeout) = rpc_config.connect_timeout {
-            connector.set_connect_timeout(Some(connect_timeout));
-            connector.set_read_timeout(rpc_config.read_timeout);
-            connector.set_write_timeout(rpc_config.write_timeout);
-        }
-
+        let config = volo::net::dial::Config::new(
+            rpc_config.connect_timeout,
+            rpc_config.read_timeout,
+            rpc_config.write_timeout,
+        );
         let http = HyperClient::builder()
             .http2_only(!http2_config.accept_http1)
             .http2_initial_stream_window_size(http2_config.init_stream_window_size)
@@ -65,7 +59,7 @@ impl<U> ClientTransport<U> {
             .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
             .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
             .retry_canceled_requests(http2_config.retry_canceled_requests)
-            .build(connector);
+            .build(Connector::new(Some(config)));
 
         ClientTransport {
             http_client: http,
@@ -160,7 +154,7 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
         #[cfg(target_family = "unix")]
         Address::Unix(unix) => hyper::Uri::builder()
             .scheme("http+unix")
-            .authority(unix.display().to_string())
+            .authority(hex::encode(unix.to_string_lossy().as_bytes()))
             .path_and_query(path)
             .build()
             .expect("fail to build unix uri"),
@@ -243,12 +237,28 @@ fn extract_metadata(
 #[cfg(test)]
 mod tests {
     #[test]
-    fn test_build_uri() {
+    fn test_build_uri_ip() {
         let addr = "127.0.0.1:8000".parse::<std::net::SocketAddr>().unwrap();
         let path = "/path?query=1";
         let uri = "http://127.0.0.1:8000/path?query=1"
             .parse::<hyper::Uri>()
             .unwrap();
         assert_eq!(super::build_uri(volo::net::Address::from(addr), path), uri);
+    }
+
+    #[cfg(target_family = "unix")]
+    #[test]
+    fn test_build_uri_unix() {
+        use std::borrow::Cow;
+
+        let addr = "/tmp/rpc.sock".parse::<std::path::PathBuf>().unwrap();
+        let path = "/path?query=1";
+        let uri = "http+unix://2f746d702f7270632e736f636b/path?query=1"
+            .parse::<hyper::Uri>()
+            .unwrap();
+        assert_eq!(
+            super::build_uri(volo::net::Address::from(Cow::from(addr)), path),
+            uri
+        );
     }
 }

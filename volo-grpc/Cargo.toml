@@ -50,6 +50,7 @@ percent-encoding = "2"
 base64 = "0.13"
 tokio-stream = "0.1"
 async-stream = "0.3"
+hex = "0.4"
 
 [dev-dependencies]
 tracing-subscriber = "0.3"
