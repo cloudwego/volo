@@ -6,7 +6,7 @@ use pilota::thrift::{
     TransportError,
 };
 use tokio::io::AsyncRead;
-use volo::loadbalance::error::LoadBalanceError;
+use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
 use crate::AnyhowError;
 
@@ -64,6 +64,15 @@ impl From<std::io::Error> for Error {
 impl From<LoadBalanceError> for Error {
     fn from(err: LoadBalanceError) -> Self {
         new_application_error(ApplicationErrorKind::LoadBalanceError, err.to_string())
+    }
+}
+
+impl Retryable for Error {
+    fn retryable(&self) -> bool {
+        if let Error::Pilota(PilotaError::Transport(_)) = self {
+            return true;
+        }
+        false
     }
 }
 
