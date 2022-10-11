@@ -84,7 +84,7 @@ impl VoloThriftBackend {
                     fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &T) -> usize {
                         match self {
                             #(Self::#variant_names(value) => {
-                                ::pilota::thrift::Size::size(value, protocol)
+                                value.size(protocol)
                             }),*
                         }
                     }
@@ -142,7 +142,7 @@ impl VoloThriftBackend {
                         match self {
                             #(
                                 Self::#variant_names(value) => {
-                                    ::pilota::thrift::Size::size(value, protocol)
+                                    value.size(protocol)
                                 }
                             )*
                         }
