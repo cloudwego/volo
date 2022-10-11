@@ -8,3 +8,9 @@ pub enum LoadBalanceError {
     #[error("load balance discovery error: {0:?}")]
     Discover(#[from] BoxError),
 }
+
+pub trait Retryable {
+    fn retryable(&self) -> bool {
+        false
+    }
+}

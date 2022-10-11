@@ -3,7 +3,7 @@ use std::{fmt::Debug, future::Future, sync::Arc};
 use motore::Service;
 use tracing::warn;
 
-use super::error::LoadBalanceError;
+use super::error::{LoadBalanceError, Retryable};
 use crate::{context::Context, discovery::Discover, loadbalance::LoadBalance, Layer, Unwrap};
 
 #[derive(Clone)]
@@ -51,7 +51,7 @@ where
     LB: LoadBalance<D>,
     S: Service<Cx, Req> + 'static + Send,
     LoadBalanceError: Into<S::Error>,
-    S::Error: Debug,
+    S::Error: Debug + Retryable,
     Req: Clone + Send + Sync + 'static,
 {
     type Response = S::Response;
@@ -96,13 +96,16 @@ where
                     }
                     Err(err) => {
                         tracing::warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
+                        if !err.retryable() {
+                            return Err(err);
+                        }
                     }
                 }
             }
             if call_count == 0 {
                 tracing::warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
             }
-            Err(LoadBalanceError::Retry).map_err(|err| err.into())?
+            Err(LoadBalanceError::Retry.into())
         }
     }
 }

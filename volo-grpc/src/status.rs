@@ -7,7 +7,7 @@ use http::header::{HeaderMap, HeaderValue};
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
 use tower::BoxError;
 use tracing::{debug, trace, warn};
-use volo::loadbalance::error::LoadBalanceError;
+use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
 use crate::{body::Body, metadata::MetadataMap};
 
@@ -758,6 +758,15 @@ impl From<BoxError> for Status {
 impl From<LoadBalanceError> for Status {
     fn from(err: LoadBalanceError) -> Self {
         Self::unknown(err.to_string())
+    }
+}
+
+impl Retryable for Status {
+    fn retryable(&self) -> bool {
+        match self.code {
+            Code::Internal | Code::Unavailable | Code::Cancelled | Code::ResourceExhausted => true,
+            _ => false,
+        }
     }
 }
 
