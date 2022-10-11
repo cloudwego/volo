@@ -9,7 +9,7 @@ use crate::{
     context::ThriftContext,
     error::Result,
     protocol::{binary::TAsyncBinaryProtocol, rw_ext::WriteExt, TBinaryProtocol},
-    EntryMessage, Size, ThriftMessage,
+    EntryMessage, ThriftMessage,
 };
 
 pub mod framed;
@@ -60,11 +60,7 @@ pub struct DefaultEncoder<TT> {
 }
 
 impl<TT: Send + TTHeaderEncoder> DefaultEncoder<TT> {
-    async fn encode<
-        W: AsyncWrite + Unpin + Send,
-        Req: Send + EntryMessage + Size,
-        Cx: ThriftContext,
-    >(
+    async fn encode<W: AsyncWrite + Unpin + Send, Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         writer: &mut W,
@@ -363,11 +359,7 @@ impl<TT> ServerEncoder<TT> {
 
 #[async_trait::async_trait]
 impl<TT: TTHeaderEncoder + Send> Encoder for ServerEncoder<TT> {
-    async fn encode<
-        W: AsyncWrite + Unpin + Send,
-        Req: Send + EntryMessage + Size,
-        Cx: ThriftContext,
-    >(
+    async fn encode<W: AsyncWrite + Unpin + Send, Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         writer: &mut W,
@@ -424,11 +416,7 @@ impl<TT> Encoder for ClientEncoder<TT>
 where
     TT: TTHeaderEncoder,
 {
-    async fn encode<
-        W: AsyncWrite + Unpin + Send,
-        Req: Send + EntryMessage + Size,
-        Cx: ThriftContext,
-    >(
+    async fn encode<W: AsyncWrite + Unpin + Send, Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         writer: &mut W,
@@ -456,11 +444,7 @@ where
 
 #[async_trait::async_trait]
 pub trait Encoder {
-    async fn encode<
-        W: AsyncWrite + Unpin + Send,
-        Req: Send + EntryMessage + Size,
-        Cx: ThriftContext,
-    >(
+    async fn encode<W: AsyncWrite + Unpin + Send, Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         writer: &mut W,

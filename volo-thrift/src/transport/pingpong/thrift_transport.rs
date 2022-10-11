@@ -10,7 +10,7 @@ use crate::{
     codec::{Decoder, Encoder, DEFAULT_BUFFER_SIZE},
     context::{ClientContext, ThriftContext},
     transport::pool::Poolable,
-    ApplicationError, ApplicationErrorKind, EntryMessage, Error, Size, ThriftMessage,
+    ApplicationError, ApplicationErrorKind, EntryMessage, Error, ThriftMessage,
 };
 
 lazy_static::lazy_static! {
@@ -43,6 +43,7 @@ impl<E, D> ThriftTransport<E, D> {
         }
     }
 
+    #[allow(dead_code)]
     pub fn split(self) -> (ReadHalf<D>, WriteHalf<E>) {
         (self.read_half, self.write_half)
     }
@@ -53,7 +54,7 @@ where
     E: Encoder,
     D: Decoder,
 {
-    pub async fn send<Req: EntryMessage + Size, Resp: EntryMessage>(
+    pub async fn send<Req: EntryMessage, Resp: EntryMessage>(
         &mut self,
         cx: &mut ClientContext,
         msg: ThriftMessage<Req>,
@@ -120,7 +121,7 @@ impl<E> WriteHalf<E>
 where
     E: Encoder,
 {
-    pub async fn send<T: EntryMessage + Size>(
+    pub async fn send<T: EntryMessage>(
         &mut self,
         cx: &mut impl ThriftContext,
         msg: ThriftMessage<T>,

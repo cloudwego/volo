@@ -16,7 +16,7 @@ use crate::{
         pingpong::thrift_transport::ThriftTransport,
         pool::{Config, PooledMakeTransport},
     },
-    EntryMessage, Size, ThriftMessage,
+    EntryMessage, ThriftMessage,
 };
 
 #[derive(Clone)]
@@ -96,7 +96,7 @@ impl<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> Client<Resp, MkE,
 impl<Req, Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static>
     Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkE, MkD>
 where
-    Req: Send + 'static + EntryMessage + Size,
+    Req: Send + 'static + EntryMessage,
     Resp: EntryMessage,
 {
     type Response = Option<ThriftMessage<Resp>>;

@@ -14,7 +14,7 @@ use crate::{
     codec::{framed::Framed, Decoder, Encoder},
     context::ServerContext,
     protocol::TMessageType,
-    DummyMessage, EntryMessage, Error, Size, ThriftMessage,
+    DummyMessage, EntryMessage, Error, ThriftMessage,
 };
 
 pub async fn serve<Svc, Req, Resp, E, D>(
@@ -26,7 +26,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     Svc: Service<ServerContext, Req, Response = Resp>,
     Svc::Error: Into<crate::Error>,
     Req: EntryMessage,
-    Resp: EntryMessage + Size,
+    Resp: EntryMessage,
     E: Encoder + Send,
     D: Decoder + Send,
 {

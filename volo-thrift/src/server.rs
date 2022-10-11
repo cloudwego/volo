@@ -18,7 +18,7 @@ use crate::{
         framed::Framed, tt_header, MakeServerDecoder, MakeServerEncoder, MkDecoder, MkEncoder,
     },
     context::ServerContext,
-    EntryMessage, Result, Size,
+    EntryMessage, Result,
 };
 
 pub struct Server<S, L, Req, MkE, MkD> {
@@ -165,7 +165,7 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
         S: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
         S::Error: Into<crate::Error> + Send,
         Req: EntryMessage + Send + 'static,
-        Resp: EntryMessage + Send + 'static + Size + Sync,
+        Resp: EntryMessage + Send + 'static + Sync,
     {
         // init server
         let service = self.layer.layer(self.service);
@@ -337,7 +337,7 @@ async fn handle_conn<Req, Svc, Resp, MkE, MkD>(
     Svc::Error: Send,
     Svc::Error: Into<crate::Error>,
     Req: EntryMessage + Send + 'static,
-    Resp: EntryMessage + Send + 'static + Size,
+    Resp: EntryMessage + Send + 'static,
 {
     // get read lock and create Notified
     let notified = {

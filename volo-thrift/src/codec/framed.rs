@@ -37,7 +37,7 @@ where
     E: Encoder + Send,
 {
     #[inline]
-    pub async fn send<M: EntryMessage + crate::Size, Cx: ThriftContext>(
+    pub async fn send<M: EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<M>,
@@ -81,7 +81,7 @@ where
     }
 
     #[inline]
-    pub async fn send<M: EntryMessage + crate::Size, Cx: ThriftContext>(
+    pub async fn send<M: EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<M>,

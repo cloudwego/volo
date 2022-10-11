@@ -7,7 +7,7 @@ use crate::{
         binary::TAsyncBinaryProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier,
         TMessageType, TOutputProtocol,
     },
-    ApplicationError, ApplicationErrorKind, EntryMessage, Size,
+    ApplicationError, ApplicationErrorKind, EntryMessage,
 };
 
 #[derive(Debug)]
@@ -50,9 +50,7 @@ impl EntryMessage for DummyMessage {
     {
         unreachable!()
     }
-}
 
-impl Size for DummyMessage {
     fn size<T: TLengthProtocol>(&self, _protocol: &T) -> usize {
         unreachable!()
     }
@@ -91,7 +89,7 @@ impl<M> ThriftMessage<M> {
 
 impl<U> ThriftMessage<U>
 where
-    U: Size,
+    U: EntryMessage,
 {
     pub(crate) fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize {
         let ident = TMessageIdentifier::new(

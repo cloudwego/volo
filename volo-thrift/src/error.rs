@@ -1,9 +1,8 @@
 use std::fmt::{self, Display, Formatter};
 
 use pilota::thrift::{
-    binary::TAsyncBinaryProtocol, Error as PilotaError, Message, ProtocolError, Size,
-    TFieldIdentifier, TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType,
-    TransportError,
+    binary::TAsyncBinaryProtocol, Error as PilotaError, Message, ProtocolError, TFieldIdentifier,
+    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
 };
 use tokio::io::AsyncRead;
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
@@ -248,9 +247,7 @@ impl Message for ApplicationError {
 
         Ok(ApplicationError { kind, message })
     }
-}
 
-impl Size for ApplicationError {
     fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize {
         protocol.write_struct_begin_len(&TAPPLICATION_EXCEPTION)
             + protocol.write_field_begin_len(&ERROR_MESSAGE_FIELD)
