@@ -1,8 +1,10 @@
 use std::sync::Arc;
 
-pub use pilota::thrift::{Message, Size};
+pub use pilota::thrift::Message;
 use pilota::{
-    thrift::{TAsyncBinaryProtocol, TInputProtocol, TMessageIdentifier, TOutputProtocol},
+    thrift::{
+        TAsyncBinaryProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier, TOutputProtocol,
+    },
     AsyncRead,
 };
 
@@ -23,6 +25,8 @@ pub trait EntryMessage: Sized + Send {
     ) -> Result<Self, Error>
     where
         R: AsyncRead + Unpin + Send;
+
+    fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize;
 }
 
 #[async_trait::async_trait]
@@ -51,5 +55,9 @@ where
         Message::decode_async(protocol, msg_ident)
             .await
             .map(Arc::new)
+    }
+
+    fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize {
+        (**self).size(protocol)
     }
 }

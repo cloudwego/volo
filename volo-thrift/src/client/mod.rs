@@ -15,7 +15,6 @@ use futures::Future;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{BoxCloneService, Service},
-    utils::Either,
 };
 use pilota::thrift::TMessageType;
 use tokio::time::Duration;
@@ -35,7 +34,7 @@ use crate::{
     error::{Error, Result},
     tags::TransportType,
     transport::{pingpong, pool},
-    EntryMessage, Size, ThriftMessage,
+    EntryMessage, ThriftMessage,
 };
 
 mod callopt;
@@ -482,7 +481,7 @@ impl<Req, Resp, MkE, MkD> Service<ClientContext, Req> for MessageService<Resp, M
 where
     MkE: MkEncoder + 'static,
     MkD: MkDecoder + 'static,
-    Req: EntryMessage + Size + 'static + Send,
+    Req: EntryMessage + 'static + Send,
     Resp: Send + 'static + EntryMessage,
 {
     type Response = Option<Resp>;
@@ -518,7 +517,7 @@ where
         Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error:
         Into<crate::Error>,
-    Req: EntryMessage + Send + 'static + Size + Sync + Clone,
+    Req: EntryMessage + Send + 'static + Sync + Clone,
     Resp: EntryMessage + Send + 'static,
     IL: Layer<MessageService<Resp, MkE, MkD>>,
     IL::Service:

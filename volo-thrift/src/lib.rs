@@ -19,5 +19,5 @@ pub mod server;
 pub mod tags;
 pub use anyhow::Error as AnyhowError;
 pub use error::*;
-pub use message::{EntryMessage, Message, Size};
+pub use message::{EntryMessage, Message};
 pub use message_wrapper::*;
