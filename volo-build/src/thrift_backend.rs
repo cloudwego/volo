@@ -80,9 +80,7 @@ impl VoloThriftBackend {
                         R: ::pilota::AsyncRead + ::core::marker::Unpin + ::core::marker::Send {
                             #decode_async
                         }
-                }
 
-                impl ::pilota::thrift::Size for #req_name {
                     fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &T) -> usize {
                         match self {
                             #(Self::#variant_names(value) => {
@@ -139,9 +137,7 @@ impl VoloThriftBackend {
                         R: ::pilota::AsyncRead + ::core::marker::Unpin + ::core::marker::Send {
                             #decode_async
                         }
-                }
 
-                impl ::pilota::thrift::Size for #res_name {
                     fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &T) -> usize {
                         match self {
                             #(
@@ -152,6 +148,7 @@ impl VoloThriftBackend {
                         }
                     }
                 }
+
             }
         };
         stream.extend(quote! {
