@@ -401,7 +401,7 @@ where
 impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U>
 where
     C: SetClient<T, U>,
-    LB: MkLbLayer<IL::Service>,
+    LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
