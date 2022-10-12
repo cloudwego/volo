@@ -511,7 +511,7 @@ impl<IL, OL, C, Req, Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static, L
     ClientBuilder<IL, OL, C, Req, Resp, MkE, MkD, LB>
 where
     C: SetClient<Req, Resp>,
-    LB: MkLbLayer<IL::Service>,
+    LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone,

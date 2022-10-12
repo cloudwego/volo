@@ -176,7 +176,7 @@ impl<L, DISC> LbConfig<L, DISC> {
     }
 }
 
-impl<LB, DISC, S> MkLbLayer<S> for LbConfig<LB, DISC> {
+impl<LB, DISC> MkLbLayer for LbConfig<LB, DISC> {
     type Layer = LoadBalanceLayer<DISC, LB>;
 
     fn make(self) -> Self::Layer {

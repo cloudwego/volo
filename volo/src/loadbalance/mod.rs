@@ -34,7 +34,7 @@ where
     fn rebalance(&self, changes: Change<D::Key>);
 }
 
-pub trait MkLbLayer<S> {
+pub trait MkLbLayer {
     type Layer;
 
     fn make(self) -> Self::Layer;
@@ -80,7 +80,7 @@ impl<L, DISC> LbConfig<L, DISC> {
 
 pub struct CustomLayer<L>(pub L);
 
-impl<LB, DISC, S> MkLbLayer<S> for LbConfig<LB, DISC> {
+impl<LB, DISC> MkLbLayer for LbConfig<LB, DISC> {
     type Layer = LoadBalanceLayer<DISC, LB>;
 
     fn make(self) -> Self::Layer {
@@ -88,7 +88,7 @@ impl<LB, DISC, S> MkLbLayer<S> for LbConfig<LB, DISC> {
     }
 }
 
-impl<S, L> MkLbLayer<S> for CustomLayer<L> {
+impl<L> MkLbLayer for CustomLayer<L> {
     type Layer = L;
 
     fn make(self) -> Self::Layer {
