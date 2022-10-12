@@ -473,12 +473,12 @@ pub trait MkDecoder: Clone + Send + Sync + 'static {
 
 #[derive(Clone, Debug)]
 pub struct MakeClientEncoder<TTEncoder> {
-    pub(crate) tt_encoder: TTEncoder,
+    pub tt_encoder: TTEncoder,
 }
 
 #[derive(Clone, Debug)]
 pub struct MakeClientDecoder<TTDecoder> {
-    pub(crate) tt_decoder: TTDecoder,
+    pub tt_decoder: TTDecoder,
 }
 
 impl<TTEncoder> MkEncoder for MakeClientEncoder<TTEncoder>

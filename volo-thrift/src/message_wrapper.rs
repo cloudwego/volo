@@ -12,15 +12,15 @@ use crate::{
 
 #[derive(Debug)]
 pub struct MessageMeta {
-    pub(crate) msg_type: TMessageType,
+    pub msg_type: TMessageType,
     pub(crate) method: smol_str::SmolStr,
     pub(crate) seq_id: i32,
 }
 
 #[derive(Debug)]
 pub struct ThriftMessage<M> {
-    pub(crate) data: Result<M, crate::Error>,
-    pub(crate) meta: MessageMeta,
+    pub data: Result<M, crate::Error>,
+    pub meta: MessageMeta,
 }
 
 pub(crate) struct DummyMessage;
