@@ -225,7 +225,7 @@ impl Config {
     }
 
     /// Sets the connect timeout.
-    pub(crate) fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
+    pub fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
         self.connect_timeout = timeout;
     }
 
