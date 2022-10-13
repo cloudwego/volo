@@ -980,7 +980,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.1.1"
-source = "git+https://github.com/cloudwego/pilota?branch=main#d4974b7e290ef82c1ee612c5fb011e723ef6bda7"
+source = "git+https://github.com/cloudwego/pilota?branch=main#5cbeeca02f6890270527055bdd0cea42a945e213"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -997,7 +997,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.1.9"
-source = "git+https://github.com/cloudwego/pilota?branch=main#d4974b7e290ef82c1ee612c5fb011e723ef6bda7"
+source = "git+https://github.com/cloudwego/pilota?branch=main#5cbeeca02f6890270527055bdd0cea42a945e213"
 dependencies = [
  "fxhash",
  "heck 0.4.0",
@@ -1023,7 +1023,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.2.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#d4974b7e290ef82c1ee612c5fb011e723ef6bda7"
+source = "git+https://github.com/cloudwego/pilota?branch=main#5cbeeca02f6890270527055bdd0cea42a945e213"
 dependencies = [
  "nom",
 ]
@@ -1660,9 +1660,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream"
-version = "0.1.10"
+version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f6edf2d6bc038a43d31353570e27270603f4648d18f5ed10c0e179abe43255af"
+checksum = "d660770404473ccd7bc9f8b28494a811bc18542b915c0855c51e8f419d5223ce"
 dependencies = [
  "futures-core",
  "pin-project-lite",
