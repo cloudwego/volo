@@ -148,11 +148,11 @@ impl Message for ApplicationError {
     fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), PilotaError> {
         protocol.write_struct_begin(&TAPPLICATION_EXCEPTION)?;
 
-        protocol.write_field_begin(&ERROR_MESSAGE_FIELD)?;
+        protocol.write_field_begin(TType::String, 1)?;
         protocol.write_string(&self.message)?;
         protocol.write_field_end()?;
 
-        protocol.write_field_begin(&ERROR_TYPE_FIELD)?;
+        protocol.write_field_begin(TType::I32, 2)?;
         protocol.write_i32(self.kind as i32)?;
         protocol.write_field_end()?;
 
