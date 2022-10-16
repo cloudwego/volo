@@ -2,7 +2,7 @@
 
 `volo-grpc` implements a Protobuf-based RPC framework.
 
-Users rarely need to use volo-thrift directly. Instead, they should use the `Client` and `Server` in the generated code.
+Users rarely need to use `volo-grpc` directly. Instead, they should use the `Client` and `Server` in the generated code.
 
 For extension developers, they may need to use some of the components in `volo-grpc`.
 
