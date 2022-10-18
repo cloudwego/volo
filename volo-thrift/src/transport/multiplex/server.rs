@@ -14,7 +14,7 @@ use crate::{
     codec::{framed::Framed, Decoder, Encoder},
     context::ServerContext,
     protocol::TMessageType,
-    DummyMessage, EntryMessage, Error, Size, ThriftMessage,
+    DummyMessage, EntryMessage, Error, ThriftMessage,
 };
 
 const CHANNEL_SIZE: usize = 1024;
@@ -28,7 +28,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     Svc: Service<ServerContext, Req, Response = Resp> + Send + Clone + 'static,
     Svc::Error: Into<crate::Error> + Send,
     Req: EntryMessage + 'static,
-    Resp: EntryMessage + Size + 'static,
+    Resp: EntryMessage + 'static,
     E: Encoder + Send + 'static,
     D: Decoder + Send + 'static,
 {
