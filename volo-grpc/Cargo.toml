@@ -1,6 +1,6 @@
 [package]
 name = "volo-grpc"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "gRPC framework implementation of volo."
 documentation = "https://docs.rs/volo-grpc"
@@ -18,8 +18,8 @@ keywords = ["async", "rpc", "grpc", "protobuf"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.1", path = "../volo" }
-motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
+volo = { version = "0.2", path = "../volo" }
+motore = "0.2"
 metainfo = "0.6"
 
 tokio = { version = "1", features = ["time", "rt", "net", "sync"] }
