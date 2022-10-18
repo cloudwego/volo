@@ -229,24 +229,6 @@ where
         self
     }
 
-    /// Sets that all sockets have `SO_KEEPALIVE` set with the supplied duration.
-    ///
-    /// If `None`, the option will not be set.
-    ///
-    /// Default is `None`.
-    pub fn tcp_keepalive(mut self, dur: impl Into<Option<Duration>>) -> Self {
-        self.http2_config.tcp_keepalive = dur.into();
-        self
-    }
-
-    /// Sets that all sockets have `SO_NODELAY` set to the supplied value `nodelay`.
-    ///
-    /// Default is `true`.
-    pub fn tcp_nodelay(mut self, nodelay: bool) -> Self {
-        self.http2_config.tcp_nodelay = nodelay;
-        self
-    }
-
     /// Sets the timeout for connecting to a URL.
     ///
     /// Default is no timeout.
@@ -548,8 +530,6 @@ pub struct Http2Config {
     pub(crate) max_concurrent_reset_streams: usize,
     pub(crate) retry_canceled_requests: bool,
     pub(crate) accept_http1: bool,
-    pub(crate) tcp_keepalive: Option<Duration>,
-    pub(crate) tcp_nodelay: bool,
 }
 
 impl Default for Http2Config {
@@ -565,8 +545,6 @@ impl Default for Http2Config {
             max_concurrent_reset_streams: DEFAULT_MAX_CONCURRENT_RESET_STREAMS,
             retry_canceled_requests: true,
             accept_http1: false,
-            tcp_keepalive: None,
-            tcp_nodelay: true,
         }
     }
 }

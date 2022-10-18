@@ -124,6 +124,7 @@ where
                     }
                     Err(err) => {
                         tracing::warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
+                        return Err(err);
                     }
                 }
             } else {

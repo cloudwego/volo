@@ -763,10 +763,10 @@ impl From<LoadBalanceError> for Status {
 
 impl Retryable for Status {
     fn retryable(&self) -> bool {
-        match self.code {
-            Code::Internal | Code::Unavailable | Code::Cancelled | Code::ResourceExhausted => true,
-            _ => false,
-        }
+        matches!(
+            self.code,
+            Code::Internal | Code::Unavailable | Code::Cancelled | Code::ResourceExhausted
+        )
     }
 }
 
