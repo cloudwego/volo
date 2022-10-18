@@ -471,7 +471,7 @@ where
     #[cfg(not(feature = "multiplex"))]
     inner: pingpong::Client<Resp, MkE, MkD>,
     #[cfg(feature = "multiplex")]
-    inner: Either<
+    inner: motore::utils::Either<
         pingpong::Client<Resp, MkE, MkD>,
         crate::transport::multiplex::Client<Resp, MkE, MkD>,
     >,
@@ -553,7 +553,7 @@ where
             ),
             #[cfg(feature = "multiplex")]
             inner: if !self.multiplex {
-                Either::A(pingpong::Client::new(
+                motore::utils::Either::A(pingpong::Client::new(
                     MakeConnection::new(Some(mc_cfg)),
                     self.codec_type,
                     self.pool,
@@ -561,7 +561,7 @@ where
                     self.mk_decoder,
                 ))
             } else {
-                Either::B(crate::transport::multiplex::Client::new(
+                motore::utils::Either::B(crate::transport::multiplex::Client::new(
                     MakeConnection::new(Some(mc_cfg)),
                     self.codec_type,
                     self.pool,

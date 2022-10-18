@@ -19,7 +19,7 @@ use crate::{
     codec::{Decoder, Encoder, DEFAULT_BUFFER_SIZE},
     context::{ClientContext, ThriftContext},
     transport::pool::{Poolable, Reservation},
-    ApplicationError, ApplicationErrorKind, EntryMessage, Error, Size, ThriftMessage,
+    ApplicationError, ApplicationErrorKind, EntryMessage, Error, ThriftMessage,
 };
 
 lazy_static::lazy_static! {
@@ -174,7 +174,7 @@ where
     E: Encoder,
     Resp: EntryMessage,
 {
-    pub async fn send<Req: EntryMessage + Size>(
+    pub async fn send<Req: EntryMessage>(
         &mut self,
         cx: &mut ClientContext,
         msg: ThriftMessage<Req>,
@@ -216,7 +216,7 @@ where
             Ok(res) => match res {
                 Ok(opt) => match opt {
                     None => Ok(None),
-                    Some((mi, cx, msg)) => {
+                    Some((mi, _cx, msg)) => {
                         metainfo::METAINFO.with(|m| {
                             m.borrow_mut().extend(mi);
                         });
@@ -289,7 +289,7 @@ impl<E> WriteHalf<E>
 where
     E: Encoder,
 {
-    pub async fn send<T: EntryMessage + Size>(
+    pub async fn send<T: EntryMessage>(
         &mut self,
         cx: &mut impl ThriftContext,
         msg: ThriftMessage<T>,

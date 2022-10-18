@@ -16,7 +16,7 @@ use crate::{
         multiplex::thrift_transport::ThriftTransport,
         pool::{Config, PooledMakeTransport},
     },
-    EntryMessage, Error, Size, ThriftMessage,
+    EntryMessage, Error, ThriftMessage,
 };
 
 pub struct MakeTransport<MkE, MkD, Resp> {
@@ -128,7 +128,7 @@ where
 
 impl<Req, Resp, MkE, MkD> Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkE, MkD>
 where
-    Req: Send + 'static + EntryMessage + Size,
+    Req: Send + 'static + EntryMessage,
     Resp: EntryMessage + Send + 'static,
     MkE: MkEncoder + Send + 'static,
     MkD: MkDecoder + Send + 'static,

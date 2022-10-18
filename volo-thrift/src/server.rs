@@ -376,7 +376,7 @@ async fn handle_conn_multiplex<Req, Svc, Resp, MkE, MkD>(
     Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
     Svc::Error: Into<crate::Error> + Send,
     Req: EntryMessage + Send + 'static,
-    Resp: EntryMessage + Send + 'static + Size,
+    Resp: EntryMessage + Send + 'static,
 {
     // get read lock and create Notified
     let notified = {
