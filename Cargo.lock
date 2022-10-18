@@ -766,8 +766,9 @@ dependencies = [
 
 [[package]]
 name = "motore"
-version = "0.2.0"
-source = "git+https://github.com/cloudwego/motore?branch=main#0ee4cb5f38702fae277412b20756ddd5ab095b81"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "409cca93fe595d6b6e5db50c03876e25ef2c019f61ac5544d4a4d44928fdab03"
 dependencies = [
  "futures",
  "motore-macros",
@@ -778,7 +779,8 @@ dependencies = [
 [[package]]
 name = "motore-macros"
 version = "0.1.0"
-source = "git+https://github.com/cloudwego/motore?branch=main#0ee4cb5f38702fae277412b20756ddd5ab095b81"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06f9e10fcf7b679da499ba91dbbf52fed22761580a0d18b950f264a9c3907095"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -979,8 +981,9 @@ dependencies = [
 
 [[package]]
 name = "pilota"
-version = "0.1.1"
-source = "git+https://github.com/cloudwego/pilota?branch=main#5cbeeca02f6890270527055bdd0cea42a945e213"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c8a776dde994a06ab5b69f2c8868f238bb7d2cdac31d58d24f61479278e9f6bd"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -996,8 +999,9 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.1.9"
-source = "git+https://github.com/cloudwego/pilota?branch=main#5cbeeca02f6890270527055bdd0cea42a945e213"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ae7edf15d31f7af7e069a59cf0cef720357a7ef2417ec496c083290061b81858"
 dependencies = [
  "fxhash",
  "heck 0.4.0",
@@ -1022,8 +1026,9 @@ dependencies = [
 
 [[package]]
 name = "pilota-thrift-parser"
-version = "0.2.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#5cbeeca02f6890270527055bdd0cea42a945e213"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22596743c4945b405fd7cea2a46c72032bdbce917cd06426b0d920aec0a3ce58"
 dependencies = [
  "nom",
 ]
@@ -1896,7 +1901,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "volo"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "async-broadcast",
  "async-trait",
@@ -1919,7 +1924,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1945,7 +1950,7 @@ dependencies = [
 
 [[package]]
 name = "volo-cli"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -1968,7 +1973,7 @@ dependencies = [
 
 [[package]]
 name = "volo-grpc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2004,7 +2009,7 @@ version = "0.1.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",

@@ -1,6 +1,6 @@
 [package]
 name = "volo"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = """
 Volo is a high-performance and strong-extensibility Rust RPC framework that helps developers build microservices.
@@ -20,7 +20,7 @@ keywords = ["async", "rpc", "thrift", "grpc", "protobuf"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
+motore = "0.2"
 
 tokio = { version = "1", features = ["net", "time", "sync", "io-util"] }
 pin-project = "1"

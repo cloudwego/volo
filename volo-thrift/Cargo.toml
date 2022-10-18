@@ -1,6 +1,6 @@
 [package]
 name = "volo-thrift"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Thrift RPC framework implementation of volo."
 documentation = "https://docs.rs/volo-thrift"
@@ -18,9 +18,9 @@ keywords = ["async", "rpc", "thrift"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.1", path = "../volo" }
-pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" }
-motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
+volo = { version = "0.2", path = "../volo" }
+pilota = "0.2" 
+motore = "0.2"
 metainfo = "0.6"
 
 tokio = { version = "1", features = [

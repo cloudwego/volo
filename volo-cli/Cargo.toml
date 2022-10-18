@@ -1,6 +1,6 @@
 [package]
 name = "volo-cli"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 description = """
 volo-cli is the command line interface for volo, which provides
@@ -22,8 +22,8 @@ keywords = ["thrift", "grpc", "protobuf", "volo", "cli"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota", branch = "main" }
-volo-build = { version = "0.1", path = "../volo-build" }
+pilota-thrift-parser = "0.3"
+volo-build = { version = "0.2", path = "../volo-build" }
 
 heck = "0.4"
 itertools = "0.10"
