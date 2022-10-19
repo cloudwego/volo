@@ -17,7 +17,7 @@ keywords = ["thrift", "grpc", "protobuf", "volo", "build"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-pilota-build = "0.2"
+pilota-build = { git = "https://github.com/cloudwego/pilota", branch = "main" }
 
 anyhow = "1"
 nom = "7"
