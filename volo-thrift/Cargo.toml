@@ -19,7 +19,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 volo = { version = "0.2", path = "../volo" }
-pilota = "0.2" 
+pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" } 
 motore = "0.2"
 metainfo = "0.6"
 
