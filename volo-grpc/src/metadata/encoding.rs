@@ -163,7 +163,7 @@ impl ValueEncoding for Binary {
 
 impl InvalidMetadataValue {
     pub(crate) fn new() -> Self {
-        InvalidMetadataValue { _priv: () }
+        Self { _priv: () }
     }
 }
 
@@ -180,7 +180,7 @@ pub struct InvalidMetadataValueBytes(InvalidMetadataValue);
 
 impl InvalidMetadataValueBytes {
     pub(crate) fn new() -> Self {
-        InvalidMetadataValueBytes(InvalidMetadataValue::new())
+        Self(InvalidMetadataValue::new())
     }
 }
 

@@ -111,7 +111,7 @@ impl<T> IntoRequest<T> for T {
 }
 
 impl<T> IntoRequest<T> for Request<T> {
-    fn into_request(self) -> Request<T> {
+    fn into_request(self) -> Self {
         self
     }
 }

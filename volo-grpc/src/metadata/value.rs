@@ -77,7 +77,7 @@ impl<VE: ValueEncoding> MetadataValue<VE> {
     /// ```
     #[inline]
     pub fn from_static(src: &'static str) -> Self {
-        MetadataValue {
+        Self {
             inner: VE::from_static(src),
             phantom: PhantomData,
         }
@@ -112,7 +112,7 @@ impl<VE: ValueEncoding> MetadataValue<VE> {
     /// ```
     #[inline]
     pub fn try_from_bytes(src: &[u8]) -> Result<Self, InvalidMetadataValueBytes> {
-        VE::from_bytes(src).map(|value| MetadataValue {
+        VE::from_bytes(src).map(|value| Self {
             inner: value,
             phantom: PhantomData,
         })
@@ -133,7 +133,7 @@ impl<VE: ValueEncoding> MetadataValue<VE> {
     /// implementation once the trait is stabilized in std.
     #[inline]
     pub fn from_shared(src: Bytes) -> Result<Self, InvalidMetadataValueBytes> {
-        VE::from_shared(src).map(|value| MetadataValue {
+        VE::from_shared(src).map(|value| Self {
             inner: value,
             phantom: PhantomData,
         })
@@ -148,7 +148,7 @@ impl<VE: ValueEncoding> MetadataValue<VE> {
     /// will not validate src
     #[inline]
     pub unsafe fn from_shared_unchecked(src: Bytes) -> Self {
-        MetadataValue {
+        Self {
             inner: HeaderValue::from_maybe_shared_unchecked(src),
             phantom: PhantomData,
         }
@@ -264,7 +264,7 @@ impl<VE: ValueEncoding> MetadataValue<VE> {
     /// value encoding.
     #[inline]
     pub(crate) fn unchecked_from_header_value(value: HeaderValue) -> Self {
-        MetadataValue {
+        Self {
             inner: value,
             phantom: PhantomData,
         }
@@ -321,7 +321,7 @@ impl MetadataValue<Ascii> {
     #[inline]
     pub fn from_str(src: &str) -> Result<Self, InvalidMetadataValue> {
         HeaderValue::from_str(src)
-            .map(|value| MetadataValue {
+            .map(|value| Self {
                 inner: value,
                 phantom: PhantomData,
             })
@@ -429,8 +429,8 @@ impl<VE: ValueEncoding> fmt::Debug for MetadataValue<VE> {
 
 impl<KeyVE: ValueEncoding> From<MetadataKey<KeyVE>> for MetadataValue<Ascii> {
     #[inline]
-    fn from(h: MetadataKey<KeyVE>) -> MetadataValue<Ascii> {
-        MetadataValue {
+    fn from(h: MetadataKey<KeyVE>) -> Self {
+        Self {
             inner: h.inner.into(),
             phantom: PhantomData,
         }
@@ -517,8 +517,8 @@ impl FromStr for MetadataValue<Ascii> {
     type Err = InvalidMetadataValue;
 
     #[inline]
-    fn from_str(s: &str) -> Result<MetadataValue<Ascii>, Self::Err> {
-        MetadataValue::<Ascii>::from_str(s)
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Self::from_str(s)
     }
 }
 
@@ -540,7 +540,7 @@ impl<'a, VE: ValueEncoding> From<&'a MetadataValue<VE>> for MetadataValue<VE> {
 
 impl ToStrError {
     pub(crate) fn new() -> Self {
-        ToStrError { _priv: () }
+        Self { _priv: () }
     }
 }
 
