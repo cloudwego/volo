@@ -59,9 +59,6 @@ where
 
     fn call(&mut self, key: Key) -> Self::Future<'_> {
         let mt = self.inner.clone();
-        async move {
-            let pool = self.pool.clone();
-            pool.get(key, mt).await
-        }
+        async move { self.pool.get(key, mt).await }
     }
 }

@@ -152,7 +152,7 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
     }
 
     /// The main entry point for the server.
-    pub async fn run<A: volo::net::incoming::MakeIncoming, Resp>(
+    pub async fn run<A: volo::net::incoming::MakeIncoming>(
         self,
         incoming: A,
     ) -> Result<(), BoxError>
@@ -160,12 +160,13 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
         L: Layer<S>,
         MkE: MkEncoder,
         MkD: MkDecoder,
-        L::Service: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static + Sync,
+        L::Service:
+            Service<ServerContext, Req, Response = S::Response> + Clone + Send + 'static + Sync,
         <L::Service as Service<ServerContext, Req>>::Error: Into<crate::Error> + Send,
-        S: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
+        S: Service<ServerContext, Req> + Clone + Send + 'static,
         S::Error: Into<crate::Error> + Send,
         Req: EntryMessage + Send + 'static,
-        Resp: EntryMessage + Send + 'static + Sync,
+        S::Response: EntryMessage + Send + 'static + Sync,
     {
         // init server
         let service = self.layer.layer(self.service);
