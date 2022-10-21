@@ -118,13 +118,18 @@ where
     type InstanceIter<'iter> = InstancePicker;
 
     type GetFut<'future, 'iter> =
-        impl Future<Output = Result<Self::InstanceIter<'iter>, LoadBalanceError>> + Send;
+        impl Future<Output = Result<Self::InstanceIter<'iter>, LoadBalanceError>> + Send + 'future
+        where
+            'iter: 'future;
 
     fn get_picker<'future, 'iter>(
         &'iter self,
         endpoint: &'future Endpoint,
         discover: &'future D,
-    ) -> Self::GetFut<'future, 'iter> {
+    ) -> Self::GetFut<'future, 'iter>
+    where
+        'iter: 'future,
+    {
         async {
             let key = discover.key(endpoint);
             let weighted_list = match self.router.entry(key) {
