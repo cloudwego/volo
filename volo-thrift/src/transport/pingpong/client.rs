@@ -47,7 +47,7 @@ impl<E, D> MakeTransport<E, D> {
 impl<E: MkEncoder + 'static, D: MkDecoder + 'static> UnaryService<Address> for MakeTransport<E, D> {
     type Response = ThriftTransport<E::Target, D::Target>;
     type Error = io::Error;
-    type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>>;
+    type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>> + 's;
 
     fn call(&mut self, target: Address) -> Self::Future<'_> {
         let make_connection = self.make_connection.clone();
