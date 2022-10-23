@@ -82,6 +82,7 @@ where
     LoadBalanceError: Into<S::Error>,
     S::Error: Debug,
     T: Send + 'static,
+    for<'future, 'iter> LB::GetFut<'future, 'iter>: Send, /* add this temporarily via https://github.com/rust-lang/rust/issues/100013 */
 {
     type Response = S::Response;
 

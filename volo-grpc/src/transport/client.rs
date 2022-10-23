@@ -77,7 +77,7 @@ where
 
     type Error = Status;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>>;
+    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
     fn call<'cx, 's>(
         &'s mut self,

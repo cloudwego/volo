@@ -65,7 +65,7 @@ where
 {
     type Response = ThriftTransport<E::Target, Resp>;
     type Error = io::Error;
-    type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>>;
+    type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>> + 's;
 
     fn call(&mut self, target: Address) -> Self::Future<'_> {
         let make_connection = self.make_connection.clone();

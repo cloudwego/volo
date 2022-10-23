@@ -55,7 +55,7 @@ where
 
     type Error = BoxError;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>>;
+    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
     fn call(&mut self, key: Key) -> Self::Future<'_> {
         let mt = self.inner.clone();

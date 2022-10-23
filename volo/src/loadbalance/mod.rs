@@ -21,7 +21,10 @@ where
 
     /// `GetFut` is the return type of `get_picker`.
     type GetFut<'future, 'iter>: Future<Output = Result<Self::InstanceIter<'iter>, LoadBalanceError>>
-        + Send; // remove +'future temporarily, see https://github.com/rust-lang/rust/issues/100013
+        + Send
+        + 'future
+    where
+        'iter: 'future;
 
     /// `get_picker` allows to get an instance iterator of a specified endpoint from self or
     /// service discovery.
@@ -29,7 +32,9 @@ where
         &'iter self,
         endpoint: &'future Endpoint,
         discover: &'future D,
-    ) -> Self::GetFut<'future, 'iter>;
+    ) -> Self::GetFut<'future, 'iter>
+    where
+        'iter: 'future;
     /// `rebalance` is the callback method be used in service discovering subscription.
     fn rebalance(&self, changes: Change<D::Key>);
 }
