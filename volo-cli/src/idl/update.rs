@@ -9,7 +9,7 @@ use volo_build::{
 use crate::{command::CliCommand, context::Context};
 
 #[derive(Parser, Debug)]
-#[clap(about = "update your idl by git repo, split by ','")]
+#[command(about = "update your idl by git repo, split by ','")]
 pub struct Update {
     git: Vec<String>,
 }

@@ -1,7 +1,7 @@
 use std::{fs::create_dir_all, path::PathBuf};
 
 use anyhow::Context;
-use clap::Parser;
+use clap::{value_parser, Parser};
 use heck::ToUpperCamelCase;
 use itertools::Itertools;
 use lazy_static::lazy_static;
@@ -15,17 +15,17 @@ use volo_build::{
 use crate::command::CliCommand;
 
 #[derive(Parser, Debug)]
-#[clap(about = "init your project")]
+#[command(about = "init your project")]
 pub struct Init {
     pub name: String,
-    #[clap(
+    #[arg(
         short = 'g',
         long = "git",
         help = "Specify the git repo for idl.\nShould be in the format of \
                 \"git@domain:path/repo.git\".\nExample: git@github.com:cloudwego/volo.git"
     )]
     pub git: Option<String>,
-    #[clap(
+    #[arg(
         short = 'r',
         long = "ref",
         requires = "git",
@@ -34,15 +34,15 @@ pub struct Init {
     )]
     pub r#ref: Option<String>,
 
-    #[clap(
+    #[arg(
         short = 'i',
         long = "includes",
         help = "Specify the include dirs for idl.\nIf -g or --git is specified, then this should \
                 be the path in the specified git repo."
     )]
     pub includes: Option<Vec<PathBuf>>,
-    #[clap(
-        parse(from_os_str),
+    #[arg(
+        value_parser = value_parser!(PathBuf),
         help = "Specify the path for idl.\nIf -g or --git is specified, then this should be the \
                 path in the specified git repo.\nExample: \t-g not \
                 specified:\t./idl/server.thrift\n\t\t-g specified:\t\t/path/to/idl/server.thrift"
