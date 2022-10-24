@@ -28,7 +28,7 @@ volo-build = { version = "0.2", path = "../volo-build" }
 heck = "0.4"
 itertools = "0.10"
 anyhow = "1"
-clap = { version = "3", features = ["wrap_help", "derive"] }
+clap = { version = "4", features = ["wrap_help", "derive"] }
 colored = "2"
 lazy_static = "1"
 log = "0.4"
