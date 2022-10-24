@@ -1,7 +1,11 @@
 [package]
 name = "volo-cli"
 version = "0.2.0"
-edition = "2021"
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
 description = """
 volo-cli is the command line interface for volo, which provides
 the ability to generate default project layout and manage the
@@ -9,10 +13,6 @@ idls used.
 """
 documentation = "https://docs.rs/volo-cli"
 readme = "README.md"
-homepage = "https://www.cloudwego.io/docs/volo/"
-repository = "https://github.com/cloudwego/volo"
-license = "MIT OR Apache-2.0"
-authors = ["Volo Team <volo@cloudwego.io>"]
 categories = ["command-line-utilities"]
 keywords = ["thrift", "grpc", "protobuf", "volo", "cli"]
 
@@ -22,21 +22,21 @@ keywords = ["thrift", "grpc", "protobuf", "volo", "cli"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota", branch = "main" }
 volo-build = { version = "0.2", path = "../volo-build" }
+pilota-thrift-parser.workspace = true
 
-heck = "0.4"
-itertools = "0.10"
-anyhow = "1"
-clap = { version = "4", features = ["wrap_help", "derive"] }
-colored = "2"
-lazy_static = "1"
-log = "0.4"
-normpath = "0.3"
-pretty_env_logger = "0.4"
-run_script = "0.10"
-regex = "1"
-same-file = "1"
-serde = { version = "1", features = ["derive"] }
-serde_yaml = "0.9"
-update-informer = "0.5"
+anyhow.workspace = true
+clap = { workspace = true, features = ["wrap_help", "derive"] }
+colored.workspace = true
+heck.workspace = true
+itertools.workspace = true
+lazy_static.workspace = true
+log.workspace = true
+normpath.workspace = true
+pretty_env_logger.workspace = true
+regex.workspace = true
+run_script.workspace = true
+same-file.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_yaml.workspace = true
+update-informer.workspace = true
