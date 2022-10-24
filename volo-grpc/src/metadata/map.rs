@@ -205,12 +205,12 @@ impl MetadataMap {
     /// assert_eq!(0, map.capacity());
     /// ```
     pub fn new() -> Self {
-        MetadataMap::with_capacity(0)
+        Self::with_capacity(0)
     }
 
     /// Convert an HTTP HeaderMap to a MetadataMap
     pub fn from_headers(headers: http::HeaderMap) -> Self {
-        MetadataMap { headers }
+        Self { headers }
     }
 
     /// Convert a MetadataMap into a HTTP HeaderMap
@@ -255,8 +255,8 @@ impl MetadataMap {
     /// assert!(map.is_empty());
     /// assert!(map.capacity() >= 10);
     /// ```
-    pub fn with_capacity(capacity: usize) -> MetadataMap {
-        MetadataMap {
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self {
             headers: http::HeaderMap::with_capacity(capacity),
         }
     }

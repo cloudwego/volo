@@ -62,7 +62,7 @@ impl<T> Response<T> {
 
     pub fn from_http(res: http::Response<T>) -> Self {
         let (head, message) = res.into_parts();
-        Response {
+        Self {
             metadata: MetadataMap::from_headers(head.headers),
             message,
             extensions: head.extensions,
