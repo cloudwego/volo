@@ -359,9 +359,8 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         });
 
         stream.extend(quote! {
-            pub struct #server_name<S, Req> {
+            pub struct #server_name<S> {
                 inner: ::std::sync::Arc<S>, // handler
-                _marker: ::core::marker::PhantomData<Req>,
             }
 
             #[derive(Clone)]
@@ -410,26 +409,23 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }
 
 
-            impl<S, Req> Clone for #server_name<S, Req> {
+            impl<S> Clone for #server_name<S> {
                 fn clone(&self) -> Self {
                     Self {
                         inner: self.inner.clone(),
-                        _marker: ::core::marker::PhantomData,
                     }
                 }
             }
 
-            impl<S> #server_name<S, #req_name> where S: #service_name + ::core::marker::Send + ::core::marker::Sync + 'static {
+            impl<S> #server_name<S> where S: #service_name + ::core::marker::Send + ::core::marker::Sync + 'static {
                 pub fn new(inner: S) -> ::volo_thrift::server::Server<Self, ::volo::layer::Identity, #req_name, ::volo_thrift::codec::MakeServerEncoder<::volo_thrift::codec::tt_header::DefaultTTHeaderCodec>, ::volo_thrift::codec::MakeServerDecoder<::volo_thrift::codec::tt_header::DefaultTTHeaderCodec>> {
-                    let service = Self {
+                    ::volo_thrift::server::Server::new(Self {
                         inner: ::std::sync::Arc::new(inner),
-                        _marker: ::core::marker::PhantomData,
-                    };
-                    ::volo_thrift::server::Server::new(service)
+                    })
                 }
             }
 
-            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, #req_name> for #server_name<T, #req_name> where T: #service_name + Send + Sync + 'static {
+            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, #req_name> for #server_name<T> where T: #service_name + Send + Sync + 'static {
                 type Response = #res_name;
                 type Error = ::anyhow::Error;
 
@@ -438,14 +434,13 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 fn call<'cx, 's>(&mut self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: #req_name) -> Self::Future<'cx> where 's:'cx {
                     let inner = self.inner.clone();
                     async move {
-                        let res: ::anyhow::Result<#res_name> = match req {
+                        match req {
                             #(#req_name::#variants(args) => Ok(
                                 #res_name::#variants(
                                     #user_handler
                                 )
                             ),)*
-                        };
-                        res
+                        }
                     }
                 }
 
