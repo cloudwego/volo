@@ -38,6 +38,7 @@ pub enum OwnedWriteHalf {
 }
 
 impl AsyncWrite for OwnedWriteHalf {
+    #[inline]
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -50,6 +51,7 @@ impl AsyncWrite for OwnedWriteHalf {
         }
     }
 
+    #[inline]
     fn poll_flush(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.project() {
             OwnedWriteHalfProj::Tcp(half) => half.poll_flush(cx),
@@ -58,11 +60,34 @@ impl AsyncWrite for OwnedWriteHalf {
         }
     }
 
+    #[inline]
     fn poll_shutdown(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Result<(), io::Error>> {
         match self.project() {
             OwnedWriteHalfProj::Tcp(half) => half.poll_shutdown(cx),
             #[cfg(target_family = "unix")]
             OwnedWriteHalfProj::Unix(half) => half.poll_shutdown(cx),
+        }
+    }
+
+    #[inline]
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[io::IoSlice<'_>],
+    ) -> Poll<Result<usize, io::Error>> {
+        match self.project() {
+            OwnedWriteHalfProj::Tcp(half) => half.poll_write_vectored(cx, bufs),
+            #[cfg(target_family = "unix")]
+            OwnedWriteHalfProj::Unix(half) => half.poll_write_vectored(cx, bufs),
+        }
+    }
+
+    #[inline]
+    fn is_write_vectored(&self) -> bool {
+        match self {
+            Self::Tcp(half) => half.is_write_vectored(),
+            #[cfg(target_family = "unix")]
+            Self::Unix(half) => half.is_write_vectored(),
         }
     }
 }
@@ -75,6 +100,7 @@ pub enum OwnedReadHalf {
 }
 
 impl AsyncRead for OwnedReadHalf {
+    #[inline]
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -92,12 +118,12 @@ impl ConnStream {
     #[allow(clippy::type_complexity)]
     pub fn into_split(self) -> (OwnedReadHalf, OwnedWriteHalf) {
         match self {
-            ConnStream::Tcp(stream) => {
+            Self::Tcp(stream) => {
                 let (rh, wh) = stream.into_split();
                 (OwnedReadHalf::Tcp(rh), OwnedWriteHalf::Tcp(wh))
             }
             #[cfg(target_family = "unix")]
-            ConnStream::Unix(stream) => {
+            Self::Unix(stream) => {
                 let (rh, wh) = stream.into_split();
                 (OwnedReadHalf::Unix(rh), OwnedWriteHalf::Unix(wh))
             }
@@ -109,7 +135,7 @@ impl From<TcpStream> for ConnStream {
     #[inline]
     fn from(s: TcpStream) -> Self {
         let _ = s.set_nodelay(true);
-        ConnStream::Tcp(s)
+        Self::Tcp(s)
     }
 }
 
@@ -117,7 +143,7 @@ impl From<TcpStream> for ConnStream {
 impl From<UnixStream> for ConnStream {
     #[inline]
     fn from(s: UnixStream) -> Self {
-        ConnStream::Unix(s)
+        Self::Unix(s)
     }
 }
 
@@ -167,15 +193,37 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Unix(s) => s.poll_shutdown(cx),
         }
     }
+
+    #[inline]
+    fn poll_write_vectored(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[io::IoSlice<'_>],
+    ) -> Poll<Result<usize, io::Error>> {
+        match self.project() {
+            IoStreamProj::Tcp(s) => s.poll_write_vectored(cx, bufs),
+            #[cfg(target_family = "unix")]
+            IoStreamProj::Unix(s) => s.poll_write_vectored(cx, bufs),
+        }
+    }
+
+    #[inline]
+    fn is_write_vectored(&self) -> bool {
+        match self {
+            Self::Tcp(s) => s.is_write_vectored(),
+            #[cfg(target_family = "unix")]
+            Self::Unix(s) => s.is_write_vectored(),
+        }
+    }
 }
 
 impl ConnStream {
     #[inline]
     pub fn peer_addr(&self) -> Option<Address> {
         match self {
-            ConnStream::Tcp(s) => s.peer_addr().map(Address::from).ok(),
+            Self::Tcp(s) => s.peer_addr().map(Address::from).ok(),
             #[cfg(target_family = "unix")]
-            ConnStream::Unix(s) => s.peer_addr().ok().and_then(|s| Address::try_from(s).ok()),
+            Self::Unix(s) => s.peer_addr().ok().and_then(|s| Address::try_from(s).ok()),
         }
     }
 }
@@ -185,6 +233,7 @@ pub struct Conn {
 }
 
 impl Conn {
+    #[inline]
     pub fn new(stream: ConnStream, info: ConnInfo) -> Self {
         Conn { stream, info }
     }
@@ -231,5 +280,19 @@ impl AsyncWrite for Conn {
     #[inline]
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Pin::new(&mut self.stream).poll_shutdown(cx)
+    }
+
+    #[inline]
+    fn poll_write_vectored(
+        mut self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+        bufs: &[io::IoSlice<'_>],
+    ) -> Poll<Result<usize, io::Error>> {
+        Pin::new(&mut self.stream).poll_write_vectored(cx, bufs)
+    }
+
+    #[inline]
+    fn is_write_vectored(&self) -> bool {
+        self.stream.is_write_vectored()
     }
 }
