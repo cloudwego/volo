@@ -6,6 +6,9 @@ members = [
   "volo-grpc",
   "volo-macros",
   "volo-thrift",
+
+  "examples",
+  "examples/volo-gen",
 ]
 resolver = "2"
 
