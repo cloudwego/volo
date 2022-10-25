@@ -9,10 +9,8 @@ impl volo_gen::proto_gen::hello::HelloService for S {
     async fn hello(
         &self,
         req: ::volo_grpc::Request<volo_gen::proto_gen::hello::HelloRequest>,
-    ) -> Result<
-        ::volo_grpc::Response<volo_gen::proto_gen::hello::HelloResponse>,
-        ::volo_grpc::Status,
-    > {
+    ) -> Result<::volo_grpc::Response<volo_gen::proto_gen::hello::HelloResponse>, ::volo_grpc::Status>
+    {
         let resp = volo_gen::proto_gen::hello::HelloResponse {
             message: format!("Hello, {}!", req.get_ref().name),
         };

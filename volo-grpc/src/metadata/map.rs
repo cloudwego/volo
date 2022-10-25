@@ -1366,7 +1366,7 @@ where
         match self.inner {
             Some(ref mut inner) => inner
                 .next()
-                .map(&MetadataValue::unchecked_from_header_value_ref),
+                .map(MetadataValue::unchecked_from_header_value_ref),
             None => None,
         }
     }
@@ -1387,7 +1387,7 @@ where
         match self.inner {
             Some(ref mut inner) => inner
                 .next_back()
-                .map(&MetadataValue::unchecked_from_header_value_ref),
+                .map(MetadataValue::unchecked_from_header_value_ref),
             None => None,
         }
     }
@@ -1404,7 +1404,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         self.inner
             .next()
-            .map(&MetadataValue::unchecked_from_mut_header_value_ref)
+            .map(MetadataValue::unchecked_from_mut_header_value_ref)
     }
 }
 
@@ -1415,7 +1415,7 @@ where
     fn next_back(&mut self) -> Option<Self::Item> {
         self.inner
             .next_back()
-            .map(&MetadataValue::unchecked_from_mut_header_value_ref)
+            .map(MetadataValue::unchecked_from_mut_header_value_ref)
     }
 }
 
@@ -2038,7 +2038,7 @@ mod into_metadata_key {
         ) -> Option<MetadataValue<VE>> {
             map.headers
                 .insert(self.inner, val.inner)
-                .map(&MetadataValue::unchecked_from_header_value)
+                .map(MetadataValue::unchecked_from_header_value)
         }
 
         #[inline]
@@ -2058,7 +2058,7 @@ mod into_metadata_key {
         ) -> Option<MetadataValue<VE>> {
             map.headers
                 .insert(&self.inner, val.inner)
-                .map(&MetadataValue::unchecked_from_header_value)
+                .map(MetadataValue::unchecked_from_header_value)
         }
         #[inline]
         fn append(self, map: &mut MetadataMap, val: MetadataValue<VE>) -> bool {
@@ -2080,7 +2080,7 @@ mod into_metadata_key {
 
             map.headers
                 .insert(key.inner, val.inner)
-                .map(&MetadataValue::unchecked_from_header_value)
+                .map(MetadataValue::unchecked_from_header_value)
         }
         #[inline]
         fn append(self, map: &mut MetadataMap, val: MetadataValue<VE>) -> bool {
@@ -2132,14 +2132,14 @@ mod as_metadata_key {
         fn get(self, map: &MetadataMap) -> Option<&MetadataValue<VE>> {
             map.headers
                 .get(self.inner)
-                .map(&MetadataValue::unchecked_from_header_value_ref)
+                .map(MetadataValue::unchecked_from_header_value_ref)
         }
 
         #[inline]
         fn get_mut(self, map: &mut MetadataMap) -> Option<&mut MetadataValue<VE>> {
             map.headers
                 .get_mut(self.inner)
-                .map(&MetadataValue::unchecked_from_mut_header_value_ref)
+                .map(MetadataValue::unchecked_from_mut_header_value_ref)
         }
 
         #[inline]
@@ -2159,7 +2159,7 @@ mod as_metadata_key {
         fn remove(self, map: &mut MetadataMap) -> Option<MetadataValue<VE>> {
             map.headers
                 .remove(self.inner)
-                .map(&MetadataValue::unchecked_from_header_value)
+                .map(MetadataValue::unchecked_from_header_value)
         }
     }
 
@@ -2170,14 +2170,14 @@ mod as_metadata_key {
         fn get(self, map: &MetadataMap) -> Option<&MetadataValue<VE>> {
             map.headers
                 .get(&self.inner)
-                .map(&MetadataValue::unchecked_from_header_value_ref)
+                .map(MetadataValue::unchecked_from_header_value_ref)
         }
 
         #[inline]
         fn get_mut(self, map: &mut MetadataMap) -> Option<&mut MetadataValue<VE>> {
             map.headers
                 .get_mut(&self.inner)
-                .map(&MetadataValue::unchecked_from_mut_header_value_ref)
+                .map(MetadataValue::unchecked_from_mut_header_value_ref)
         }
 
         #[inline]
@@ -2197,7 +2197,7 @@ mod as_metadata_key {
         fn remove(self, map: &mut MetadataMap) -> Option<MetadataValue<VE>> {
             map.headers
                 .remove(&self.inner)
-                .map(&MetadataValue::unchecked_from_header_value)
+                .map(MetadataValue::unchecked_from_header_value)
         }
     }
 
@@ -2211,7 +2211,7 @@ mod as_metadata_key {
             }
             map.headers
                 .get(self)
-                .map(&MetadataValue::unchecked_from_header_value_ref)
+                .map(MetadataValue::unchecked_from_header_value_ref)
         }
 
         #[inline]
@@ -2221,7 +2221,7 @@ mod as_metadata_key {
             }
             map.headers
                 .get_mut(self)
-                .map(&MetadataValue::unchecked_from_mut_header_value_ref)
+                .map(MetadataValue::unchecked_from_mut_header_value_ref)
         }
 
         #[inline]
@@ -2254,7 +2254,7 @@ mod as_metadata_key {
             }
             map.headers
                 .remove(self)
-                .map(&MetadataValue::unchecked_from_header_value)
+                .map(MetadataValue::unchecked_from_header_value)
         }
     }
 
@@ -2268,7 +2268,7 @@ mod as_metadata_key {
             }
             map.headers
                 .get(self.as_str())
-                .map(&MetadataValue::unchecked_from_header_value_ref)
+                .map(MetadataValue::unchecked_from_header_value_ref)
         }
 
         #[inline]
@@ -2278,7 +2278,7 @@ mod as_metadata_key {
             }
             map.headers
                 .get_mut(self.as_str())
-                .map(&MetadataValue::unchecked_from_mut_header_value_ref)
+                .map(MetadataValue::unchecked_from_mut_header_value_ref)
         }
 
         #[inline]
@@ -2310,7 +2310,7 @@ mod as_metadata_key {
             }
             map.headers
                 .remove(self.as_str())
-                .map(&MetadataValue::unchecked_from_header_value)
+                .map(MetadataValue::unchecked_from_header_value)
         }
     }
 
@@ -2324,7 +2324,7 @@ mod as_metadata_key {
             }
             map.headers
                 .get(self.as_str())
-                .map(&MetadataValue::unchecked_from_header_value_ref)
+                .map(MetadataValue::unchecked_from_header_value_ref)
         }
 
         #[inline]
@@ -2334,7 +2334,7 @@ mod as_metadata_key {
             }
             map.headers
                 .get_mut(self.as_str())
-                .map(&MetadataValue::unchecked_from_mut_header_value_ref)
+                .map(MetadataValue::unchecked_from_mut_header_value_ref)
         }
 
         #[inline]
@@ -2366,7 +2366,7 @@ mod as_metadata_key {
             }
             map.headers
                 .remove(self.as_str())
-                .map(&MetadataValue::unchecked_from_header_value)
+                .map(MetadataValue::unchecked_from_header_value)
         }
     }
 
