@@ -1,0 +1,15 @@
+entries:
+  proto:
+    protocol: protobuf
+    filename: proto_gen.rs
+    idls:
+    - source: local
+      path: ../proto/hello.proto
+      includes:
+      - ../proto
+  thrift:
+    protocol: thrift
+    filename: thrift_gen.rs
+    idls:
+    - source: local
+      path: ../thrift_idl/hello.thrift
