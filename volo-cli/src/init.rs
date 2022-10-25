@@ -118,7 +118,7 @@ impl Init {
     fn copy_grpc_template(&self, contents: String) -> anyhow::Result<()> {
         let (service_name, namespace) = self.parse_grpc(contents)?;
 
-        let name = self.name.replace('.', "_").replace('-', "_");
+        let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
         let folder = cwd.as_path();
 
@@ -177,7 +177,7 @@ impl Init {
 
     fn copy_thrift_template(&self, contents: String, filename: &str) -> anyhow::Result<()> {
         let (service_name, mut namespace) = self.parse_thrift(contents)?;
-        let name = self.name.replace('.', "_").replace('-', "_");
+        let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
         let folder = cwd.as_path();
         if namespace.is_none() {

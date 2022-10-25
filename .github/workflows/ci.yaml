@@ -28,6 +28,8 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: rustfmt
     # - uses: Swatinem/rust-cache@v1
     - name: Run tests
       run: |
@@ -40,6 +42,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
       # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
@@ -52,6 +56,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
       - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
@@ -64,6 +70,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
       - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |

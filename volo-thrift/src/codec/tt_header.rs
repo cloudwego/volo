@@ -218,7 +218,7 @@ impl TTHeaderEncoder for DefaultTTHeaderCodec {
                 }
 
                 let mut buf = &mut dst[string_kv_index..string_kv_index + 2];
-                buf.put_u16(string_kv_len as u16);
+                buf.put_u16(string_kv_len);
             }
 
             // Write int KV start.
