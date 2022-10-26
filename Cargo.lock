@@ -316,7 +316,7 @@ checksum = "0206175f82b8d6bf6652ff7d71a1e27fd2e4efde587fd368662814d6ec1d9ce0"
 
 [[package]]
 name = "examples"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1006,8 +1006,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c8a776dde994a06ab5b69f2c8868f238bb7d2cdac31d58d24f61479278e9f6bd"
+source = "git+https://github.com/cloudwego/pilota?branch=main#2659cfbe08c95881cb2674df985093179bb681fa"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1024,8 +1023,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ae7edf15d31f7af7e069a59cf0cef720357a7ef2417ec496c083290061b81858"
+source = "git+https://github.com/cloudwego/pilota?branch=main#2659cfbe08c95881cb2674df985093179bb681fa"
 dependencies = [
  "fxhash",
  "heck 0.4.0",
@@ -1051,8 +1049,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "22596743c4945b405fd7cea2a46c72032bdbce917cd06426b0d920aec0a3ce58"
+source = "git+https://github.com/cloudwego/pilota?branch=main#2659cfbe08c95881cb2674df985093179bb681fa"
 dependencies = [
  "nom",
 ]
@@ -1989,7 +1986,7 @@ dependencies = [
 
 [[package]]
 name = "volo-gen"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
