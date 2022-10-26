@@ -115,20 +115,20 @@ impl<D> LoadBalance<D> for WeightedRandomBalance<D::Key>
 where
     D: Discover,
 {
-    type InstanceIter<'iter> = InstancePicker;
+    type InstanceIter = InstancePicker;
 
-    type GetFut<'future, 'iter> =
-        impl Future<Output = Result<Self::InstanceIter<'iter>, LoadBalanceError>> + Send + 'future
+    type GetFut<'future> =
+        impl Future<Output = Result<Self::InstanceIter, LoadBalanceError>> + Send + 'future
         where
-            'iter: 'future;
+            Self: 'future;
 
-    fn get_picker<'future, 'iter>(
-        &'iter self,
+    fn get_picker<'future>(
+        &'future self,
         endpoint: &'future Endpoint,
         discover: &'future D,
-    ) -> Self::GetFut<'future, 'iter>
+    ) -> Self::GetFut<'future>
     where
-        'iter: 'future,
+        Self: 'future,
     {
         async {
             let key = discover.key(endpoint);

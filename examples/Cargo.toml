@@ -12,15 +12,15 @@ publish = false
 [[bin]]
 name = "hello-grpc-server"
 path = "src/hello/grpc_server.rs"
-# [[bin]]
-# name = "hello-grpc-client"
-# path = "src/hello/grpc_client.rs"
+[[bin]]
+name = "hello-grpc-client"
+path = "src/hello/grpc_client.rs"
 [[bin]]
 name = "hello-thrift-server"
 path = "src/hello/thrift_server.rs"
-# [[bin]]
-# name = "hello-thrift-client"
-# path = "src/hello/thrift_client.rs"
+[[bin]]
+name = "hello-thrift-client"
+path = "src/hello/thrift_client.rs"
 
 [dependencies]
 anyhow.workspace = true
