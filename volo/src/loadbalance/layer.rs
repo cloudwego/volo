@@ -45,7 +45,6 @@ where
 
 impl<Cx, Req, D, LB, S> Service<Cx, Req> for LoadBalanceService<D, LB, S>
 where
-    <Cx as Context>::Config: std::marker::Sync,
     Cx: 'static + Context + Send + Sync,
     D: Discover,
     LB: LoadBalance<D>,
@@ -53,7 +52,6 @@ where
     LoadBalanceError: Into<S::Error>,
     S::Error: Debug + Retryable,
     Req: Clone + Send + Sync + 'static,
-    for<'future, 'iter> LB::GetFut<'future, 'iter>: Send, /* add this temporarily via https://github.com/rust-lang/rust/issues/100013 */
 {
     type Response = S::Response;
 
