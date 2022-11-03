@@ -69,12 +69,14 @@ impl CliCommand for Add {
                             r#ref: self.r#ref.clone(),
                             lock: Some(lock),
                         }),
+                        touch: vec![],
                         path: self.idl.clone(),
                         includes: self.includes.clone(),
                     }
                 } else {
                     Idl {
                         source: Source::Local,
+                        touch: vec![],
                         path: self.idl.clone(),
                         includes: self.includes.clone(),
                     }

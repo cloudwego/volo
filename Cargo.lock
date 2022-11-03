@@ -126,9 +126,9 @@ checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
 
 [[package]]
 name = "cc"
-version = "1.0.73"
+version = "1.0.74"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fff2a6927b3bb87f9595d67196a70493f627687a71d87a0d692242c33f58c11"
+checksum = "581f5dba903aac52ea3feb5ec4810848460ee833876f1f9b0fdeab1f19091574"
 
 [[package]]
 name = "cfg-if"
@@ -589,9 +589,9 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "0.14.20"
+version = "0.14.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02c929dc5c39e335a03c405292728118860721b10190d98c2a0f0efd5baafbac"
+checksum = "abfba89e19b959ca163c7752ba59d737c1ceea53a5d31a149c805446fc958064"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -654,9 +654,9 @@ dependencies = [
 
 [[package]]
 name = "io-lifetimes"
-version = "0.7.4"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6e481ccbe3dea62107216d0d1138bb8ad8e5e5c43009a098bd1990272c497b0"
+checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
 
 [[package]]
 name = "itertools"
@@ -863,9 +863,9 @@ dependencies = [
 
 [[package]]
 name = "once_cell"
-version = "1.15.0"
+version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e82dad04139b71a90c080c8463fe0dc7902db5192d939bd0950f074d014339e1"
+checksum = "86f0b0d4bf799edbc74508c1e8bf170ff5f41238e5f8225603ca7caaae2b7860"
 
 [[package]]
 name = "oorandom"
@@ -875,9 +875,9 @@ checksum = "0ab1bc2a289d34bd04a330323ac98a1b4bc82c9d9fcb1e66b63caa84da26b575"
 
 [[package]]
 name = "os_str_bytes"
-version = "6.3.0"
+version = "6.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ff7415e9ae3fff1225851df9e0d9e4e5479f947619774677a63572e55e80eff"
+checksum = "3baf96e39c5359d2eb0dd6ccb42c62b91d9678aa68160d261b9e0ccbf9e9dea9"
 
 [[package]]
 name = "overload"
@@ -1006,7 +1006,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.2.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#2659cfbe08c95881cb2674df985093179bb681fa"
+source = "git+https://github.com/cloudwego/pilota?branch=main#a53be3579cd8ed5a379a1d7fe94b08a110c0e7ab"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1014,7 +1014,6 @@ dependencies = [
  "bytes",
  "derivative",
  "lazy_static",
- "num_enum",
  "smol_str",
  "thiserror",
  "tokio",
@@ -1022,8 +1021,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.2.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#2659cfbe08c95881cb2674df985093179bb681fa"
+version = "0.3.0"
+source = "git+https://github.com/cloudwego/pilota?branch=main#a53be3579cd8ed5a379a1d7fe94b08a110c0e7ab"
 dependencies = [
  "fxhash",
  "heck 0.4.0",
@@ -1049,7 +1048,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#2659cfbe08c95881cb2674df985093179bb681fa"
+source = "git+https://github.com/cloudwego/pilota?branch=main#a53be3579cd8ed5a379a1d7fe94b08a110c0e7ab"
 dependencies = [
  "nom",
 ]
@@ -1337,16 +1336,16 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustix"
-version = "0.35.12"
+version = "0.35.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "985947f9b6423159c4726323f373be0a21bdb514c5af06a849cb3d2dce2d01e8"
+checksum = "727a1a6d65f786ec22df8a81ca3121107f235970dc1705ed681d3e6e8b9cd5f9"
 dependencies = [
  "bitflags",
  "errno",
  "io-lifetimes",
  "libc",
  "linux-raw-sys",
- "windows-sys 0.36.1",
+ "windows-sys 0.42.0",
 ]
 
 [[package]]
@@ -1407,9 +1406,9 @@ dependencies = [
 
 [[package]]
 name = "scoped-tls"
-version = "1.0.0"
+version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea6a9290e3c9cf0f18145ef7ffa62d68ee0bf5fcd651017e586dc7fd5da448c2"
+checksum = "e1cf6437eb19a8f4a6cc0f7dca544973b0b78843adbfeb3683d1a94a0024a294"
 
 [[package]]
 name = "scopeguard"
