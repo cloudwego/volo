@@ -33,6 +33,8 @@ pub struct Idl {
     pub path: PathBuf,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub includes: Option<Vec<PathBuf>>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default = "Vec::new")]
+    pub touch: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -71,6 +73,7 @@ impl Idl {
             source: Source::Local,
             path: PathBuf::from(""),
             includes: None,
+            touch: Vec::default(),
         }
     }
 

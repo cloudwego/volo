@@ -88,11 +88,11 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
-    pub fn must_gen_items(
+    pub fn touch(
         mut self,
         items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>,
     ) -> Self {
-        self.pilota_builder = self.pilota_builder.must_gen_items(items);
+        self.pilota_builder = self.pilota_builder.touch(items);
         self
     }
 

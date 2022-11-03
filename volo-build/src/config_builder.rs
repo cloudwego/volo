@@ -72,6 +72,13 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.add_service(path)),
         }
     }
+
+    pub fn touch(self, items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.touch(items)),
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.touch(items)),
+        }
+    }
 }
 
 impl ConfigBuilder {
@@ -135,7 +142,10 @@ impl ConfigBuilder {
                     (idl.path.to_path_buf(), idl.includes.unwrap_or_default())
                 };
 
-                builder = builder.add_service(path).includes(includes);
+                builder = builder
+                    .add_service(path.clone())
+                    .includes(includes)
+                    .touch([(path, idl.touch)]);
             }
 
             builder.write()?;
