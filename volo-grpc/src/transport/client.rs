@@ -1,25 +1,20 @@
-use std::{marker::PhantomData, net::SocketAddr, str::FromStr};
+use std::marker::PhantomData;
 
 use futures::Future;
 use http::{
     header::{CONTENT_TYPE, TE},
-    HeaderMap, HeaderValue,
+    HeaderValue,
 };
 use hyper::Client as HyperClient;
-use metainfo::{Backward, Forward};
 use motore::Service;
 use tower::{util::ServiceExt, Service as TowerService};
-use volo::{context::Context, net::Address, Unwrap};
+use volo::{net::Address, Unwrap};
 
 use super::connect::Connector;
 use crate::{
     client::Http2Config,
     codec::decode::Kind,
     context::{ClientContext, Config},
-    metadata::{
-        MetadataKey, MetadataMap, DESTINATION_ADDR, DESTINATION_METHOD, DESTINATION_SERVICE,
-        HEADER_TRANS_REMOTE_ADDR, SOURCE_SERVICE,
-    },
     Code, Request, Response, Status,
 };
 
@@ -100,12 +95,10 @@ where
                     std::io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
                 })?;
 
-            let (mut metadata, extensions, message) = volo_req.into_parts();
-
-            insert_metadata(&mut metadata, cx)?;
-
+            let (metadata, extensions, message) = volo_req.into_parts();
             let path = cx.rpc_info.method().volo_unwrap();
             let body = hyper::Body::wrap_stream(message.into_body());
+
             let mut req = hyper::Request::new(body);
             *req.version_mut() = http::Version::HTTP_2;
             *req.method_mut() = http::Method::POST;
@@ -132,10 +125,8 @@ where
                     return Err(status);
                 }
             }
-            let (mut parts, body) = resp.into_parts();
+            let (parts, body) = resp.into_parts();
             let body = U::from_body(Some(path), body, Kind::Response(status_code))?;
-            extract_metadata(&mut parts.headers, cx)?;
-
             let resp = hyper::Response::from_parts(parts, body);
 
             Ok(Response::from_http(resp))
@@ -159,79 +150,6 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
             .build()
             .expect("fail to build unix uri"),
     }
-}
-
-fn insert_metadata(metadata: &mut MetadataMap, cx: &mut ClientContext) -> Result<(), Status> {
-    metainfo::METAINFO.with(|metainfo| {
-        let metainfo = metainfo.borrow_mut();
-
-        // persistents for multi-hops
-        if let Some(ap) = metainfo.get_all_persistents() {
-            for (key, value) in ap {
-                let key = metainfo::HTTP_PREFIX_PERSISTENT.to_owned() + key;
-                metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
-            }
-        }
-
-        // transients for one-hop
-        if let Some(at) = metainfo.get_all_transients() {
-            for (key, value) in at {
-                let key = metainfo::HTTP_PREFIX_TRANSIENT.to_owned() + key;
-                metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
-            }
-        }
-
-        // caller
-        if let Some(caller) = cx.rpc_info.caller.as_ref() {
-            metadata.insert(SOURCE_SERVICE, caller.service_name().parse()?);
-        }
-
-        // callee
-        if let Some(callee) = cx.rpc_info.callee.as_ref() {
-            metadata.insert(DESTINATION_SERVICE, callee.service_name().parse()?);
-            if let Some(method) = cx.rpc_info.method() {
-                metadata.insert(DESTINATION_METHOD, method.parse()?);
-            }
-            if let Some(addr) = callee.address() {
-                metadata.insert(DESTINATION_ADDR, addr.to_string().parse()?);
-            }
-        }
-
-        Ok::<(), Status>(())
-    })
-}
-
-fn extract_metadata(
-    headers: &mut HeaderMap<HeaderValue>,
-    cx: &mut ClientContext,
-) -> Result<(), Status> {
-    metainfo::METAINFO.with(|metainfo| {
-        let mut metainfo = metainfo.borrow_mut();
-
-        // callee
-        if let Some(ad) = headers.remove(HEADER_TRANS_REMOTE_ADDR) {
-            let maybe_addr = ad.to_str()?.parse::<SocketAddr>();
-            if let (Some(callee), Ok(addr)) = (cx.rpc_info_mut().callee.as_mut(), maybe_addr) {
-                callee.set_address(volo::net::Address::from(addr));
-            }
-        }
-
-        // backward
-        let mut vec = Vec::with_capacity(headers.len());
-        for (k, v) in headers.into_iter() {
-            let k = k.as_str();
-            let v = v.to_str()?;
-            if k.starts_with(metainfo::HTTP_PREFIX_BACKWARD) {
-                vec.push(k.to_owned());
-                metainfo.strip_http_prefix_and_set_backward_downstream(k.to_owned(), v.to_owned());
-            }
-        }
-        for k in vec {
-            headers.remove(k);
-        }
-
-        Ok::<(), Status>(())
-    })
 }
 
 #[cfg(test)]

@@ -2,35 +2,26 @@
 //!
 //! This module contains the low level component to build a gRPC server.
 
-use std::{
-    cell::RefCell, marker::PhantomData, net::SocketAddr, str::FromStr, sync::Arc, time::Duration,
-};
+mod meta;
+
+use std::{cell::RefCell, marker::PhantomData, time::Duration};
 
 use futures::{Future, TryStreamExt};
-use http::{HeaderMap, HeaderValue};
 use hyper::server::conn::Http;
-use metainfo::{Backward, Forward};
 use motore::{
     builder::ServiceBuilder,
     layer::{Identity, Layer, Stack},
     service::Service,
     BoxError, ServiceExt,
 };
-use tower::Layer as TowerLayer;
-use volo::{
-    context::{Context, Endpoint},
-    net::Address,
-    spawn,
-};
+use volo::spawn;
 
 use crate::{
     body::Body,
     codec::decode::Kind,
     context::ServerContext,
     message::{RecvEntryMessage, SendEntryMessage},
-    metadata::{
-        MetadataKey, MetadataMap, DESTINATION_SERVICE, HEADER_TRANS_REMOTE_ADDR, SOURCE_SERVICE,
-    },
+    server::meta::MetaService,
     Request, Response, Status,
 };
 
@@ -57,7 +48,7 @@ impl<S, L> Server<S, L> {
     /// stream-level flow control.
     ///
     /// Default is `1MB`.
-    pub fn http2_init_stream_window_size(&mut self, sz: impl Into<u32>) -> &mut Self {
+    pub fn http2_init_stream_window_size(mut self, sz: impl Into<u32>) -> Self {
         self.http2_config.init_stream_window_size = sz.into();
         self
     }
@@ -65,7 +56,7 @@ impl<S, L> Server<S, L> {
     /// Sets the max connection-level flow control for HTTP2.
     ///
     /// Default is `1MB`.
-    pub fn http2_init_connection_window_size(&mut self, sz: impl Into<u32>) -> &mut Self {
+    pub fn http2_init_connection_window_size(mut self, sz: impl Into<u32>) -> Self {
         self.http2_config.init_connection_window_size = sz.into();
         self
     }
@@ -85,7 +76,7 @@ impl<S, L> Server<S, L> {
     /// Sets the [`SETTINGS_MAX_CONCURRENT_STREAMS`] option for HTTP2 connections.
     ///
     /// Default is no limit (`None`).
-    pub fn http2_max_concurrent_streams(&mut self, max: impl Into<Option<u32>>) -> &mut Self {
+    pub fn http2_max_concurrent_streams(mut self, max: impl Into<Option<u32>>) -> Self {
         self.http2_config.max_concurrent_streams = max.into();
         self
     }
@@ -98,7 +89,7 @@ impl<S, L> Server<S, L> {
     /// can be set with [`Server::http2_keepalive_timeout`].
     ///
     /// Default is no HTTP2 keepalive (`None`).
-    pub fn http2_keepalive_interval(&mut self, interval: impl Into<Option<Duration>>) -> &mut Self {
+    pub fn http2_keepalive_interval(mut self, interval: impl Into<Option<Duration>>) -> Self {
         self.http2_config.http2_keepalive_interval = interval.into();
         self
     }
@@ -109,7 +100,7 @@ impl<S, L> Server<S, L> {
     /// Does nothing if http2_keepalive_interval is disabled.
     ///
     /// Default is 20 seconds.
-    pub fn http2_keepalive_timeout(&mut self, timeout: Duration) -> &mut Self {
+    pub fn http2_keepalive_timeout(mut self, timeout: Duration) -> Self {
         self.http2_config.http2_keepalive_timeout = timeout;
         self
     }
@@ -119,7 +110,7 @@ impl<S, L> Server<S, L> {
     /// Passing `None` will do nothing.
     ///
     /// If not set, will default from underlying transport.
-    pub fn http2_max_frame_size(&mut self, sz: impl Into<Option<u32>>) -> &mut Self {
+    pub fn http2_max_frame_size(mut self, sz: impl Into<Option<u32>>) -> Self {
         self.http2_config.max_frame_size = sz.into();
         self
     }
@@ -132,7 +123,7 @@ impl<S, L> Server<S, L> {
     /// return confusing (but correct) protocol errors.
     ///
     /// Default is `false`.
-    pub fn accept_http1(&mut self, accept_http1: bool) -> &mut Self {
+    pub fn accept_http1(mut self, accept_http1: bool) -> Self {
         self.http2_config.accept_http1 = accept_http1;
         self
     }
@@ -201,7 +192,7 @@ impl<S, L> Server<S, L> {
             tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
             let peer_addr = conn.info.peer_addr.clone();
 
-            let service = HyperAdaptorLayer::new(peer_addr).layer(service.clone());
+            let service = HyperAdaptorService::new(MetaService::new(service.clone(), peer_addr));
             // init server
             let server = Self::create_http_server(&self.http2_config);
             spawn(async move {
@@ -238,33 +229,6 @@ macro_rules! status_to_http {
     };
 }
 
-/// A layer that adapts a `motore::Service` to `tower::Service`.
-pub struct HyperAdaptorLayer<T, U> {
-    peer_addr: Option<Address>,
-    _marker: PhantomData<(T, U)>,
-}
-
-impl<T, U> HyperAdaptorLayer<T, U> {
-    pub fn new(peer_addr: Option<Address>) -> Self {
-        Self {
-            peer_addr,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<S, T, U> tower::Layer<S> for HyperAdaptorLayer<T, U> {
-    type Service = HyperAdaptorService<S, T, U>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        HyperAdaptorService {
-            inner,
-            peer_addr: self.peer_addr.clone(),
-            _marker: self._marker,
-        }
-    }
-}
-
 /// A service that implements `tower::Service` for service transition between hyper's
 /// `tower::Service` and our's `motore::Service`. For more details, A incoming
 /// request will first come to hyper's `tower::Service`, then `HyperAdaptorService`,
@@ -272,8 +236,16 @@ impl<S, T, U> tower::Layer<S> for HyperAdaptorLayer<T, U> {
 #[derive(Clone)]
 pub struct HyperAdaptorService<S, T, U> {
     inner: S,
-    peer_addr: Option<Address>,
     _marker: PhantomData<(T, U)>,
+}
+
+impl<S, T, U> HyperAdaptorService<S, T, U> {
+    pub fn new(inner: S) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<S, T, U> tower::Service<hyper::Request<hyper::Body>> for HyperAdaptorService<S, T, U>
@@ -296,15 +268,12 @@ where
 
     fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
         let mut inner = self.inner.clone();
-        let peer_addr = self.peer_addr.clone();
 
         metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
             let mut cx = ServerContext::default();
             cx.rpc_info.method = Some(req.uri().path().into());
 
-            let (mut parts, body) = req.into_parts();
-
-            status_to_http!(extract_metadata(&mut parts.headers, &mut cx, peer_addr));
+            let (parts, body) = req.into_parts();
 
             let message = status_to_http!(T::from_body(
                 cx.rpc_info.method.as_deref(),
@@ -321,9 +290,7 @@ where
                 }
             };
 
-            let (mut metadata, extensions, message) = volo_resp.into_parts();
-
-            status_to_http!(insert_metadata(&mut metadata));
+            let (metadata, extensions, message) = volo_resp.into_parts();
 
             let mut resp = hyper::Response::new(Body::new(message.into_body()));
             *resp.headers_mut() = metadata.into_headers();
@@ -336,74 +303,6 @@ where
             Ok(resp)
         })
     }
-}
-
-fn extract_metadata(
-    headers: &mut HeaderMap<HeaderValue>,
-    cx: &mut ServerContext,
-    peer_addr: Option<Address>,
-) -> Result<(), Status> {
-    metainfo::METAINFO.with(|metainfo| {
-        let mut metainfo = metainfo.borrow_mut();
-
-        // caller
-        if let Some(source_service) = headers.remove(SOURCE_SERVICE) {
-            let source_service = Arc::<str>::from(source_service.to_str()?);
-            let mut caller = Endpoint::new(source_service.into());
-            if let Some(ad) = headers.remove(HEADER_TRANS_REMOTE_ADDR) {
-                let addr = ad.to_str()?.parse::<SocketAddr>();
-                if let Ok(addr) = addr {
-                    caller.set_address(volo::net::Address::from(addr));
-                }
-            }
-            if caller.address.is_none() {
-                caller.address = peer_addr;
-            }
-            cx.rpc_info_mut().caller = Some(caller);
-        }
-
-        // callee
-        if let Some(destination_service) = headers.remove(DESTINATION_SERVICE) {
-            let destination_service = Arc::<str>::from(destination_service.to_str()?);
-            let callee = Endpoint::new(destination_service.into());
-            cx.rpc_info_mut().callee = Some(callee);
-        }
-
-        // persistent and transient
-        let mut vec = Vec::with_capacity(headers.len());
-        for (k, v) in headers.into_iter() {
-            let k = k.as_str();
-            let v = v.to_str()?;
-            if k.starts_with(metainfo::HTTP_PREFIX_PERSISTENT) {
-                vec.push(k.to_owned());
-                metainfo.strip_http_prefix_and_set_persistent(k.to_owned(), v.to_owned());
-            } else if k.starts_with(metainfo::HTTP_PREFIX_TRANSIENT) {
-                vec.push(k.to_owned());
-                metainfo.strip_http_prefix_and_set_upstream(k.to_owned(), v.to_owned());
-            }
-        }
-        for k in vec {
-            headers.remove(k);
-        }
-
-        Ok::<(), Status>(())
-    })
-}
-
-fn insert_metadata(metadata: &mut MetadataMap) -> Result<(), Status> {
-    metainfo::METAINFO.with(|metainfo| {
-        let metainfo = metainfo.borrow_mut();
-
-        // backward
-        if let Some(at) = metainfo.get_all_backward_transients() {
-            for (key, value) in at {
-                let key = metainfo::HTTP_PREFIX_BACKWARD.to_owned() + key;
-                metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
-            }
-        }
-
-        Ok::<(), Status>(())
-    })
 }
 
 const DEFAULT_KEEPALIVE_TIMEOUT_SECS: Duration = Duration::from_secs(20);
