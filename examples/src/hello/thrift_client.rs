@@ -1,12 +1,12 @@
 #![feature(type_alias_impl_trait)]
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use lazy_static::lazy_static;
 
 lazy_static! {
     static ref CLIENT: volo_gen::thrift_gen::hello::HelloServiceClient = {
-        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let addr: SocketAddr = "127.0.0.1:8081".parse().unwrap();
         volo_gen::thrift_gen::hello::HelloServiceClientBuilder::new("hello")
             .address(addr)
             .build()
