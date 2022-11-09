@@ -1,6 +1,6 @@
 #![feature(type_alias_impl_trait)]
 
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
 use lazy_static::lazy_static;
 

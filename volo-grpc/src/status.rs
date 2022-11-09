@@ -622,7 +622,10 @@ impl Status {
 
         self.add_header(&mut parts.headers).unwrap();
 
-        http::Response::from_parts(parts, Body::new(Box::pin(futures::stream::empty())))
+        http::Response::from_parts(
+            parts,
+            Body::new(Box::pin(futures::stream::empty())).end_stream(true),
+        )
     }
 }
 

@@ -126,9 +126,9 @@ checksum = "ec8a7b6a70fde80372154c65702f00a0f56f3e1c36abbc6c440484be248856db"
 
 [[package]]
 name = "cc"
-version = "1.0.74"
+version = "1.0.76"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "581f5dba903aac52ea3feb5ec4810848460ee833876f1f9b0fdeab1f19091574"
+checksum = "76a284da2e6fe2092f2353e51713435363112dfd60030e22add80be333fb928f"
 
 [[package]]
 name = "cfg-if"
@@ -1006,7 +1006,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.2.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#1192fa8be51ea64fadadb0b4a2f9c99d87ff8b5a"
+source = "git+https://github.com/cloudwego/pilota?branch=main#c280540d3a6216a58d5227e7f3da84c7becd3228"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1022,7 +1022,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#1192fa8be51ea64fadadb0b4a2f9c99d87ff8b5a"
+source = "git+https://github.com/cloudwego/pilota?branch=main#c280540d3a6216a58d5227e7f3da84c7becd3228"
 dependencies = [
  "fxhash",
  "heck 0.4.0",
@@ -1048,7 +1048,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#1192fa8be51ea64fadadb0b4a2f9c99d87ff8b5a"
+source = "git+https://github.com/cloudwego/pilota?branch=main#c280540d3a6216a58d5227e7f3da84c7becd3228"
 dependencies = [
  "nom",
 ]

@@ -25,7 +25,7 @@ where
                     unsafe {
                         buf.advance_mut(PREFIX_LEN);
                     }
-                    DefaultEncoder::default().encode(item, &mut buf).map_err(drop).unwrap();
+                    DefaultEncoder::default().encode(item, &mut buf).map_err(|err| Status::internal(format!("Error encoding: {}", err)))?;
                     let len = buf.len() - PREFIX_LEN;
                     assert!(len <= std::u32::MAX as usize);
                     {
