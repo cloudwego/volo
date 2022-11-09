@@ -5,7 +5,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures::{ready, Stream};
+use futures::{ready, TryStreamExt};
 use http::HeaderMap;
 use hyper::body::HttpBody;
 use pin_project::pin_project;
@@ -34,6 +34,11 @@ impl Body {
         }
     }
 
+    pub fn end_stream(mut self, flag: bool) -> Self {
+        self.is_end_stream = flag;
+        self
+    }
+
     pub fn status(&self) -> Option<Status> {
         self.error_occurred.clone()
     }
@@ -51,10 +56,10 @@ impl HttpBody for Body {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        let this = self.project();
+        let mut this = self.project();
 
         // if there is an error, store it and return in poll_trailers().
-        match ready!(this.bytes_stream.poll_next(cx)) {
+        match ready!(this.bytes_stream.try_poll_next_unpin(cx)) {
             Some(Ok(data)) => Poll::Ready(Some(Ok(data))),
             Some(Err(err)) => {
                 *this.error_occurred = Some(err);
