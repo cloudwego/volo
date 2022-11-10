@@ -6,10 +6,12 @@
 //! For users need to specify some options at call time, they may use ['callopt'][callopt].
 
 mod callopt;
+mod meta;
 
 use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
 
 pub use callopt::CallOpt;
+pub use meta::MetaService;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{BoxCloneService, Service},
@@ -61,20 +63,9 @@ impl<C, T, U>
         U,
     >
 {
-    #[allow(clippy::type_complexity)]
     /// Creates a new [`ClientBuilder`].
-    pub fn new(
-        service_client: C,
-        service_name: impl AsRef<str>,
-    ) -> ClientBuilder<
-        Identity,
-        Identity,
-        C,
-        LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>,
-        T,
-        U,
-    > {
-        ClientBuilder {
+    pub fn new(service_client: C, service_name: impl AsRef<str>) -> Self {
+        Self {
             http2_config: Default::default(),
             rpc_config: Default::default(),
             callee_name: service_name.into(),
@@ -389,7 +380,7 @@ where
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Error:
         Into<Status>,
-    IL: Layer<ClientTransport<U>>,
+    IL: Layer<MetaService<ClientTransport<U>>>,
     IL::Service:
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
     <IL::Service as Service<ClientContext, Request<T>>>::Error: Into<Status>,
@@ -412,7 +403,8 @@ where
 {
     /// Builds a new [`Client`].
     pub fn build(self) -> C {
-        let transport = ClientTransport::new(&self.http2_config, &self.rpc_config);
+        let transport =
+            MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config));
         let transport = self.outer_layer.layer(BoxCloneService::new(
             self.mk_lb.make().layer(self.inner_layer.layer(transport)),
         ));
