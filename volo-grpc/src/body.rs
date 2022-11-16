@@ -48,10 +48,6 @@ impl HttpBody for Body {
     type Data = Bytes;
     type Error = Status;
 
-    fn is_end_stream(&self) -> bool {
-        self.is_end_stream
-    }
-
     fn poll_data(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -87,6 +83,10 @@ impl HttpBody for Body {
         };
 
         Poll::Ready(Ok(Some(status.to_header_map()?)))
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.is_end_stream
     }
 }
 

@@ -149,15 +149,16 @@ where
     {
         async move {
             let rpc_info = &cx.rpc_info;
-            let target = rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
-                std::io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
-            })?;
+            let target =
+                rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
+                    io::Error::new(io::ErrorKind::InvalidData, "address is required")
+                })?;
             let oneway = cx.message_type == TMessageType::OneWay;
             let mut transport = self.make_transport.call(target).await?;
             let resp = transport.send(cx, req, oneway).await;
             if let Ok(None) = resp {
                 if !oneway {
-                    return Err(crate::Error::Pilota(new_transport_error(
+                    return Err(Error::Pilota(new_transport_error(
                         TransportErrorKind::EndOfFile,
                         "an unexpected end of file from server",
                     )));

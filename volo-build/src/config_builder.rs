@@ -14,12 +14,17 @@ use crate::{
 
 pub struct ConfigBuilder {
     filename: PathBuf,
-    plugins: Vec<pilota_build::BoxClonePlugin>,
+    plugins: Vec<BoxClonePlugin>,
 }
 
 enum InnerBuilder {
     Protobuf(
-        crate::Builder<crate::grpc_backend::MkGrpcBackend, pilota_build::parser::ProtobufParser>,
+        Box<
+            crate::Builder<
+                crate::grpc_backend::MkGrpcBackend,
+                pilota_build::parser::ProtobufParser,
+            >,
+        >,
     ),
     Thrift(
         crate::Builder<crate::thrift_backend::MkThriftBackend, pilota_build::parser::ThriftParser>,

@@ -24,7 +24,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     mut service: Svc,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
-    Svc::Error: Into<crate::Error>,
+    Svc::Error: Into<Error>,
     Req: EntryMessage,
     Resp: EntryMessage,
     E: Encoder + Send,
@@ -46,7 +46,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                     out = framed.next(&mut cx) => out
                 };
 
-                tracing::debug!(
+                debug!(
                     "[VOLO] received message: {:?}",
                     msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta))
                 );
@@ -95,7 +95,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                     }
                 }
 
-                ::metainfo::METAINFO.with(|mi| {
+                metainfo::METAINFO.with(|mi| {
                     mi.borrow_mut().clear();
                 })
             }

@@ -43,7 +43,7 @@ where
         uri.authority = Some(set_uri.authority.expect("expected authority"));
 
         // update head.uri
-        head.uri = http::Uri::from_parts(uri).expect("valid uri");
+        head.uri = Uri::from_parts(uri).expect("valid uri");
 
         // combine into http::Request
         let request = Request::from_parts(head, body);

@@ -45,7 +45,7 @@ mod value_encoding {
     }
 }
 
-pub trait ValueEncoding: Clone + Eq + PartialEq + Hash + self::value_encoding::Sealed {
+pub trait ValueEncoding: Clone + Eq + PartialEq + Hash + value_encoding::Sealed {
     fn is_valid_key(key: &str) -> bool;
 }
 
@@ -56,7 +56,7 @@ pub enum Ascii {}
 #[doc(hidden)]
 pub enum Binary {}
 
-impl self::value_encoding::Sealed for Ascii {
+impl value_encoding::Sealed for Ascii {
     fn is_empty(value: &[u8]) -> bool {
         value.is_empty()
     }
@@ -96,7 +96,7 @@ impl ValueEncoding for Ascii {
     }
 }
 
-impl self::value_encoding::Sealed for Binary {
+impl value_encoding::Sealed for Binary {
     fn is_empty(value: &[u8]) -> bool {
         for c in value {
             if *c != b'=' {

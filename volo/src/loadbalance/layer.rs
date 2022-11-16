@@ -94,7 +94,7 @@ where
                         return Ok(resp);
                     }
                     Err(err) => {
-                        tracing::warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
+                        warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
                         if !err.retryable() {
                             return Err(err);
                         }
@@ -102,7 +102,7 @@ where
                 }
             }
             if call_count == 0 {
-                tracing::warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
+                warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
             }
             Err(LoadBalanceError::Retry.into())
         }

@@ -24,7 +24,7 @@ pub enum Incoming {
 
 #[async_trait::async_trait]
 impl MakeIncoming for Incoming {
-    async fn make_incoming(self) -> Result<Incoming, std::io::Error> {
+    async fn make_incoming(self) -> Result<Incoming, io::Error> {
         Ok(self)
     }
 }
@@ -44,12 +44,12 @@ impl From<TcpListener> for Incoming {
 
 #[async_trait::async_trait]
 pub trait MakeIncoming {
-    async fn make_incoming(self) -> Result<Incoming, std::io::Error>;
+    async fn make_incoming(self) -> Result<Incoming, io::Error>;
 }
 
 #[async_trait::async_trait]
 impl MakeIncoming for Address {
-    async fn make_incoming(self) -> Result<Incoming, std::io::Error> {
+    async fn make_incoming(self) -> Result<Incoming, io::Error> {
         match self {
             Address::Ip(addr) => TcpListener::bind(addr).await.map(Incoming::from),
             #[cfg(target_family = "unix")]

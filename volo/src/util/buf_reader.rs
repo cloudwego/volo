@@ -44,10 +44,7 @@ impl<R: AsyncRead + Unpin> BufReader<R> {
                 let buf = &mut self.buf[self.len..self.cap];
                 let size = self.inner.read(buf).await?;
                 if size == 0 {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "invalid eof",
-                    ));
+                    return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid eof"));
                 }
                 self.len += size;
             }
@@ -184,7 +181,7 @@ impl<R: AsyncRead> AsyncRead for BufReader<R> {
             return Poll::Ready(res);
         }
         let rem = ready!(self.as_mut().poll_fill_buf(cx))?;
-        let amt = std::cmp::min(rem.len(), buf.remaining());
+        let amt = cmp::min(rem.len(), buf.remaining());
         buf.put_slice(&rem[..amt]);
         self.consume(amt);
         Poll::Ready(Ok(()))

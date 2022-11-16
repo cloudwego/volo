@@ -9,7 +9,7 @@ impl volo_gen::thrift_gen::hello::HelloService for S {
     async fn hello(
         &self,
         req: volo_gen::thrift_gen::hello::HelloRequest,
-    ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, ::volo_thrift::AnyhowError> {
+    ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::AnyhowError> {
         let resp = volo_gen::thrift_gen::hello::HelloResponse {
             message: format!("Hello, {}!", req.name),
         };

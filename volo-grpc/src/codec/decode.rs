@@ -179,14 +179,12 @@ impl<T: Message + Default> Stream for RecvStream<T> {
         if let Kind::Response(status) = self.kind {
             match ready!(Pin::new(&mut self.body).poll_trailers(cx)) {
                 Ok(trailer) => {
-                    if let Err(e) =
-                        crate::status::Status::infer_grpc_status(trailer.as_ref(), status)
-                    {
-                        if let Some(e) = e {
-                            return Some(Err(e)).into();
+                    if let Err(e) = Status::infer_grpc_status(trailer.as_ref(), status) {
+                        return if let Some(e) = e {
+                            Some(Err(e)).into()
                         } else {
-                            return Poll::Ready(None);
-                        }
+                            Poll::Ready(None)
+                        };
                     } else {
                         self.trailers = trailer.map(MetadataMap::from_headers);
                     }

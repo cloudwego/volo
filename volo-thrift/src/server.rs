@@ -394,7 +394,7 @@ async fn handle_conn_multiplex<Req, Svc, Resp, MkE, MkD>(
 
     let framed = Framed::new(stream, encoder, decoder);
 
-    tracing::info!("[VOLO] handle conn by multiplex");
+    info!("[VOLO] handle conn by multiplex");
     crate::transport::multiplex::serve(framed, notified, exit_mark, service).await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }

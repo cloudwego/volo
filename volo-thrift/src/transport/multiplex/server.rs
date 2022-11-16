@@ -26,7 +26,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     service: Svc,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp> + Send + Clone + 'static,
-    Svc::Error: Into<crate::Error> + Send,
+    Svc::Error: Into<Error> + Send,
     Req: EntryMessage + 'static,
     Resp: EntryMessage + 'static,
     E: Encoder + Send + 'static,
@@ -149,7 +149,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             }
                         }
                     }
-                };
+                }
             }
         })
         .await;

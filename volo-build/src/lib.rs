@@ -30,7 +30,7 @@ pub struct Builder<MkB, P> {
     config_file_path: PathBuf,
 }
 
-impl Builder<thrift_backend::MkThriftBackend, pilota_build::parser::ThriftParser> {
+impl Builder<thrift_backend::MkThriftBackend, parser::ThriftParser> {
     pub fn thrift() -> Self {
         Builder {
             pilota_builder: pilota_build::Builder::thrift()
@@ -43,7 +43,7 @@ impl Builder<thrift_backend::MkThriftBackend, pilota_build::parser::ThriftParser
     }
 }
 
-impl Builder<grpc_backend::MkGrpcBackend, pilota_build::parser::ProtobufParser> {
+impl Builder<grpc_backend::MkGrpcBackend, parser::ProtobufParser> {
     pub fn protobuf() -> Self {
         Builder {
             pilota_builder: pilota_build::Builder::protobuf()
@@ -66,7 +66,7 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
-    pub fn plugin<P: pilota_build::Plugin + 'static>(mut self, p: P) -> Self {
+    pub fn plugin<P: Plugin + 'static>(mut self, p: P) -> Self {
         self.pilota_builder = self.pilota_builder.plugin(p);
 
         self

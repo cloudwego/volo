@@ -54,7 +54,7 @@ pub struct ServerCxInner {
     pub transport: ServerTransportInfo,
 }
 
-pub struct ClientContext(pub(crate) volo::context::RpcCx<ClientCxInner, Config>);
+pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 newtype_impl_context!(ClientContext, Config, 0);
 
@@ -72,7 +72,7 @@ impl ClientContext {
 }
 
 impl std::ops::Deref for ClientContext {
-    type Target = volo::context::RpcCx<ClientCxInner, Config>;
+    type Target = RpcCx<ClientCxInner, Config>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -85,7 +85,7 @@ impl std::ops::DerefMut for ClientContext {
     }
 }
 
-pub struct ServerContext(pub(crate) volo::context::RpcCx<ServerCxInner, Config>);
+pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 impl Default for ServerContext {
     fn default() -> Self {
@@ -104,7 +104,7 @@ impl Default for ServerContext {
 newtype_impl_context!(ServerContext, Config, 0);
 
 impl std::ops::Deref for ServerContext {
-    type Target = volo::context::RpcCx<ServerCxInner, Config>;
+    type Target = RpcCx<ServerCxInner, Config>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
