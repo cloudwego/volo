@@ -61,15 +61,23 @@ impl InnerBuilder {
 
     fn filename(self, filename: PathBuf) -> Self {
         match self {
-            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(Box::from(inner.filename(filename))),
-            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(Box::from(inner.filename(filename))),
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(Box::from(inner.filename(filename)))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(Box::from(inner.filename(filename)))
+            }
         }
     }
 
     fn includes(self, includes: Vec<PathBuf>) -> Self {
         match self {
-            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(Box::from(inner.include_dirs(includes))),
-            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(Box::from(inner.include_dirs(includes))),
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(Box::from(inner.include_dirs(includes)))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(Box::from(inner.include_dirs(includes)))
+            }
         }
     }
 
@@ -78,7 +86,9 @@ impl InnerBuilder {
         P: AsRef<Path>,
     {
         match self {
-            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(Box::from(inner.add_service(path))),
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(Box::from(inner.add_service(path)))
+            }
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(Box::from(inner.add_service(path))),
         }
     }

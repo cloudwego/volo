@@ -7,7 +7,7 @@ pub struct ClientCxInner;
 
 /// A context for client to pass information such as `RpcInfo` and `Config` between middleware
 /// during the rpc call lifecycle.
-pub struct ClientContext(pub(crate) volo::context::RpcCx<ClientCxInner, Config>);
+pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 newtype_impl_context!(ClientContext, Config, 0);
 
