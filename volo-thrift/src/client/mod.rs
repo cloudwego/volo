@@ -435,7 +435,7 @@ pub struct MessageService<Resp, MkT, MkC>
 where
     Resp: EntryMessage + Send + 'static,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
 {
     #[cfg(not(feature = "multiplex"))]
     inner: pingpong::Client<Resp, MkT, MkC>,
@@ -449,9 +449,9 @@ where
 impl<Req, Resp, MkT, MkC> Service<ClientContext, Req> for MessageService<Resp, MkT, MkC>
 where
     Req: EntryMessage + 'static + Send,
-    Resp: Send + 'static + EntryMessage,
+    Resp: Send + 'static + EntryMessage + Sync,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
 {
     type Response = Option<Resp>;
 
@@ -459,7 +459,7 @@ where
 
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx + Send where Self:'cx;
 
-    fn call<'cx, 's>(&'s mut self, cx: &'cx mut ClientContext, req: Req) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut ClientContext, req: Req) -> Self::Future<'cx>
     where
         's: 'cx,
     {
@@ -482,16 +482,19 @@ where
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
-        Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone,
+        Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone + Sync,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error: Into<Error>,
+    for<'cx> <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Future<'cx>:
+        Send,
     Req: EntryMessage + Send + 'static + Sync + Clone,
     Resp: EntryMessage + Send + 'static,
     IL: Layer<MessageService<Resp, MkT, MkC>>,
     IL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + Sync + Clone + Send + 'static,
     <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<Error>,
+    for<'cx> <IL::Service as Service<ClientContext, Req>>::Future<'cx>: Send,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
     OL: Layer<
         BoxCloneService<
             ClientContext,
@@ -500,7 +503,9 @@ where
             <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error,
         >,
     >,
-    OL::Service: Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone,
+    OL::Service:
+        Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone + Sync,
+    for<'cx> <OL::Service as Service<ClientContext, Req>>::Future<'cx>: Send,
     <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<Error>,
 {
     /// Build volo client.
@@ -547,7 +552,6 @@ where
                 caller_name: self.caller_name,
                 seq_id: AtomicI32::new(0),
             }),
-            callopt: None,
             transport,
         })
     }
@@ -559,8 +563,7 @@ where
 /// One important thing is that the `CallOpt` will not be cloned, because
 /// it's designed to be per-request.
 pub struct Client<Req, Resp> {
-    transport: BoxCloneService<ClientContext, Req, Option<Resp>, Error>,
-    callopt: Option<CallOpt>,
+    transport: BoxCloneService<ClientContext, Req, Option<Resp>, crate::Error>,
     inner: Arc<ClientInner>,
 }
 
@@ -570,18 +573,12 @@ impl<Req, Resp> Clone for Client<Req, Resp> {
     fn clone(&self) -> Self {
         Self {
             transport: self.transport.clone(),
-            callopt: None,
             inner: self.inner.clone(),
         }
     }
 }
 
-impl<Req, Resp> Client<Req, Resp> {
-    #[inline]
-    pub fn set_callopt(&mut self, callopt: CallOpt) {
-        self.callopt = Some(callopt);
-    }
-}
+impl<Req, Resp> Client<Req, Resp> {}
 
 struct ClientInner {
     callee_name: smol_str::SmolStr,
@@ -593,7 +590,7 @@ struct ClientInner {
 
 impl<Req, Resp> Client<Req, Resp> {
     pub async fn call(
-        &mut self,
+        &self,
         method: &'static str,
         req: Req,
         oneway: bool,
@@ -623,21 +620,13 @@ impl<Req, Resp> Client<Req, Resp> {
         }
     }
 
-    fn make_rpc_info(&mut self, method: &'static str) -> RpcInfo<Config> {
-        let mut caller = Endpoint::new(self.inner.caller_name.clone());
+    fn make_rpc_info(&self, method: &'static str) -> RpcInfo<Config> {
+        let caller = Endpoint::new(self.inner.caller_name.clone());
         let mut callee = Endpoint::new(self.inner.callee_name.clone());
         if let Some(target) = &self.inner.address {
             callee.set_address(target.clone());
         }
-        let mut config = self.inner.config;
-        if let Some(co) = self.callopt.take() {
-            callee.tags.extend(co.callee_tags);
-            caller.tags.extend(co.caller_tags);
-            if let Some(a) = co.address {
-                callee.set_address(a);
-            }
-            config.merge(co.config);
-        }
+        let config = self.inner.config;
 
         RpcInfo::new(Role::Client, method.into(), caller, callee, config)
     }

@@ -201,9 +201,9 @@ where
         Pool { inner }
     }
 
-    pub async fn get<MT>(&self, key: Key, mut mt: MT) -> Result<Pooled<Key, T>, BoxError>
+    pub async fn get<MT>(&self, key: Key, mt: MT) -> Result<Pooled<Key, T>, BoxError>
     where
-        MT: UnaryService<Key, Response = T> + Send + 'static,
+        MT: UnaryService<Key, Response = T> + Send + 'static + Sync,
         MT::Error: Into<BoxError>,
     {
         let (rx, _waiter_token) = {

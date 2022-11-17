@@ -420,11 +420,6 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     #client_name { client: None }
                 }
 
-                pub fn with_callopt(mut self, callopt: ::volo_thrift::client::CallOpt) -> Self {
-                    self.client.as_mut().unwrap().set_callopt(callopt);
-                    self
-                }
-
                 #(#client_methods)*
             }
 
@@ -478,7 +473,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
                 type Future<'cx> = impl ::std::future::Future<Output = ::std::result::Result<Self::Response, Self::Error>> + 'cx;
 
-                fn call<'cx, 's>(&mut self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: #req_recv_name) -> Self::Future<'cx> where 's:'cx {
+                fn call<'cx, 's>(& self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: #req_recv_name) -> Self::Future<'cx> where 's:'cx {
                     let inner = self.inner.clone();
                     async move {
                         match req {

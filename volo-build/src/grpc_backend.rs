@@ -384,10 +384,6 @@ impl CodegenBackend for VoloGrpcBackend {
                 pub fn new() -> Self {
                     #client_name { client: None }
                 }
-                pub fn with_callopt(mut self, callopt: ::volo_grpc::client::CallOpt) -> Self {
-                    self.client.as_mut().unwrap().set_callopt(callopt);
-                    self
-                }
 
                 #(#client_methods)*
             }
@@ -432,7 +428,7 @@ impl CodegenBackend for VoloGrpcBackend {
                 type Error = ::volo_grpc::status::Status;
                 type Future<'cx> = impl ::std::future::Future<Output = ::std::result::Result<Self::Response, Self::Error>> + 'cx;
 
-                fn call<'cx, 's>(&'s mut self, cx: &'cx mut ::volo_grpc::context::ServerContext, req: ::volo_grpc::Request<#req_enum_name_recv>) -> Self::Future<'cx>
+                fn call<'cx, 's>(&'s self, cx: &'cx mut ::volo_grpc::context::ServerContext, req: ::volo_grpc::Request<#req_enum_name_recv>) -> Self::Future<'cx>
                 where
                     's: 'cx,
                 {

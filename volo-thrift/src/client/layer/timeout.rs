@@ -15,7 +15,7 @@ pub struct Timeout<S> {
 impl<Req, S> Service<ClientContext, Req> for Timeout<S>
 where
     Req: 'static + Send,
-    S: Service<ClientContext, Req> + 'static + Send,
+    S: Service<ClientContext, Req> + 'static + Send + Sync,
     S::Error: Send + Sync + Into<crate::Error>,
 {
     type Response = S::Response;
@@ -24,7 +24,7 @@ where
 
     type Future<'cx> = impl Future<Output = Result<S::Response, Self::Error>> + 'cx;
 
-    fn call<'cx, 's>(&'s mut self, cx: &'cx mut ClientContext, req: Req) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut ClientContext, req: Req) -> Self::Future<'cx>
     where
         's: 'cx,
     {

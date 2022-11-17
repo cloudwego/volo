@@ -48,10 +48,11 @@ where
     Cx: 'static + Context + Send + Sync,
     D: Discover,
     LB: LoadBalance<D>,
-    S: Service<Cx, Req> + 'static + Send,
+    S: Service<Cx, Req> + 'static + Send + Sync,
     LoadBalanceError: Into<S::Error>,
     S::Error: Debug + Retryable,
     Req: Clone + Send + Sync + 'static,
+    for<'cx> S::Future<'cx>: Send,
 {
     type Response = S::Response;
 
@@ -61,7 +62,7 @@ where
     where
         Self: 'cx;
 
-    fn call<'cx, 's>(&'s mut self, cx: &'cx mut Cx, req: Req) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, req: Req) -> Self::Future<'cx>
     where
         's: 'cx,
     {

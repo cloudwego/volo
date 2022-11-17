@@ -22,7 +22,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     mut decoder: D,
     notified: Notified<'_>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
-    mut service: Svc,
+    service: &Svc,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
     Svc::Error: Into<Error>,

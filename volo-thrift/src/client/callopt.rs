@@ -6,8 +6,6 @@
 //!
 //! # Example
 //!
-//! You can use `with_callopt` to set [`CallOpt`] to a [`Client`][super::Client]:
-//!
 //! ```rust,ignore
 //! use volo_thrift::client::CallOpt;
 //!
@@ -27,7 +25,7 @@
 //!     // Do something with callopt here
 //!     ...
 //!     let req = volo_gen::volo::example::item::GetItemRequest { id: 1024 };
-//!     let resp = CLIENT.clone().with_callopt(callopt).get_item(req).await;
+//!     let resp = CLIENT.clone().get_item(req).await;
 //!     match resp {
 //!         Ok(info) => tracing::info!("{:?}", info),
 //!         Err(e) => tracing::error!("{:?}", e),
