@@ -321,10 +321,10 @@ impl CodegenBackend for VoloGrpcBackend {
             }
 
             impl ::volo_grpc::SendEntryMessage for #req_enum_name_send {
-                fn into_body(self) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
+                fn into_body(self,compression_config: Option<::volo_grpc::codec::compression::CompressionConfig>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
                     match self {
                         #(Self::#enum_variant_names(s) => {
-                            ::volo_grpc::codec::encode::encode(s)
+                            ::volo_grpc::codec::encode::encode(s,compression_config)
                         },)*
                     }
                 }
@@ -335,10 +335,10 @@ impl CodegenBackend for VoloGrpcBackend {
             }
 
             impl ::volo_grpc::RecvEntryMessage for #req_enum_name_recv {
-                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::Body, kind: ::volo_grpc::codec::decode::Kind) -> ::std::result::Result<Self, ::volo_grpc::Status> {
+                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::Body, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status> {
                     match method {
                         #(Some(#paths) => {
-                            Ok(Self::#enum_variant_names(::volo_grpc::RecvStream::new(body, kind)))
+                            Ok(Self::#enum_variant_names(::volo_grpc::RecvStream::new(body, kind,compression_encoding)))
                         })*
                         _ => Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
                     }
@@ -350,10 +350,10 @@ impl CodegenBackend for VoloGrpcBackend {
             }
 
             impl ::volo_grpc::SendEntryMessage for #resp_enum_name_send {
-                fn into_body(self) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
+                fn into_body(self,compression_config: Option<::volo_grpc::codec::compression::CompressionConfig>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
                     match self {
                         #(Self::#enum_variant_names(s) => {
-                            ::volo_grpc::codec::encode::encode(s)
+                            ::volo_grpc::codec::encode::encode(s,compression_config)
                         },)*
                     }
                 }
@@ -364,13 +364,13 @@ impl CodegenBackend for VoloGrpcBackend {
             }
 
             impl ::volo_grpc::RecvEntryMessage for #resp_enum_name_recv {
-                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::Body, kind: ::volo_grpc::codec::decode::Kind) -> ::std::result::Result<Self, ::volo_grpc::Status>
+                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::Body, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status>
                 where
                     Self: ::core::marker::Sized,
                 {
                     match method {
                         #(Some(#paths) => {
-                            Ok(Self::#enum_variant_names(::volo_grpc::RecvStream::new(body, kind)))
+                            Ok(Self::#enum_variant_names(::volo_grpc::RecvStream::new(body, kind,compression_encoding)))
                         })*
                         _ => Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
                     }

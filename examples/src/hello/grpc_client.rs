@@ -3,11 +3,17 @@
 use std::net::SocketAddr;
 
 use lazy_static::lazy_static;
+use volo_grpc::codec::compression::{CompressionConfig, CompressionEncoding};
 
 lazy_static! {
     static ref CLIENT: volo_gen::proto_gen::hello::HelloServiceClient = {
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         volo_gen::proto_gen::hello::HelloServiceClientBuilder::new("hello")
+            .send_compression(CompressionConfig {
+                encoding: CompressionEncoding::Gzip,
+                level: 6,
+            })
+            .accept_compression(CompressionEncoding::Gzip)
             .address(addr)
             .build()
     };

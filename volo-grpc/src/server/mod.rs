@@ -18,8 +18,11 @@ use volo::{net::incoming::Incoming, spawn};
 
 use crate::{
     body::Body,
-    codec::decode::Kind,
-    context::ServerContext,
+    codec::{
+        compression::{CompressionConfig, CompressionEncoding, ENCODING_HEADER},
+        decode::Kind,
+    },
+    context::{Config, ServerContext},
     message::{RecvEntryMessage, SendEntryMessage},
     server::meta::MetaService,
     Request, Response, Status,
@@ -30,6 +33,7 @@ pub struct Server<S, L> {
     service: S,
     layer: L,
     http2_config: Http2Config,
+    rpc_config: Config,
 }
 
 impl<S> Server<S, Identity> {
@@ -39,6 +43,7 @@ impl<S> Server<S, Identity> {
             service,
             layer: Identity::new(),
             http2_config: Http2Config::default(),
+            rpc_config: Config::default(),
         }
     }
 }
@@ -128,6 +133,16 @@ impl<S, L> Server<S, L> {
         self
     }
 
+    pub fn send_compression(mut self, config: CompressionConfig) -> Self {
+        self.rpc_config.send_compression = Some(config);
+        self
+    }
+
+    pub fn accept_compression(mut self, encoding: CompressionEncoding) -> Self {
+        self.rpc_config.accept_compression = Some(encoding);
+        self
+    }
+
     /// Adds a new inner layer to the server.
     ///
     /// The layer's `Service` should be `Send + Clone + 'static`.
@@ -144,6 +159,7 @@ impl<S, L> Server<S, L> {
             layer: Stack::new(layer, self.layer),
             service: self.service,
             http2_config: self.http2_config,
+            rpc_config: self.rpc_config,
         }
     }
 
@@ -163,6 +179,7 @@ impl<S, L> Server<S, L> {
             layer: Stack::new(self.layer, layer),
             service: self.service,
             http2_config: self.http2_config,
+            rpc_config: self.rpc_config,
         }
     }
 
@@ -196,7 +213,10 @@ impl<S, L> Server<S, L> {
             tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
             let peer_addr = conn.info.peer_addr.clone();
 
-            let service = HyperAdaptorService::new(MetaService::new(service.clone(), peer_addr));
+            let service = HyperAdaptorService::new(
+                MetaService::new(service.clone(), peer_addr),
+                self.rpc_config,
+            );
             // init server
             let server = Self::create_http_server(&self.http2_config);
             spawn(async move {
@@ -240,13 +260,15 @@ macro_rules! status_to_http {
 #[derive(Clone)]
 pub struct HyperAdaptorService<S, T, U> {
     inner: S,
+    rpc_config: Config,
     _marker: PhantomData<(T, U)>,
 }
 
 impl<S, T, U> HyperAdaptorService<S, T, U> {
-    pub fn new(inner: S) -> Self {
+    pub fn new(inner: S, rpc_config: Config) -> Self {
         Self {
             inner,
+            rpc_config,
             _marker: PhantomData,
         }
     }
@@ -271,18 +293,19 @@ where
     }
 
     fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
-        let inner = self.inner.clone();
+        let mut inner = self.inner.clone();
+        let rpc_config = self.rpc_config;
 
         metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
             let mut cx = ServerContext::default();
             cx.rpc_info.method = Some(req.uri().path().into());
-
             let (parts, body) = req.into_parts();
 
             let message = status_to_http!(T::from_body(
                 cx.rpc_info.method.as_deref(),
                 body,
-                Kind::Request
+                Kind::Request,
+                rpc_config.accept_compression
             ));
 
             let volo_req = Request::from_http_parts(parts, message);
@@ -296,13 +319,19 @@ where
 
             let (metadata, extensions, message) = volo_resp.into_parts();
 
-            let mut resp = hyper::Response::new(Body::new(message.into_body()));
+            let mut resp =
+                hyper::Response::new(Body::new(message.into_body(rpc_config.send_compression)));
             *resp.headers_mut() = metadata.into_headers();
             *resp.extensions_mut() = extensions;
             resp.headers_mut().insert(
                 http::header::CONTENT_TYPE,
                 http::header::HeaderValue::from_static("application/grpc"),
             );
+            if let Some(encoding) = rpc_config.accept_compression {
+                // Set the content encoding
+                resp.headers_mut()
+                    .insert(ENCODING_HEADER, encoding.into_header_value());
+            }
 
             Ok(resp)
         })

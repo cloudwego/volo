@@ -2,6 +2,8 @@
 
 use std::net::SocketAddr;
 
+use volo_grpc::codec::compression::{CompressionConfig, CompressionEncoding};
+
 pub struct S;
 
 #[volo::async_trait]
@@ -24,6 +26,11 @@ async fn main() {
     let addr = volo::net::Address::from(addr);
 
     volo_gen::proto_gen::hello::HelloServiceServer::new(S)
+        .send_compression(CompressionConfig {
+            encoding: CompressionEncoding::Gzip,
+            level: 6,
+        })
+        .accept_compression(CompressionEncoding::Gzip)
         .run(addr)
         .await
         .unwrap();

@@ -13,7 +13,10 @@ use volo::{net::Address, Unwrap};
 use super::connect::Connector;
 use crate::{
     client::Http2Config,
-    codec::decode::Kind,
+    codec::{
+        compression::{ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
+        decode::Kind,
+    },
     context::{ClientContext, Config},
     Code, Request, Response, Status,
 };
@@ -97,7 +100,8 @@ where
 
             let (metadata, extensions, message) = volo_req.into_parts();
             let path = cx.rpc_info.method().volo_unwrap();
-            let body = hyper::Body::wrap_stream(message.into_body());
+            let rpc_config = cx.rpc_info.config.volo_unwrap();
+            let body = hyper::Body::wrap_stream(message.into_body(rpc_config.send_compression));
 
             let mut req = hyper::Request::new(body);
             *req.version_mut() = http::Version::HTTP_2;
@@ -109,6 +113,16 @@ where
                 .insert(TE, HeaderValue::from_static("trailers"));
             req.headers_mut()
                 .insert(CONTENT_TYPE, HeaderValue::from_static("application/grpc"));
+
+            if let Some(config) = rpc_config.send_compression {
+                req.headers_mut()
+                    .insert(ENCODING_HEADER, config.encoding.into_header_value());
+
+                if let Some(header_value) = config.into_accept_encoding_header_value() {
+                    req.headers_mut()
+                        .insert(ACCEPT_ENCODING_HEADER, header_value);
+                }
+            }
 
             // call the service through hyper client
             let resp = http_client
@@ -126,7 +140,12 @@ where
                 }
             }
             let (parts, body) = resp.into_parts();
-            let body = U::from_body(Some(path), body, Kind::Response(status_code))?;
+            let body = U::from_body(
+                Some(path),
+                body,
+                Kind::Response(status_code),
+                rpc_config.accept_compression,
+            )?;
             let resp = hyper::Response::from_parts(parts, body);
 
             Ok(Response::from_http(resp))
