@@ -19,6 +19,7 @@ use motore::{
 use pilota::thrift::TMessageType;
 use tokio::time::Duration;
 use volo::{
+    client::WithOptService,
     context::{Endpoint, Role, RpcInfo},
     discovery::{Discover, DummyDiscover},
     loadbalance::{random::WeightedRandomBalance, LbConfig, MkLbLayer},
@@ -46,14 +47,7 @@ use self::layer::timeout::TimeoutLayer;
 
 pub mod layer;
 
-/// Only used by framework generated code.
-/// Do not use directly.
-#[doc(hidden)]
-pub trait SetClient<Req, Resp> {
-    fn set_client(self, client: Client<Req, Resp>) -> Self;
-}
-
-pub struct ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB> {
+pub struct ClientBuilder<IL, OL, MkClient, Req, Resp, MkT, MkC, LB> {
     config: Config,
     pool: Option<pool::Config>,
     callee_name: smol_str::SmolStr,
@@ -61,9 +55,9 @@ pub struct ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB> {
     address: Option<Address>, // maybe address use Arc avoid memory alloc
     inner_layer: IL,
     outer_layer: OL,
-    service_client: C,
     make_transport: MkT,
     make_codec: MkC,
+    mk_client: MkClient,
     mk_lb: LB,
     _marker: PhantomData<(*const Req, *const Resp)>,
 
@@ -82,8 +76,6 @@ impl<C, Req, Resp>
         DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>,
         LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>,
     >
-where
-    C: SetClient<Req, Resp>,
 {
     pub fn new(service_name: impl AsRef<str>, service_client: C) -> Self {
         ClientBuilder {
@@ -94,7 +86,7 @@ where
             address: None,
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
-            service_client,
+            mk_client: service_client,
             make_transport: DefaultMakeTransport::default(),
             make_codec: DefaultMakeCodec::default(),
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
@@ -108,8 +100,6 @@ where
 
 impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
     ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LbConfig<LB, DISC>>
-where
-    C: SetClient<Req, Resp>,
 {
     pub fn load_balance<NLB>(
         self,
@@ -123,7 +113,7 @@ where
             address: self.address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             _marker: PhantomData,
             make_transport: self.make_transport,
             make_codec: self.make_codec,
@@ -146,7 +136,7 @@ where
             address: self.address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             _marker: PhantomData,
             make_transport: self.make_transport,
             make_codec: self.make_codec,
@@ -164,10 +154,7 @@ where
     }
 }
 
-impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB>
-where
-    C: SetClient<Req, Resp>,
-{
+impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB> {
     /// Sets the rpc timeout for the client.
     ///
     /// The default value is 1 second.
@@ -222,7 +209,7 @@ where
             address: self.address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             _marker: PhantomData,
             make_transport: self.make_transport,
             make_codec: self.make_codec,
@@ -253,7 +240,7 @@ where
             address: self.address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             _marker: PhantomData,
             make_transport: self.make_transport,
             make_codec,
@@ -278,7 +265,7 @@ where
             address: self.address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             _marker: PhantomData,
             make_transport,
             make_codec: self.make_codec,
@@ -324,7 +311,7 @@ where
             address: self.address,
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             _marker: PhantomData,
             make_transport: self.make_transport,
             make_codec: self.make_codec,
@@ -360,7 +347,7 @@ where
             address: self.address,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             _marker: PhantomData,
             make_transport: self.make_transport,
             make_codec: self.make_codec,
@@ -396,7 +383,7 @@ where
             address: self.address,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             _marker: PhantomData,
             make_transport: self.make_transport,
             make_codec: self.make_codec,
@@ -419,7 +406,7 @@ where
             address: self.address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             _marker: PhantomData,
             make_transport: self.make_transport,
             make_codec: self.make_codec,
@@ -478,7 +465,9 @@ where
 
 impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB>
 where
-    C: SetClient<Req, Resp>,
+    C: volo::client::MkClient<
+        Client<BoxCloneService<ClientContext, Req, Option<Resp>, crate::Error>>,
+    >,
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
@@ -509,7 +498,7 @@ where
     <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<Error>,
 {
     /// Build volo client.
-    pub fn build(mut self) -> C {
+    pub fn build(mut self) -> C::Target {
         if let Some(timeout) = self.config.connect_timeout() {
             self.make_transport.set_connect_timeout(Some(timeout));
         }
@@ -544,7 +533,7 @@ where
 
         let transport = BoxCloneService::new(transport);
 
-        self.service_client.set_client(Client {
+        self.mk_client.mk_client(Client {
             inner: Arc::new(ClientInner {
                 callee_name: self.callee_name,
                 config: self.config,
@@ -562,23 +551,13 @@ where
 /// `Client` is designed to "clone and use", so it's cheap to clone it.
 /// One important thing is that the `CallOpt` will not be cloned, because
 /// it's designed to be per-request.
-pub struct Client<Req, Resp> {
-    transport: BoxCloneService<ClientContext, Req, Option<Resp>, crate::Error>,
+#[derive(Clone)]
+pub struct Client<S> {
+    transport: S,
     inner: Arc<ClientInner>,
 }
 
-unsafe impl<Req, Resp> Sync for Client<Req, Resp> {}
-
-impl<Req, Resp> Clone for Client<Req, Resp> {
-    fn clone(&self) -> Self {
-        Self {
-            transport: self.transport.clone(),
-            inner: self.inner.clone(),
-        }
-    }
-}
-
-impl<Req, Resp> Client<Req, Resp> {}
+// unsafe impl<Req, Resp> Sync for Client<Req, Resp> {}
 
 struct ClientInner {
     callee_name: smol_str::SmolStr,
@@ -588,14 +567,9 @@ struct ClientInner {
     seq_id: AtomicI32,
 }
 
-impl<Req, Resp> Client<Req, Resp> {
-    pub async fn call(
-        &self,
-        method: &'static str,
-        req: Req,
-        oneway: bool,
-    ) -> Result<Option<Resp>, Error> {
-        let mut cx = ClientContext::new(
+impl<S> Client<S> {
+    pub fn make_cx(&self, method: &'static str, oneway: bool) -> ClientContext {
+        ClientContext::new(
             self.inner
                 .seq_id
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -605,19 +579,7 @@ impl<Req, Resp> Client<Req, Resp> {
             } else {
                 TMessageType::Call
             },
-        );
-
-        let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
-
-        let mk_call = async { self.transport.call(&mut cx, req).await };
-
-        if has_metainfo {
-            mk_call.await
-        } else {
-            metainfo::METAINFO
-                .scope(RefCell::new(metainfo::MetaInfo::default()), mk_call)
-                .await
-        }
+        )
     }
 
     fn make_rpc_info(&self, method: &'static str) -> RpcInfo<Config> {
@@ -630,4 +592,86 @@ impl<Req, Resp> Client<Req, Resp> {
 
         RpcInfo::new(Role::Client, method.into(), caller, callee, config)
     }
+
+    pub fn with_opt<Opt>(&self, opt: Opt) -> Client<WithOptService<'_, S, Opt>> {
+        Client {
+            transport: WithOptService::new(&self.transport, opt),
+            inner: self.inner.clone(),
+        }
+    }
 }
+
+macro_rules! impl_client {
+    (($self: ident, &mut $cx:ident, $req: ident) => async move $e: tt ) => {
+        impl<S, Req: Send + 'static, Res: 'static>
+            volo::service::Service<crate::context::ClientContext, Req> for Client<S>
+        where
+            S: volo::service::Service<
+                    crate::context::ClientContext,
+                    Req,
+                    Response = Option<Res>,
+                    Error = crate::Error,
+                > + Sync
+                + Send
+                + 'static,
+        {
+            type Response = S::Response;
+            type Error = S::Error;
+            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
+
+            fn call<'cx, 's>(
+                &'s $self,
+                $cx: &'cx mut crate::context::ClientContext,
+                $req: Req,
+            ) -> Self::Future<'cx>
+            where
+                's: 'cx,
+            {
+                async move { $e }
+            }
+        }
+
+        impl<S, Req: Send + 'static, Res: 'static>
+            volo::client::OneShotService<crate::context::ClientContext, Req> for Client<S>
+        where
+            S: volo::client::OneShotService<
+                    crate::context::ClientContext,
+                    Req,
+                    Response = Option<Res>,
+                    Error = crate::Error,
+                > + Sync
+                + Send
+                + 'static,
+        {
+            type Response = S::Response;
+            type Error = S::Error;
+            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
+
+            fn call<'cx>(
+                $self,
+                $cx: &'cx mut crate::context::ClientContext,
+                $req: Req,
+            ) -> Self::Future<'cx>
+            where
+                Self: 'cx,
+            {
+                async move { $e }
+            }
+        }
+    };
+}
+
+impl_client!((self, &mut cx, req) => async move {
+
+    let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
+
+    let mk_call = async { self.transport.call(cx, req).await };
+
+    if has_metainfo {
+        mk_call.await
+    } else {
+        metainfo::METAINFO
+            .scope(RefCell::new(metainfo::MetaInfo::default()), mk_call)
+            .await
+    }
+});
