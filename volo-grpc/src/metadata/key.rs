@@ -18,7 +18,7 @@ use super::encoding::{Ascii, Binary, ValueEncoding};
 pub struct MetadataKey<VE: ValueEncoding> {
     // Note: There are unsafe transmutes that assume that the memory layout
     // of MetadataValue is identical to HeaderName
-    pub(crate) inner: http::header::HeaderName,
+    pub(crate) inner: HeaderName,
     phantom: PhantomData<VE>,
 }
 

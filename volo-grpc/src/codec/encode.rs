@@ -8,7 +8,7 @@ use crate::{
     BoxStream, Status,
 };
 
-pub fn encode<T, S>(source: S) -> BoxStream<'static, Result<Bytes, crate::Status>>
+pub fn encode<T, S>(source: S) -> BoxStream<'static, Result<Bytes, Status>>
 where
     S: Stream<Item = Result<T, Status>> + Send + 'static,
     T: Message + 'static,

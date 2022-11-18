@@ -117,11 +117,10 @@ where
                             let mut tx_map = inner_tx_map.lock().await;
                             inner_read_error.store(true, std::sync::atomic::Ordering::Relaxed);
                             for (_, tx) in tx_map.drain() {
-                                let _ =
-                                    tx.send(Err(crate::Error::Application(ApplicationError::new(
-                                        ApplicationErrorKind::Unknown,
-                                        format!("multiplex connection error: {}", e.to_string()),
-                                    ))));
+                                let _ = tx.send(Err(Error::Application(ApplicationError::new(
+                                    ApplicationErrorKind::Unknown,
+                                    format!("multiplex connection error: {}", e),
+                                ))));
                             }
                             return;
                         }

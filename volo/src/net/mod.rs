@@ -36,7 +36,7 @@ fn should_favor_ipv6() -> bool {
 }
 
 impl fmt::Display for Address {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Address::Ip(addr) => write!(f, "{}", addr),
             #[cfg(target_family = "unix")]

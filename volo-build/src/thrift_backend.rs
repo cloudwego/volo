@@ -264,21 +264,11 @@ impl VoloThriftBackend {
 }
 
 impl pilota_build::CodegenBackend for VoloThriftBackend {
-    fn codegen_struct_impl(
-        &self,
-        def_id: DefId,
-        stream: &mut proc_macro2::TokenStream,
-        s: &rir::Message,
-    ) {
+    fn codegen_struct_impl(&self, def_id: DefId, stream: &mut TokenStream, s: &rir::Message) {
         self.inner.codegen_struct_impl(def_id, stream, s)
     }
 
-    fn codegen_service_impl(
-        &self,
-        def_id: DefId,
-        stream: &mut proc_macro2::TokenStream,
-        _s: &rir::Service,
-    ) {
+    fn codegen_service_impl(&self, def_id: DefId, stream: &mut TokenStream, _s: &rir::Service) {
         let service_name = self.cx.rust_name(def_id).as_syn_ident();
         let server_name = format_ident!("{}Server", service_name);
         let client_name = format_ident!("{}Client", service_name);
@@ -505,11 +495,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         self.codegen_service_anonymous_type(stream, def_id);
     }
 
-    fn codegen_service_method(
-        &self,
-        _service_def_id: DefId,
-        method: &rir::Method,
-    ) -> proc_macro2::TokenStream {
+    fn codegen_service_method(&self, _service_def_id: DefId, method: &Method) -> TokenStream {
         let name = self.cx.rust_name(method.def_id).as_syn_ident();
         let ret_ty = self.inner.codegen_item_ty(method.ret.kind.clone());
         let args = method.args.iter().map(|a| {
@@ -532,21 +518,11 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         }
     }
 
-    fn codegen_enum_impl(
-        &self,
-        def_id: DefId,
-        stream: &mut proc_macro2::TokenStream,
-        e: &rir::Enum,
-    ) {
+    fn codegen_enum_impl(&self, def_id: DefId, stream: &mut TokenStream, e: &rir::Enum) {
         self.inner.codegen_enum_impl(def_id, stream, e)
     }
 
-    fn codegen_newtype_impl(
-        &self,
-        def_id: DefId,
-        stream: &mut proc_macro2::TokenStream,
-        t: &rir::NewType,
-    ) {
+    fn codegen_newtype_impl(&self, def_id: DefId, stream: &mut TokenStream, t: &rir::NewType) {
         self.inner.codegen_newtype_impl(def_id, stream, t)
     }
 }
@@ -556,7 +532,7 @@ pub struct MkThriftBackend;
 impl pilota_build::MakeBackend for MkThriftBackend {
     type Target = VoloThriftBackend;
 
-    fn make_backend(self, context: std::sync::Arc<pilota_build::Context>) -> Self::Target {
+    fn make_backend(self, context: Arc<Context>) -> Self::Target {
         VoloThriftBackend {
             cx: context.clone(),
             inner: ThriftBackend::new(context),

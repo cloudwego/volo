@@ -11,7 +11,7 @@ use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
 use crate::{body::Body, metadata::MetadataMap};
 
-pub type BoxBody = http_body::combinators::BoxBody<bytes::Bytes, Status>;
+pub type BoxBody = http_body::combinators::BoxBody<Bytes, Status>;
 
 const ENCODING_SET: &AsciiSet = &CONTROLS
     .add(b' ')
@@ -169,8 +169,8 @@ impl Code {
     }
 }
 
-impl std::fmt::Display for Code {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Code {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         std::fmt::Display::fmt(self.description(), f)
     }
 }
@@ -617,7 +617,7 @@ impl Status {
 
         parts.headers.insert(
             http::header::CONTENT_TYPE,
-            http::header::HeaderValue::from_static("application/grpc"),
+            HeaderValue::from_static("application/grpc"),
         );
 
         self.add_header(&mut parts.headers).unwrap();
@@ -1019,7 +1019,7 @@ mod tests {
 
         let b64_details = base64::encode_config(DETAILS, base64::STANDARD_NO_PAD);
 
-        assert_eq!(header_map[super::GRPC_STATUS_DETAILS_HEADER], b64_details);
+        assert_eq!(header_map[GRPC_STATUS_DETAILS_HEADER], b64_details);
 
         let status = Status::from_header_map(&header_map).unwrap();
 

@@ -515,14 +515,13 @@ where
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone,
-    <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error:
-        Into<crate::Error>,
+    <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error: Into<Error>,
     Req: EntryMessage + Send + 'static + Sync + Clone,
     Resp: EntryMessage + Send + 'static,
     IL: Layer<MessageService<Resp, MkE, MkD>>,
     IL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + Sync + Clone + Send + 'static,
-    <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<crate::Error>,
+    <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<Error>,
     MkD: MkDecoder + 'static,
     OL: Layer<
         BoxCloneService<
@@ -533,7 +532,7 @@ where
         >,
     >,
     OL::Service: Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone,
-    <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<crate::Error>,
+    <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<Error>,
 {
     /// Build volo client.
     pub fn build(self) -> C {
@@ -597,7 +596,7 @@ where
 /// One important thing is that the `CallOpt` will not be cloned, because
 /// it's designed to be per-request.
 pub struct Client<Req, Resp> {
-    transport: BoxCloneService<ClientContext, Req, Option<Resp>, crate::Error>,
+    transport: BoxCloneService<ClientContext, Req, Option<Resp>, Error>,
     callopt: Option<CallOpt>,
     inner: Arc<ClientInner>,
 }

@@ -70,7 +70,7 @@ impl<T: Message + Default> Decoder for DefaultDecoder<T> {
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         Message::decode(src)
-            .map(Option::Some)
+            .map(Some)
             .map_err(|e| Status::new(Internal, e.to_string()))
     }
 }

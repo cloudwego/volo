@@ -16,7 +16,7 @@ pub struct MkGrpcBackend;
 impl pilota_build::MakeBackend for MkGrpcBackend {
     type Target = VoloGrpcBackend;
 
-    fn make_backend(self, context: std::sync::Arc<pilota_build::Context>) -> Self::Target {
+    fn make_backend(self, context: Arc<Context>) -> Self::Target {
         VoloGrpcBackend { cx: context }
     }
 }
@@ -175,33 +175,6 @@ impl VoloGrpcBackend {
 }
 
 impl CodegenBackend for VoloGrpcBackend {
-    fn codegen_service_method(
-        &self,
-        _service_def_id: DefId,
-        method: &rir::Method,
-    ) -> proc_macro2::TokenStream {
-        let client_streaming = self.cx.node_contains_tag::<ClientStreaming>(method.def_id);
-        let args = method.args.iter().map(|a| {
-            let ty = self.trait_input_ty(a.ty.clone(), client_streaming);
-
-            let ident = format_ident!("{}", a.name);
-            quote::quote! {
-                #ident: #ty
-            }
-        });
-
-        let ret_ty = self.trait_output_ty(
-            method.ret.clone(),
-            self.cx.node_contains_tag::<ServerStreaming>(method.def_id),
-        );
-
-        let name = self.cx.rust_name(method.def_id).as_syn_ident();
-
-        quote::quote! {
-            async fn #name(&self, #(#args),*) -> ::std::result::Result<#ret_ty>;
-        }
-    }
-
     fn codegen_service_impl(&self, def_id: DefId, stream: &mut TokenStream, s: &rir::Service) {
         let service_name = self.cx.rust_name(def_id).as_syn_ident();
         let server_name = format_ident!("{}Server", service_name);
@@ -476,5 +449,32 @@ impl CodegenBackend for VoloGrpcBackend {
                 }
             }
         });
+    }
+
+    fn codegen_service_method(
+        &self,
+        _service_def_id: DefId,
+        method: &rir::Method,
+    ) -> proc_macro2::TokenStream {
+        let client_streaming = self.cx.node_contains_tag::<ClientStreaming>(method.def_id);
+        let args = method.args.iter().map(|a| {
+            let ty = self.trait_input_ty(a.ty.clone(), client_streaming);
+
+            let ident = format_ident!("{}", a.name);
+            quote::quote! {
+                #ident: #ty
+            }
+        });
+
+        let ret_ty = self.trait_output_ty(
+            method.ret.clone(),
+            self.cx.node_contains_tag::<ServerStreaming>(method.def_id),
+        );
+
+        let name = self.cx.rust_name(method.def_id).as_syn_ident();
+
+        quote::quote! {
+            async fn #name(&self, #(#args),*) -> ::std::result::Result<#ret_ty>;
+        }
     }
 }

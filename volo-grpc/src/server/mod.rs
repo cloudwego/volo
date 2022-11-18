@@ -261,9 +261,9 @@ where
 
     fn poll_ready(
         &mut self,
-        _: &mut ::core::task::Context<'_>,
-    ) -> ::core::task::Poll<Result<(), Self::Error>> {
-        ::core::task::Poll::Ready(Ok(()))
+        _: &mut core::task::Context<'_>,
+    ) -> core::task::Poll<Result<(), Self::Error>> {
+        core::task::Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {

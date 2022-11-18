@@ -7,7 +7,7 @@ pub struct ClientCxInner;
 
 /// A context for client to pass information such as `RpcInfo` and `Config` between middleware
 /// during the rpc call lifecycle.
-pub struct ClientContext(pub(crate) volo::context::RpcCx<ClientCxInner, Config>);
+pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 newtype_impl_context!(ClientContext, Config, 0);
 
@@ -24,7 +24,7 @@ impl Default for ClientContext {
 }
 
 impl std::ops::Deref for ClientContext {
-    type Target = volo::context::RpcCx<ClientCxInner, Config>;
+    type Target = RpcCx<ClientCxInner, Config>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -41,7 +41,7 @@ pub struct ServerCxInner;
 
 /// A context for server to pass information such as `RpcInfo` and `Config` between middleware
 /// during the rpc call lifecycle.
-pub struct ServerContext(pub(crate) volo::context::RpcCx<ServerCxInner, Config>);
+pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 newtype_impl_context!(ServerContext, Config, 0);
 
@@ -52,7 +52,7 @@ impl Default for ServerContext {
 }
 
 impl std::ops::Deref for ServerContext {
-    type Target = volo::context::RpcCx<ServerCxInner, Config>;
+    type Target = RpcCx<ServerCxInner, Config>;
 
     fn deref(&self) -> &Self::Target {
         &self.0

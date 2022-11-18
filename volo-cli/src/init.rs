@@ -137,7 +137,7 @@ impl Init {
         );
 
         // src dirs
-        std::fs::create_dir_all(folder.join("src/bin"))?;
+        create_dir_all(folder.join("src/bin"))?;
         crate::templates_to_target_file!(
             folder,
             "templates/grpc/src/bin/server_rs",
@@ -155,7 +155,7 @@ impl Init {
         );
 
         // volo-gen dirs
-        std::fs::create_dir_all(folder.join("volo-gen/src"))?;
+        create_dir_all(folder.join("volo-gen/src"))?;
         crate::templates_to_target_file!(
             folder,
             "templates/grpc/volo-gen/build_rs",
@@ -200,7 +200,7 @@ impl Init {
         );
 
         // src dirs
-        std::fs::create_dir_all(folder.join("src/bin"))?;
+        create_dir_all(folder.join("src/bin"))?;
         crate::templates_to_target_file!(
             folder,
             "templates/thrift/src/bin/server_rs",
@@ -218,7 +218,7 @@ impl Init {
         );
 
         // volo-gen dirs
-        std::fs::create_dir_all(folder.join("volo-gen/src"))?;
+        create_dir_all(folder.join("volo-gen/src"))?;
         crate::templates_to_target_file!(
             folder,
             "templates/thrift/volo-gen/build_rs",

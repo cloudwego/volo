@@ -74,7 +74,7 @@ where
 
 impl<Cx, T, D, LB, S> Service<Cx, Request<T>> for LoadBalanceService<D, LB, S>
 where
-    <Cx as Context>::Config: std::marker::Sync,
+    <Cx as Context>::Config: Sync,
     Cx: 'static + Context + Send + Sync,
     D: Discover,
     LB: LoadBalance<D>,
@@ -118,17 +118,15 @@ where
                     callee.address = Some(addr.clone())
                 }
 
-                match self.service.call(cx, req).await {
-                    Ok(resp) => {
-                        return Ok(resp);
-                    }
+                return match self.service.call(cx, req).await {
+                    Ok(resp) => Ok(resp),
                     Err(err) => {
-                        tracing::warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
-                        return Err(err);
+                        warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
+                        Err(err)
                     }
-                }
+                };
             } else {
-                tracing::warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
+                warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
             }
             Err(LoadBalanceError::Retry).map_err(|err| err.into())?
         }

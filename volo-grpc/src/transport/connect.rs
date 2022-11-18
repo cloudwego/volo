@@ -34,11 +34,11 @@ impl Default for Connector {
 impl tower::Service<hyper::Uri> for Connector {
     type Response = ConnectionWrapper;
 
-    type Error = std::io::Error;
+    type Error = io::Error;
 
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 

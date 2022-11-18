@@ -14,31 +14,41 @@ use crate::{
 
 pub struct ConfigBuilder {
     filename: PathBuf,
-    plugins: Vec<pilota_build::BoxClonePlugin>,
+    plugins: Vec<BoxClonePlugin>,
 }
 
 enum InnerBuilder {
     Protobuf(
-        crate::Builder<crate::grpc_backend::MkGrpcBackend, pilota_build::parser::ProtobufParser>,
+        Box<
+            crate::Builder<
+                crate::grpc_backend::MkGrpcBackend,
+                pilota_build::parser::ProtobufParser,
+            >,
+        >,
     ),
     Thrift(
-        crate::Builder<crate::thrift_backend::MkThriftBackend, pilota_build::parser::ThriftParser>,
+        Box<
+            crate::Builder<
+                crate::thrift_backend::MkThriftBackend,
+                pilota_build::parser::ThriftParser,
+            >,
+        >,
     ),
 }
 
 impl InnerBuilder {
     fn thrift() -> Self {
-        InnerBuilder::Thrift(crate::Builder::thrift())
+        InnerBuilder::Thrift(Box::from(crate::Builder::thrift()))
     }
 
     fn protobuf() -> Self {
-        InnerBuilder::Protobuf(crate::Builder::protobuf())
+        InnerBuilder::Protobuf(Box::from(crate::Builder::protobuf()))
     }
 
     fn plugin<P: pilota_build::Plugin + 'static>(self, p: P) -> Self {
         match self {
-            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.plugin(p)),
-            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.plugin(p)),
+            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(Box::from(inner.plugin(p))),
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(Box::from(inner.plugin(p))),
         }
     }
 
@@ -51,15 +61,23 @@ impl InnerBuilder {
 
     fn filename(self, filename: PathBuf) -> Self {
         match self {
-            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.filename(filename)),
-            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.filename(filename)),
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(Box::from(inner.filename(filename)))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(Box::from(inner.filename(filename)))
+            }
         }
     }
 
     fn includes(self, includes: Vec<PathBuf>) -> Self {
         match self {
-            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.include_dirs(includes)),
-            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.include_dirs(includes)),
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(Box::from(inner.include_dirs(includes)))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(Box::from(inner.include_dirs(includes)))
+            }
         }
     }
 
@@ -68,15 +86,17 @@ impl InnerBuilder {
         P: AsRef<Path>,
     {
         match self {
-            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.add_service(path)),
-            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.add_service(path)),
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(Box::from(inner.add_service(path)))
+            }
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(Box::from(inner.add_service(path))),
         }
     }
 
     pub fn touch(self, items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>) -> Self {
         match self {
-            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.touch(items)),
-            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.touch(items)),
+            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(Box::from(inner.touch(items))),
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(Box::from(inner.touch(items))),
         }
     }
 }
