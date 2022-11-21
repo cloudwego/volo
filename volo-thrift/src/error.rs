@@ -17,7 +17,7 @@ const TAPPLICATION_EXCEPTION: TStructIdentifier = TStructIdentifier {
 
 const ERROR_MESSAGE_FIELD: TFieldIdentifier = TFieldIdentifier {
     name: Some("message"),
-    field_type: TType::String,
+    field_type: TType::Binary,
     id: Some(1),
 };
 
@@ -148,7 +148,7 @@ impl Message for ApplicationError {
     fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), PilotaError> {
         protocol.write_struct_begin(&TAPPLICATION_EXCEPTION)?;
 
-        protocol.write_field_begin(TType::String, 1)?;
+        protocol.write_field_begin(TType::Binary, 1)?;
         protocol.write_string(&self.message)?;
         protocol.write_field_end()?;
 

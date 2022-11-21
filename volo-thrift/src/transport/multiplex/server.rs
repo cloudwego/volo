@@ -11,7 +11,7 @@ use tracing::*;
 use volo::volo_unreachable;
 
 use crate::{
-    codec::{framed::Framed, Decoder, Encoder},
+    codec::{Decoder, Encoder},
     context::ServerContext,
     protocol::TMessageType,
     DummyMessage, EntryMessage, Error, ThriftMessage,
@@ -20,7 +20,8 @@ use crate::{
 const CHANNEL_SIZE: usize = 1024;
 
 pub async fn serve<Svc, Req, Resp, E, D>(
-    framed: Framed<E, D>,
+    mut encoder: E,
+    mut decoder: D,
     notified: Notified<'_>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     service: Svc,
@@ -29,12 +30,10 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     Svc::Error: Into<Error> + Send,
     Req: EntryMessage + 'static,
     Resp: EntryMessage + 'static,
-    E: Encoder + Send + 'static,
-    D: Decoder + Send + 'static,
+    E: Encoder,
+    D: Decoder,
 {
     tokio::pin!(notified);
-
-    let (mut read_half, mut write_half) = framed.into_split();
 
     // mpsc channel used to send responses to the loop
     let (send_tx, mut send_rx) = mpsc::channel(CHANNEL_SIZE);
@@ -49,7 +48,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         msg = send_rx.recv() => {
                             match msg {
                                 Some((mi, mut cx, msg)) => {
-                                    if let Err(e) = metainfo::METAINFO.scope(RefCell::new(mi), write_half.send(&mut cx, msg)).await {
+                                    if let Err(e) = metainfo::METAINFO.scope(RefCell::new(mi), encoder.encode(&mut cx, msg)).await {
                                         // log it
                                         error!("[VOLO] server send response error: {:?}", e,);
                                         return;
@@ -66,7 +65,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         error_msg = error_send_rx.recv() => {
                             match error_msg {
                                 Some((mut cx, msg)) => {
-                                    if let Err(e) = write_half.send(&mut cx, msg).await {
+                                    if let Err(e) = encoder.encode(&mut cx, msg).await {
                                         // log it
                                         error!("[VOLO] server send error error: {:?}", e,);
                                     }
@@ -97,7 +96,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         return
                     },
                     // receives a message
-                    msg = read_half.next(&mut cx) => {
+                    msg = decoder.decode(&mut cx) => {
                         tracing::debug!(
                             "[VOLO] received message: {:?}",
                             msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta))

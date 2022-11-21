@@ -15,7 +15,6 @@ pub use client::Client;
 pub mod codec;
 pub mod context;
 pub mod server;
-pub mod tags;
 pub use anyhow::Error as AnyhowError;
 pub use error::*;
 pub use message::{EntryMessage, Message};

@@ -11,14 +11,15 @@ use tracing::*;
 use volo::volo_unreachable;
 
 use crate::{
-    codec::{framed::Framed, Decoder, Encoder},
+    codec::{Decoder, Encoder},
     context::ServerContext,
     protocol::TMessageType,
     DummyMessage, EntryMessage, Error, ThriftMessage,
 };
 
 pub async fn serve<Svc, Req, Resp, E, D>(
-    mut framed: Framed<E, D>,
+    mut encoder: E,
+    mut decoder: D,
     notified: Notified<'_>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     mut service: Svc,
@@ -27,8 +28,8 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     Svc::Error: Into<Error>,
     Req: EntryMessage,
     Resp: EntryMessage,
-    E: Encoder + Send,
-    D: Decoder + Send,
+    E: Encoder,
+    D: Decoder,
 {
     tokio::pin!(notified);
 
@@ -43,7 +44,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         tracing::trace!("[VOLO] close conn by notified");
                         return
                     },
-                    out = framed.next(&mut cx) => out
+                    out = decoder.decode(&mut cx) => out
                 };
 
                 debug!(
@@ -67,7 +68,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             let msg =
                                 ThriftMessage::mk_server_resp(&cx, resp.map_err(|e| e.into()))
                                     .unwrap();
-                            if let Err(e) = framed.send(&mut cx, msg).await {
+                            if let Err(e) = encoder.encode(&mut cx, msg).await {
                                 // log it
                                 error!("[VOLO] server send response error: {:?}", e,);
                                 return;
@@ -87,7 +88,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         if !matches!(e, Error::Pilota(pilota::thrift::error::Error::Transport(_))) {
                             let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e))
                                 .unwrap();
-                            if let Err(e) = framed.send(&mut cx, msg).await {
+                            if let Err(e) = encoder.encode(&mut cx, msg).await {
                                 error!("[VOLO] server send error error: {:?}", e);
                             }
                         }

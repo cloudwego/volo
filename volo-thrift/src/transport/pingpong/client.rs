@@ -4,12 +4,12 @@ use futures::Future;
 use motore::service::{Service, UnaryService};
 use pilota::thrift::{new_transport_error, TransportErrorKind};
 use volo::{
-    net::{dial::MakeConnection, Address},
+    net::{dial::MakeTransport, Address},
     Unwrap,
 };
 
 use crate::{
-    codec::{CodecType, MkDecoder, MkEncoder},
+    codec::MakeCodec,
     context::ClientContext,
     protocol::TMessageType,
     transport::{
@@ -20,84 +20,91 @@ use crate::{
 };
 
 #[derive(Clone)]
-pub struct MakeTransport<MkE, MkD> {
-    make_connection: MakeConnection,
-    codec_type: CodecType,
-    mk_encoder: MkE,
-    mk_decoder: MkD,
+pub struct MakeClientTransport<MkT, MkC>
+where
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+{
+    make_transport: MkT,
+    make_codec: MkC,
 }
 
-impl<E, D> MakeTransport<E, D> {
+impl<MkT, MkC> MakeClientTransport<MkT, MkC>
+where
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+{
     #[allow(unused)]
-    pub fn new(
-        make_connection: MakeConnection,
-        codec_type: CodecType,
-        mk_encoder: E,
-        mk_decoder: D,
-    ) -> Self {
+    pub fn new(make_transport: MkT, make_codec: MkC) -> Self {
         Self {
-            make_connection,
-            codec_type,
-            mk_decoder,
-            mk_encoder,
+            make_transport,
+            make_codec,
         }
     }
 }
 
-impl<E: MkEncoder + 'static, D: MkDecoder + 'static> UnaryService<Address> for MakeTransport<E, D> {
-    type Response = ThriftTransport<E::Target, D::Target>;
+impl<MkT, MkC> UnaryService<Address> for MakeClientTransport<MkT, MkC>
+where
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+{
+    type Response = ThriftTransport<MkC::Encoder, MkC::Decoder>;
     type Error = io::Error;
     type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>> + 's;
 
     fn call(&mut self, target: Address) -> Self::Future<'_> {
-        let make_connection = self.make_connection.clone();
+        let make_transport = self.make_transport.clone();
         async move {
-            let conn = make_connection.make_connection(target).await?;
-            let decoder = self.mk_decoder.mk_decoder(Some(self.codec_type));
-            let encoder = self.mk_encoder.mk_encoder(Some(self.codec_type));
-            Ok(ThriftTransport::new(conn, encoder, decoder))
+            let (rh, wh) = make_transport.make_transport(target).await?;
+            Ok(ThriftTransport::new(rh, wh, self.make_codec.clone()))
         }
     }
 }
 
-pub struct Client<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> {
+pub struct Client<Resp, MkT, MkC>
+where
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+{
     #[allow(clippy::type_complexity)]
-    make_transport: PooledMakeTransport<MakeTransport<MkE, MkD>, Address>,
-    _maker: PhantomData<Resp>,
+    make_transport: PooledMakeTransport<MakeClientTransport<MkT, MkC>, Address>,
+    _marker: PhantomData<Resp>,
 }
 
-impl<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> Clone for Client<Resp, MkE, MkD> {
+impl<Resp, MkT, MkC> Clone for Client<Resp, MkT, MkC>
+where
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+{
     fn clone(&self) -> Self {
         Self {
             make_transport: self.make_transport.clone(),
-            _maker: self._maker,
+            _marker: self._marker,
         }
     }
 }
 
-impl<Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static> Client<Resp, MkE, MkD> {
-    pub fn new(
-        make_connection: MakeConnection,
-        codec_type: CodecType,
-        pool_cfg: Option<Config>,
-        mk_encoder: MkE,
-        mk_decoder: MkD,
-    ) -> Self {
-        let make_transport =
-            MakeTransport::new(make_connection, codec_type, mk_encoder, mk_decoder);
+impl<Resp, MkT, MkC> Client<Resp, MkT, MkC>
+where
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+{
+    pub fn new(make_transport: MkT, pool_cfg: Option<Config>, make_codec: MkC) -> Self {
+        let make_transport = MakeClientTransport::new(make_transport, make_codec);
         let make_transport = PooledMakeTransport::new(make_transport, pool_cfg);
         Client {
             make_transport,
-            _maker: PhantomData,
+            _marker: PhantomData,
         }
     }
 }
 
-impl<Req, Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static>
-    Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkE, MkD>
+impl<Req, Resp, MkT, MkC> Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkT, MkC>
 where
     Req: Send + 'static + EntryMessage,
     Resp: EntryMessage,
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
 {
     type Response = Option<ThriftMessage<Resp>>;
 

@@ -5,7 +5,7 @@ mod probe;
 
 use std::{borrow::Cow, fmt, net::Ipv6Addr, path::Path};
 
-pub use incoming::{Incoming, MakeIncoming};
+pub use incoming::{DefaultIncoming, MakeIncoming};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Address {

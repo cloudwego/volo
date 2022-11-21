@@ -4,49 +4,48 @@ use std::{
     time::Duration,
 };
 
-use futures::stream::TryStreamExt as _;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::Service,
     BoxError,
 };
-use tokio::sync::Notify;
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    sync::Notify,
+};
 use tracing::info;
+use volo::net::{
+    conn::{OwnedReadHalf, OwnedWriteHalf},
+    incoming::Incoming,
+};
 
 use crate::{
     codec::{
-        framed::Framed, tt_header, MakeServerDecoder, MakeServerEncoder, MkDecoder, MkEncoder,
+        default::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec},
+        DefaultMakeCodec, MakeCodec,
     },
     context::ServerContext,
     EntryMessage, Result,
 };
 
-pub struct Server<S, L, Req, MkE, MkD> {
+pub struct Server<S, L, Req, MkC> {
     service: S,
     layer: L,
-    mk_encoder: MkE,
-    mk_decoder: MkD,
+    make_codec: MkC,
     _marker: PhantomData<fn(Req)>,
     #[cfg(feature = "multiplex")]
     multiplex: bool,
 }
 
 impl<S, Req>
-    Server<
-        S,
-        Identity,
-        Req,
-        MakeServerEncoder<tt_header::DefaultTTHeaderCodec>,
-        MakeServerDecoder<tt_header::DefaultTTHeaderCodec>,
-    >
+    Server<S, Identity, Req, DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>>
 {
     pub fn new(service: S) -> Self
     where
         S: Service<ServerContext, Req>,
     {
         Self {
-            mk_encoder: MakeServerEncoder::new(tt_header::DefaultTTHeaderCodec),
-            mk_decoder: MakeServerDecoder::new(tt_header::DefaultTTHeaderCodec),
+            make_codec: DefaultMakeCodec::default(),
             service,
             layer: Identity::new(),
             _marker: PhantomData,
@@ -56,7 +55,7 @@ impl<S, Req>
     }
 }
 
-impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
+impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
     /// Adds a new inner layer to the server.
     ///
     /// The layer's `Service` should be `Send + Clone + 'static`.
@@ -68,12 +67,11 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<Inner>(self, layer: Inner) -> Server<S, Stack<Inner, L>, Req, MkE, MkD> {
+    pub fn layer<Inner>(self, layer: Inner) -> Server<S, Stack<Inner, L>, Req, MkC> {
         Server {
             layer: Stack::new(layer, self.layer),
             service: self.service,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_codec: self.make_codec,
             _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -91,60 +89,30 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>, Req, MkE, MkD> {
+    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>, Req, MkC> {
         Server {
             layer: Stack::new(self.layer, layer),
             service: self.service,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_codec: self.make_codec,
             _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
         }
     }
 
-    /// Set the TTHeader encoder to use for the server.
+    /// Set the codec to use for the server.
     ///
     /// This should not be used by most users, Volo has already provided a default encoder.
-    /// This is only useful if you want to customize TTHeader protocol and use it together with
-    /// a proxy (such as service mesh).
+    /// This is only useful if you want to customize some protocol.
     ///
     /// If you only want to transform metadata across microservices, you can use [`metainfo`] to do
     /// this.
     #[doc(hidden)]
-    pub fn tt_header_encoder<TTEncoder>(
-        self,
-        tt_encoder: TTEncoder,
-    ) -> Server<S, L, Req, MakeServerEncoder<TTEncoder>, MkD> {
+    pub fn make_codec<MakeCodec>(self, make_codec: MakeCodec) -> Server<S, L, Req, MakeCodec> {
         Server {
             layer: self.layer,
             service: self.service,
-            mk_encoder: MakeServerEncoder::new(tt_encoder),
-            mk_decoder: self.mk_decoder,
-            _marker: PhantomData,
-            #[cfg(feature = "multiplex")]
-            multiplex: self.multiplex,
-        }
-    }
-
-    /// Set the TTHeader decoder to use for the server.
-    ///
-    /// This should not be used by most users, Volo has already provided a default decoder.
-    /// This is only useful if you want to customize TTHeader protocol and use it together with
-    /// a proxy (such as service mesh).
-    ///
-    /// If you only want to transform metadata across microservices, you can use [`metainfo`] to do
-    /// this.
-    #[doc(hidden)]
-    pub fn tt_header_decoder<TTDecoder>(
-        self,
-        tt_decoder: TTDecoder,
-    ) -> Server<S, L, Req, MkE, MakeServerDecoder<TTDecoder>> {
-        Server {
-            layer: self.layer,
-            service: self.service,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: MakeServerDecoder::new(tt_decoder),
+            make_codec,
             _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -152,14 +120,13 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
     }
 
     /// The main entry point for the server.
-    pub async fn run<A: volo::net::incoming::MakeIncoming>(
+    pub async fn run<MI: volo::net::incoming::MakeIncoming>(
         self,
-        incoming: A,
+        make_incoming: MI,
     ) -> Result<(), BoxError>
     where
         L: Layer<S>,
-        MkE: MkEncoder,
-        MkD: MkDecoder,
+        MkC: MakeCodec<OwnedReadHalf, OwnedWriteHalf>,
         L::Service:
             Service<ServerContext, Req, Response = S::Response> + Clone + Send + 'static + Sync,
         <L::Service as Service<ServerContext, Req>>::Error: Into<crate::Error> + Send,
@@ -171,7 +138,7 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
         // init server
         let service = self.layer.layer(self.service);
 
-        let mut incoming = incoming.make_incoming().await?;
+        let mut incoming = make_incoming.make_incoming().await?;
         info!("[VOLO] server start at: {:?}", incoming);
 
         let conn_cnt = Arc::new(std::sync::atomic::AtomicUsize::new(0));
@@ -187,19 +154,19 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
         // spawn accept loop
         let handler = tokio::spawn(async move {
             loop {
-                match incoming.try_next().await {
+                match incoming.accept().await {
                     Ok(Some(conn)) => {
-                        tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
+                        let (rh, wh) = conn.stream.into_split();
                         conn_cnt.fetch_add(1, Ordering::Relaxed);
                         let service = service.clone();
 
                         #[cfg(feature = "multiplex")]
                         if self.multiplex {
                             tokio::spawn(handle_conn_multiplex(
-                                conn,
+                                rh,
+                                wh,
                                 service,
-                                self.mk_encoder.clone(),
-                                self.mk_decoder.clone(),
+                                self.make_codec.clone(),
                                 exit_notify_inner.clone(),
                                 exit_flag_inner.clone(),
                                 exit_mark_inner.clone(),
@@ -207,10 +174,10 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
                             ));
                         } else {
                             tokio::spawn(handle_conn(
-                                conn,
+                                rh,
+                                wh,
                                 service,
-                                self.mk_encoder.clone(),
-                                self.mk_decoder.clone(),
+                                self.make_codec.clone(),
                                 exit_notify_inner.clone(),
                                 exit_flag_inner.clone(),
                                 exit_mark_inner.clone(),
@@ -219,10 +186,10 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
                         }
                         #[cfg(not(feature = "multiplex"))]
                         tokio::spawn(handle_conn(
-                            conn,
+                            rh,
+                            wh,
                             service,
-                            self.mk_encoder.clone(),
-                            self.mk_decoder.clone(),
+                            self.make_codec.clone(),
                             exit_notify_inner.clone(),
                             exit_flag_inner.clone(),
                             exit_mark_inner.clone(),
@@ -309,12 +276,11 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
     ///
     /// Not recommend for most users.
     #[doc(hidden)]
-    pub fn multiplex(self, multiplex: bool) -> Server<S, L, Req, MkE, MkD> {
+    pub fn multiplex(self, multiplex: bool) -> Server<S, L, Req, MkC> {
         Server {
             layer: self.layer,
             service: self.service,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_codec: self.make_codec,
             _marker: PhantomData,
             multiplex,
         }
@@ -322,23 +288,24 @@ impl<S, L, Req, MkE, MkD> Server<S, L, Req, MkE, MkD> {
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn handle_conn<Req, Svc, Resp, MkE, MkD>(
-    conn: volo::net::conn::Conn,
+async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
+    rh: R,
+    wh: W,
     service: Svc,
-    mk_encoder: MkE,
-    mk_decoder: MkD,
+    make_codec: MkC,
     exit_notify: Arc<Notify>,
     exit_flag: Arc<parking_lot::RwLock<bool>>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
 ) where
-    MkE: MkEncoder,
-    MkD: MkDecoder,
+    R: AsyncRead + Unpin + Send + Sync + 'static,
+    W: AsyncWrite + Unpin + Send + Sync + 'static,
     Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
     Svc::Error: Send,
     Svc::Error: Into<crate::Error>,
     Req: EntryMessage + Send + 'static,
     Resp: EntryMessage + Send + 'static,
+    MkC: MakeCodec<R, W>,
 {
     // get read lock and create Notified
     let notified = {
@@ -349,35 +316,32 @@ async fn handle_conn<Req, Svc, Resp, MkE, MkD>(
         exit_notify.notified()
     };
 
-    let stream = conn.stream;
-    let encoder = mk_encoder.mk_encoder(None);
-    let decoder = mk_decoder.mk_decoder(None);
-
-    let framed = Framed::new(stream, encoder, decoder);
+    let (encoder, decoder) = make_codec.make_codec(rh, wh);
 
     tracing::trace!("[VOLO] handle conn by ping-pong");
-    crate::transport::pingpong::serve(framed, notified, exit_mark, service).await;
+    crate::transport::pingpong::serve(encoder, decoder, notified, exit_mark, service).await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }
 
 #[cfg(feature = "multiplex")]
 #[allow(clippy::too_many_arguments)]
-async fn handle_conn_multiplex<Req, Svc, Resp, MkE, MkD>(
-    conn: volo::net::conn::Conn,
+async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
+    rh: R,
+    wh: W,
     service: Svc,
-    mk_encoder: MkE,
-    mk_decoder: MkD,
+    make_codec: MkC,
     exit_notify: Arc<Notify>,
     exit_flag: Arc<parking_lot::RwLock<bool>>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
 ) where
-    MkE: MkEncoder,
-    MkD: MkDecoder,
+    R: AsyncRead + Unpin + Send + Sync + 'static,
+    W: AsyncWrite + Unpin + Send + Sync + 'static,
     Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
     Svc::Error: Into<crate::Error> + Send,
     Req: EntryMessage + Send + 'static,
     Resp: EntryMessage + Send + 'static,
+    MkC: MakeCodec<R, W>,
 {
     // get read lock and create Notified
     let notified = {
@@ -388,13 +352,9 @@ async fn handle_conn_multiplex<Req, Svc, Resp, MkE, MkD>(
         exit_notify.notified()
     };
 
-    let stream = conn.stream;
-    let encoder = mk_encoder.mk_encoder(None);
-    let decoder = mk_decoder.mk_decoder(None);
-
-    let framed = Framed::new(stream, encoder, decoder);
+    let (encoder, decoder) = make_codec.make_codec(rh, wh);
 
     info!("[VOLO] handle conn by multiplex");
-    crate::transport::multiplex::serve(framed, notified, exit_mark, service).await;
+    crate::transport::multiplex::serve(encoder, decoder, notified, exit_mark, service).await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }

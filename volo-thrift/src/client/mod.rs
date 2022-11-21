@@ -19,20 +19,22 @@ use motore::{
 use pilota::thrift::TMessageType;
 use tokio::time::Duration;
 use volo::{
-    context::{Context, Endpoint, Role, RpcInfo},
+    context::{Endpoint, Role, RpcInfo},
     discovery::{Discover, DummyDiscover},
     loadbalance::{random::WeightedRandomBalance, LbConfig, MkLbLayer},
-    net::{dial::MakeConnection, Address},
+    net::{
+        dial::{DefaultMakeTransport, MakeTransport},
+        Address,
+    },
 };
 
 use crate::{
     codec::{
-        tt_header::DefaultTTHeaderCodec, CodecType, MakeClientDecoder, MakeClientEncoder,
-        MkDecoder, MkEncoder,
+        default::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec},
+        DefaultMakeCodec, MakeCodec,
     },
     context::{ClientContext, Config},
     error::{Error, Result},
-    tags::TransportType,
     transport::{pingpong, pool},
     EntryMessage, ThriftMessage,
 };
@@ -51,7 +53,7 @@ pub trait SetClient<Req, Resp> {
     fn set_client(self, client: Client<Req, Resp>) -> Self;
 }
 
-pub struct ClientBuilder<IL, OL, C, Req, Resp, MkE, MkD, LB> {
+pub struct ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB> {
     config: Config,
     pool: Option<pool::Config>,
     callee_name: smol_str::SmolStr,
@@ -59,10 +61,9 @@ pub struct ClientBuilder<IL, OL, C, Req, Resp, MkE, MkD, LB> {
     address: Option<Address>, // maybe address use Arc avoid memory alloc
     inner_layer: IL,
     outer_layer: OL,
-    codec_type: CodecType,
     service_client: C,
-    mk_encoder: MkE,
-    mk_decoder: MkD,
+    make_transport: MkT,
+    make_codec: MkC,
     mk_lb: LB,
     _marker: PhantomData<(*const Req, *const Resp)>,
 
@@ -77,8 +78,8 @@ impl<C, Req, Resp>
         C,
         Req,
         Resp,
-        MakeClientEncoder<DefaultTTHeaderCodec>,
-        MakeClientDecoder<DefaultTTHeaderCodec>,
+        DefaultMakeTransport,
+        DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>,
         LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>,
     >
 where
@@ -93,14 +94,9 @@ where
             address: None,
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
-            codec_type: CodecType::TTHeaderFramed,
             service_client,
-            mk_encoder: MakeClientEncoder {
-                tt_encoder: DefaultTTHeaderCodec,
-            },
-            mk_decoder: MakeClientDecoder {
-                tt_decoder: DefaultTTHeaderCodec,
-            },
+            make_transport: DefaultMakeTransport::default(),
+            make_codec: DefaultMakeCodec::default(),
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
 
@@ -110,28 +106,27 @@ where
     }
 }
 
-impl<IL, OL, C, Req, Resp, E, D, LB, DISC>
-    ClientBuilder<IL, OL, C, Req, Resp, E, D, LbConfig<LB, DISC>>
+impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
+    ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LbConfig<LB, DISC>>
 where
     C: SetClient<Req, Resp>,
 {
     pub fn load_balance<NLB>(
         self,
         load_balance: NLB,
-    ) -> ClientBuilder<IL, OL, C, Req, Resp, E, D, LbConfig<NLB, DISC>> {
+    ) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LbConfig<NLB, DISC>> {
         ClientBuilder {
             config: self.config,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
-            codec_type: self.codec_type,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
             _marker: PhantomData,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_transport: self.make_transport,
+            make_codec: self.make_codec,
             mk_lb: self.mk_lb.load_balance(load_balance),
 
             #[cfg(feature = "multiplex")]
@@ -142,20 +137,19 @@ where
     pub fn discover<NDISC>(
         self,
         discover: NDISC,
-    ) -> ClientBuilder<IL, OL, C, Req, Resp, E, D, LbConfig<LB, NDISC>> {
+    ) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LbConfig<LB, NDISC>> {
         ClientBuilder {
             config: self.config,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
-            codec_type: self.codec_type,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
             _marker: PhantomData,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_transport: self.make_transport,
+            make_codec: self.make_codec,
             mk_lb: self.mk_lb.discover(discover),
 
             #[cfg(feature = "multiplex")]
@@ -170,7 +164,7 @@ where
     }
 }
 
-impl<IL, OL, C, Req, Resp, E, D, LB> ClientBuilder<IL, OL, C, Req, Resp, E, D, LB>
+impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB>
 where
     C: SetClient<Req, Resp>,
 {
@@ -219,20 +213,19 @@ where
     pub fn mk_load_balance<NLB>(
         self,
         mk_load_balance: NLB,
-    ) -> ClientBuilder<IL, OL, C, Req, Resp, E, D, NLB> {
+    ) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, NLB> {
         ClientBuilder {
             config: self.config,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
-            codec_type: self.codec_type,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
             _marker: PhantomData,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_transport: self.make_transport,
+            make_codec: self.make_codec,
             mk_lb: mk_load_balance,
 
             #[cfg(feature = "multiplex")]
@@ -240,32 +233,30 @@ where
         }
     }
 
-    /// Set the TTHeader encoder to use for the client.
+    /// Set the codec to use for the client.
     ///
     /// This should not be used by most users, Volo has already provided a default encoder.
-    /// This is only useful if you want to customize TTHeader protocol and use it together with
-    /// a proxy (such as service mesh).
+    /// This is only useful if you want to customize some protocol.
     ///
     /// If you only want to transform metadata across microservices, you can use [`metainfo`] to do
     /// this.
     #[doc(hidden)]
-    pub fn tt_header_encoder<TTEncoder>(
+    pub fn make_codec<MakeCodec>(
         self,
-        tt_encoder: TTEncoder,
-    ) -> ClientBuilder<IL, OL, C, Req, Resp, MakeClientEncoder<TTEncoder>, D, LB> {
+        make_codec: MakeCodec,
+    ) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MakeCodec, LB> {
         ClientBuilder {
             config: self.config,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
-            codec_type: self.codec_type,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
             _marker: PhantomData,
-            mk_encoder: MakeClientEncoder { tt_encoder },
-            mk_decoder: self.mk_decoder,
+            make_transport: self.make_transport,
+            make_codec,
             mk_lb: self.mk_lb,
 
             #[cfg(feature = "multiplex")]
@@ -273,32 +264,24 @@ where
         }
     }
 
-    /// Set the TTHeader decoder to use for the client.
-    ///
-    /// This should not be used by most users, Volo has already provided a default decoder.
-    /// This is only useful if you want to customize TTHeader protocol and use it together with
-    /// a proxy (such as service mesh).
-    ///
-    /// If you only want to transform metadata across microservices, you can use [`metainfo`] to do
-    /// this.
+    /// Set the transport to use for the client.
     #[doc(hidden)]
-    pub fn tt_header_decoder<TTDecoder>(
+    pub fn make_transport<MakeTransport>(
         self,
-        tt_decoder: TTDecoder,
-    ) -> ClientBuilder<IL, OL, C, Req, Resp, E, MakeClientDecoder<TTDecoder>, LB> {
+        make_transport: MakeTransport,
+    ) -> ClientBuilder<IL, OL, C, Req, Resp, MakeTransport, MkC, LB> {
         ClientBuilder {
             config: self.config,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
-            codec_type: self.codec_type,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
             _marker: PhantomData,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: MakeClientDecoder { tt_decoder },
+            make_transport,
+            make_codec: self.make_codec,
             mk_lb: self.mk_lb,
 
             #[cfg(feature = "multiplex")]
@@ -313,16 +296,6 @@ where
     /// The client will skip the discovery and loadbalance Service if this is set.
     pub fn address<A: Into<Address>>(mut self, target: A) -> Self {
         self.address = Some(target.into());
-        self
-    }
-
-    /// Sets the codec type used for the client.
-    ///
-    /// Most users don't need to change this.
-    ///
-    /// Defaults to `CodecType::TTHeaderFramed`.
-    pub fn codec_type(mut self, t: CodecType) -> Self {
-        self.codec_type = t;
         self
     }
 
@@ -342,20 +315,19 @@ where
     pub fn layer_inner<Inner>(
         self,
         layer: Inner,
-    ) -> ClientBuilder<Stack<Inner, IL>, OL, C, Req, Resp, E, D, LB> {
+    ) -> ClientBuilder<Stack<Inner, IL>, OL, C, Req, Resp, MkT, MkC, LB> {
         ClientBuilder {
             config: self.config,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
-            codec_type: self.codec_type,
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
             service_client: self.service_client,
             _marker: PhantomData,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_transport: self.make_transport,
+            make_codec: self.make_codec,
             mk_lb: self.mk_lb,
 
             #[cfg(feature = "multiplex")]
@@ -379,20 +351,19 @@ where
     pub fn layer_outer<Outer>(
         self,
         layer: Outer,
-    ) -> ClientBuilder<IL, Stack<Outer, OL>, C, Req, Resp, E, D, LB> {
+    ) -> ClientBuilder<IL, Stack<Outer, OL>, C, Req, Resp, MkT, MkC, LB> {
         ClientBuilder {
             config: self.config,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
-            codec_type: self.codec_type,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
             service_client: self.service_client,
             _marker: PhantomData,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_transport: self.make_transport,
+            make_codec: self.make_codec,
             mk_lb: self.mk_lb,
 
             #[cfg(feature = "multiplex")]
@@ -416,20 +387,19 @@ where
     pub fn layer_outer_front<Outer>(
         self,
         layer: Outer,
-    ) -> ClientBuilder<IL, Stack<OL, Outer>, C, Req, Resp, E, D, LB> {
+    ) -> ClientBuilder<IL, Stack<OL, Outer>, C, Req, Resp, MkT, MkC, LB> {
         ClientBuilder {
             config: self.config,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
-            codec_type: self.codec_type,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
             service_client: self.service_client,
             _marker: PhantomData,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_transport: self.make_transport,
+            make_codec: self.make_codec,
             mk_lb: self.mk_lb,
 
             #[cfg(feature = "multiplex")]
@@ -440,20 +410,19 @@ where
     #[cfg(feature = "multiplex")]
     /// Enable multiplexing for the client.
     #[doc(hidden)]
-    pub fn multiplex(self, multiplex: bool) -> ClientBuilder<IL, OL, C, Req, Resp, E, D, LB> {
+    pub fn multiplex(self, multiplex: bool) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB> {
         ClientBuilder {
             config: self.config,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
-            codec_type: self.codec_type,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             service_client: self.service_client,
             _marker: PhantomData,
-            mk_encoder: self.mk_encoder,
-            mk_decoder: self.mk_decoder,
+            make_transport: self.make_transport,
+            make_codec: self.make_codec,
             mk_lb: self.mk_lb,
 
             multiplex,
@@ -462,27 +431,27 @@ where
 }
 
 #[derive(Clone)]
-pub struct MessageService<Resp, MkE, MkD>
+pub struct MessageService<Resp, MkT, MkC>
 where
     Resp: EntryMessage + Send + 'static,
-    MkE: MkEncoder + 'static,
-    MkD: MkDecoder + 'static,
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
 {
     #[cfg(not(feature = "multiplex"))]
-    inner: pingpong::Client<Resp, MkE, MkD>,
+    inner: pingpong::Client<Resp, MkT, MkC>,
     #[cfg(feature = "multiplex")]
     inner: motore::utils::Either<
-        pingpong::Client<Resp, MkE, MkD>,
-        crate::transport::multiplex::Client<Resp, MkE, MkD>,
+        pingpong::Client<Resp, MkT, MkC>,
+        crate::transport::multiplex::Client<Resp, MkT, MkC>,
     >,
 }
 
-impl<Req, Resp, MkE, MkD> Service<ClientContext, Req> for MessageService<Resp, MkE, MkD>
+impl<Req, Resp, MkT, MkC> Service<ClientContext, Req> for MessageService<Resp, MkT, MkC>
 where
-    MkE: MkEncoder + 'static,
-    MkD: MkDecoder + 'static,
     Req: EntryMessage + 'static + Send,
     Resp: Send + 'static + EntryMessage,
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
 {
     type Response = Option<Resp>;
 
@@ -507,8 +476,7 @@ where
     }
 }
 
-impl<IL, OL, C, Req, Resp, MkE: MkEncoder + 'static, MkD: MkDecoder + 'static, LB>
-    ClientBuilder<IL, OL, C, Req, Resp, MkE, MkD, LB>
+impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB>
 where
     C: SetClient<Req, Resp>,
     LB: MkLbLayer,
@@ -518,11 +486,12 @@ where
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error: Into<Error>,
     Req: EntryMessage + Send + 'static + Sync + Clone,
     Resp: EntryMessage + Send + 'static,
-    IL: Layer<MessageService<Resp, MkE, MkD>>,
+    IL: Layer<MessageService<Resp, MkT, MkC>>,
     IL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + Sync + Clone + Send + 'static,
     <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<Error>,
-    MkD: MkDecoder + 'static,
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
     OL: Layer<
         BoxCloneService<
             ClientContext,
@@ -535,37 +504,31 @@ where
     <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<Error>,
 {
     /// Build volo client.
-    pub fn build(self) -> C {
-        let mc_cfg = volo::net::dial::Config::new(
-            self.config.connect_timeout(),
-            self.config.read_write_timeout(),
-            self.config.read_write_timeout(),
-        );
+    pub fn build(mut self) -> C {
+        if let Some(timeout) = self.config.connect_timeout() {
+            self.make_transport.set_connect_timeout(Some(timeout));
+        }
+        if let Some(timeout) = self.config.read_write_timeout() {
+            self.make_transport.set_read_timeout(Some(timeout));
+        }
+        if let Some(timeout) = self.config.read_write_timeout() {
+            self.make_transport.set_write_timeout(Some(timeout));
+        }
         let msg_svc = MessageService {
             #[cfg(not(feature = "multiplex"))]
-            inner: pingpong::Client::new(
-                MakeConnection::new(Some(mc_cfg)),
-                self.codec_type,
-                self.pool,
-                self.mk_encoder,
-                self.mk_decoder,
-            ),
+            inner: pingpong::Client::new(self.make_transport, self.pool, self.make_codec),
             #[cfg(feature = "multiplex")]
             inner: if !self.multiplex {
                 motore::utils::Either::A(pingpong::Client::new(
-                    MakeConnection::new(Some(mc_cfg)),
-                    self.codec_type,
+                    self.make_transport,
                     self.pool,
-                    self.mk_encoder,
-                    self.mk_decoder,
+                    self.make_codec,
                 ))
             } else {
                 motore::utils::Either::B(crate::transport::multiplex::Client::new(
-                    MakeConnection::new(Some(mc_cfg)),
-                    self.codec_type,
+                    self.make_transport,
                     self.pool,
-                    self.mk_encoder,
-                    self.mk_decoder,
+                    self.make_codec,
                 ))
             },
         };
@@ -646,8 +609,6 @@ impl<Req, Resp> Client<Req, Resp> {
                 TMessageType::Call
             },
         );
-
-        cx.extensions_mut().insert(TransportType::TRANSPORT_FRAMED);
 
         let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
 

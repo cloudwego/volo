@@ -13,7 +13,7 @@ use volo::net::conn::Conn;
 #[pin_project]
 pub struct Incoming {
     #[pin]
-    listener: volo::net::incoming::Incoming,
+    listener: volo::net::incoming::DefaultIncoming,
 }
 
 impl Stream for Incoming {

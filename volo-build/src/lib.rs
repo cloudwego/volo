@@ -130,7 +130,7 @@ where
         }
 
         self.pilota_builder
-            .compile(&self.idls, &out_dir.join(self.filename));
+            .compile(&self.idls, out_dir.join(self.filename));
         Ok(())
     }
 }
