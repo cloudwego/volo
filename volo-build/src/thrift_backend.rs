@@ -446,8 +446,8 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     #client_name,
                     #req_send_name,
                     #res_name,
-                    ::volo_thrift::codec::MakeClientEncoder<::volo_thrift::codec::tt_header::DefaultTTHeaderCodec>,
-                    ::volo_thrift::codec::MakeClientDecoder<::volo_thrift::codec::tt_header::DefaultTTHeaderCodec>,
+                    ::volo::net::dial::DefaultMakeTransport,
+                    ::volo_thrift::codec::default::DefaultMakeCodec<::volo_thrift::codec::default::ttheader::MakeTTHeaderCodec<::volo_thrift::codec::default::framed::MakeFramedCodec<::volo_thrift::codec::default::thrift::MakeThriftCodec>>>,
                     ::volo::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<()>, ::volo::discovery::DummyDiscover>,
                 >
                 {
@@ -465,7 +465,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }
 
             impl<S> #server_name<S> where S: #service_name + ::core::marker::Send + ::core::marker::Sync + 'static {
-                pub fn new(inner: S) -> ::volo_thrift::server::Server<Self, ::volo::layer::Identity, #req_recv_name, ::volo_thrift::codec::MakeServerEncoder<::volo_thrift::codec::tt_header::DefaultTTHeaderCodec>, ::volo_thrift::codec::MakeServerDecoder<::volo_thrift::codec::tt_header::DefaultTTHeaderCodec>> {
+                pub fn new(inner: S) -> ::volo_thrift::server::Server<Self, ::volo::layer::Identity, #req_recv_name, ::volo_thrift::codec::default::DefaultMakeCodec<::volo_thrift::codec::default::ttheader::MakeTTHeaderCodec<::volo_thrift::codec::default::framed::MakeFramedCodec<::volo_thrift::codec::default::thrift::MakeThriftCodec>>>> {
                     ::volo_thrift::server::Server::new(Self {
                         inner: ::std::sync::Arc::new(inner),
                     })

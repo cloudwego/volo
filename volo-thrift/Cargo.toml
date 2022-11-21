@@ -29,6 +29,7 @@ bytes.workspace = true
 futures.workspace = true
 fxhash.workspace = true
 lazy_static.workspace = true
+linkedbytes.workspace = true
 linked-hash-map.workspace = true
 num_enum.workspace = true
 parking_lot.workspace = true

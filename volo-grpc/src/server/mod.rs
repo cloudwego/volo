@@ -6,7 +6,7 @@ mod meta;
 
 use std::{cell::RefCell, marker::PhantomData, time::Duration};
 
-use futures::{Future, TryStreamExt};
+use futures::Future;
 use hyper::server::conn::Http;
 use motore::{
     builder::ServiceBuilder,
@@ -14,7 +14,7 @@ use motore::{
     service::Service,
     BoxError, ServiceExt,
 };
-use volo::spawn;
+use volo::{net::incoming::Incoming, spawn};
 
 use crate::{
     body::Body,
@@ -188,7 +188,7 @@ impl<S, L> Server<S, L> {
             .service(self.service);
         let service = service.map_err(|err| err.into());
 
-        while let Some(conn) = incoming.try_next().await? {
+        while let Some(conn) = incoming.accept().await? {
             tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
             let peer_addr = conn.info.peer_addr.clone();
 

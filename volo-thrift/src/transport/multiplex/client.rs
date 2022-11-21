@@ -4,12 +4,12 @@ use futures::Future;
 use motore::service::{Service, UnaryService};
 use pilota::thrift::{new_transport_error, TransportErrorKind};
 use volo::{
-    net::{dial::MakeConnection, Address},
+    net::{dial::MakeTransport, Address},
     Unwrap,
 };
 
 use crate::{
-    codec::{CodecType, MkDecoder, MkEncoder},
+    codec::MakeCodec,
     context::ClientContext,
     protocol::TMessageType,
     transport::{
@@ -19,123 +19,113 @@ use crate::{
     EntryMessage, Error, ThriftMessage,
 };
 
-pub struct MakeTransport<MkE, MkD, Resp> {
-    make_connection: MakeConnection,
-    codec_type: CodecType,
-    mk_encoder: MkE,
-    mk_decoder: MkD,
+pub struct MakeClientTransport<MkT, MkC, Resp>
+where
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+{
+    make_transport: MkT,
+    make_codec: MkC,
     _phantom: PhantomData<fn() -> Resp>,
 }
 
-impl<MkE: Clone, MkD: Clone, Resp> Clone for MakeTransport<MkE, MkD, Resp> {
+impl<MkT: MakeTransport, MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>, Resp> Clone
+    for MakeClientTransport<MkT, MkC, Resp>
+{
     fn clone(&self) -> Self {
         Self {
-            make_connection: self.make_connection.clone(),
-            codec_type: self.codec_type,
-            mk_decoder: self.mk_decoder.clone(),
-            mk_encoder: self.mk_encoder.clone(),
+            make_transport: self.make_transport.clone(),
+            make_codec: self.make_codec.clone(),
             _phantom: PhantomData,
         }
     }
 }
 
-impl<E, D, Resp> MakeTransport<E, D, Resp> {
-    #[allow(unused)]
-    pub fn new(
-        make_connection: MakeConnection,
-        codec_type: CodecType,
-        mk_encoder: E,
-        mk_decoder: D,
-    ) -> Self {
-        Self {
-            make_connection,
-            codec_type,
-            mk_decoder,
-            mk_encoder,
-            _phantom: PhantomData,
-        }
-    }
-}
-
-impl<E, D, Resp> UnaryService<Address> for MakeTransport<E, D, Resp>
+impl<MkT, MkC, Resp> MakeClientTransport<MkT, MkC, Resp>
 where
-    E: MkEncoder + Send + 'static,
-    D: MkDecoder + Send + 'static,
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+{
+    #[allow(unused)]
+    pub fn new(make_transport: MkT, make_codec: MkC) -> Self {
+        Self {
+            make_transport,
+            make_codec,
+            _phantom: PhantomData,
+        }
+    }
+}
+
+impl<MkT, MkC, Resp> UnaryService<Address> for MakeClientTransport<MkT, MkC, Resp>
+where
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
     Resp: EntryMessage + Send + 'static,
 {
-    type Response = ThriftTransport<E::Target, Resp>;
+    type Response = ThriftTransport<MkC::Encoder, Resp>;
     type Error = io::Error;
     type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>> + 's;
 
     fn call(&mut self, target: Address) -> Self::Future<'_> {
-        let make_connection = self.make_connection.clone();
+        let make_transport = self.make_transport.clone();
         async move {
-            let conn = make_connection.make_connection(target).await?;
-            let decoder = self.mk_decoder.mk_decoder(Some(self.codec_type));
-            let encoder = self.mk_encoder.mk_encoder(Some(self.codec_type));
-            Ok(ThriftTransport::new(conn, encoder, decoder))
+            let (rh, wh) = make_transport.make_transport(target).await?;
+            Ok(ThriftTransport::new(rh, wh, self.make_codec.clone()))
         }
     }
 }
 
-pub struct Client<Resp, MkE, MkD>
+pub struct Client<Resp, MkT, MkC>
 where
-    MkE: MkEncoder + Send + 'static,
-    MkD: MkDecoder + Send + 'static,
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
     Resp: EntryMessage + Send + 'static,
 {
     #[allow(clippy::type_complexity)]
-    make_transport: PooledMakeTransport<MakeTransport<MkE, MkD, Resp>, Address>,
-    _maker: PhantomData<Resp>,
+    make_transport: PooledMakeTransport<MakeClientTransport<MkT, MkC, Resp>, Address>,
+    _marker: PhantomData<Resp>,
 }
 
-impl<Resp, MkE, MkD> Clone for Client<Resp, MkE, MkD>
+impl<Resp, MkT, MkC> Clone for Client<Resp, MkT, MkC>
 where
-    MkE: MkEncoder + Send + 'static,
-    MkD: MkDecoder + Send + 'static,
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
     Resp: EntryMessage + Send + 'static,
 {
     fn clone(&self) -> Self {
         Self {
             make_transport: self.make_transport.clone(),
-            _maker: self._maker,
+            _marker: self._marker,
         }
     }
 }
 
-impl<Resp, MkE, MkD> Client<Resp, MkE, MkD>
+impl<Resp, MkT, MkC> Client<Resp, MkT, MkC>
 where
-    MkE: MkEncoder + Send + 'static,
-    MkD: MkDecoder + Send + 'static,
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
     Resp: EntryMessage + Send + 'static,
 {
-    pub fn new(
-        make_connection: MakeConnection,
-        codec_type: CodecType,
-        pool_cfg: Option<Config>,
-        mk_encoder: MkE,
-        mk_decoder: MkD,
-    ) -> Self {
-        let make_transport =
-            MakeTransport::new(make_connection, codec_type, mk_encoder, mk_decoder);
+    pub fn new(make_transport: MkT, pool_cfg: Option<Config>, make_codec: MkC) -> Self {
+        let make_transport = MakeClientTransport::new(make_transport, make_codec);
         let make_transport = PooledMakeTransport::new(make_transport, pool_cfg);
         Client {
             make_transport,
-            _maker: PhantomData,
+            _marker: PhantomData,
         }
     }
 }
 
-impl<Req, Resp, MkE, MkD> Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkE, MkD>
+impl<Req, Resp, MkT, MkC> Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkT, MkC>
 where
     Req: Send + 'static + EntryMessage,
     Resp: EntryMessage + Send + 'static,
-    MkE: MkEncoder + Send + 'static,
-    MkD: MkDecoder + Send + 'static,
+    MkT: MakeTransport,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
 {
     type Response = Option<ThriftMessage<Resp>>;
 
-    type Error = Error;
+    type Error = crate::Error;
 
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx where Self:'cx;
 

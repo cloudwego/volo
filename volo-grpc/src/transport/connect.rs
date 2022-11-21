@@ -12,16 +12,22 @@ use hyper::client::connect::{Connected, Connection};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use volo::net::{
     conn::Conn,
-    dial::{Config, MakeConnection},
+    dial::{Config, DefaultMakeTransport, MakeTransport},
     Address,
 };
 
 #[derive(Clone, Debug)]
-pub struct Connector(MakeConnection);
+pub struct Connector(DefaultMakeTransport);
 
 impl Connector {
     pub fn new(cfg: Option<Config>) -> Self {
-        Self(MakeConnection::new(cfg))
+        let mut mt = DefaultMakeTransport::default();
+        if let Some(cfg) = cfg {
+            mt.set_connect_timeout(cfg.connect_timeout);
+            mt.set_read_timeout(cfg.read_timeout);
+            mt.set_write_timeout(cfg.write_timeout);
+        }
+        Self(mt)
     }
 }
 
