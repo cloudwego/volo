@@ -25,7 +25,7 @@ macro_rules! ready {
 
 impl<R: AsyncRead + Unpin> BufReader<R> {
     pub async fn fill_buf_at_least(&mut self, len: usize) -> io::Result<&[u8]> {
-        if self.len >= len {
+        if (self.len - self.pos) >= len {
             return Ok(&self.buf[self.pos..self.len]);
         }
 
