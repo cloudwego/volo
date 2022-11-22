@@ -49,7 +49,7 @@ impl tower::Service<hyper::Uri> for Connector {
     }
 
     fn call(&mut self, uri: hyper::Uri) -> Self::Future {
-        let mk_conn = self.0.clone();
+        let mk_conn = self.0;
         Box::pin(async move {
             let authority = uri.authority().expect("authority required").as_str();
             let target: Address = match uri.scheme_str() {
