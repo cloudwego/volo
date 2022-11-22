@@ -118,7 +118,7 @@ impl value_encoding::Sealed for Binary {
 
     fn from_static(value: &'static str) -> HeaderValue {
         if base64::decode(value).is_err() {
-            panic!("Invalid base64 passed to from_static: {}", value);
+            panic!("Invalid base64 passed to from_static: {value}");
         }
         // SAFETY: we have checked the bytes with base64
         unsafe { HeaderValue::from_maybe_shared_unchecked(Bytes::from_static(value.as_ref())) }
@@ -148,9 +148,9 @@ impl value_encoding::Sealed for Binary {
 
     fn fmt(value: &HeaderValue, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Ok(decoded) = Self::decode(value.as_bytes()) {
-            write!(f, "{:?}", decoded)
+            write!(f, "{decoded:?}")
         } else {
-            write!(f, "b[invalid]{:?}", value)
+            write!(f, "b[invalid]{value:?}")
         }
     }
 }

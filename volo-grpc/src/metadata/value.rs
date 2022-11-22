@@ -738,13 +738,13 @@ fn test_debug() {
 
     for &(value, expected) in cases {
         let val = AsciiMetadataValue::try_from_bytes(value.as_bytes()).unwrap();
-        let actual = format!("{:?}", val);
+        let actual = format!("{val:?}");
         assert_eq!(expected, actual);
     }
 
     let mut sensitive = AsciiMetadataValue::from_static("password");
     sensitive.set_sensitive(true);
-    assert_eq!("Sensitive", format!("{:?}", sensitive));
+    assert_eq!("Sensitive", format!("{sensitive:?}"));
 }
 
 #[test]

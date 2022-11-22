@@ -30,6 +30,14 @@ path = "src/compression/grpc_server.rs"
 name = "compression-grpc-client"
 path = "src/compression/grpc_client.rs"
 
+# multiplex
+[[bin]]
+name = "multiplex-grpc-server"
+path = "src/multiplex/grpc_server.rs"
+[[bin]]
+name = "multiplex-grpc-client"
+path = "src/multiplex/grpc_client.rs"
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true

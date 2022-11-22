@@ -1,4 +1,5 @@
 //! These codes are copied from `tonic/src/codec/compression.rs` and may be modified by us.
+
 use std::io;
 
 use bytes::{Buf, BufMut, BytesMut};
@@ -153,8 +154,7 @@ impl CompressionEncoding {
                 "identity" => Ok(None),
                 other => {
                     let status = Status::unimplemented(format!(
-                        "Content is compressed with `{}` which isn't supported",
-                        other
+                        "Content is compressed with `{other}` which isn't supported"
                     ));
                     Err(status)
                 }

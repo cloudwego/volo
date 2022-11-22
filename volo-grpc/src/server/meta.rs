@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, str::FromStr, sync::Arc};
+use std::{cell::RefCell, net::SocketAddr, str::FromStr, sync::Arc};
 
 use futures::Future;
 use metainfo::{Backward, Forward};
@@ -9,6 +9,7 @@ use volo::{
 };
 
 use crate::{
+    body::Body,
     context::ServerContext,
     metadata::{
         KeyAndValueRef, MetadataKey, DESTINATION_SERVICE, HEADER_TRANS_REMOTE_ADDR, SOURCE_SERVICE,
@@ -16,7 +17,16 @@ use crate::{
     Request, Response, Status,
 };
 
-#[derive(Clone)]
+macro_rules! status_to_http {
+    ($result:expr) => {
+        match $result {
+            Ok(value) => value,
+            Err(status) => return Ok(status.to_http()),
+        }
+    };
+}
+
+#[derive(Clone, Debug)]
 pub struct MetaService<S> {
     inner: S,
     peer_addr: Option<Address>,
@@ -28,33 +38,40 @@ impl<S> MetaService<S> {
     }
 }
 
-impl<T, U, S> Service<ServerContext, Request<T>> for MetaService<S>
+impl<S> Service<ServerContext, hyper::Request<hyper::Body>> for MetaService<S>
 where
-    S: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>
+    S: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>>
+        + Clone
         + Send
-        + 'static
-        + Sync,
-    T: Send + 'static,
+        + Sync
+        + 'static,
+    S::Error: Into<Status>,
 {
-    type Response = S::Response;
+    type Response = hyper::Response<Body>;
 
-    type Error = S::Error;
+    type Error = Status;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
+    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx;
 
     fn call<'cx, 's>(
         &'s self,
-        cx: &'cx mut ServerContext,
-        mut volo_req: Request<T>,
+        _cx: &'cx mut ServerContext,
+        req: hyper::Request<hyper::Body>,
     ) -> Self::Future<'cx>
     where
         's: 'cx,
     {
         let peer_addr = self.peer_addr.clone();
 
-        async move {
+        metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
+            let mut cx = ServerContext::default();
+            cx.rpc_info.method = Some(req.uri().path().into());
+
+            let mut volo_req = Request::from_http(req);
+
             let metadata = volo_req.metadata_mut();
-            _ = metainfo::METAINFO.with(|metainfo| {
+
+            status_to_http!(metainfo::METAINFO.with(|metainfo| {
                 let mut metainfo = metainfo.borrow_mut();
 
                 // caller
@@ -107,12 +124,18 @@ where
                 }
 
                 Ok::<(), Status>(())
-            });
+            }));
 
-            let mut volo_resp = self.inner.call(cx, volo_req).await?;
+            let volo_resp = match self.inner.call(&mut cx, volo_req).await {
+                Ok(resp) => resp,
+                Err(err) => {
+                    return Ok(err.into().to_http());
+                }
+            };
 
-            let metadata = volo_resp.metadata_mut();
-            _ = metainfo::METAINFO.with(|metainfo| {
+            let (mut metadata, extensions, message) = volo_resp.into_parts();
+
+            status_to_http!(metainfo::METAINFO.with(|metainfo| {
                 let metainfo = metainfo.borrow_mut();
 
                 // backward
@@ -124,9 +147,17 @@ where
                 }
 
                 Ok::<(), Status>(())
-            });
+            }));
 
-            Ok(volo_resp)
-        }
+            let mut resp = hyper::Response::new(message);
+            *resp.headers_mut() = metadata.into_headers();
+            *resp.extensions_mut() = extensions;
+            resp.headers_mut().insert(
+                http::header::CONTENT_TYPE,
+                http::header::HeaderValue::from_static("application/grpc"),
+            );
+
+            Ok(resp)
+        })
     }
 }

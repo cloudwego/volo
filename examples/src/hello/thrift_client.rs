@@ -25,7 +25,7 @@ async fn main() {
         .hello(req)
         .await;
     match resp {
-        Ok(info) => println!("{:?}", info),
-        Err(e) => eprintln!("{:?}", e),
+        Ok(info) => println!("{info:?}"),
+        Err(e) => eprintln!("{e:?}"),
     }
 }
