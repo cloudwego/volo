@@ -16,6 +16,7 @@ pub mod net;
 pub mod util;
 pub use hack::Unwrap;
 
+pub mod client;
 mod hack;
 mod macros;
 

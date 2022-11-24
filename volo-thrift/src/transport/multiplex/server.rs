@@ -26,7 +26,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     service: Svc,
 ) where
-    Svc: Service<ServerContext, Req, Response = Resp> + Send + Clone + 'static,
+    Svc: Service<ServerContext, Req, Response = Resp> + Send + Clone + 'static + Sync,
     Svc::Error: Into<Error> + Send,
     Req: EntryMessage + 'static,
     Resp: EntryMessage + 'static,
@@ -104,11 +104,11 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         match msg {
                             Ok(Some(ThriftMessage { data: Ok(req), .. })) => {
                                 // if it's ok, then we need to spawn this msg to a new task
-                                let mut svc = service.clone();
+                                let svc = service.clone();
                                 let exit_mark = exit_mark.clone();
                                 let send_tx = send_tx.clone();
                                 let mi = metainfo::METAINFO.with(|m| m.take());
-                                tokio::spawn(async move {
+                                tokio::spawn(async  {
                                     metainfo::METAINFO.scope(RefCell::new(mi), async move {
                                         let resp = svc.call(&mut cx, req).await;
 

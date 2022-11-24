@@ -26,7 +26,10 @@ impl<S> MetaService<S> {
 
 impl<T, U, S> Service<ClientContext, Request<T>> for MetaService<S>
 where
-    S: Service<ClientContext, Request<T>, Response = Response<U>, Error = Status> + Send + 'static,
+    S: Service<ClientContext, Request<T>, Response = Response<U>, Error = Status>
+        + Send
+        + 'static
+        + Sync,
     T: Send + 'static,
 {
     type Response = S::Response;
@@ -36,7 +39,7 @@ where
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
     fn call<'cx, 's>(
-        &'s mut self,
+        &'s self,
         cx: &'cx mut ClientContext,
         mut volo_req: Request<T>,
     ) -> Self::Future<'cx>

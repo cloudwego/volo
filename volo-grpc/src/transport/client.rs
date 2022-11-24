@@ -75,7 +75,7 @@ where
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
     fn call<'cx, 's>(
-        &'s mut self,
+        &'s self,
         cx: &'cx mut ClientContext,
         volo_req: Request<T>,
     ) -> Self::Future<'cx>

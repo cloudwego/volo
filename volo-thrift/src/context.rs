@@ -6,7 +6,7 @@ use volo::{
     newtype_impl_context,
 };
 
-use crate::protocol::TMessageType;
+use crate::{client::CallOpt, protocol::TMessageType};
 
 #[derive(Default, Clone, Debug)]
 pub struct ServerTransportInfo {
@@ -273,5 +273,22 @@ impl Default for Config {
             read_write_timeout: None,
             max_frame_size: DEFAULT_MAX_FRAME_SIZE,
         }
+    }
+}
+
+impl ::volo::client::Apply<ClientContext> for CallOpt {
+    type Error = crate::Error;
+
+    #[inline]
+    fn apply(self, cx: &mut ClientContext) -> Result<(), Self::Error> {
+        let callee = cx.rpc_info.callee.as_mut().unwrap();
+        callee.tags.extend(self.callee_tags);
+        if let Some(a) = &self.address {
+            callee.set_address(a.clone());
+        }
+        let caller = cx.rpc_info.caller.as_mut().unwrap();
+        caller.tags.extend(self.caller_tags);
+        cx.rpc_info.config_mut().unwrap().merge(self.config);
+        Ok(())
     }
 }

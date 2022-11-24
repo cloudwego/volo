@@ -130,6 +130,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
         L::Service:
             Service<ServerContext, Req, Response = S::Response> + Clone + Send + 'static + Sync,
         <L::Service as Service<ServerContext, Req>>::Error: Into<crate::Error> + Send,
+        for<'cx> <L::Service as Service<ServerContext, Req>>::Future<'cx>: Send,
         S: Service<ServerContext, Req> + Clone + Send + 'static,
         S::Error: Into<crate::Error> + Send,
         Req: EntryMessage + Send + 'static,
@@ -319,7 +320,7 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
     let (encoder, decoder) = make_codec.make_codec(rh, wh);
 
     tracing::trace!("[VOLO] handle conn by ping-pong");
-    crate::transport::pingpong::serve(encoder, decoder, notified, exit_mark, service).await;
+    crate::transport::pingpong::serve(encoder, decoder, notified, exit_mark, &service).await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }
 
@@ -337,7 +338,7 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
 ) where
     R: AsyncRead + Unpin + Send + Sync + 'static,
     W: AsyncWrite + Unpin + Send + Sync + 'static,
-    Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
+    Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static + Sync,
     Svc::Error: Into<crate::Error> + Send,
     Req: EntryMessage + Send + 'static,
     Resp: EntryMessage + Send + 'static,

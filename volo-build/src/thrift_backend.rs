@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use itertools::Itertools;
 use pilota_build::{
     codegen::thrift::DecodeHelper, db::RirDatabase, rir, rir::Method, tags::RustWrapperArc,
     Context, DefId, IdentName, ThriftBackend,
@@ -271,7 +272,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
     fn codegen_service_impl(&self, def_id: DefId, stream: &mut TokenStream, _s: &rir::Service) {
         let service_name = self.cx.rust_name(def_id).as_syn_ident();
         let server_name = format_ident!("{}Server", service_name);
+        let generic_client_name = format_ident!("{}GenericClient", service_name);
         let client_name = format_ident!("{}Client", service_name);
+        let oneshot_client_name = format_ident!("{}OneShotClient", service_name);
         let client_builder_name = format_ident!("{}Builder", client_name);
         let req_send_name = format_ident!("{}RequestSend", service_name);
         let req_recv_name = format_ident!("{}RequestRecv", service_name);
@@ -279,7 +282,10 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         let all_methods = self.cx.service_methods(def_id);
 
-        let client_methods = all_methods.iter().map(|m| {
+        let mut client_methods = Vec::new();
+        let mut oneshot_client_methods = Vec::new();
+
+        all_methods.iter().for_each(|m| {
             let name = self.cx.rust_name(m.def_id).as_syn_ident();
             let resp_type = self.cx.codegen_item_ty(m.ret.kind.clone());
             let req_fields = m.args.iter().map(|a| {
@@ -294,7 +300,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 quote! {
                     #name: #ty
                 }
-            });
+            }).collect_vec();
             let method_name_str = &**m.name;
             let enum_variant = self.cx.rust_name(m.def_id).upper_camel_ident().as_syn_ident();
             let result_path = self.method_result_path(&service_name, m);
@@ -308,7 +314,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     None => unreachable!(),
                 }
             };
-            let req_field_names = m.args.iter().map(|a| format_ident!("{}", a.name));
+            let req_field_names = m.args.iter().map(|a| format_ident!("{}", a.name)).collect_vec();
             let anonymous_args_send_name = self.method_args_path(&service_name, m, true);
             let exception = if let Some(p) = &m.exceptions {
                 let path = self.cx.cur_related_item_path(p.did);
@@ -324,29 +330,40 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
                         let name = self.cx.rust_name(v.did).as_syn_ident();
                         quote! {
-                            #res_name::#enum_variant(#result_path::#name(err)) => Err(::volo_thrift::error::ResponseError::UserException(#exception::#name(err)))
+                            Some(#res_name::#enum_variant(#result_path::#name(err))) => Err(::volo_thrift::error::ResponseError::UserException(#exception::#name(err)))
                         }
                     }).collect::<Vec<_>>(),
                     _ => panic!()
                 }
-            });
+            }).collect_vec();
 
-            quote! {
-                pub async fn #name(&mut self #(, #req_fields)*) -> ::std::result::Result<#resp_type, ::volo_thrift::error::ResponseError<#exception>> {
+            client_methods.push(quote! {
+                pub async fn #name(&self #(, #req_fields)*) -> ::std::result::Result<#resp_type, ::volo_thrift::error::ResponseError<#exception>> {
                     let req = #req_send_name::#enum_variant(#anonymous_args_send_name {
                         #(#req_field_names),*
                     });
-                    match self.client.as_mut().unwrap().call(#method_name_str, req, #oneway).await? {
-                        Some(resp) => match resp {
-                            #res_name::#enum_variant(#result_path::Ok(resp)) => Ok(resp),
-                            #(#convert_exceptions,)*
-                            #[allow(unreachable_patterns)]
-                            _ => unreachable!(),
-                        }
+                    let mut cx = self.0.make_cx(#method_name_str, #oneway);
+                    match ::volo::service::Service::call(&self.0, &mut cx, req).await? {
+                        Some(#res_name::#enum_variant(#result_path::Ok(resp))) => Ok(resp),
+                        #(#convert_exceptions,)*
                         #none
                     }
                 }
-            }
+            });
+
+            oneshot_client_methods.push(quote! {
+                pub async fn #name(self #(, #req_fields)*) -> ::std::result::Result<#resp_type, ::volo_thrift::error::ResponseError<#exception>> {
+                    let req = #req_send_name::#enum_variant(#anonymous_args_send_name {
+                        #(#req_field_names),*
+                    });
+                    let mut cx = self.0.make_cx(#method_name_str, #oneway);
+                    match ::volo::client::OneShotService::call(self.0, &mut cx, req).await? {
+                        Some(#res_name::#enum_variant(#result_path::Ok(resp))) => Ok(resp),
+                        #(#convert_exceptions,)*
+                        #none
+                    }
+                }
+            });
         });
 
         let variants = all_methods.iter().map(|m| {
@@ -405,35 +422,39 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }
         });
 
+        let mk_client_name = format_ident!("Mk{}", generic_client_name);
+
         stream.extend(quote! {
             pub struct #server_name<S> {
                 inner: ::std::sync::Arc<S>, // handler
             }
 
-            #[derive(Clone)]
-            pub struct #client_name {
-                client: Option<::volo_thrift::Client<#req_send_name, #res_name>>
+            pub struct #mk_client_name;
+
+            pub type #client_name = #generic_client_name<::volo::service::BoxCloneService<::volo_thrift::context::ClientContext, #req_send_name, ::std::option::Option<#res_name>, ::volo_thrift::Error>>;
+
+            impl<S> ::volo::client::MkClient<::volo_thrift::Client<S>> for #mk_client_name {
+                type Target = #generic_client_name<S>;
+                fn mk_client(&self, service: ::volo_thrift::Client<S>) -> Self::Target {
+                    #generic_client_name(service)
+                }
             }
 
-            impl #client_name {
-                pub fn new() -> Self {
-                    #client_name { client: None }
-                }
+            #[derive(Clone)]
+            pub struct #generic_client_name<S>(pub ::volo_thrift::Client<S>);
 
-                pub fn with_callopt(mut self, callopt: ::volo_thrift::client::CallOpt) -> Self {
-                    self.client.as_mut().unwrap().set_callopt(callopt);
-                    self
+            pub struct #oneshot_client_name<S>(pub ::volo_thrift::Client<S>);
+
+            impl<S: ::volo::service::Service<::volo_thrift::context::ClientContext, #req_send_name, Response = ::std::option::Option<#res_name>, Error = ::volo_thrift::Error> + Send + Sync + 'static> #generic_client_name<S> {
+                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_thrift::context::ClientContext>>(&self, opt: Opt) -> #oneshot_client_name<::volo::client::WithOptService<'_, S, Opt>> {
+                    #oneshot_client_name(self.0.with_opt(opt))
                 }
 
                 #(#client_methods)*
             }
 
-            impl ::volo_thrift::client::SetClient<#req_send_name, #res_name> for #client_name {
-                fn set_client(mut self, client: ::volo_thrift::client::Client<#req_send_name, #res_name>) -> #client_name {
-                    #client_name {
-                        client: Some(client)
-                    }
-                }
+            impl<S: ::volo::client::OneShotService<::volo_thrift::context::ClientContext, #req_send_name, Response = ::std::option::Option<#res_name>, Error = ::volo_thrift::Error> + Send + Sync + 'static> #oneshot_client_name<S> {
+                #(#oneshot_client_methods)*
             }
 
             pub struct #client_builder_name {
@@ -443,7 +464,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 pub fn new(service_name: impl AsRef<str>) -> ::volo_thrift::client::ClientBuilder<
                     ::volo::layer::Identity,
                     ::volo::layer::Identity,
-                    #client_name,
+                    #mk_client_name,
                     #req_send_name,
                     #res_name,
                     ::volo::net::dial::DefaultMakeTransport,
@@ -451,7 +472,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     ::volo::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<()>, ::volo::discovery::DummyDiscover>,
                 >
                 {
-                    ::volo_thrift::client::ClientBuilder::new(service_name, #client_name::new())
+                    ::volo_thrift::client::ClientBuilder::new(service_name, #mk_client_name)
                 }
             }
 
@@ -478,7 +499,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
                 type Future<'cx> = impl ::std::future::Future<Output = ::std::result::Result<Self::Response, Self::Error>> + 'cx;
 
-                fn call<'cx, 's>(&mut self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: #req_recv_name) -> Self::Future<'cx> where 's:'cx {
+                fn call<'cx, 's>(& self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: #req_recv_name) -> Self::Future<'cx> where 's:'cx {
                     let inner = self.inner.clone();
                     async move {
                         match req {

@@ -46,13 +46,13 @@ where
 impl<MkT, MkC> UnaryService<Address> for MakeClientTransport<MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
 {
     type Response = ThriftTransport<MkC::Encoder, MkC::Decoder>;
     type Error = io::Error;
     type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>> + 's;
 
-    fn call(&mut self, target: Address) -> Self::Future<'_> {
+    fn call(&self, target: Address) -> Self::Future<'_> {
         let make_transport = self.make_transport.clone();
         async move {
             let (rh, wh) = make_transport.make_transport(target).await?;
@@ -64,7 +64,7 @@ where
 pub struct Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
 {
     #[allow(clippy::type_complexity)]
     make_transport: PooledMakeTransport<MakeClientTransport<MkT, MkC>, Address>,
@@ -74,7 +74,7 @@ where
 impl<Resp, MkT, MkC> Clone for Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
 {
     fn clone(&self) -> Self {
         Self {
@@ -87,7 +87,7 @@ where
 impl<Resp, MkT, MkC> Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
 {
     pub fn new(make_transport: MkT, pool_cfg: Option<Config>, make_codec: MkC) -> Self {
         let make_transport = MakeClientTransport::new(make_transport, make_codec);
@@ -102,9 +102,9 @@ where
 impl<Req, Resp, MkT, MkC> Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkT, MkC>
 where
     Req: Send + 'static + EntryMessage,
-    Resp: EntryMessage,
+    Resp: EntryMessage + Sync,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
 {
     type Response = Option<ThriftMessage<Resp>>;
 
@@ -113,7 +113,7 @@ where
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx where Self:'cx;
 
     fn call<'cx, 's>(
-        &'s mut self,
+        &'s self,
         cx: &'cx mut ClientContext,
         req: ThriftMessage<Req>,
     ) -> Self::Future<'cx>

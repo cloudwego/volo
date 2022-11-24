@@ -47,7 +47,7 @@ where
 impl<MT, Key> UnaryService<Key> for PooledMakeTransport<MT, Key>
 where
     Key: Clone + Eq + Hash + Debug + Send + 'static,
-    MT: UnaryService<Key> + Send + Clone + 'static,
+    MT: UnaryService<Key> + Send + Clone + 'static + Sync,
     MT::Response: Poolable + Send,
     MT::Error: Into<BoxError>,
 {
@@ -57,7 +57,7 @@ where
 
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
-    fn call(&mut self, key: Key) -> Self::Future<'_> {
+    fn call(&self, key: Key) -> Self::Future<'_> {
         let mt = self.inner.clone();
         async move { self.pool.get(key, mt).await }
     }

@@ -170,9 +170,13 @@ impl<S, L> Server<S, L> {
     pub async fn run<A: volo::net::MakeIncoming, T, U>(self, incoming: A) -> Result<(), BoxError>
     where
         L: Layer<S>,
-        L::Service:
-            Service<ServerContext, Request<T>, Response = Response<U>> + Clone + Send + 'static,
+        L::Service: Service<ServerContext, Request<T>, Response = Response<U>>
+            + Clone
+            + Send
+            + 'static
+            + Sync,
         <L::Service as Service<ServerContext, Request<T>>>::Error: Into<Status> + Send,
+        for<'cx> <L::Service as Service<ServerContext, Request<T>>>::Future<'cx>: Send,
         S: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>
             + Send
             + Clone
@@ -267,7 +271,7 @@ where
     }
 
     fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
-        let mut inner = self.inner.clone();
+        let inner = self.inner.clone();
 
         metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
             let mut cx = ServerContext::default();

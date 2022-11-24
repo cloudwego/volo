@@ -130,7 +130,7 @@ where
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx where Self:'cx;
 
     fn call<'cx, 's>(
-        &'s mut self,
+        &'s self,
         cx: &'cx mut ClientContext,
         req: ThriftMessage<Req>,
     ) -> Self::Future<'cx>

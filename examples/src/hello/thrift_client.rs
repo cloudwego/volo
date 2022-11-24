@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 
 use lazy_static::lazy_static;
+use volo_thrift::client::CallOpt;
 
 lazy_static! {
     static ref CLIENT: volo_gen::thrift_gen::hello::HelloServiceClient = {
@@ -18,7 +19,7 @@ async fn main() {
     let req = volo_gen::thrift_gen::hello::HelloRequest {
         name: "volo".to_string(),
     };
-    let resp = CLIENT.clone().hello(req).await;
+    let resp = CLIENT.with_callopt(CallOpt::default()).hello(req).await;
     match resp {
         Ok(info) => println!("{:?}", info),
         Err(e) => eprintln!("{:?}", e),

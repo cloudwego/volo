@@ -39,7 +39,7 @@ where
         Self: 'cx,
         Cx: 'cx;
 
-    fn call<'cx, 's>(&'s mut self, cx: &'cx mut Cx, mut req: Request<ReqBody>) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, mut req: Request<ReqBody>) -> Self::Future<'cx>
     where
         's: 'cx,
     {

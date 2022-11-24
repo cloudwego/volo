@@ -78,7 +78,8 @@ where
     Cx: 'static + Context + Send + Sync,
     D: Discover,
     LB: LoadBalance<D>,
-    S: Service<Cx, Request<T>> + 'static + Send,
+    S: Service<Cx, Request<T>> + 'static + Send + Sync,
+    for<'cx> S::Future<'cx>: Send,
     LoadBalanceError: Into<S::Error>,
     S::Error: Debug,
     T: Send + 'static,
@@ -91,7 +92,7 @@ where
     where
         Self: 'cx;
 
-    fn call<'cx, 's>(&'s mut self, cx: &'cx mut Cx, req: Request<T>) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, req: Request<T>) -> Self::Future<'cx>
     where
         's: 'cx,
     {

@@ -377,13 +377,16 @@ where
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
-        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
+        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Error:
         Into<Status>,
+    for<'cx> <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Future<'cx>:
+        Send,
     IL: Layer<MetaService<ClientTransport<U>>>,
     IL::Service:
-        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
+        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <IL::Service as Service<ClientContext, Request<T>>>::Error: Into<Status>,
+    for<'cx> <IL::Service as Service<ClientContext, Request<T>>>::Future<'cx>: Send,
     OL:
         Layer<
             BoxCloneService<
@@ -397,8 +400,9 @@ where
             >,
         >,
     OL::Service:
-        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
+        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <OL::Service as Service<ClientContext, Request<T>>>::Error: Send + Into<Status>,
+    for<'cx> <OL::Service as Service<ClientContext, Request<T>>>::Future<'cx>: Send,
     T: 'static + Send,
 {
     /// Builds a new [`Client`].

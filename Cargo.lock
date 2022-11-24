@@ -790,9 +790,8 @@ dependencies = [
 
 [[package]]
 name = "motore"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "409cca93fe595d6b6e5db50c03876e25ef2c019f61ac5544d4a4d44928fdab03"
+version = "0.3.0"
+source = "git+https://github.com/cloudwego/motore?branch=main#f733841b24fcae564df859d9e16bddfd6acd4696"
 dependencies = [
  "futures",
  "motore-macros",
@@ -802,9 +801,8 @@ dependencies = [
 
 [[package]]
 name = "motore-macros"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4cea7b9fa504fca8e7e4ed5113fc30109b8e9a7c9cb09b0841192a447eac2817"
+version = "0.2.0"
+source = "git+https://github.com/cloudwego/motore?branch=main#f733841b24fcae564df859d9e16bddfd6acd4696"
 dependencies = [
  "proc-macro2",
  "quote",
