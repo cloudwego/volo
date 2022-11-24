@@ -27,7 +27,7 @@ use volo::{
 };
 
 use crate::{
-    codec::compression::{CompressionConfig, CompressionEncoding},
+    codec::compression::CompressionEncoding,
     context::{ClientContext, Config},
     layer::loadbalance::LbConfig,
     transport::ClientTransport,
@@ -242,7 +242,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
         self
     }
 
-    pub fn send_compression(mut self, config: CompressionConfig) -> Self {
+    pub fn send_compression(mut self, config: CompressionEncoding) -> Self {
         self.rpc_config.send_compression = Some(config);
         self
     }

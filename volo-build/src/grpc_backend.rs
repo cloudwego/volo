@@ -321,10 +321,10 @@ impl CodegenBackend for VoloGrpcBackend {
             }
 
             impl ::volo_grpc::SendEntryMessage for #req_enum_name_send {
-                fn into_body(self,compression_config: Option<::volo_grpc::codec::compression::CompressionConfig>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
+                fn into_body(self,compression_encoding: Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
                     match self {
                         #(Self::#enum_variant_names(s) => {
-                            ::volo_grpc::codec::encode::encode(s,compression_config)
+                            ::volo_grpc::codec::encode::encode(s,compression_encoding)
                         },)*
                     }
                 }
@@ -350,10 +350,10 @@ impl CodegenBackend for VoloGrpcBackend {
             }
 
             impl ::volo_grpc::SendEntryMessage for #resp_enum_name_send {
-                fn into_body(self,compression_config: Option<::volo_grpc::codec::compression::CompressionConfig>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
+                fn into_body(self,compression_encoding: Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
                     match self {
                         #(Self::#enum_variant_names(s) => {
-                            ::volo_grpc::codec::encode::encode(s,compression_config)
+                            ::volo_grpc::codec::encode::encode(s,compression_encoding)
                         },)*
                     }
                 }

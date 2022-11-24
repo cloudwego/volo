@@ -19,7 +19,7 @@ use volo::{net::incoming::Incoming, spawn};
 use crate::{
     body::Body,
     codec::{
-        compression::{CompressionConfig, CompressionEncoding, ENCODING_HEADER},
+        compression::{CompressionEncoding, ENCODING_HEADER},
         decode::Kind,
     },
     context::{Config, ServerContext},
@@ -133,7 +133,7 @@ impl<S, L> Server<S, L> {
         self
     }
 
-    pub fn send_compression(mut self, config: CompressionConfig) -> Self {
+    pub fn send_compression(mut self, config: CompressionEncoding) -> Self {
         self.rpc_config.send_compression = Some(config);
         self
     }
@@ -295,21 +295,46 @@ where
     fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
         let mut inner = self.inner.clone();
         let rpc_config = self.rpc_config;
+        let req_headers = req.headers().clone();
 
         metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
             let mut cx = ServerContext::default();
             cx.rpc_info.method = Some(req.uri().path().into());
+            let recv_compression = CompressionEncoding::from_encoding_header(
+                &req_headers,
+                rpc_config.accept_compression,
+            );
+
+            let send_compression = match CompressionEncoding::from_accept_encoding_header(
+                &req_headers,
+                rpc_config.send_compression,
+            ) {
+                Ok(accept_compression) => {
+                    if let (Some(send), Some(accept)) =
+                        (rpc_config.send_compression, accept_compression)
+                    {
+                        if send == accept {
+                            accept_compression
+                        } else {
+                            rpc_config.send_compression
+                        }
+                    } else {
+                        rpc_config.send_compression
+                    }
+                }
+                Err(status) => return Ok(status.to_http()),
+            };
+
             let (parts, body) = req.into_parts();
 
             let message = status_to_http!(T::from_body(
                 cx.rpc_info.method.as_deref(),
                 body,
                 Kind::Request,
-                rpc_config.accept_compression
+                recv_compression
             ));
 
             let volo_req = Request::from_http_parts(parts, message);
-
             let volo_resp = match inner.call(&mut cx, volo_req).await {
                 Ok(resp) => resp,
                 Err(err) => {
@@ -319,8 +344,7 @@ where
 
             let (metadata, extensions, message) = volo_resp.into_parts();
 
-            let mut resp =
-                hyper::Response::new(Body::new(message.into_body(rpc_config.send_compression)));
+            let mut resp = hyper::Response::new(Body::new(message.into_body(send_compression)));
             *resp.headers_mut() = metadata.into_headers();
             *resp.extensions_mut() = extensions;
             resp.headers_mut().insert(

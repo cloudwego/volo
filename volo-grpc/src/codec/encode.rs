@@ -1,12 +1,11 @@
 use bytes::{BufMut, Bytes, BytesMut};
-use flate2::Compression;
 use futures::{Stream, StreamExt};
 use prost::Message;
 
 use super::{DefaultEncoder, PREFIX_LEN};
 use crate::{
     codec::{
-        compression::{compress, CompressionConfig},
+        compression::{compress, CompressionEncoding},
         Encoder, BUFFER_SIZE,
     },
     BoxStream, Status,
@@ -14,7 +13,7 @@ use crate::{
 
 pub fn encode<T, S>(
     source: S,
-    compression_config: Option<CompressionConfig>,
+    compression_encoding: Option<CompressionEncoding>,
 ) -> BoxStream<'static, Result<Bytes, Status>>
 where
     S: Stream<Item = Result<T, Status>> + Send + 'static,
@@ -25,10 +24,10 @@ where
 
         futures_util::pin_mut!(source);
 
-        let (mut compressed_buf,level)= if compression_config.is_some() {
-            (BytesMut::with_capacity(BUFFER_SIZE),Compression::new(compression_config.unwrap().level))
+        let mut compressed_buf= if compression_encoding.is_some() {
+            BytesMut::with_capacity(BUFFER_SIZE)
         } else {
-           (BytesMut::new(),Compression::none())
+           BytesMut::new()
         };
 
         loop {
@@ -40,11 +39,11 @@ where
                     }
                     let mut encoder=DefaultEncoder::default();
 
-                    if let Some(config)=compression_config{
+                    if let Some(config)=compression_encoding{
                         compressed_buf.clear();
                         encoder.encode(item, &mut compressed_buf)
                             .map_err(|err| Status::internal(format!("Error encoding: {}", err)))?;
-                        compress(config.encoding,&mut compressed_buf,&mut buf, level)
+                        compress(config,&mut compressed_buf,&mut buf)
                             .map_err(|err| Status::internal(format!("Error compressing: {}", err)))?;
                     }else{
                         encoder.encode(item, &mut buf)
@@ -54,7 +53,7 @@ where
                     assert!(len <= std::u32::MAX as usize);
                     {
                         let mut buf = &mut buf[..PREFIX_LEN];
-                        buf.put_u8(compression_config.is_some() as u8);
+                        buf.put_u8(compression_encoding.is_some() as u8);
                         buf.put_u32(len as u32);
                     }
 

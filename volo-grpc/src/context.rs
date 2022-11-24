@@ -3,7 +3,7 @@ use std::time::Duration;
 pub use volo::context::*;
 use volo::newtype_impl_context;
 
-use crate::codec::compression::{CompressionConfig, CompressionEncoding};
+use crate::codec::compression::CompressionEncoding;
 
 pub struct ClientCxInner;
 
@@ -77,7 +77,7 @@ pub struct Config {
     pub(crate) write_timeout: Option<Duration>,
 
     pub(crate) accept_compression: Option<CompressionEncoding>,
-    pub(crate) send_compression: Option<CompressionConfig>,
+    pub(crate) send_compression: Option<CompressionEncoding>,
 }
 
 impl Config {

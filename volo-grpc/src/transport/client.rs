@@ -14,7 +14,7 @@ use super::connect::Connector;
 use crate::{
     client::Http2Config,
     codec::{
-        compression::{ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
+        compression::{CompressionEncoding, ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
         decode::Kind,
     },
     context::{ClientContext, Config},
@@ -101,6 +101,7 @@ where
             let (metadata, extensions, message) = volo_req.into_parts();
             let path = cx.rpc_info.method().volo_unwrap();
             let rpc_config = cx.rpc_info.config.volo_unwrap();
+
             let body = hyper::Body::wrap_stream(message.into_body(rpc_config.send_compression));
 
             let mut req = hyper::Request::new(body);
@@ -116,7 +117,7 @@ where
 
             if let Some(config) = rpc_config.send_compression {
                 req.headers_mut()
-                    .insert(ENCODING_HEADER, config.encoding.into_header_value());
+                    .insert(ENCODING_HEADER, config.into_header_value());
 
                 if let Some(header_value) = config.into_accept_encoding_header_value() {
                     req.headers_mut()
@@ -134,20 +135,32 @@ where
                 .map_err(|err| Status::from_error(err.into()))?;
 
             let status_code = resp.status();
-            if let Some(status) = Status::from_header_map(resp.headers()) {
+            let headers = resp.headers();
+
+            if let Some(status) = Status::from_header_map(headers) {
                 if status.code() != Code::Ok {
                     return Err(status);
                 }
             }
+
+            let mut accept_compression = CompressionEncoding::from_accept_encoding_header(
+                headers,
+                rpc_config.accept_compression,
+            )?;
+
+            if rpc_config.accept_compression.is_none() || accept_compression.is_none() {
+                accept_compression = None;
+            }
+
             let (parts, body) = resp.into_parts();
+
             let body = U::from_body(
                 Some(path),
                 body,
                 Kind::Response(status_code),
-                rpc_config.accept_compression,
+                accept_compression,
             )?;
             let resp = hyper::Response::from_parts(parts, body);
-
             Ok(Response::from_http(resp))
         }
     }
