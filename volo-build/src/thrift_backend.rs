@@ -311,7 +311,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 }
             } else {
                 quote! {
-                    None => unreachable!(),
+                    None => unreachable!()
                 }
             };
             let req_field_names = m.args.iter().map(|a| format_ident!("{}", a.name)).collect_vec();
@@ -346,7 +346,8 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     match ::volo::service::Service::call(&self.0, &mut cx, req).await? {
                         Some(#res_name::#enum_variant(#result_path::Ok(resp))) => Ok(resp),
                         #(#convert_exceptions,)*
-                        #none
+                        #none,
+                        _ => unreachable!()
                     }
                 }
             });
@@ -360,7 +361,8 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     match ::volo::client::OneShotService::call(self.0, &mut cx, req).await? {
                         Some(#res_name::#enum_variant(#result_path::Ok(resp))) => Ok(resp),
                         #(#convert_exceptions,)*
-                        #none
+                        #none,
+                        _ => unreachable!()
                     }
                 }
             });
