@@ -27,7 +27,7 @@ pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" }
 pilota-build = { git = "https://github.com/cloudwego/pilota", branch = "main" }
 pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota", branch = "main" }
 motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
-motore-macros = { git = "https://github.com/cloudwego/motore", branch = "main" }
+
 metainfo = "0.6"
 
 anyhow = "1"
