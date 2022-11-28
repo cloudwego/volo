@@ -179,7 +179,9 @@ impl CodegenBackend for VoloGrpcBackend {
         let service_name = self.cx.rust_name(def_id).as_syn_ident();
         let server_name = format_ident!("{}Server", service_name);
         let client_builder_name = format_ident!("{}ClientBuilder", service_name);
+        let generic_client_name = format_ident!("{}GenericClient", service_name);
         let client_name = format_ident!("{}Client", service_name);
+        let oneshot_client_name = format_ident!("{}OneShotClient", service_name);
 
         let file_id = self.cx.node(def_id).unwrap().file_id;
         let file = self.cx.file(file_id).unwrap();
@@ -281,18 +283,16 @@ impl CodegenBackend for VoloGrpcBackend {
                     requests: #req_ty,
                 ) -> #resp_ty {
                     let req = #req.map(|message| #req_enum_name_send::#variant_name(::std::boxed::Box::pin(message) as _));
+                    let mut cx = self.0.make_cx(#path);
 
-                    let resp = self
-                        .client
-                        .as_mut()
-                        .unwrap()
-                        .call(#path, req)
-                        .await?;
+                    let resp = ::volo::Service::call(&self.0, &mut cx, req).await?;
 
                     #resp
                 }
             }
         });
+
+        let mk_client_name = format_ident!("Mk{}", generic_client_name);
 
         stream.extend(quote! {
             pub enum #req_enum_name_send {
@@ -358,45 +358,44 @@ impl CodegenBackend for VoloGrpcBackend {
 
             pub struct #client_builder_name {}
             impl #client_builder_name {
+                #[allow(clippy::new_ret_no_self)]
+                #[allow(clippy::type_complexity)]
                 pub fn new(
                     service_name: impl AsRef<str>,
                 ) -> ::volo_grpc::client::ClientBuilder<
                     ::volo::layer::Identity,
                     ::volo::layer::Identity,
-                    #client_name,
+                    #mk_client_name,
                     ::volo_grpc::layer::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<()>, ::volo::discovery::DummyDiscover>,
                     #req_enum_name_send,
                     #resp_enum_name_recv,
                 > {
-                    ::volo_grpc::client::ClientBuilder::new(#client_name::new(), service_name)
+                    ::volo_grpc::client::ClientBuilder::new(MkHelloServiceGenericClient, service_name)
+                }
+            }
+
+            pub struct #mk_client_name;
+
+            pub type #client_name = #generic_client_name<::volo::service::BoxCloneService<::volo_grpc::context::ClientContext, ::volo_grpc::Request<#req_enum_name_send>, ::volo_grpc::Response<#resp_enum_name_recv>, ::volo_grpc::Status>>;
+
+            impl<S> ::volo::client::MkClient<::volo_grpc::Client<S>> for #mk_client_name {
+                type Target = #generic_client_name<S>;
+                fn mk_client(&self, service: ::volo_grpc::Client<S>) -> Self::Target {
+                    #generic_client_name(service)
                 }
             }
 
             #[derive(Clone)]
-            pub struct #client_name {
-                client: ::std::option::Option<::volo_grpc::client::Client<
-                    #req_enum_name_send,
-                    #resp_enum_name_recv,
-                >>
-            }
+            pub struct #generic_client_name<S>(pub ::volo_grpc::Client<S>);
 
-            impl #client_name {
-                pub fn new() -> Self {
-                    #client_name { client: None }
+            pub struct #oneshot_client_name<S>(pub ::volo_grpc::Client<S>);
+
+            impl<S> #generic_client_name<S> where S: ::volo::service::Service<::volo_grpc::context::ClientContext, ::volo_grpc::Request<#req_enum_name_send>, Response=::volo_grpc::Response<#resp_enum_name_recv>, Error = ::volo_grpc::Status> + Sync + Send + 'static {
+                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_grpc::context::ClientContext>>(self, opt: Opt) -> #oneshot_client_name<::volo::client::WithOptService<S, Opt>> {
+                    #oneshot_client_name(self.0.with_opt(opt))
                 }
 
                 #(#client_methods)*
-            }
-
-            impl ::volo_grpc::client::SetClient<#req_enum_name_send, #resp_enum_name_recv> for #client_name {
-                fn set_client(
-                    mut self,
-                    client: ::volo_grpc::client::Client<#req_enum_name_send, #resp_enum_name_recv>,
-                ) -> #client_name {
-                    #client_name {
-                        client: Some(client),
-                    }
-                }
             }
 
             pub struct #server_name<S> {

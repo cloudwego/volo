@@ -57,3 +57,20 @@ impl CallOpt {
         Default::default()
     }
 }
+
+impl volo::client::Apply<crate::context::ClientContext> for CallOpt {
+    type Error = crate::Status;
+
+    fn apply(self, cx: &mut crate::context::ClientContext) -> Result<(), Self::Error> {
+        let caller = cx.rpc_info.caller_mut().unwrap();
+        caller.tags.extend(self.caller_tags);
+
+        let callee = cx.rpc_info.callee_mut().unwrap();
+        callee.tags.extend(self.callee_tags);
+        if let Some(addr) = self.address {
+            callee.set_address(addr);
+        }
+        cx.rpc_info.config_mut().unwrap().merge(self.config);
+        Ok(())
+    }
+}

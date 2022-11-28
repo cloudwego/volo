@@ -11,6 +11,7 @@ mod meta;
 use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
 
 pub use callopt::CallOpt;
+use futures::Future;
 pub use meta::MetaService;
 use motore::{
     layer::{Identity, Layer, Stack},
@@ -18,6 +19,7 @@ use motore::{
     ServiceExt,
 };
 use volo::{
+    client::{MkClient, WithOptService},
     context::{Endpoint, Role, RpcInfo},
     discovery::{Discover, DummyDiscover},
     loadbalance::{random::WeightedRandomBalance, MkLbLayer},
@@ -31,13 +33,6 @@ use crate::{
     Request, Response, Status,
 };
 
-/// Only used by framework generated code.
-/// Do not use directly.
-#[doc(hidden)]
-pub trait SetClient<T, U> {
-    fn set_client(self, client: Client<T, U>) -> Self;
-}
-
 /// [`ClientBuilder`] provides a [builder-like interface][builder] to construct a [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     http2_config: Http2Config,
@@ -48,7 +43,7 @@ pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     target: Option<Address>,
     inner_layer: IL,
     outer_layer: OL,
-    service_client: C,
+    mk_client: C,
     mk_lb: LB,
     _marker: PhantomData<fn(T, U)>,
 }
@@ -73,17 +68,14 @@ impl<C, T, U>
             target: None,
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
-            service_client,
+            mk_client: service_client,
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
         }
     }
 }
 
-impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, U>
-where
-    C: SetClient<T, U>,
-{
+impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, U> {
     pub fn load_balance<NLB>(
         self,
         load_balance: NLB,
@@ -96,7 +88,7 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb.load_balance(load_balance),
             _marker: PhantomData,
         }
@@ -114,17 +106,14 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb.discover(discover),
             _marker: PhantomData,
         }
     }
 }
 
-impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U>
-where
-    C: SetClient<T, U>,
-{
+impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
     /// stream-level flow control.
     ///
@@ -261,7 +250,7 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: mk_load_balance,
             _marker: PhantomData,
         }
@@ -302,7 +291,7 @@ where
             target: self.target,
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
         }
@@ -333,7 +322,7 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
         }
@@ -364,7 +353,7 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
         }
@@ -373,7 +362,7 @@ where
 
 impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U>
 where
-    C: SetClient<T, U>,
+    C: MkClient<Client<BoxCloneService<ClientContext, Request<T>, Response<U>, Status>>>,
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
@@ -406,7 +395,7 @@ where
     T: 'static + Send,
 {
     /// Builds a new [`Client`].
-    pub fn build(self) -> C {
+    pub fn build(self) -> C::Target {
         let transport =
             MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config));
         let transport = self.outer_layer.layer(BoxCloneService::new(
@@ -416,14 +405,13 @@ where
         let transport = transport.map_err(|err| err.into());
         let transport = BoxCloneService::new(transport);
 
-        self.service_client.set_client(Client {
+        self.mk_client.mk_client(Client {
             inner: Arc::new(ClientInner {
                 callee_name: self.callee_name,
                 caller_name: self.caller_name,
                 rpc_config: self.rpc_config,
                 target: self.target,
             }),
-            callopt: None,
             transport,
         })
     }
@@ -442,68 +430,65 @@ struct ClientInner {
 /// `Client` is designed to "clone and use", so it's cheap to clone it.
 /// One important thing is that the `CallOpt` will not be cloned, because
 /// it's designed to be per-request.
-pub struct Client<T, U> {
+#[derive(Clone)]
+pub struct Client<S> {
+    transport: S,
     inner: Arc<ClientInner>,
-    callopt: Option<CallOpt>,
-    transport: BoxCloneService<ClientContext, Request<T>, Response<U>, Status>,
 }
 
-/// # Safety
-///
-/// `Client` doesn't have non-atomic interior mutability.
-unsafe impl<T, U> Sync for Client<T, U> {}
-
-impl<T, U> Clone for Client<T, U> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-            callopt: None,
-            transport: self.transport.clone(),
-        }
-    }
-}
-
-impl<T, U> Client<T, U> {
-    pub async fn call(
-        &mut self,
-        path: &'static str,
-        req: Request<T>,
-    ) -> Result<Response<U>, Status> {
-        let mut cx = ClientContext::new(self.make_rpc_info(path));
-        let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
-
-        let mk_call = async { self.transport.call(&mut cx, req).await };
-
-        if has_metainfo {
-            mk_call.await
-        } else {
-            metainfo::METAINFO
-                .scope(RefCell::new(metainfo::MetaInfo::default()), mk_call)
-                .await
-        }
+impl<S> Client<S> {
+    pub fn make_cx(&self, path: &'static str) -> ClientContext {
+        ClientContext::new(self.make_rpc_info(path))
     }
 
-    #[inline]
-    pub fn set_callopt(&mut self, callopt: CallOpt) {
-        self.callopt = Some(callopt);
-    }
-
-    fn make_rpc_info(&mut self, method: &'static str) -> RpcInfo<Config> {
-        let mut caller = Endpoint::new(self.inner.caller_name.clone());
+    fn make_rpc_info(&self, method: &'static str) -> RpcInfo<Config> {
+        let caller = Endpoint::new(self.inner.caller_name.clone());
         let mut callee = Endpoint::new(self.inner.callee_name.clone());
         if let Some(target) = &self.inner.target {
             callee.set_address(target.clone());
         }
-        let mut rpc_config = self.inner.rpc_config;
-        if let Some(co) = self.callopt.take() {
-            caller.tags.extend(co.caller_tags);
-            callee.tags.extend(co.callee_tags);
-            if let Some(addr) = co.address {
-                callee.set_address(addr);
-            }
-            rpc_config.merge(co.config);
-        }
+        let rpc_config = self.inner.rpc_config;
+
         RpcInfo::new(Role::Client, method.into(), caller, callee, rpc_config)
+    }
+
+    pub fn with_opt<Opt>(self, opt: Opt) -> Client<WithOptService<S, Opt>> {
+        Client {
+            transport: WithOptService::new(self.transport, opt),
+            inner: self.inner,
+        }
+    }
+}
+
+impl<T: 'static + Send, S> Service<ClientContext, Request<T>> for Client<S>
+where
+    S: Service<ClientContext, Request<T>> + Sync + Send + 'static,
+{
+    type Response = S::Response;
+
+    type Error = S::Error;
+
+    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx
+    where
+        Self: 'cx;
+
+    fn call<'cx, 's>(&'s self, cx: &'cx mut ClientContext, req: Request<T>) -> Self::Future<'cx>
+    where
+        's: 'cx,
+    {
+        async move {
+            let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
+
+            let mk_call = async { self.transport.call(cx, req).await };
+
+            if has_metainfo {
+                mk_call.await
+            } else {
+                metainfo::METAINFO
+                    .scope(RefCell::new(metainfo::MetaInfo::default()), mk_call)
+                    .await
+            }
+        }
     }
 }
 

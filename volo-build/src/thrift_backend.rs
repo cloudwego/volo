@@ -465,6 +465,8 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }
 
             impl #client_builder_name {
+                #[allow(clippy::new_ret_no_self)]
+                #[allow(clippy::type_complexity)]
                 pub fn new(service_name: impl AsRef<str>) -> ::volo_thrift::client::ClientBuilder<
                     ::volo::layer::Identity,
                     ::volo::layer::Identity,
