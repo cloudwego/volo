@@ -59,14 +59,14 @@ where
 impl<MkT, MkC, Resp> UnaryService<Address> for MakeClientTransport<MkT, MkC, Resp>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
     Resp: EntryMessage + Send + 'static,
 {
     type Response = ThriftTransport<MkC::Encoder, Resp>;
     type Error = io::Error;
     type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>> + 's;
 
-    fn call(&mut self, target: Address) -> Self::Future<'_> {
+    fn call(&self, target: Address) -> Self::Future<'_> {
         let make_transport = self.make_transport.clone();
         async move {
             let (rh, wh) = make_transport.make_transport(target).await?;
@@ -78,7 +78,7 @@ where
 pub struct Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
     Resp: EntryMessage + Send + 'static,
 {
     #[allow(clippy::type_complexity)]
@@ -89,7 +89,7 @@ where
 impl<Resp, MkT, MkC> Clone for Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
     Resp: EntryMessage + Send + 'static,
 {
     fn clone(&self) -> Self {
@@ -103,7 +103,7 @@ where
 impl<Resp, MkT, MkC> Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
     Resp: EntryMessage + Send + 'static,
 {
     pub fn new(make_transport: MkT, pool_cfg: Option<Config>, make_codec: MkC) -> Self {
@@ -119,9 +119,9 @@ where
 impl<Req, Resp, MkT, MkC> Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkT, MkC>
 where
     Req: Send + 'static + EntryMessage,
-    Resp: EntryMessage + Send + 'static,
+    Resp: EntryMessage + Send + 'static + Sync,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
 {
     type Response = Option<ThriftMessage<Resp>>;
 
