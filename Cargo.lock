@@ -669,9 +669,9 @@ checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
 
 [[package]]
 name = "io-lifetimes"
-version = "1.0.1"
+version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7d367024b3f3414d8e01f437f704f41a9f64ab36f9067fa73e526ad4c763c87"
+checksum = "e394faa0efb47f9f227f1cd89978f854542b318a6f64fa695489c9c993056656"
 dependencies = [
  "libc",
  "windows-sys",
@@ -684,7 +684,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aae5bc6e2eb41c9def29a3e0f1306382807764b9b53112030eff57435667352d"
 dependencies = [
  "hermit-abi 0.2.6",
- "io-lifetimes 1.0.1",
+ "io-lifetimes 1.0.2",
  "rustix 0.36.3",
  "windows-sys",
 ]
@@ -1051,7 +1051,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#ea8d379295215238edb097e13923d504e7d0f553"
+source = "git+https://github.com/cloudwego/pilota?branch=main#bb657f7e881fe6a1c66f84b67ed5bf07087e5ba4"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1068,7 +1068,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#ea8d379295215238edb097e13923d504e7d0f553"
+source = "git+https://github.com/cloudwego/pilota?branch=main#bb657f7e881fe6a1c66f84b67ed5bf07087e5ba4"
 dependencies = [
  "fxhash",
  "heck 0.4.0",
@@ -1094,7 +1094,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#ea8d379295215238edb097e13923d504e7d0f553"
+source = "git+https://github.com/cloudwego/pilota?branch=main#bb657f7e881fe6a1c66f84b67ed5bf07087e5ba4"
 dependencies = [
  "nom",
 ]
@@ -1402,7 +1402,7 @@ checksum = "0b1fbb4dfc4eb1d390c02df47760bb19a84bb80b301ecc947ab5406394d8223e"
 dependencies = [
  "bitflags",
  "errno",
- "io-lifetimes 1.0.1",
+ "io-lifetimes 1.0.2",
  "libc",
  "linux-raw-sys 0.1.3",
  "windows-sys",
@@ -1494,18 +1494,18 @@ checksum = "e25dfac463d778e353db5be2449d1cce89bd6fd23c9f1ea21310ce6e5a1b29c4"
 
 [[package]]
 name = "serde"
-version = "1.0.147"
+version = "1.0.148"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d193d69bae983fc11a79df82342761dfbf28a99fc8d203dca4c3c1b590948965"
+checksum = "e53f64bb4ba0191d6d0676e1b141ca55047d83b74f5607e6d8eb88126c52c2dc"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.147"
+version = "1.0.148"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f1d362ca8fc9c3e3a7484440752472d68a6caa98f1ab81d99b5dfe517cec852"
+checksum = "a55492425aa53521babf6137309e7d34c20bbfbbfcfe2c7f3a047fd1f6b92c0c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1608,9 +1608,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "syn"
-version = "1.0.103"
+version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a864042229133ada95abf3b54fdc62ef5ccabe9515b64717bcb9a1919e59445d"
+checksum = "4ae548ec36cf198c0ef7710d3c230987c2d6d7bd98ad6edc0274462724c585ce"
 dependencies = [
  "proc-macro2",
  "quote",
