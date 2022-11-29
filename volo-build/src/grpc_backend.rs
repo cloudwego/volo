@@ -368,7 +368,7 @@ impl CodegenBackend for VoloGrpcBackend {
                     #req_enum_name_send,
                     #resp_enum_name_recv,
                 > {
-                    ::volo_grpc::client::ClientBuilder::new(MkHelloServiceGenericClient, service_name)
+                    ::volo_grpc::client::ClientBuilder::new(#mk_client_name, service_name)
                 }
             }
 
