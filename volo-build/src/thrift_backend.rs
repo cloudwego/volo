@@ -217,30 +217,26 @@ impl VoloThriftBackend {
                     rir::Item::Service(s) => s,
                     _ => panic!("expected service"),
                 };
-                let ident = format_ident!(
+                let ident = (&*format!(
                     "{}{}{}",
                     target_service.name,
-                    self.cx
-                        .rust_name(method.def_id)
-                        .upper_camel_ident()
-                        .as_syn_ident(),
+                    self.cx.rust_name(method.def_id).upper_camel_ident(),
                     suffix,
-                );
+                ))
+                    .as_syn_ident();
                 let mut path: syn::Path = self.cx.cur_related_item_path(def_id);
                 path.segments.pop();
                 path.segments.push(ident.into());
                 quote! { #path }
             }
             rir::MethodSource::Own => {
-                let ident = format_ident!(
+                let ident = (&*format!(
                     "{}{}{}",
                     service_name,
-                    self.cx
-                        .rust_name(method.def_id)
-                        .upper_camel_ident()
-                        .as_syn_ident(),
+                    self.cx.rust_name(method.def_id).upper_camel_ident(),
                     suffix
-                );
+                ))
+                    .as_syn_ident();
                 quote!(#ident)
             }
         }

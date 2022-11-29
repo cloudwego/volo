@@ -1,6 +1,6 @@
 use std::{
     fs::{create_dir_all, File, OpenOptions},
-    io::{Seek, SeekFrom},
+    io::Seek,
     path::{Path, PathBuf},
     process::Command,
 };
@@ -206,9 +206,9 @@ where
     let r = func(&mut config)?;
 
     // write back to config file
-    f.seek(SeekFrom::Start(0))?;
+    f.rewind()?;
     serde_yaml::to_writer(&mut f, &config).context("write back config file")?;
-    let len = f.seek(SeekFrom::Current(0))?;
+    let len = f.stream_position()?;
     f.set_len(len)?;
 
     Ok(r)
