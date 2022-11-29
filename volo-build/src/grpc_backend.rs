@@ -358,8 +358,6 @@ impl CodegenBackend for VoloGrpcBackend {
 
             pub struct #client_builder_name {}
             impl #client_builder_name {
-                #[allow(clippy::new_ret_no_self)]
-                #[allow(clippy::type_complexity)]
                 pub fn new(
                     service_name: impl AsRef<str>,
                 ) -> ::volo_grpc::client::ClientBuilder<
