@@ -460,37 +460,77 @@ impl<S> Client<S> {
     }
 }
 
-impl<T: 'static + Send, S> Service<ClientContext, Request<T>> for Client<S>
-where
-    S: Service<ClientContext, Request<T>> + Sync + Send + 'static,
-{
-    type Response = S::Response;
+macro_rules! impl_client {
+    (($self: ident, &mut $cx:ident, $req: ident) => async move $e: tt ) => {
+        impl<S, Req: Send + 'static>
+            volo::service::Service<crate::context::ClientContext, Req> for Client<S>
+        where
+            S: volo::service::Service<
+                    crate::context::ClientContext,
+                    Req,
+                    Error = crate::Status,
+                > + Sync
+                + Send
+                + 'static,
+        {
+            type Response = S::Response;
+            type Error = S::Error;
+            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
-    type Error = S::Error;
-
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx
-    where
-        Self: 'cx;
-
-    fn call<'cx, 's>(&'s self, cx: &'cx mut ClientContext, req: Request<T>) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
-
-            let mk_call = async { self.transport.call(cx, req).await };
-
-            if has_metainfo {
-                mk_call.await
-            } else {
-                metainfo::METAINFO
-                    .scope(RefCell::new(metainfo::MetaInfo::default()), mk_call)
-                    .await
+            fn call<'cx, 's>(
+                &'s $self,
+                $cx: &'cx mut crate::context::ClientContext,
+                $req: Req,
+            ) -> Self::Future<'cx>
+            where
+                's: 'cx,
+            {
+                async move { $e }
             }
         }
-    }
+
+        impl<S, Req: Send + 'static>
+            volo::client::OneShotService<crate::context::ClientContext, Req> for Client<S>
+        where
+            S: volo::client::OneShotService<
+                    crate::context::ClientContext,
+                    Req,
+                    Error = crate::Status,
+                > + Sync
+                + Send
+                + 'static,
+        {
+            type Response = S::Response;
+            type Error = S::Error;
+            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
+
+            fn call<'cx>(
+                $self,
+                $cx: &'cx mut crate::context::ClientContext,
+                $req: Req,
+            ) -> Self::Future<'cx>
+            where
+                Self: 'cx,
+            {
+                async move { $e }
+            }
+        }
+    };
 }
+
+impl_client!((self, &mut cx, req) => async move {
+    let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
+
+    let mk_call = async { self.transport.call(cx, req).await };
+
+    if has_metainfo {
+        mk_call.await
+    } else {
+        metainfo::METAINFO
+            .scope(RefCell::new(metainfo::MetaInfo::default()), mk_call)
+            .await
+    }
+});
 
 const DEFAULT_STREAM_WINDOW_SIZE: u32 = 1024 * 1024 * 2; // 2MB
 const DEFAULT_CONN_WINDOW_SIZE: u32 = 1024 * 1024 * 5; // 5MB

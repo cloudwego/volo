@@ -258,7 +258,10 @@ impl CodegenBackend for VoloGrpcBackend {
             .map(|method| self.cx.codegen_item_ty(method.ret.kind.clone()))
             .collect::<Vec<_>>();
 
-        let client_methods = s.methods.iter().map(|method| {
+        let mut client_methods = Vec::new();
+        let mut oneshot_client_methods = Vec::new();
+
+        s.methods.iter().for_each(|method| {
             let method_name = self.cx.rust_name(method.def_id).as_syn_ident();
 
             let path = format!("/{}.{}/{}", package, s.name, method.name);
@@ -277,19 +280,37 @@ impl CodegenBackend for VoloGrpcBackend {
 
             let resp = self.build_client_resp(&resp_enum_name_recv, &variant_name, output_ty.clone(), server_streaming);
 
-            quote! {
-                pub async fn #method_name(
-                    &mut self,
-                    requests: #req_ty,
-                ) -> #resp_ty {
-                    let req = #req.map(|message| #req_enum_name_send::#variant_name(::std::boxed::Box::pin(message) as _));
-                    let mut cx = self.0.make_cx(#path);
+            client_methods.push(
+                quote! {
+                    pub async fn #method_name(
+                        &mut self,
+                        requests: #req_ty,
+                    ) -> #resp_ty {
+                        let req = #req.map(|message| #req_enum_name_send::#variant_name(::std::boxed::Box::pin(message) as _));
+                        let mut cx = self.0.make_cx(#path);
 
-                    let resp = ::volo::Service::call(&self.0, &mut cx, req).await?;
+                        let resp = ::volo::Service::call(&self.0, &mut cx, req).await?;
 
-                    #resp
+                        #resp
+                    }
                 }
-            }
+            );
+
+            oneshot_client_methods.push(
+                quote! {
+                    pub async fn #method_name(
+                        self,
+                        requests: #req_ty,
+                    ) -> #resp_ty {
+                        let req = #req.map(|message| #req_enum_name_send::#variant_name(::std::boxed::Box::pin(message) as _));
+                        let mut cx = self.0.make_cx(#path);
+
+                        let resp = ::volo::client::OneShotService::call(self.0, &mut cx, req).await?;
+
+                        #resp
+                    }
+                }
+            );
         });
 
         let mk_client_name = format_ident!("Mk{}", generic_client_name);
@@ -394,6 +415,10 @@ impl CodegenBackend for VoloGrpcBackend {
                 }
 
                 #(#client_methods)*
+            }
+
+            impl<S: ::volo::client::OneShotService<::volo_grpc::context::ClientContext,::volo_grpc::Request<#req_enum_name_send>, Response=::volo_grpc::Response<#resp_enum_name_recv>, Error = ::volo_grpc::Status> + Send + Sync + 'static> #oneshot_client_name<S> {
+                #(#oneshot_client_methods)*
             }
 
             pub struct #server_name<S> {
