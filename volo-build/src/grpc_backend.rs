@@ -283,7 +283,7 @@ impl CodegenBackend for VoloGrpcBackend {
             client_methods.push(
                 quote! {
                     pub async fn #method_name(
-                        &mut self,
+                        &self,
                         requests: #req_ty,
                     ) -> #resp_ty {
                         let req = #req.map(|message| #req_enum_name_send::#variant_name(::std::boxed::Box::pin(message) as _));
