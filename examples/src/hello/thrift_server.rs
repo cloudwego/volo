@@ -11,7 +11,7 @@ impl volo_gen::thrift_gen::hello::HelloService for S {
         req: volo_gen::thrift_gen::hello::HelloRequest,
     ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::AnyhowError> {
         let resp = volo_gen::thrift_gen::hello::HelloResponse {
-            message: format!("Hello, {}!", req.name),
+            message: format!("Hello, {}!", req.name).into(),
         };
         Ok(resp)
     }

@@ -68,9 +68,9 @@ dependencies = [
 
 [[package]]
 name = "async-trait"
-version = "0.1.58"
+version = "0.1.59"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e805d94e6b5001b651426cf4cd446b1ab5f319d27bab5c644f61de0a804360c"
+checksum = "31e6e93155431f3931513b243d371981bb2770112b370c82745a1d19d2f99364"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -144,9 +144,9 @@ checksum = "fff857943da45f546682664a79488be82e69e43c1a7a2307679ab9afb3a66d2e"
 
 [[package]]
 name = "clap"
-version = "4.0.27"
+version = "4.0.29"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0acbd8d28a0a60d7108d7ae850af6ba34cf2d1257fc646980e5f97ce14275966"
+checksum = "4d63b9e9c07271b9957ad22c173bae2a4d9a81127680962039296abcd2f8251d"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -219,7 +219,7 @@ dependencies = [
  "hashbrown",
  "lock_api",
  "once_cell",
- "parking_lot_core 0.9.4",
+ "parking_lot_core 0.9.5",
 ]
 
 [[package]]
@@ -663,15 +663,9 @@ dependencies = [
 
 [[package]]
 name = "io-lifetimes"
-version = "0.7.5"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59ce5ef949d49ee85593fc4d3f3f95ad61657076395cbbce23e2121fc5542074"
-
-[[package]]
-name = "io-lifetimes"
-version = "1.0.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e394faa0efb47f9f227f1cd89978f854542b318a6f64fa695489c9c993056656"
+checksum = "46112a93252b123d31a119a8d1a1ac19deac4fac6e0e8b0df58f0d4e5870e63c"
 dependencies = [
  "libc",
  "windows-sys",
@@ -679,13 +673,13 @@ dependencies = [
 
 [[package]]
 name = "is-terminal"
-version = "0.4.0"
+version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aae5bc6e2eb41c9def29a3e0f1306382807764b9b53112030eff57435667352d"
+checksum = "927609f78c2913a6f6ac3c27a4fe87f43e2a35367c0c4b0f8265e8f49a104330"
 dependencies = [
  "hermit-abi 0.2.6",
- "io-lifetimes 1.0.2",
- "rustix 0.36.3",
+ "io-lifetimes",
+ "rustix",
  "windows-sys",
 ]
 
@@ -733,19 +727,14 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linkedbytes"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d8078f7e58507f9a29e35dab0e02a18874f11be833260e6227777b71f5c0cda9"
+checksum = "6e0703494cf80f30244b1a85c18fea20e4a4ba32d7d2799ffad1e7774303bf0c"
 dependencies = [
  "bytes",
+ "smol_str",
  "tokio",
 ]
-
-[[package]]
-name = "linux-raw-sys"
-version = "0.0.46"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d4d2456c373231a208ad294c33dc5bff30051eafd954cd4caae83a712b12854d"
 
 [[package]]
 name = "linux-raw-sys"
@@ -828,7 +817,7 @@ dependencies = [
 [[package]]
 name = "motore"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/motore?branch=main#3b988a5840aff1af2d85dbc20110b8d9e38d07dc"
+source = "git+https://github.com/cloudwego/motore?branch=main#1a27d68f6b88e0e06f843d91dc9bc098544ec5cd"
 dependencies = [
  "futures",
  "motore-macros",
@@ -839,7 +828,7 @@ dependencies = [
 [[package]]
 name = "motore-macros"
 version = "0.2.0"
-source = "git+https://github.com/cloudwego/motore?branch=main#3b988a5840aff1af2d85dbc20110b8d9e38d07dc"
+source = "git+https://github.com/cloudwego/motore?branch=main#1a27d68f6b88e0e06f843d91dc9bc098544ec5cd"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -948,7 +937,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3742b2c103b9f06bc9fff0a37ff4912935851bee6d36f3c02bcc755bcfec228f"
 dependencies = [
  "lock_api",
- "parking_lot_core 0.9.4",
+ "parking_lot_core 0.9.5",
 ]
 
 [[package]]
@@ -967,9 +956,9 @@ dependencies = [
 
 [[package]]
 name = "parking_lot_core"
-version = "0.9.4"
+version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4dc9e0dc2adc1c69d09143aff38d3d30c5c3f0df0dad82e6d25547af174ebec0"
+checksum = "7ff9f3fef3968a3ec5945535ed654cb38ff72d7495a25619e2247fb15a2ed9ba"
 dependencies = [
  "cfg-if",
  "libc",
@@ -1051,7 +1040,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#bb657f7e881fe6a1c66f84b67ed5bf07087e5ba4"
+source = "git+https://github.com/cloudwego/pilota?branch=main#31568905db25b5a327a1fdb4b58c001481807c0c"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1068,7 +1057,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#bb657f7e881fe6a1c66f84b67ed5bf07087e5ba4"
+source = "git+https://github.com/cloudwego/pilota?branch=main#31568905db25b5a327a1fdb4b58c001481807c0c"
 dependencies = [
  "fxhash",
  "heck 0.4.0",
@@ -1094,7 +1083,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#bb657f7e881fe6a1c66f84b67ed5bf07087e5ba4"
+source = "git+https://github.com/cloudwego/pilota?branch=main#31568905db25b5a327a1fdb4b58c001481807c0c"
 dependencies = [
  "nom",
 ]
@@ -1193,9 +1182,9 @@ dependencies = [
 
 [[package]]
 name = "prost"
-version = "0.11.2"
+version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a0841812012b2d4a6145fae9a6af1534873c32aa67fff26bd09f8fa42c83f95a"
+checksum = "c0b18e655c21ff5ac2084a5ad0611e827b3f92badf79f4910b5a5c58f4d87ff0"
 dependencies = [
  "bytes",
  "prost-derive",
@@ -1382,29 +1371,15 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustix"
-version = "0.35.13"
+version = "0.36.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "727a1a6d65f786ec22df8a81ca3121107f235970dc1705ed681d3e6e8b9cd5f9"
+checksum = "cb93e85278e08bb5788653183213d3a60fc242b10cb9be96586f5a73dcb67c23"
 dependencies = [
  "bitflags",
  "errno",
- "io-lifetimes 0.7.5",
+ "io-lifetimes",
  "libc",
- "linux-raw-sys 0.0.46",
- "windows-sys",
-]
-
-[[package]]
-name = "rustix"
-version = "0.36.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b1fbb4dfc4eb1d390c02df47760bb19a84bb80b301ecc947ab5406394d8223e"
-dependencies = [
- "bitflags",
- "errno",
- "io-lifetimes 1.0.2",
- "libc",
- "linux-raw-sys 0.1.3",
+ "linux-raw-sys",
  "windows-sys",
 ]
 
@@ -1642,11 +1617,11 @@ dependencies = [
 
 [[package]]
 name = "terminal_size"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40ca90c434fd12083d1a6bdcbe9f92a14f96c8a1ba600ba451734ac334521f7a"
+checksum = "cb20089a8ba2b69debd491f8d2d023761cbf196e999218c591fa1e7e15a21907"
 dependencies = [
- "rustix 0.35.13",
+ "rustix",
  "windows-sys",
 ]
 
