@@ -66,9 +66,9 @@ impl<D: ZeroCopyDecoder> FramedDecoder<D> {
     }
 }
 
-/// 4-bytes length + 1-byte protocol id
+/// 4-bytes length + 2-byte protocol id
 /// https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
-pub const HEADER_DETECT_LENGTH: usize = 5;
+pub const HEADER_DETECT_LENGTH: usize = 6;
 
 #[async_trait::async_trait]
 impl<D> ZeroCopyDecoder for FramedDecoder<D>
@@ -135,7 +135,9 @@ where
 /// Detect protocol according to https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
 pub fn is_framed(buf: &[u8]) -> bool {
     // binary
-    (buf[4] == 0x80 || buf[4] == 0x00)
+    // in practice, using (buf[4] == 0x80 || buf[4] == 0x00) according to the spec is likely to be
+    // wrong
+    (buf[4..6] == [0x80, 0x01])
     ||
     // compact
     buf[4] == 0x82
