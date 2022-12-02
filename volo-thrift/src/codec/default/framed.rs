@@ -208,7 +208,10 @@ where
                 .0
         {
             check_framed_size(self.inner_size, self.max_frame_size)?;
-            Ok((real_size + FRAMED_HEADER_SIZE, malloc_size + FRAMED_HEADER_SIZE))
+            Ok((
+                real_size + FRAMED_HEADER_SIZE,
+                malloc_size + FRAMED_HEADER_SIZE,
+            ))
         } else {
             Ok((real_size, malloc_size))
         }

@@ -122,7 +122,11 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
     ) -> Result<()> {
         // first, we need to get the size of the message
         let (real_size, malloc_size) = self.encoder.size(cx, &msg)?;
-        trace!("[VOLO] codec encode message real size: {}, malloc size: {}", real_size, malloc_size);
+        trace!(
+            "[VOLO] codec encode message real size: {}, malloc size: {}",
+            real_size,
+            malloc_size
+        );
         // then we reserve the size of the message in the linked bytes
         self.linked_bytes.reserve(malloc_size);
         // after that, we encode the message into the linked bytes
