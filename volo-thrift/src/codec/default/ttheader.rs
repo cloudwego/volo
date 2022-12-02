@@ -181,8 +181,9 @@ where
         &mut self,
         cx: &mut Cx,
         msg: &ThriftMessage<Msg>,
-    ) -> crate::Result<usize> {
-        self.inner_size = self.inner.size(cx, msg)?;
+    ) -> crate::Result<(usize, usize)> {
+        let (real_size, malloc_size) = self.inner.size(cx, msg)?;
+        self.inner_size = real_size;
         // only calc ttheader size if role is client or server has detected ttheader in decode
         if cx.rpc_info().role() == Role::Client
             || cx
@@ -191,9 +192,10 @@ where
                 .unwrap_or(&HasTTHeader(false))
                 .0
         {
-            Ok(self.inner_size + encode_size(cx)?)
+            let size = encode_size(cx)?;
+            Ok((real_size + size, malloc_size + size))
         } else {
-            Ok(self.inner_size)
+            Ok((real_size, malloc_size))
         }
     }
 }

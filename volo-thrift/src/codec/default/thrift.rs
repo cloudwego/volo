@@ -1,6 +1,8 @@
 use bytes::BytesMut;
 use linkedbytes::LinkedBytes;
-use pilota::thrift::{binary::TBinaryProtocol, ProtocolErrorKind, TAsyncBinaryProtocol};
+use pilota::thrift::{
+    binary::TBinaryProtocol, ProtocolErrorKind, TAsyncBinaryProtocol, TLengthProtocol,
+};
 use tokio::io::AsyncRead;
 use volo::util::buf_reader::BufReader;
 
@@ -209,14 +211,15 @@ impl ZeroCopyEncoder for ThriftCodec {
         &mut self,
         cx: &mut Cx,
         msg: &ThriftMessage<Msg>,
-    ) -> crate::Result<usize> {
+    ) -> crate::Result<(usize, usize)> {
         // for the client side, the match expression will always be `&self.protocol`
         // TODO: use the protocol in TTHeader?
         match cx.extensions().get::<Protocol>().unwrap_or(&self.protocol) {
             Protocol::Binary => {
-                let p = TBinaryProtocol::new((), true);
-                let size = msg.size(&p);
-                Ok(size)
+                let mut p = TBinaryProtocol::new((), true);
+                let real_size = msg.size(&mut p);
+                let malloc_size = real_size - p.zero_copy_len();
+                Ok((real_size, malloc_size))
             }
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(

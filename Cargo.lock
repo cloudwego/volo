@@ -1040,7 +1040,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#31568905db25b5a327a1fdb4b58c001481807c0c"
+source = "git+https://github.com/cloudwego/pilota?branch=main#00bcc07524bb2984d6f8f5114c820b4148170d3e"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1057,7 +1057,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#31568905db25b5a327a1fdb4b58c001481807c0c"
+source = "git+https://github.com/cloudwego/pilota?branch=main#00bcc07524bb2984d6f8f5114c820b4148170d3e"
 dependencies = [
  "fxhash",
  "heck 0.4.0",
@@ -1083,7 +1083,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#31568905db25b5a327a1fdb4b58c001481807c0c"
+source = "git+https://github.com/cloudwego/pilota?branch=main#00bcc07524bb2984d6f8f5114c820b4148170d3e"
 dependencies = [
  "nom",
 ]
@@ -1583,9 +1583,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "syn"
-version = "1.0.104"
+version = "1.0.105"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4ae548ec36cf198c0ef7710d3c230987c2d6d7bd98ad6edc0274462724c585ce"
+checksum = "60b9b43d45702de4c839cb9b51d9f529c5dd26a4aff255b42b1ebc03e88ee908"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1701,9 +1701,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-macros"
-version = "1.8.0"
+version = "1.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9724f9a975fb987ef7a3cd9be0350edcbe130698af5b8f7a631e23d42d052484"
+checksum = "d266c00fde287f55d3f1c3e96c500c362a2b8c695076ec180f27918820bc6df8"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -51,7 +51,7 @@ impl EntryMessage for DummyMessage {
         unreachable!()
     }
 
-    fn size<T: TLengthProtocol>(&self, _protocol: &T) -> usize {
+    fn size<T: TLengthProtocol>(&self, _protocol: &mut T) -> usize {
         unreachable!()
     }
 }
@@ -91,7 +91,7 @@ impl<U> ThriftMessage<U>
 where
     U: EntryMessage,
 {
-    pub(crate) fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize {
+    pub(crate) fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
         let ident = TMessageIdentifier::new(
             self.meta.method.clone(),
             self.meta.msg_type,

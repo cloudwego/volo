@@ -26,7 +26,7 @@ pub trait EntryMessage: Sized + Send {
     where
         R: AsyncRead + Unpin + Send;
 
-    fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize;
+    fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize;
 }
 
 #[async_trait::async_trait]
@@ -57,7 +57,7 @@ where
             .map(Arc::new)
     }
 
-    fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize {
+    fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
         (**self).size(protocol)
     }
 }

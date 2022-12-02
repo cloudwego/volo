@@ -60,11 +60,13 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
     ///
     /// To avoid the overhead of calculating the size again in the [`encode`] method, the
     /// implementation can cache the size in the struct.
+    ///
+    /// The returned value is (real_size, recommended_malloc_size).
     fn size<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         msg: &ThriftMessage<Msg>,
-    ) -> Result<usize>;
+    ) -> Result<(usize, usize)>;
 }
 
 /// [`ZeroCopyDecoder`] tries to decode a message without copying large data, so the [`BytesMut`] in
@@ -119,10 +121,10 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         msg: ThriftMessage<Req>,
     ) -> Result<()> {
         // first, we need to get the size of the message
-        let size = self.encoder.size(cx, &msg)?;
-        trace!("[VOLO] codec encode message size: {}", size);
+        let (real_size, malloc_size) = self.encoder.size(cx, &msg)?;
+        trace!("[VOLO] codec encode message real size: {}, malloc size: {}", real_size, malloc_size);
         // then we reserve the size of the message in the linked bytes
-        self.linked_bytes.reserve(size);
+        self.linked_bytes.reserve(malloc_size);
         // after that, we encode the message into the linked bytes
         self.encoder.encode(cx, &mut self.linked_bytes, msg)?;
         self.linked_bytes

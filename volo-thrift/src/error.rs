@@ -248,7 +248,7 @@ impl Message for ApplicationError {
         Ok(ApplicationError { kind, message })
     }
 
-    fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize {
+    fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
         protocol.write_struct_begin_len(&TAPPLICATION_EXCEPTION)
             + protocol.write_field_begin_len(&ERROR_MESSAGE_FIELD)
             + protocol.write_string_len(&self.message)

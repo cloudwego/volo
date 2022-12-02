@@ -196,9 +196,9 @@ where
         &mut self,
         cx: &mut Cx,
         msg: &ThriftMessage<Msg>,
-    ) -> crate::Result<usize> {
-        self.inner_size = self.inner.size(cx, msg)? as i32;
-        check_framed_size(self.inner_size, self.max_frame_size)?;
+    ) -> crate::Result<(usize, usize)> {
+        let (real_size, malloc_size) = self.inner.size(cx, msg)?;
+        self.inner_size = real_size as i32;
         // only calc framed size if role is client or server has detected framed in decode
         if cx.rpc_info().role() == Role::Client
             || cx
@@ -207,9 +207,10 @@ where
                 .unwrap_or(&HasFramed(false))
                 .0
         {
-            Ok(self.inner_size as usize + FRAMED_HEADER_SIZE)
+            check_framed_size(self.inner_size, self.max_frame_size)?;
+            Ok((real_size + FRAMED_HEADER_SIZE, malloc_size + FRAMED_HEADER_SIZE))
         } else {
-            Ok(self.inner_size as usize)
+            Ok((real_size, malloc_size))
         }
     }
 }

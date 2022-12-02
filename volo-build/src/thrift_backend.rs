@@ -86,7 +86,7 @@ impl VoloThriftBackend {
                             #decode_async
                         }
 
-                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &T) -> usize {
+                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {
                         match self {
                             #(Self::#variant_names(value) => {
                                 ::volo_thrift::Message::size(value, protocol)
@@ -118,7 +118,7 @@ impl VoloThriftBackend {
                             #decode_async
                         }
 
-                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &T) -> usize {
+                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {
                         match self {
                             #(Self::#variant_names(value) => {
                                 ::volo_thrift::Message::size(value, protocol)
@@ -175,7 +175,7 @@ impl VoloThriftBackend {
                             #decode_async
                         }
 
-                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &T) -> usize {
+                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {
                         match self {
                             #(
                                 Self::#variant_names(value) => {
