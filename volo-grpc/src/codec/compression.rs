@@ -1,10 +1,9 @@
 //! These codes are copied from `tonic/src/codec/compression.rs` and may be modified by us.
-
 use std::io;
 
 use bytes::{Buf, BufMut, BytesMut};
-use flate2::read::{GzDecoder, GzEncoder};
-pub use flate2::Compression;
+use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
+pub use flate2::Compression as Level;
 use http::HeaderValue;
 
 use super::BUFFER_SIZE;
@@ -12,48 +11,122 @@ use crate::Status;
 
 pub const ENCODING_HEADER: &str = "grpc-encoding";
 pub const ACCEPT_ENCODING_HEADER: &str = "grpc-accept-encoding";
-const DEFAULT_GZIP_LEVEL: Compression = Compression::new(6);
+const DEFAULT_LEVEL: Level = Level::new(6);
 
 /// The compression encodings volo supports.
 #[derive(Clone, Copy, Debug)]
 pub enum CompressionEncoding {
     Identity,
     Gzip(Option<GzipConfig>),
+    Zlib(Option<ZlibConfig>),
 }
 
 impl PartialEq for CompressionEncoding {
     fn eq(&self, other: &Self) -> bool {
         matches!(
             (self, other),
-            (Self::Gzip(_), Self::Gzip(_)) | (Self::Identity, Self::Identity)
+            (Self::Gzip(_), Self::Gzip(_))
+                | (Self::Zlib(_), Self::Zlib(_))
+                | (Self::Identity, Self::Identity)
         )
     }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub struct GzipConfig {
-    pub level: Compression,
+    pub level: Level,
 }
 
 impl Default for GzipConfig {
     fn default() -> Self {
         Self {
-            level: DEFAULT_GZIP_LEVEL,
+            level: DEFAULT_LEVEL,
         }
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct ZlibConfig {
+    pub level: Level,
+}
+
+impl Default for ZlibConfig {
+    fn default() -> Self {
+        Self {
+            level: DEFAULT_LEVEL,
+        }
+    }
+}
+
+/// compose multiple compression encodings to a [HeaderValue]
+pub fn compose_encodings(encodings: &Vec<CompressionEncoding>) -> HeaderValue {
+    let encodings = encodings
+        .iter()
+        .map(|item| match item {
+            // TODO: gzip-6 @https://grpc.github.io/grpc/core/md_doc_compression.html#autotoc_md59
+            CompressionEncoding::Gzip(_) => "gzip",
+            CompressionEncoding::Zlib(_) => "zlib",
+            CompressionEncoding::Identity => "identity",
+        })
+        .collect::<Vec<&'static str>>();
+    // encodings.push("identity");
+
+    HeaderValue::from_str(encodings.join(",").as_str()).unwrap()
+}
+
+fn is_enabled(encoding: CompressionEncoding, encodings: &Vec<CompressionEncoding>) -> bool {
+    encodings.contains(&encoding)
 }
 
 impl CompressionEncoding {
     pub fn into_header_value(self) -> HeaderValue {
         match self {
             CompressionEncoding::Gzip(_) => HeaderValue::from_static("gzip"),
+            CompressionEncoding::Zlib(_) => HeaderValue::from_static("zlib"),
             CompressionEncoding::Identity => HeaderValue::from_static("identity"),
         }
     }
 
-    pub fn into_accept_encoding_header_value(self) -> Option<HeaderValue> {
-        if self.is_gzip_enabled() {
-            Some(HeaderValue::from_static("gzip,identity"))
+    pub fn into_accept_encoding_header_value(
+        self,
+        encodings: &Vec<CompressionEncoding>,
+    ) -> Option<HeaderValue> {
+        if self.is_enabled() {
+            Some(compose_encodings(encodings))
+        } else {
+            None
+        }
+    }
+
+    /// Based on the `grpc-accept-encoding` header, adaptive picking an encoding to use.
+    pub fn from_accept_encoding_header(
+        headers: &http::HeaderMap,
+        config: &Option<Vec<Self>>,
+    ) -> Option<Self> {
+        if let Some(available_encodings) = config {
+            let header_value = headers.get(ACCEPT_ENCODING_HEADER)?;
+            let header_value_str = header_value.to_str().ok()?;
+
+            header_value_str
+                .split(',')
+                .map(|s| s.trim())
+                .find_map(|encoding| match encoding {
+                    "gzip" => available_encodings.iter().find_map(|item| {
+                        if item.is_gzip_enabled() {
+                            Some(*item)
+                        } else {
+                            None
+                        }
+                    }),
+                    "zlib" => available_encodings.iter().find_map(|item| {
+                        if item.is_zlib_enabled() {
+                            Some(*item)
+                        } else {
+                            None
+                        }
+                    }),
+                    _ => None,
+                })
         } else {
             None
         }
@@ -61,67 +134,25 @@ impl CompressionEncoding {
 
     /// Get the value of `grpc-encoding` header. Returns an error if the encoding isn't supported.
     pub fn from_encoding_header(
-        map: &http::HeaderMap,
-        config: Option<CompressionEncoding>,
-    ) -> Option<CompressionEncoding> {
-        if let Some(config) = config {
-            let header_value = map.get(ACCEPT_ENCODING_HEADER)?;
-            let header_value_str = header_value.to_str().ok()?;
-
-            header_value_str
-                .trim()
-                .split(',')
-                .map(|s| s.trim())
-                .find_map(|encoding: &str| {
-                    match encoding {
-                        s if s.starts_with("gzip") => {
-                            // gzip-6 @https://grpc.github.io/grpc/core/md_doc_compression.html#autotoc_md59
-                            // Not implemented temporarily to reduce unnecessary parsing overhead
-                            // let x: Vec<&str> = s.split("-").collect();
-                            Some(config)
-                        }
-                        _ => None,
-                    }
-                })
-        } else {
-            None
-        }
-    }
-
-    /// Based on the `grpc-accept-encoding` header, pick an encoding to use.
-    pub fn from_accept_encoding_header(
-        map: &http::HeaderMap,
-        config: Option<Self>,
-    ) -> Result<Option<CompressionEncoding>, Status> {
-        if let Some(config) = config {
-            let header_value = if let Some(value) = map.get(ENCODING_HEADER) {
-                value
+        headers: &http::HeaderMap,
+        config: &Option<Vec<Self>>,
+    ) -> Result<Option<Self>, Status> {
+        if let Some(encodings) = config {
+            let header_value = if let Some(header_value) = headers.get(ENCODING_HEADER) {
+                header_value
             } else {
                 return Ok(None);
             };
 
-            let header_value_str = if let Ok(value) = header_value.to_str() {
-                value
-            } else {
-                return Ok(None);
-            };
-
-            match header_value_str {
-                "gzip" => {
-                    if config.is_gzip_enabled() {
-                        Ok(Some(CompressionEncoding::Gzip(Some(GzipConfig::default()))))
-                    } else {
-                        Ok(None)
-                    }
-                }
-
+            match header_value.to_str()? {
+                "gzip" if is_enabled(Self::Gzip(None), encodings) => Ok(Some(Self::Gzip(None))),
+                "zlib" if is_enabled(Self::Zlib(None), encodings) => Ok(Some(Self::Zlib(None))),
                 "identity" => Ok(None),
                 other => {
                     let status = Status::unimplemented(format!(
                         "Content is compressed with `{}` which isn't supported",
                         other
                     ));
-
                     Err(status)
                 }
             }
@@ -132,20 +163,31 @@ impl CompressionEncoding {
 
     /// please use it only for Compression type is insignificant, otherwise you will have a
     /// duplicate pattern-matching problem
-    pub fn level(self) -> Compression {
+    pub fn level(self) -> Level {
         match self {
             CompressionEncoding::Gzip(config) if let Some(config)=config =>{
                 config.level
             } ,
-            CompressionEncoding::Identity | _ => DEFAULT_GZIP_LEVEL,
+            CompressionEncoding::Zlib(config) if let Some(config)=config =>{
+                config.level
+            } ,
+             _ => DEFAULT_LEVEL,
         }
     }
 
     const fn is_gzip_enabled(&self) -> bool {
-        if let CompressionEncoding::Gzip(_) = self {
-            return true;
-        }
-        false
+        matches!(self, CompressionEncoding::Gzip(_))
+    }
+
+    const fn is_zlib_enabled(&self) -> bool {
+        matches!(self, CompressionEncoding::Zlib(_))
+    }
+
+    const fn is_enabled(&self) -> bool {
+        matches!(
+            self,
+            CompressionEncoding::Gzip(_) | CompressionEncoding::Zlib(_)
+        )
     }
 }
 
@@ -159,13 +201,18 @@ pub(crate) fn compress(
     let capacity = ((len / BUFFER_SIZE) + 1) * BUFFER_SIZE;
 
     dest_buf.reserve(capacity);
+
     match encoding {
-        CompressionEncoding::Gzip(config) if let Some(config) = config  => {
-            let mut gzip_encoder = GzEncoder::new(&src_buf[0..len], config.level);
-            io::copy(&mut gzip_encoder, &mut dest_buf.writer())?;
+        CompressionEncoding::Gzip(config) if let Some(config) = config => {
+            let mut gz_encoder = GzEncoder::new(&src_buf[0..len], config.level);
+            io::copy(&mut gz_encoder, &mut dest_buf.writer())?;
         }
-        _ => {}
-    }
+        CompressionEncoding::Zlib(config) if let Some(config) = config => {
+            let mut zlib_encoder = ZlibEncoder::new(&src_buf[0..len], config.level);
+            io::copy(&mut zlib_encoder, &mut dest_buf.writer())?;
+        }
+        _=>{}
+    };
 
     src_buf.advance(len);
     Ok(())
@@ -185,11 +232,16 @@ pub(crate) fn decompress(
 
     match encoding {
         CompressionEncoding::Gzip(_) => {
-            let mut gzip_decoder = GzDecoder::new(&src_buf[0..len]);
-            io::copy(&mut gzip_decoder, &mut dest_buf.writer())?;
+            let mut gz_decoder = GzDecoder::new(&src_buf[0..len]);
+            io::copy(&mut gz_decoder, &mut dest_buf.writer())?;
+        }
+
+        CompressionEncoding::Zlib(_) => {
+            let mut zlib_decoder = ZlibDecoder::new(&src_buf[0..len]);
+            io::copy(&mut zlib_decoder, &mut dest_buf.writer())?;
         }
         _ => {}
-    }
+    };
 
     src_buf.advance(len);
     Ok(())
@@ -200,36 +252,34 @@ mod tests {
     use bytes::{BufMut, BytesMut};
 
     use crate::codec::{
-        compression::{compress, decompress, Compression, CompressionEncoding, GzipConfig},
+        compression::{compress, decompress, CompressionEncoding, GzipConfig, Level, ZlibConfig},
         BUFFER_SIZE,
     };
 
     #[test]
-    fn test_consistency_for_gzip() {
+    fn test_consistency_for_compression() {
         let mut src = BytesMut::with_capacity(BUFFER_SIZE);
         let mut compress_buf = BytesMut::new();
+        let mut de_data = BytesMut::with_capacity(BUFFER_SIZE);
         let test_data = &b"test compression"[..];
-
         src.put(test_data);
 
-        compress(
+        let encodings = [
             CompressionEncoding::Gzip(Some(GzipConfig {
-                level: Compression::fast(),
+                level: Level::fast(),
             })),
-            &mut src,
-            &mut compress_buf,
-        )
-        .expect("compress failed:");
+            CompressionEncoding::Zlib(Some(ZlibConfig {
+                level: Level::fast(),
+            })),
+            CompressionEncoding::Identity,
+        ];
 
-        let mut decompressed_data = BytesMut::with_capacity(BUFFER_SIZE);
+        for encoding in encodings {
+            compress_buf.clear();
+            compress(encoding, &mut src, &mut compress_buf).expect("compress failed:");
+            decompress(encoding, &mut compress_buf, &mut de_data).expect("decompress failed:");
+        }
 
-        decompress(
-            CompressionEncoding::Gzip(None),
-            &mut compress_buf,
-            &mut decompressed_data,
-        )
-        .expect("decompress failed:");
-
-        assert_eq!(test_data, decompressed_data);
+        assert_eq!(test_data, de_data);
     }
 }

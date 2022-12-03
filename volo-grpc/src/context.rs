@@ -67,7 +67,7 @@ impl std::ops::DerefMut for ServerContext {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone)]
 pub struct Config {
     /// Amount of time to wait connecting.
     pub(crate) connect_timeout: Option<Duration>,
@@ -76,8 +76,8 @@ pub struct Config {
     /// Amount of time to wait reading response.
     pub(crate) write_timeout: Option<Duration>,
 
-    pub(crate) accept_compression: Option<CompressionEncoding>,
-    pub(crate) send_compression: Option<CompressionEncoding>,
+    pub(crate) accept_compressions: Option<Vec<CompressionEncoding>>,
+    pub(crate) send_compressions: Option<Vec<CompressionEncoding>>,
 }
 
 impl Config {
@@ -91,11 +91,11 @@ impl Config {
         if let Some(t) = other.write_timeout {
             self.write_timeout = Some(t);
         }
-        if let Some(t) = other.accept_compression {
-            self.accept_compression = Some(t);
+        if let Some(e) = other.accept_compressions {
+            self.accept_compressions = Some(e);
         }
-        if let Some(t) = other.send_compression {
-            self.send_compression = Some(t);
+        if let Some(e) = other.send_compressions {
+            self.send_compressions = Some(e);
         }
     }
 }

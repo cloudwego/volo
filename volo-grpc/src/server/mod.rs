@@ -133,13 +133,13 @@ impl<S, L> Server<S, L> {
         self
     }
 
-    pub fn send_compression(mut self, config: CompressionEncoding) -> Self {
-        self.rpc_config.send_compression = Some(config);
+    pub fn send_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
+        self.rpc_config.send_compressions = Some(config);
         self
     }
 
-    pub fn accept_compression(mut self, encoding: CompressionEncoding) -> Self {
-        self.rpc_config.accept_compression = Some(encoding);
+    pub fn accept_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
+        self.rpc_config.accept_compressions = Some(config);
         self
     }
 
@@ -215,7 +215,7 @@ impl<S, L> Server<S, L> {
 
             let service = HyperAdaptorService::new(
                 MetaService::new(service.clone(), peer_addr),
-                self.rpc_config,
+                self.rpc_config.clone(),
             );
             // init server
             let server = Self::create_http_server(&self.http2_config);
@@ -293,35 +293,24 @@ where
     }
 
     fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
-        let mut inner = self.inner.clone();
-        let rpc_config = self.rpc_config;
+        let inner = self.inner.clone();
+        let rpc_config = self.rpc_config.clone();
         let req_headers = req.headers().clone();
 
         metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
             let mut cx = ServerContext::default();
             cx.rpc_info.method = Some(req.uri().path().into());
-            let recv_compression = CompressionEncoding::from_encoding_header(
+            let send_compression = CompressionEncoding::from_accept_encoding_header(
                 &req_headers,
-                rpc_config.accept_compression,
+                &rpc_config.send_compressions,
             );
 
-            let send_compression = match CompressionEncoding::from_accept_encoding_header(
+            let recv_compression = match CompressionEncoding::from_encoding_header(
                 &req_headers,
-                rpc_config.send_compression,
+                &rpc_config.accept_compressions,
             ) {
-                Ok(accept_compression) => {
-                    if let (Some(send), Some(accept)) =
-                        (rpc_config.send_compression, accept_compression)
-                    {
-                        if send == accept {
-                            accept_compression
-                        } else {
-                            rpc_config.send_compression
-                        }
-                    } else {
-                        rpc_config.send_compression
-                    }
-                }
+                Ok(encoding) => encoding,
+
                 Err(status) => return Ok(status.to_http()),
             };
 
@@ -351,12 +340,11 @@ where
                 http::header::CONTENT_TYPE,
                 http::header::HeaderValue::from_static("application/grpc"),
             );
-            if let Some(encoding) = rpc_config.accept_compression {
-                // Set the content encoding
+
+            if let Some(encoding) = send_compression {
                 resp.headers_mut()
                     .insert(ENCODING_HEADER, encoding.into_header_value());
-            }
-
+            };
             Ok(resp)
         })
     }

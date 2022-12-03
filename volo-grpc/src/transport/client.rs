@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{io, marker::PhantomData};
 
 use futures::Future;
 use http::{
@@ -95,14 +95,21 @@ where
                 .volo_unwrap()
                 .address()
                 .ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
+                    io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
                 })?;
 
             let (metadata, extensions, message) = volo_req.into_parts();
             let path = cx.rpc_info.method().volo_unwrap();
-            let rpc_config = cx.rpc_info.config.volo_unwrap();
+            let rpc_config = cx.rpc_info.config().volo_unwrap();
+            let accept_compressions = &rpc_config.accept_compressions.as_ref();
 
-            let body = hyper::Body::wrap_stream(message.into_body(rpc_config.send_compression));
+            // select the compression algorithm with the highest priority by user's config
+            let send_compression = rpc_config
+                .send_compressions
+                .as_ref()
+                .map(|config| config[0]);
+
+            let body = hyper::Body::wrap_stream(message.into_body(send_compression));
 
             let mut req = hyper::Request::new(body);
             *req.version_mut() = http::Version::HTTP_2;
@@ -115,13 +122,18 @@ where
             req.headers_mut()
                 .insert(CONTENT_TYPE, HeaderValue::from_static("application/grpc"));
 
-            if let Some(config) = rpc_config.send_compression {
+            // insert compression headers
+            if let Some(send_compression) = send_compression {
                 req.headers_mut()
-                    .insert(ENCODING_HEADER, config.into_header_value());
+                    .insert(ENCODING_HEADER, send_compression.into_header_value());
 
-                if let Some(header_value) = config.into_accept_encoding_header_value() {
-                    req.headers_mut()
-                        .insert(ACCEPT_ENCODING_HEADER, header_value);
+                if let Some(accept_compressions) = accept_compressions {
+                    if let Some(header_value) =
+                        send_compression.into_accept_encoding_header_value(accept_compressions)
+                    {
+                        req.headers_mut()
+                            .insert(ACCEPT_ENCODING_HEADER, header_value);
+                    }
                 }
             }
 
@@ -143,14 +155,10 @@ where
                 }
             }
 
-            let mut accept_compression = CompressionEncoding::from_accept_encoding_header(
+            let accept_compression = CompressionEncoding::from_encoding_header(
                 headers,
-                rpc_config.accept_compression,
+                &rpc_config.accept_compressions,
             )?;
-
-            if rpc_config.accept_compression.is_none() || accept_compression.is_none() {
-                accept_compression = None;
-            }
 
             let (parts, body) = resp.into_parts();
 

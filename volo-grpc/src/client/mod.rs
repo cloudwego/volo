@@ -242,13 +242,13 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
         self
     }
 
-    pub fn send_compression(mut self, config: CompressionEncoding) -> Self {
-        self.rpc_config.send_compression = Some(config);
+    pub fn send_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
+        self.rpc_config.send_compressions = Some(config);
         self
     }
 
-    pub fn accept_compression(mut self, encoding: CompressionEncoding) -> Self {
-        self.rpc_config.accept_compression = Some(encoding);
+    pub fn accept_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
+        self.rpc_config.accept_compressions = Some(config);
         self
     }
 
@@ -458,9 +458,13 @@ impl<S> Client<S> {
         if let Some(target) = &self.inner.target {
             callee.set_address(target.clone());
         }
-        let rpc_config = self.inner.rpc_config;
-
-        RpcInfo::new(Role::Client, method.into(), caller, callee, rpc_config)
+        RpcInfo::new(
+            Role::Client,
+            method.into(),
+            caller,
+            callee,
+            self.inner.rpc_config.clone(),
+        )
     }
 
     pub fn with_opt<Opt>(self, opt: Opt) -> Client<WithOptService<S, Opt>> {
