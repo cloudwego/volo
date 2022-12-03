@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 
 use lazy_static::lazy_static;
+
 lazy_static! {
     static ref CLIENT: volo_gen::proto_gen::hello::HelloServiceClient = {
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();

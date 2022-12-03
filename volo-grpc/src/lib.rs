@@ -3,7 +3,6 @@
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 #![feature(type_alias_impl_trait)]
-#![feature(if_let_guard)]
 
 pub mod body;
 pub mod client;

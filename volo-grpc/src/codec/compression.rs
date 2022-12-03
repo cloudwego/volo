@@ -1,8 +1,8 @@
 //! These codes are copied from `tonic/src/codec/compression.rs` and may be modified by us.
-use std::io;
+use std::{io, io::Read};
 
 use bytes::{Buf, BufMut, BytesMut};
-use flate2::read::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
+use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 pub use flate2::Compression as Level;
 use http::HeaderValue;
 
@@ -59,7 +59,7 @@ impl Default for ZlibConfig {
 }
 
 /// compose multiple compression encodings to a [HeaderValue]
-pub fn compose_encodings(encodings: &Vec<CompressionEncoding>) -> HeaderValue {
+pub fn compose_encodings(encodings: &[CompressionEncoding]) -> HeaderValue {
     let encodings = encodings
         .iter()
         .map(|item| match item {
@@ -74,7 +74,7 @@ pub fn compose_encodings(encodings: &Vec<CompressionEncoding>) -> HeaderValue {
     HeaderValue::from_str(encodings.join(",").as_str()).unwrap()
 }
 
-fn is_enabled(encoding: CompressionEncoding, encodings: &Vec<CompressionEncoding>) -> bool {
+fn is_enabled(encoding: CompressionEncoding, encodings: &[CompressionEncoding]) -> bool {
     encodings.contains(&encoding)
 }
 
@@ -89,7 +89,7 @@ impl CompressionEncoding {
 
     pub fn into_accept_encoding_header_value(
         self,
-        encodings: &Vec<CompressionEncoding>,
+        encodings: &[CompressionEncoding],
     ) -> Option<HeaderValue> {
         if self.is_enabled() {
             Some(compose_encodings(encodings))
@@ -165,13 +165,9 @@ impl CompressionEncoding {
     /// duplicate pattern-matching problem
     pub fn level(self) -> Level {
         match self {
-            CompressionEncoding::Gzip(config) if let Some(config)=config =>{
-                config.level
-            } ,
-            CompressionEncoding::Zlib(config) if let Some(config)=config =>{
-                config.level
-            } ,
-             _ => DEFAULT_LEVEL,
+            CompressionEncoding::Gzip(Some(config)) => config.level,
+            CompressionEncoding::Zlib(Some(config)) => config.level,
+            _ => DEFAULT_LEVEL,
         }
     }
 
@@ -203,15 +199,15 @@ pub(crate) fn compress(
     dest_buf.reserve(capacity);
 
     match encoding {
-        CompressionEncoding::Gzip(config) if let Some(config) = config => {
+        CompressionEncoding::Gzip(Some(config)) => {
             let mut gz_encoder = GzEncoder::new(&src_buf[0..len], config.level);
             io::copy(&mut gz_encoder, &mut dest_buf.writer())?;
         }
-        CompressionEncoding::Zlib(config) if let Some(config) = config => {
+        CompressionEncoding::Zlib(Some(config)) => {
             let mut zlib_encoder = ZlibEncoder::new(&src_buf[0..len], config.level);
             io::copy(&mut zlib_encoder, &mut dest_buf.writer())?;
         }
-        _=>{}
+        _ => {}
     };
 
     src_buf.advance(len);
