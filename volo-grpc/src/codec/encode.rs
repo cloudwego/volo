@@ -21,7 +21,11 @@ where
 {
     Box::pin(async_stream::stream! {
         let mut buf = BytesMut::with_capacity(BUFFER_SIZE);
-        let mut compressed_buf=BytesMut::with_capacity(BUFFER_SIZE);
+        let mut compressed_buf= if compression_encoding.is_some() {
+            BytesMut::with_capacity(BUFFER_SIZE)
+        } else {
+           BytesMut::new()
+        };
 
         futures_util::pin_mut!(source);
 

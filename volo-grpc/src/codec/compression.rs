@@ -79,6 +79,7 @@ fn is_enabled(encoding: CompressionEncoding, encodings: &[CompressionEncoding]) 
 }
 
 impl CompressionEncoding {
+    /// make the compression encoding into a [HeaderValue]
     pub fn into_header_value(self) -> HeaderValue {
         match self {
             CompressionEncoding::Gzip(_) => HeaderValue::from_static("gzip"),
@@ -87,6 +88,8 @@ impl CompressionEncoding {
         }
     }
 
+    /// make the compression encodings into a [HeaderValue],and the encodings uses a `,` as
+    /// separator
     pub fn into_accept_encoding_header_value(
         self,
         encodings: &[CompressionEncoding],

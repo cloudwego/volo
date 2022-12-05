@@ -242,11 +242,19 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
         self
     }
 
+    /// Sets the send compression encodings for the request, and will self-adaptive with config of
+    /// the server.
+    ///
+    /// Default is disable the send compression.
     pub fn send_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
         self.rpc_config.send_compressions = Some(config);
         self
     }
 
+    /// Sets the accept compression encodings for the request, and will self-adaptive with config of
+    /// the server.
+    ///
+    /// Default is disable the accept decompression.
     pub fn accept_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
         self.rpc_config.accept_compressions = Some(config);
         self

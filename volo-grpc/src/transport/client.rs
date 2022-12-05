@@ -126,14 +126,13 @@ where
             if let Some(send_compression) = send_compression {
                 req.headers_mut()
                     .insert(ENCODING_HEADER, send_compression.into_header_value());
-
-                if let Some(accept_compressions) = accept_compressions {
-                    if let Some(header_value) =
-                        send_compression.into_accept_encoding_header_value(accept_compressions)
-                    {
-                        req.headers_mut()
-                            .insert(ACCEPT_ENCODING_HEADER, header_value);
-                    }
+            }
+            if let Some(accept_compressions) = accept_compressions {
+                if let Some(header_value) =
+                    accept_compressions[0].into_accept_encoding_header_value(accept_compressions)
+                {
+                    req.headers_mut()
+                        .insert(ACCEPT_ENCODING_HEADER, header_value);
                 }
             }
 
