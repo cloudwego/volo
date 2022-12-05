@@ -1,5 +1,5 @@
 //! These codes are copied from `tonic/src/codec/compression.rs` and may be modified by us.
-use std::{io, io::Read};
+use std::io;
 
 use bytes::{Buf, BufMut, BytesMut};
 use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};

@@ -303,22 +303,20 @@ where
     fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
         let inner = self.inner.clone();
         let rpc_config = self.rpc_config.clone();
-        let req_headers = req.headers().clone();
 
         metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
             let mut cx = ServerContext::default();
             cx.rpc_info.method = Some(req.uri().path().into());
             let send_compression = CompressionEncoding::from_accept_encoding_header(
-                &req_headers,
+                req.headers(),
                 &rpc_config.send_compressions,
             );
 
             let recv_compression = match CompressionEncoding::from_encoding_header(
-                &req_headers,
+                req.headers(),
                 &rpc_config.accept_compressions,
             ) {
                 Ok(encoding) => encoding,
-
                 Err(status) => return Ok(status.to_http()),
             };
 

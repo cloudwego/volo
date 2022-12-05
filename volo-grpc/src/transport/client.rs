@@ -101,7 +101,7 @@ where
             let (metadata, extensions, message) = volo_req.into_parts();
             let path = cx.rpc_info.method().volo_unwrap();
             let rpc_config = cx.rpc_info.config().volo_unwrap();
-            let accept_compressions = &rpc_config.accept_compressions.as_ref();
+            let accept_compressions = &rpc_config.accept_compressions;
 
             // select the compression algorithm with the highest priority by user's config
             let send_compression = rpc_config
@@ -128,11 +128,13 @@ where
                     .insert(ENCODING_HEADER, send_compression.into_header_value());
             }
             if let Some(accept_compressions) = accept_compressions {
-                if let Some(header_value) =
-                    accept_compressions[0].into_accept_encoding_header_value(accept_compressions)
-                {
-                    req.headers_mut()
-                        .insert(ACCEPT_ENCODING_HEADER, header_value);
+                if !accept_compressions.is_empty() {
+                    if let Some(header_value) = accept_compressions[0]
+                        .into_accept_encoding_header_value(accept_compressions)
+                    {
+                        req.headers_mut()
+                            .insert(ACCEPT_ENCODING_HEADER, header_value);
+                    }
                 }
             }
 
