@@ -277,8 +277,7 @@ mod tests {
             compress_buf.clear();
             compress(encoding, &mut src, &mut compress_buf).expect("compress failed:");
             decompress(encoding, &mut compress_buf, &mut de_data).expect("decompress failed:");
+            assert_eq!(test_data, de_data);
         }
-
-        assert_eq!(test_data, de_data);
     }
 }
