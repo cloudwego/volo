@@ -40,7 +40,7 @@ impl fmt::Display for Address {
         match self {
             Address::Ip(addr) => write!(f, "{}", addr),
             #[cfg(target_family = "unix")]
-            Address::Unix(_) => write!(f, "-"),
+            Address::Unix(path) => write!(f, "{}", path.display()),
         }
     }
 }

@@ -7,7 +7,7 @@ use volo::{context::Context, Service};
 use crate::{
     context::ClientContext,
     metadata::{
-        KeyAndValueRef, MetadataKey, DESTINATION_ADDR, DESTINATION_METHOD, DESTINATION_SERVICE,
+        KeyAndValueRef, MetadataKey, DESTINATION_METHOD, DESTINATION_SERVICE,
         HEADER_TRANS_REMOTE_ADDR, SOURCE_SERVICE,
     },
     Request, Response, Status,
@@ -77,9 +77,6 @@ where
                     metadata.insert(DESTINATION_SERVICE, callee.service_name().parse()?);
                     if let Some(method) = cx.rpc_info.method() {
                         metadata.insert(DESTINATION_METHOD, method.parse()?);
-                    }
-                    if let Some(addr) = callee.address() {
-                        metadata.insert(DESTINATION_ADDR, addr.to_string().parse()?);
                     }
                 }
 
