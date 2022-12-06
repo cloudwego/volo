@@ -22,6 +22,14 @@ path = "src/hello/thrift_server.rs"
 name = "hello-thrift-client"
 path = "src/hello/thrift_client.rs"
 
+# compression
+[[bin]]
+name = "compresion-grpc-server"
+path = "src/compression/grpc_server.rs"
+[[bin]]
+name = "compression-grpc-client"
+path = "src/compression/grpc_client.rs"
+
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true

@@ -14,7 +14,15 @@ use prost::Message;
 use tracing::{debug, trace};
 
 use super::{DefaultDecoder, BUFFER_SIZE, PREFIX_LEN};
-use crate::{codec::Decoder, metadata::MetadataMap, status::Code, Status};
+use crate::{
+    codec::{
+        compression::{decompress, CompressionEncoding},
+        Decoder,
+    },
+    metadata::MetadataMap,
+    status::Code,
+    Status,
+};
 
 /// Streaming Received Request and Received Response.
 ///
@@ -26,6 +34,8 @@ pub struct RecvStream<T> {
     buf: BytesMut,
     state: State,
     kind: Kind,
+    compression_encoding: Option<CompressionEncoding>,
+    decompress_buf: BytesMut,
 }
 
 impl<T> Unpin for RecvStream<T> {}
@@ -33,7 +43,7 @@ impl<T> Unpin for RecvStream<T> {}
 #[derive(Debug, Clone)]
 enum State {
     Header,
-    Body(usize),
+    Body(Option<CompressionEncoding>, usize),
     Error,
 }
 
@@ -44,7 +54,11 @@ pub enum Kind {
 }
 
 impl<T> RecvStream<T> {
-    pub fn new(body: hyper::Body, kind: Kind) -> Self {
+    pub fn new(
+        body: hyper::Body,
+        kind: Kind,
+        compression_encoding: Option<CompressionEncoding>,
+    ) -> Self {
         RecvStream {
             body,
             decoder: DefaultDecoder(PhantomData),
@@ -52,6 +66,8 @@ impl<T> RecvStream<T> {
             buf: BytesMut::with_capacity(BUFFER_SIZE),
             state: State::Header,
             kind,
+            compression_encoding,
+            decompress_buf: BytesMut::new(),
         }
     }
 }
@@ -93,17 +109,21 @@ impl<T: Message + Default> RecvStream<T> {
                 return Ok(None);
             }
 
-            match self.buf.get_u8() {
-                0 => false,
+            let compression_encoding = match self.buf.get_u8() {
+                0 => None,
                 1 => {
-                    trace!("[VOLO] compression not supported yet");
-                    return Err(Status::new(
-                        Code::Unimplemented,
-                        "Compression not supported yet".to_string(),
-                    ));
+                    if self.compression_encoding.is_some() {
+                        self.compression_encoding
+                    } else {
+                        return Err(Status::new(
+                            Code::Internal,
+                            "protocol error: received message with compressed-flag but no \
+                             grpc-encoding was specified"
+                                .to_string(),
+                        ));
+                    }
                 }
                 flag => {
-                    trace!("[VOLO] unexpected compression flag");
                     let message = format!(
                         "protocol error: received message with invalid compression flag: {} \
                          (valid flags are 0 and 1), while sending request",
@@ -116,16 +136,33 @@ impl<T: Message + Default> RecvStream<T> {
             let len = self.buf.get_u32() as usize;
             self.buf.reserve(len);
 
-            self.state = State::Body(len);
+            self.state = State::Body(compression_encoding, len);
         }
 
-        if let State::Body(len) = &self.state {
+        if let State::Body(compression_encoding, len) = &self.state {
             // data is not enough to decode body, return and keep reading
             if self.buf.remaining() < *len || self.buf.len() < *len {
                 return Ok(None);
             }
+            let decode_result = if let Some(encoding) = compression_encoding {
+                self.decompress_buf.clear();
+                if let Err(err) = decompress(*encoding, &mut self.buf, &mut self.decompress_buf) {
+                    let message = if let Kind::Response(status) = self.kind {
+                        format!(
+                            "Error decompressing: {}, while receiving response with status: {}",
+                            err, status
+                        )
+                    } else {
+                        format!("Error decompressing: {}, while sending request", err)
+                    };
+                    return Err(Status::new(Code::Internal, message));
+                }
+                DefaultDecoder::<T>::decode(&mut self.decoder, &mut self.decompress_buf)
+            } else {
+                DefaultDecoder::<T>::decode(&mut self.decoder, &mut self.buf)
+            };
 
-            return match DefaultDecoder::<T>::decode(&mut self.decoder, &mut self.buf) {
+            return match decode_result {
                 Ok(Some(msg)) => {
                     self.state = State::Header;
                     Ok(Some(msg))

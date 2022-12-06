@@ -3,6 +3,8 @@ use std::time::Duration;
 pub use volo::context::*;
 use volo::newtype_impl_context;
 
+use crate::codec::compression::CompressionEncoding;
+
 pub struct ClientCxInner;
 
 /// A context for client to pass information such as `RpcInfo` and `Config` between middleware
@@ -65,7 +67,7 @@ impl std::ops::DerefMut for ServerContext {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone)]
 pub struct Config {
     /// Amount of time to wait connecting.
     pub(crate) connect_timeout: Option<Duration>,
@@ -73,6 +75,9 @@ pub struct Config {
     pub(crate) read_timeout: Option<Duration>,
     /// Amount of time to wait reading response.
     pub(crate) write_timeout: Option<Duration>,
+
+    pub(crate) accept_compressions: Option<Vec<CompressionEncoding>>,
+    pub(crate) send_compressions: Option<Vec<CompressionEncoding>>,
 }
 
 impl Config {
@@ -85,6 +90,12 @@ impl Config {
         }
         if let Some(t) = other.write_timeout {
             self.write_timeout = Some(t);
+        }
+        if let Some(e) = other.accept_compressions {
+            self.accept_compressions = Some(e);
+        }
+        if let Some(e) = other.send_compressions {
+            self.send_compressions = Some(e);
         }
     }
 }

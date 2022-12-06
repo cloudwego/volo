@@ -3,6 +3,7 @@
 //! This module contains the generic `Encoder` and `Decoder` traits as well as
 //! the 'DefaultEncoder' and 'DefaultDecoder' implementations based on prost.
 
+pub mod compression;
 pub mod decode;
 pub mod encode;
 

@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{io, marker::PhantomData};
 
 use futures::Future;
 use http::{
@@ -13,7 +13,10 @@ use volo::{net::Address, Unwrap};
 use super::connect::Connector;
 use crate::{
     client::Http2Config,
-    codec::decode::Kind,
+    codec::{
+        compression::{CompressionEncoding, ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
+        decode::Kind,
+    },
     context::{ClientContext, Config},
     Code, Request, Response, Status,
 };
@@ -92,12 +95,21 @@ where
                 .volo_unwrap()
                 .address()
                 .ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
+                    io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
                 })?;
 
             let (metadata, extensions, message) = volo_req.into_parts();
             let path = cx.rpc_info.method().volo_unwrap();
-            let body = hyper::Body::wrap_stream(message.into_body());
+            let rpc_config = cx.rpc_info.config().volo_unwrap();
+            let accept_compressions = &rpc_config.accept_compressions;
+
+            // select the compression algorithm with the highest priority by user's config
+            let send_compression = rpc_config
+                .send_compressions
+                .as_ref()
+                .map(|config| config[0]);
+
+            let body = hyper::Body::wrap_stream(message.into_body(send_compression));
 
             let mut req = hyper::Request::new(body);
             *req.version_mut() = http::Version::HTTP_2;
@@ -110,6 +122,22 @@ where
             req.headers_mut()
                 .insert(CONTENT_TYPE, HeaderValue::from_static("application/grpc"));
 
+            // insert compression headers
+            if let Some(send_compression) = send_compression {
+                req.headers_mut()
+                    .insert(ENCODING_HEADER, send_compression.into_header_value());
+            }
+            if let Some(accept_compressions) = accept_compressions {
+                if !accept_compressions.is_empty() {
+                    if let Some(header_value) = accept_compressions[0]
+                        .into_accept_encoding_header_value(accept_compressions)
+                    {
+                        req.headers_mut()
+                            .insert(ACCEPT_ENCODING_HEADER, header_value);
+                    }
+                }
+            }
+
             // call the service through hyper client
             let resp = http_client
                 .ready()
@@ -120,15 +148,28 @@ where
                 .map_err(|err| Status::from_error(err.into()))?;
 
             let status_code = resp.status();
-            if let Some(status) = Status::from_header_map(resp.headers()) {
+            let headers = resp.headers();
+
+            if let Some(status) = Status::from_header_map(headers) {
                 if status.code() != Code::Ok {
                     return Err(status);
                 }
             }
-            let (parts, body) = resp.into_parts();
-            let body = U::from_body(Some(path), body, Kind::Response(status_code))?;
-            let resp = hyper::Response::from_parts(parts, body);
 
+            let accept_compression = CompressionEncoding::from_encoding_header(
+                headers,
+                &rpc_config.accept_compressions,
+            )?;
+
+            let (parts, body) = resp.into_parts();
+
+            let body = U::from_body(
+                Some(path),
+                body,
+                Kind::Response(status_code),
+                accept_compression,
+            )?;
+            let resp = hyper::Response::from_parts(parts, body);
             Ok(Response::from_http(resp))
         }
     }

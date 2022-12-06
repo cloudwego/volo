@@ -29,6 +29,7 @@ base64.workspace = true
 bytes.workspace = true
 futures-util.workspace = true
 futures.workspace = true
+flate2.workspace = true
 h2.workspace = true
 hex.workspace = true
 http-body.workspace = true
