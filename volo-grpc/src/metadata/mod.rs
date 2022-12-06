@@ -27,7 +27,6 @@ pub mod errors {
 
 pub const DESTINATION_SERVICE: &str = "destination-service";
 pub const DESTINATION_METHOD: &str = "destination-method";
-pub const DESTINATION_ADDR: &str = "destination-addr";
 
 pub const SOURCE_SERVICE: &str = "source-service";
 
