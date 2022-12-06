@@ -170,6 +170,25 @@ pub struct DefaultMakeCodec<MkZC: MakeZeroCopyCodec> {
 }
 
 impl<MkZC: MakeZeroCopyCodec> DefaultMakeCodec<MkZC> {
+    pub fn framed() -> DefaultMakeCodec<MakeFramedCodec<MakeThriftCodec>> {
+        DefaultMakeCodec::new(framed::MakeFramedCodec::new(
+            thrift::MakeThriftCodec::default(),
+        ))
+    }
+
+    pub fn ttheader_framed() -> DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>
+    {
+        DefaultMakeCodec::new(ttheader::MakeTTHeaderCodec::new(
+            framed::MakeFramedCodec::new(thrift::MakeThriftCodec::default()),
+        ))
+    }
+
+    pub fn buffered() -> DefaultMakeCodec<MakeThriftCodec> {
+        DefaultMakeCodec::new(thrift::MakeThriftCodec::default())
+    }
+}
+
+impl<MkZC: MakeZeroCopyCodec> DefaultMakeCodec<MkZC> {
     /// `make_zero_copy_codec` should implement [`MakeZeroCopyCodec`], which will be used to create
     /// the inner [`ZeroCopyEncoder`] and [`ZeroCopyDecoder`].
     pub fn new(make_zero_copy_codec: MkZC) -> Self {
