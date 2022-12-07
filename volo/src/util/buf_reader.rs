@@ -25,29 +25,27 @@ macro_rules! ready {
 
 impl<R: AsyncRead + Unpin> BufReader<R> {
     pub async fn fill_buf_at_least(&mut self, len: usize) -> io::Result<&[u8]> {
+        if len == 0 {
+            return Ok(&[]);
+        }
+
         if (self.len - self.pos) >= len {
             return Ok(&self.buf[self.pos..self.len]);
         }
 
-        assert!(len < self.cap);
+        assert!(len <= self.cap);
+        // if the requested length is larger than the buffer, we need to compact the buffer
         if len > (self.cap - self.pos) {
             self.compact();
         }
 
-        if self.pos >= self.cap {
-            debug_assert!(self.pos == self.cap);
-            let size = self.inner.read(&mut self.buf).await?;
-            self.len = size;
-            self.pos = 0
-        } else if self.len < self.cap {
-            while self.len < len {
-                let buf = &mut self.buf[self.len..self.cap];
-                let size = self.inner.read(buf).await?;
-                if size == 0 {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid eof"));
-                }
-                self.len += size;
+        while (self.len - self.pos) < len {
+            let buf = &mut self.buf[self.len..self.cap];
+            let size = self.inner.read(buf).await?;
+            if size == 0 {
+                return Err(io::Error::new(io::ErrorKind::InvalidData, "invalid eof"));
             }
+            self.len += size;
         }
         Ok(&self.buf[self.pos..self.len])
     }
@@ -142,7 +140,7 @@ impl<R: AsyncRead> BufReader<R> {
 
         let len = self.len - self.pos;
         let dst = self.buf.as_mut_ptr();
-        let src = unsafe { dst.add(self.pos) };
+        let src = unsafe { dst.add(self.pos) } as *const u8;
 
         unsafe {
             std::ptr::copy(src, dst, len);
