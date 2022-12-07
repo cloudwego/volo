@@ -17,7 +17,7 @@ lazy_static! {
 #[volo::main]
 async fn main() {
     let req = volo_gen::thrift_gen::hello::HelloRequest {
-        name: "volo".to_string().into(),
+        name: "volo".into(),
     };
     let resp = CLIENT
         .clone()

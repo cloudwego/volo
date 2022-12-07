@@ -201,7 +201,7 @@ mod tests {
     #[test]
     fn test_static_discover() {
         let empty = Endpoint {
-            service_name: smol_str::SmolStr::new(""),
+            service_name: faststr::FastStr::new(""),
             address: None,
             tags: Default::default(),
         };

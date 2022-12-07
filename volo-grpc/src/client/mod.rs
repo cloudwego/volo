@@ -11,6 +11,7 @@ mod meta;
 use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
 
 pub use callopt::CallOpt;
+use faststr::FastStr;
 use futures::Future;
 pub use meta::MetaService;
 use motore::{
@@ -38,8 +39,8 @@ use crate::{
 pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     http2_config: Http2Config,
     rpc_config: Config,
-    callee_name: smol_str::SmolStr,
-    caller_name: smol_str::SmolStr,
+    callee_name: FastStr,
+    caller_name: FastStr,
     // Maybe address use Arc avoid memory alloc.
     target: Option<Address>,
     inner_layer: IL,
@@ -438,8 +439,8 @@ where
 
 /// A struct indicating the rpc configuration of the client.
 struct ClientInner {
-    callee_name: smol_str::SmolStr,
-    caller_name: smol_str::SmolStr,
+    callee_name: FastStr,
+    caller_name: FastStr,
     rpc_config: Config,
     target: Option<Address>,
 }
