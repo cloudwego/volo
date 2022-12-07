@@ -341,11 +341,12 @@ dependencies = [
 
 [[package]]
 name = "faststr"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c30e8b7deaa08b8ce5efe5d91bf00eee3d20e5e327a1cac209d4f9b2f39f503f"
+checksum = "9cd7a705f88e4665d7a72a763debf1a263d4143c5cefae8e8efceb98d49afe69"
 dependencies = [
  "bytes",
+ "serde",
 ]
 
 [[package]]
