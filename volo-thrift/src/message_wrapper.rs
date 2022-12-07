@@ -1,3 +1,4 @@
+use faststr::FastStr;
 use pilota::thrift::{Error::Protocol, Message};
 use tokio::io::AsyncRead;
 
@@ -13,7 +14,7 @@ use crate::{
 #[derive(Debug)]
 pub struct MessageMeta {
     pub msg_type: TMessageType,
-    pub(crate) method: smol_str::SmolStr,
+    pub(crate) method: FastStr,
     pub(crate) seq_id: i32,
 }
 

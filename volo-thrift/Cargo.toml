@@ -26,6 +26,7 @@ metainfo.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
+faststr.workspace = true
 futures.workspace = true
 fxhash.workspace = true
 lazy_static.workspace = true
@@ -34,7 +35,6 @@ linked-hash-map.workspace = true
 num_enum.workspace = true
 parking_lot.workspace = true
 pin-project.workspace = true
-smol_str.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = [
     "time",

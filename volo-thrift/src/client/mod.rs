@@ -11,6 +11,7 @@ use std::{
     sync::{atomic::AtomicI32, Arc},
 };
 
+use faststr::FastStr;
 use futures::Future;
 use motore::{
     layer::{Identity, Layer, Stack},
@@ -50,8 +51,8 @@ pub mod layer;
 pub struct ClientBuilder<IL, OL, MkClient, Req, Resp, MkT, MkC, LB> {
     config: Config,
     pool: Option<pool::Config>,
-    callee_name: smol_str::SmolStr,
-    caller_name: smol_str::SmolStr,
+    callee_name: FastStr,
+    caller_name: FastStr,
     address: Option<Address>, // maybe address use Arc avoid memory alloc
     inner_layer: IL,
     outer_layer: OL,
@@ -560,8 +561,8 @@ pub struct Client<S> {
 // unsafe impl<Req, Resp> Sync for Client<Req, Resp> {}
 
 struct ClientInner {
-    callee_name: smol_str::SmolStr,
-    caller_name: smol_str::SmolStr,
+    callee_name: FastStr,
+    caller_name: FastStr,
     config: Config,
     address: Option<Address>,
     seq_id: AtomicI32,

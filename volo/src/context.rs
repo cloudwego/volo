@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 
+use faststr::FastStr;
 pub use metainfo::MetaInfo;
 use metainfo::TypeMap;
 
@@ -122,7 +123,7 @@ impl<I, Config> RpcCx<I, Config> {
 #[derive(Debug)]
 pub struct Endpoint {
     /// `service_name` is the most important information, which is used by the service discovering.
-    pub service_name: smol_str::SmolStr,
+    pub service_name: FastStr,
     pub address: Option<Address>,
     /// `tags` is used to store additional information of the endpoint.
     ///
@@ -134,7 +135,7 @@ pub struct Endpoint {
 impl Endpoint {
     /// Creates a new endpoint info.
     #[inline]
-    pub fn new(service_name: smol_str::SmolStr) -> Self {
+    pub fn new(service_name: FastStr) -> Self {
         Self {
             service_name,
             address: None,
@@ -149,7 +150,7 @@ impl Endpoint {
     }
 
     #[inline]
-    pub fn service_name(&self) -> smol_str::SmolStr {
+    pub fn service_name(&self) -> FastStr {
         self.service_name.clone()
     }
 
@@ -195,7 +196,7 @@ pub struct RpcInfo<Config> {
     pub role: Role,
     pub caller: Option<Endpoint>,
     pub callee: Option<Endpoint>,
-    pub method: Option<smol_str::SmolStr>,
+    pub method: Option<FastStr>,
     pub config: Option<Config>,
 }
 
@@ -212,7 +213,7 @@ impl<Config> RpcInfo<Config> {
 
     pub fn new(
         role: Role,
-        method: smol_str::SmolStr,
+        method: FastStr,
         caller: Endpoint,
         callee: Endpoint,
         config: Config,
@@ -232,12 +233,12 @@ impl<Config> RpcInfo<Config> {
     }
 
     #[inline]
-    pub fn method(&self) -> Option<&smol_str::SmolStr> {
+    pub fn method(&self) -> Option<&FastStr> {
         self.method.as_ref()
     }
 
     #[inline]
-    pub fn method_mut(&mut self) -> Option<&mut smol_str::SmolStr> {
+    pub fn method_mut(&mut self) -> Option<&mut FastStr> {
         self.method.as_mut()
     }
 

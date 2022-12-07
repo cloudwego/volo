@@ -27,7 +27,7 @@ lazy_static! {
 #[volo::main]
 async fn main() {
     let req = volo_gen::proto_gen::hello::HelloRequest {
-        name: Some("Volo".to_string()),
+        name: "Volo".to_string(),
     };
     let resp = CLIENT.clone().hello(req).await;
 

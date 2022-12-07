@@ -25,13 +25,13 @@ motore.workspace = true
 async-broadcast.workspace = true
 async-trait.workspace = true
 dashmap.workspace = true
+faststr.workspace = true
 futures.workspace = true
 lazy_static.workspace = true
 metainfo.workspace = true
 once_cell.workspace = true
 pin-project.workspace = true
 rand.workspace = true
-smol_str.workspace = true
 socket2.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "time", "sync", "io-util"] }

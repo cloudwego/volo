@@ -27,6 +27,7 @@ async-stream.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 bytes.workspace = true
+faststr.workspace = true
 futures-util.workspace = true
 futures.workspace = true
 flate2.workspace = true
@@ -39,7 +40,6 @@ hyper-timeout.workspace = true
 percent-encoding.workspace = true
 pin-project.workspace = true
 prost.workspace = true
-smol_str.workspace = true
 tokio = { workspace = true, features = ["time", "rt", "net", "sync"] }
 tokio-stream.workspace = true
 tokio-util = { workspace = true, features = ["codec", "compat"] }

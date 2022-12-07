@@ -169,7 +169,7 @@ mod tests {
     #[tokio::test]
     async fn test_weighted_random() {
         let empty = Endpoint {
-            service_name: smol_str::SmolStr::new_inline(""),
+            service_name: faststr::FastStr::new_inline(""),
             address: None,
             tags: Default::default(),
         };

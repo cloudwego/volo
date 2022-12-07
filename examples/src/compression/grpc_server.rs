@@ -17,7 +17,7 @@ impl volo_gen::proto_gen::hello::HelloService for S {
     ) -> Result<volo_grpc::Response<volo_gen::proto_gen::hello::HelloResponse>, volo_grpc::Status>
     {
         let resp = volo_gen::proto_gen::hello::HelloResponse {
-            message: Some(format!("Hello, {}!", req.get_ref().name.as_ref().unwrap())),
+            message: format!("Hello, {}!", req.get_ref().name),
         };
         Ok(volo_grpc::Response::new(resp))
     }

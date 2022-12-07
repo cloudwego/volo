@@ -340,6 +340,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "faststr"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c30e8b7deaa08b8ce5efe5d91bf00eee3d20e5e327a1cac209d4f9b2f39f503f"
+dependencies = [
+ "bytes",
+]
+
+[[package]]
 name = "fixedbitset"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -727,12 +736,12 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linkedbytes"
-version = "0.1.4"
+version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e0703494cf80f30244b1a85c18fea20e4a4ba32d7d2799ffad1e7774303bf0c"
+checksum = "1eb697040b79d318dd14b4219e6764c72ac84b5b07836551ce35b6847427db09"
 dependencies = [
  "bytes",
- "smol_str",
+ "faststr",
  "tokio",
 ]
 
@@ -1040,16 +1049,16 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#f14ab072d42e156a75ace410c487ab34181ba6c1"
+source = "git+https://github.com/cloudwego/pilota?branch=main#d2e3759138a10725960ad902bc5de3cc59c3b489"
 dependencies = [
  "anyhow",
  "async-recursion",
  "async-trait",
  "bytes",
  "derivative",
+ "faststr",
  "lazy_static",
  "linkedbytes",
- "smol_str",
  "thiserror",
  "tokio",
 ]
@@ -1057,8 +1066,9 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.3.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#f14ab072d42e156a75ace410c487ab34181ba6c1"
+source = "git+https://github.com/cloudwego/pilota?branch=main#d2e3759138a10725960ad902bc5de3cc59c3b489"
 dependencies = [
+ "faststr",
  "fxhash",
  "heck 0.4.0",
  "itertools",
@@ -1074,7 +1084,6 @@ dependencies = [
  "quote",
  "salsa",
  "scoped-tls",
- "smol_str",
  "syn",
  "tracing",
  "tracing-subscriber",
@@ -1083,7 +1092,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#f14ab072d42e156a75ace410c487ab34181ba6c1"
+source = "git+https://github.com/cloudwego/pilota?branch=main#d2e3759138a10725960ad902bc5de3cc59c3b489"
 dependencies = [
  "nom",
 ]
@@ -1551,15 +1560,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a507befe795404456341dfab10cef66ead4c041f62b8b11bbb92bffe5d0953e0"
 
 [[package]]
-name = "smol_str"
-version = "0.1.23"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7475118a28b7e3a2e157ce0131ba8c5526ea96e90ee601d9f6bb2e286a35ab44"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "socket2"
 version = "0.4.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1953,6 +1953,7 @@ dependencies = [
  "async-broadcast",
  "async-trait",
  "dashmap",
+ "faststr",
  "futures",
  "lazy_static",
  "metainfo",
@@ -1960,7 +1961,6 @@ dependencies = [
  "once_cell",
  "pin-project",
  "rand",
- "smol_str",
  "socket2",
  "thiserror",
  "tokio",
@@ -2043,6 +2043,7 @@ dependencies = [
  "async-trait",
  "base64",
  "bytes",
+ "faststr",
  "flate2",
  "futures",
  "futures-util",
@@ -2057,7 +2058,6 @@ dependencies = [
  "percent-encoding",
  "pin-project",
  "prost",
- "smol_str",
  "tokio",
  "tokio-stream",
  "tokio-util",
@@ -2078,6 +2078,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "bytes",
+ "faststr",
  "futures",
  "fxhash",
  "lazy_static",
@@ -2089,7 +2090,6 @@ dependencies = [
  "parking_lot 0.12.1",
  "pilota",
  "pin-project",
- "smol_str",
  "thiserror",
  "tokio",
  "tracing",
