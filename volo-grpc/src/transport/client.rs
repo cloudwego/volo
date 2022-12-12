@@ -56,6 +56,7 @@ impl<U> ClientTransport<U> {
             .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
             .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
             .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
+            .http2_max_send_buf_size(http2_config.max_send_buf_size)
             .retry_canceled_requests(http2_config.retry_canceled_requests)
             .build(Connector::new(Some(config)));
 
