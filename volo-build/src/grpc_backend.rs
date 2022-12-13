@@ -187,6 +187,7 @@ impl CodegenBackend for VoloGrpcBackend {
         let file = self.cx.file(file_id).unwrap();
 
         let package = file.package.iter().join(".");
+        let name = format!("{package}.{}", s.name);
 
         let req_enum_name_send = format_ident!("{}RequestSend", service_name);
         let resp_enum_name_send = format_ident!("{}ResponseSend", service_name);
@@ -195,7 +196,7 @@ impl CodegenBackend for VoloGrpcBackend {
         let paths = s
             .methods
             .iter()
-            .map(|method| format!("/{}.{}/{}", package, s.name, method.name))
+            .map(|method| format!("/{package}.{}/{}", s.name, method.name))
             .collect::<Vec<_>>();
 
         let req_matches = s.methods.iter().map(|method| {
@@ -204,7 +205,7 @@ impl CodegenBackend for VoloGrpcBackend {
                 .rust_name(method.def_id)
                 .upper_camel_ident()
                 .as_syn_ident();
-            let path = format!("/{}.{}/{}", package, s.name, method.name);
+            let path = format!("/{package}.{}/{}", s.name, method.name);
             let client_streaming = self.cx.node_contains_tag::<ClientStreaming>(method.def_id);
             let input_ty = &method.args[0].ty;
 
@@ -264,7 +265,7 @@ impl CodegenBackend for VoloGrpcBackend {
         s.methods.iter().for_each(|method| {
             let method_name = self.cx.rust_name(method.def_id).as_syn_ident();
 
-            let path = format!("/{}.{}/{}", package, s.name, method.name);
+            let path = format!("/{package}.{}/{}", s.name, method.name);
             let input_ty = &method.args[0].ty;
             let client_streaming = self.cx.node_contains_tag::<ClientStreaming>(method.def_id);
             let req_ty = self.client_input_ty(input_ty.clone(), client_streaming);
@@ -434,11 +435,10 @@ impl CodegenBackend for VoloGrpcBackend {
             }
 
             impl<S> #server_name<S> {
-                pub fn new(inner: S) -> ::volo_grpc::server::Server<Self, ::volo::layer::Identity> {
-                    let service = Self {
+                pub fn new(inner: S) -> Self {
+                    Self {
                         inner: ::std::sync::Arc::new(inner),
-                    };
-                    ::volo_grpc::server::Server::new(service)
+                    }
                 }
             }
 
@@ -465,6 +465,10 @@ impl CodegenBackend for VoloGrpcBackend {
                         }
                     }
                 }
+            }
+
+            impl<S: #service_name> ::volo_grpc::server::NamedService for #server_name<S> {
+                const NAME: &'static str = #name;
             }
         });
     }

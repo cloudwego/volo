@@ -378,7 +378,7 @@ impl Status {
             _ => Code::Unknown,
         };
 
-        let mut status = Self::new(code, format!("h2 protocol error: {}", err));
+        let mut status = Self::new(code, format!("h2 protocol error: {err}"));
         status.source = Some(err);
         status
     }
@@ -468,7 +468,7 @@ impl Status {
                     warn!("[VOLO] Error deserializing status message header: {}", err);
                     Self {
                         code: Code::Unknown,
-                        message: format!("Error deserializing status message header: {}", err),
+                        message: format!("Error deserializing status message header: {err}"),
                         details,
                         metadata: MetadataMap::from_headers(other_headers),
                         source: None,

@@ -125,9 +125,8 @@ impl<T: Message + Default> RecvStream<T> {
                 }
                 flag => {
                     let message = format!(
-                        "protocol error: received message with invalid compression flag: {} \
-                         (valid flags are 0 and 1), while sending request",
-                        flag
+                        "protocol error: received message with invalid compression flag: {flag} \
+                         (valid flags are 0 and 1), while sending request"
                     );
                     // https://grpc.github.io/grpc/core/md_doc_compression.html
                     return Err(Status::new(Code::Internal, message));
@@ -149,11 +148,11 @@ impl<T: Message + Default> RecvStream<T> {
                 if let Err(err) = decompress(*encoding, &mut self.buf, &mut self.decompress_buf) {
                     let message = if let Kind::Response(status) = self.kind {
                         format!(
-                            "Error decompressing: {}, while receiving response with status: {}",
-                            err, status
+                            "Error decompressing: {err}, while receiving response with status: \
+                             {status}"
                         )
                     } else {
-                        format!("Error decompressing: {}, while sending request", err)
+                        format!("Error decompressing: {err}, while sending request")
                     };
                     return Err(Status::new(Code::Internal, message));
                 }

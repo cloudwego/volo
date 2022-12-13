@@ -3,13 +3,17 @@ entries:
     protocol: protobuf
     filename: proto_gen.rs
     idls:
-    - source: local
-      path: ../proto/hello.proto
-      includes:
-      - ../proto
+      - source: local
+        path: ../proto/hello.proto
+        includes:
+          - ../proto
+      - source: local
+        path: ../proto/echo.proto
+        includes:
+          - ../proto
   thrift:
     protocol: thrift
     filename: thrift_gen.rs
     idls:
-    - source: local
-      path: ../thrift_idl/hello.thrift
+      - source: local
+        path: ../thrift_idl/hello.thrift

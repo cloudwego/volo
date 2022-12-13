@@ -16,7 +16,7 @@ pub fn encode<T, S>(
     compression_encoding: Option<CompressionEncoding>,
 ) -> BoxStream<'static, Result<Bytes, Status>>
 where
-    S: Stream<Item = Result<T, Status>> + Send + 'static,
+    S: Stream<Item = Result<T, Status>> + Send + Sync + 'static,
     T: Message + 'static,
 {
     Box::pin(async_stream::stream! {

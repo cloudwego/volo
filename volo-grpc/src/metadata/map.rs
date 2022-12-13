@@ -237,6 +237,16 @@ impl MetadataMap {
         self.headers
     }
 
+    /// Get a reference to the underlying HTTP HeaderMap
+    pub fn headers(&self) -> &http::HeaderMap {
+        &self.headers
+    }
+
+    /// Get a mutable reference to the underlying HTTP HeaderMap
+    pub fn headers_mut(&mut self) -> &mut http::HeaderMap {
+        &mut self.headers
+    }
+
     /// Create an empty `MetadataMap` with the specified capacity.
     ///
     /// The returned map will allocate internal storage in order to hold about

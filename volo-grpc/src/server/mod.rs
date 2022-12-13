@@ -3,52 +3,60 @@
 //! This module contains the low level component to build a gRPC server.
 
 mod meta;
+mod router;
+mod service;
 
-use std::{cell::RefCell, marker::PhantomData, time::Duration};
+use std::{fmt, time::Duration};
 
-use futures::Future;
 use hyper::server::conn::Http;
 use motore::{
-    builder::ServiceBuilder,
     layer::{Identity, Layer, Stack},
-    service::Service,
-    BoxError, ServiceExt,
+    service::{Service, TowerAdapter},
+    BoxError,
 };
+pub use service::ServiceBuilder;
 use volo::{net::incoming::Incoming, spawn};
 
+pub use self::router::Router;
 use crate::{
-    body::Body,
-    codec::{
-        compression::{CompressionEncoding, ENCODING_HEADER},
-        decode::Kind,
-    },
-    context::{Config, ServerContext},
-    message::{RecvEntryMessage, SendEntryMessage},
-    server::meta::MetaService,
-    Request, Response, Status,
+    body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status,
 };
 
-/// A server for a gRPC service.
-pub struct Server<S, L> {
-    service: S,
-    layer: L,
-    http2_config: Http2Config,
-    rpc_config: Config,
+/// A trait to provide a static reference to the service's
+/// name. This is used for routing service's within the router.
+pub trait NamedService {
+    /// The `Service-Name` as described [here].
+    ///
+    /// [here]: https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
+    const NAME: &'static str;
 }
 
-impl<S> Server<S, Identity> {
+/// A server for a gRPC service.
+#[derive(Clone)]
+pub struct Server<L> {
+    layer: L,
+    http2_config: Http2Config,
+    router: Router,
+}
+
+impl Default for Server<Identity> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Server<Identity> {
     /// Creates a new [`Server`].
-    pub fn new(service: S) -> Self {
+    pub fn new() -> Self {
         Self {
-            service,
             layer: Identity::new(),
             http2_config: Http2Config::default(),
-            rpc_config: Config::default(),
+            router: Router::new(),
         }
     }
 }
 
-impl<S, L> Server<S, L> {
+impl<L> Server<L> {
     /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
     /// stream-level flow control.
     ///
@@ -133,24 +141,6 @@ impl<S, L> Server<S, L> {
         self
     }
 
-    /// Sets the send compression encodings for the request, and will self-adaptive with config of
-    /// the client.
-    ///
-    /// Default is disable the send compression.
-    pub fn send_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
-        self.rpc_config.send_compressions = Some(config);
-        self
-    }
-
-    /// Sets the accept compression encodings for the request, and will self-adaptive with config of
-    /// the server.
-    ///
-    /// Default is disable the accept decompression.
-    pub fn accept_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
-        self.rpc_config.accept_compressions = Some(config);
-        self
-    }
-
     /// Adds a new inner layer to the server.
     ///
     /// The layer's `Service` should be `Send + Clone + 'static`.
@@ -162,12 +152,11 @@ impl<S, L> Server<S, L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<O>(self, layer: O) -> Server<S, Stack<O, L>> {
+    pub fn layer<O>(self, layer: O) -> Server<Stack<O, L>> {
         Server {
             layer: Stack::new(layer, self.layer),
-            service: self.service,
             http2_config: self.http2_config,
-            rpc_config: self.rpc_config,
+            router: self.router,
         }
     }
 
@@ -182,49 +171,56 @@ impl<S, L> Server<S, L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>> {
+    pub fn layer_front<Front>(self, layer: Front) -> Server<Stack<L, Front>> {
         Server {
             layer: Stack::new(self.layer, layer),
-            service: self.service,
             http2_config: self.http2_config,
-            rpc_config: self.rpc_config,
+            router: self.router,
+        }
+    }
+
+    /// Adds a new service to the router.
+    pub fn add_service<S>(self, s: S) -> Self
+    where
+        S: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>, Error = Status>
+            + NamedService
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self {
+            layer: self.layer,
+            http2_config: self.http2_config,
+            router: self.router.add_service(s),
         }
     }
 
     /// The main entry point for the server.
-    pub async fn run<A: volo::net::MakeIncoming, T, U>(self, incoming: A) -> Result<(), BoxError>
+    pub async fn run<A: volo::net::MakeIncoming>(self, incoming: A) -> Result<(), BoxError>
     where
-        L: Layer<S>,
-        L::Service: Service<ServerContext, Request<T>, Response = Response<U>>
+        L: Layer<Router>,
+        L::Service: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>>
             + Clone
             + Send
-            + 'static
-            + Sync,
-        <L::Service as Service<ServerContext, Request<T>>>::Error: Into<Status> + Send,
-        for<'cx> <L::Service as Service<ServerContext, Request<T>>>::Future<'cx>: Send,
-        S: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>
-            + Send
-            + Clone
+            + Sync
             + 'static,
-        T: Send + 'static + RecvEntryMessage,
-        U: Send + 'static + SendEntryMessage,
+        <L::Service as Service<ServerContext, Request<hyper::Body>>>::Error: Into<Status> + Send,
     {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
 
-        let service = ServiceBuilder::new()
+        let service = motore::builder::ServiceBuilder::new()
             .layer(self.layer)
-            .service(self.service);
-        let service = service.map_err(|err| err.into());
+            .service(self.router);
 
         while let Some(conn) = incoming.accept().await? {
             tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
             let peer_addr = conn.info.peer_addr.clone();
 
-            let service = HyperAdaptorService::new(
-                MetaService::new(service.clone(), peer_addr),
-                self.rpc_config.clone(),
-            );
+            let service = MetaService::new(service.clone(), peer_addr)
+                .tower(|req| (ServerContext::default(), req));
+
             // init server
             let server = Self::create_http_server(&self.http2_config);
             spawn(async move {
@@ -252,107 +248,12 @@ impl<S, L> Server<S, L> {
     }
 }
 
-macro_rules! status_to_http {
-    ($result:expr) => {
-        match $result {
-            Ok(value) => value,
-            Err(status) => return Ok(status.to_http()),
-        }
-    };
-}
-
-/// A service that implements `tower::Service` for service transition between hyper's
-/// `tower::Service` and our's `motore::Service`. For more details, A incoming
-/// request will first come to hyper's `tower::Service`, then `HyperAdaptorService`,
-/// finally our's `motore::Service`.
-#[derive(Clone)]
-pub struct HyperAdaptorService<S, T, U> {
-    inner: S,
-    rpc_config: Config,
-    _marker: PhantomData<(T, U)>,
-}
-
-impl<S, T, U> HyperAdaptorService<S, T, U> {
-    pub fn new(inner: S, rpc_config: Config) -> Self {
-        Self {
-            inner,
-            rpc_config,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<S, T, U> tower::Service<hyper::Request<hyper::Body>> for HyperAdaptorService<S, T, U>
-where
-    S: Service<ServerContext, Request<T>, Response = Response<U>> + Clone + Send + 'static,
-    S::Error: Into<Status>,
-    T: RecvEntryMessage,
-    U: SendEntryMessage,
-{
-    type Response = hyper::Response<Body>;
-    type Error = Status;
-    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(
-        &mut self,
-        _: &mut core::task::Context<'_>,
-    ) -> core::task::Poll<Result<(), Self::Error>> {
-        core::task::Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
-        let inner = self.inner.clone();
-        let rpc_config = self.rpc_config.clone();
-
-        metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
-            let mut cx = ServerContext::default();
-            cx.rpc_info.method = Some(req.uri().path().into());
-            let send_compression = CompressionEncoding::from_accept_encoding_header(
-                req.headers(),
-                &rpc_config.send_compressions,
-            );
-
-            let recv_compression = match CompressionEncoding::from_encoding_header(
-                req.headers(),
-                &rpc_config.accept_compressions,
-            ) {
-                Ok(encoding) => encoding,
-                Err(status) => return Ok(status.to_http()),
-            };
-
-            let (parts, body) = req.into_parts();
-
-            let message = status_to_http!(T::from_body(
-                cx.rpc_info.method.as_deref(),
-                body,
-                Kind::Request,
-                recv_compression
-            ));
-
-            let volo_req = Request::from_http_parts(parts, message);
-            let volo_resp = match inner.call(&mut cx, volo_req).await {
-                Ok(resp) => resp,
-                Err(err) => {
-                    return Ok(err.into().to_http());
-                }
-            };
-
-            let (metadata, extensions, message) = volo_resp.into_parts();
-
-            let mut resp = hyper::Response::new(Body::new(message.into_body(send_compression)));
-            *resp.headers_mut() = metadata.into_headers();
-            *resp.extensions_mut() = extensions;
-            resp.headers_mut().insert(
-                http::header::CONTENT_TYPE,
-                http::header::HeaderValue::from_static("application/grpc"),
-            );
-
-            if let Some(encoding) = send_compression {
-                resp.headers_mut()
-                    .insert(ENCODING_HEADER, encoding.into_header_value());
-            };
-            Ok(resp)
-        })
+impl<L> fmt::Debug for Server<L> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Server")
+            .field("http2_config", &self.http2_config)
+            .field("router", &self.router)
+            .finish()
     }
 }
 

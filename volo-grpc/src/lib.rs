@@ -20,7 +20,7 @@ pub mod status;
 pub mod transport;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
-pub type BoxStream<'l, T> = std::pin::Pin<Box<dyn futures::Stream<Item = T> + Send + 'l>>;
+pub type BoxStream<'l, T> = std::pin::Pin<Box<dyn futures::Stream<Item = T> + Send + Sync + 'l>>;
 
 pub use client::Client;
 pub use codec::decode::RecvStream;

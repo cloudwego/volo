@@ -9,9 +9,9 @@ use volo_grpc::codec::compression::{
 };
 
 lazy_static! {
-    static ref CLIENT: volo_gen::proto_gen::hello::HelloServiceClient = {
+    static ref CLIENT: volo_gen::proto_gen::hello::GreeterClient = {
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-        volo_gen::proto_gen::hello::HelloServiceClientBuilder::new("hello")
+        volo_gen::proto_gen::hello::GreeterClientBuilder::new("hello")
             .send_compressions(vec![
                 Gzip(Some(GzipConfig::default())),
                 Zlib(Some(ZlibConfig {
@@ -29,10 +29,10 @@ async fn main() {
     let req = volo_gen::proto_gen::hello::HelloRequest {
         name: "Volo".to_string(),
     };
-    let resp = CLIENT.clone().hello(req).await;
+    let resp = CLIENT.clone().say_hello(req).await;
 
     match resp {
-        Ok(info) => println!("{:?}", info),
-        Err(e) => eprintln!("{:?}", e),
+        Ok(info) => println!("{info:?}"),
+        Err(e) => eprintln!("{e:?}"),
     }
 }
