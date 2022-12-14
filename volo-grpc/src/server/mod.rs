@@ -133,16 +133,16 @@ impl<L> Server<L> {
     /// Default is currently ~400KB, but may change.
     ///
     /// The value must be no larger than `u32::MAX`.
-    pub fn http2_max_send_buf_size(&mut self, max: usize) -> &mut Self {
-        self.http2_config.max_send_buf_size = max;
+    pub fn http2_max_send_buf_size(mut self, max: impl Into<usize>) -> Self {
+        self.http2_config.max_send_buf_size = max.into();
         self
     }
 
     /// Sets the max size of received header frames.
     ///
     /// Default is currently ~16MB, but may change.
-    pub fn http2_max_header_list_size(&mut self, max: u32) -> &mut Self {
-        self.http2_config.max_header_list_size = max;
+    pub fn http2_max_header_list_size(mut self, max: impl Into<u32>) -> Self {
+        self.http2_config.max_header_list_size = max.into();
         self
     }
 
