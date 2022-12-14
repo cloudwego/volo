@@ -128,6 +128,24 @@ impl<L> Server<L> {
         self
     }
 
+    /// Set the maximum write buffer size for each HTTP/2 stream.
+    ///
+    /// Default is currently ~400KB, but may change.
+    ///
+    /// The value must be no larger than `u32::MAX`.
+    pub fn http2_max_send_buf_size(&mut self, max: usize) -> &mut Self {
+        self.http2_config.max_send_buf_size = max;
+        self
+    }
+
+    /// Sets the max size of received header frames.
+    ///
+    /// Default is currently ~16MB, but may change.
+    pub fn http2_max_header_list_size(&mut self, max: u32) -> &mut Self {
+        self.http2_config.max_header_list_size = max;
+        self
+    }
+
     /// Allow this server to accept http1 requests.
     ///
     /// Accepting http1 requests is only useful when developing `grpc-web`
@@ -243,7 +261,9 @@ impl<L> Server<L> {
             .http2_max_concurrent_streams(http2_config.max_concurrent_streams)
             .http2_keep_alive_interval(http2_config.http2_keepalive_interval)
             .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
-            .http2_max_frame_size(http2_config.max_frame_size);
+            .http2_max_frame_size(http2_config.max_frame_size)
+            .http2_max_send_buf_size(http2_config.max_send_buf_size)
+            .http2_max_header_list_size(http2_config.max_header_list_size);
         server
     }
 }
@@ -260,6 +280,8 @@ impl<L> fmt::Debug for Server<L> {
 const DEFAULT_KEEPALIVE_TIMEOUT_SECS: Duration = Duration::from_secs(20);
 const DEFAULT_CONN_WINDOW_SIZE: u32 = 1024 * 1024; // 1MB
 const DEFAULT_STREAM_WINDOW_SIZE: u32 = 1024 * 1024; // 1MB
+const DEFAULT_MAX_SEND_BUF_SIZE: usize = 1024 * 400; // 400kb
+const DEFAULT_SETTINGS_MAX_HEADER_LIST_SIZE: u32 = 16 << 20; // 16 MB "sane default" taken from golang http2
 
 /// Configuration for the underlying h2 connection.
 #[derive(Debug, Clone, Copy)]
@@ -271,6 +293,8 @@ pub struct Http2Config {
     pub(crate) http2_keepalive_interval: Option<Duration>,
     pub(crate) http2_keepalive_timeout: Duration,
     pub(crate) max_frame_size: Option<u32>,
+    pub(crate) max_send_buf_size: usize,
+    pub(crate) max_header_list_size: u32,
     pub(crate) accept_http1: bool,
 }
 
@@ -284,6 +308,8 @@ impl Default for Http2Config {
             http2_keepalive_interval: None,
             http2_keepalive_timeout: DEFAULT_KEEPALIVE_TIMEOUT_SECS,
             max_frame_size: None,
+            max_send_buf_size: DEFAULT_MAX_SEND_BUF_SIZE,
+            max_header_list_size: DEFAULT_SETTINGS_MAX_HEADER_LIST_SIZE,
             accept_http1: false,
         }
     }
