@@ -288,10 +288,8 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 let name = format_ident!("{}", a.name);
                 let ty = self.cx.codegen_item_ty(a.ty.kind.clone());
                 let mut ty = quote! { #ty };
-                if let Some(rust_wrapper_arc) = self.cx.tags(a.tags_id).as_ref().and_then(|tags| tags.get::<RustWrapperArc>()) {
-                    if rust_wrapper_arc == "true" {
-                        ty = quote! { ::std::sync::Arc<#ty> };
-                    }
+                if let Some(RustWrapperArc(true)) = self.cx.tags(a.tags_id).as_ref().and_then(|tags| tags.get::<RustWrapperArc>()) {
+                    ty = quote! { ::std::sync::Arc<#ty> };
                 }
                 quote! {
                     #name: #ty
