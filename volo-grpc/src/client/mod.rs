@@ -199,8 +199,8 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     /// Default is currently 1MB, but may change.
     ///
     /// The value must be no larger than `u32::MAX`.
-    pub fn http2_max_send_buf_size(mut self, max: usize) -> Self {
-        self.http2_config.max_send_buf_size = max;
+    pub fn http2_max_send_buf_size(mut self, max: impl Into<usize>) -> Self {
+        self.http2_config.max_send_buf_size = max.into();
         self
     }
 
