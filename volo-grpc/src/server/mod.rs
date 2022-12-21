@@ -8,7 +8,6 @@ mod service;
 
 use std::{fmt, time::Duration};
 
-use hyper::server::conn::Http;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{Service, TowerAdapter},
@@ -240,31 +239,27 @@ impl<L> Server<L> {
                 .tower(|req| (ServerContext::default(), req));
 
             // init server
-            let server = Self::create_http_server(&self.http2_config);
+            let mut server = hyper::server::conn::Http::new();
+            server
+                .http2_only(!self.http2_config.accept_http1)
+                .http2_initial_stream_window_size(self.http2_config.init_stream_window_size)
+                .http2_initial_connection_window_size(self.http2_config.init_connection_window_size)
+                .http2_adaptive_window(self.http2_config.adaptive_window)
+                .http2_max_concurrent_streams(self.http2_config.max_concurrent_streams)
+                .http2_keep_alive_interval(self.http2_config.http2_keepalive_interval)
+                .http2_keep_alive_timeout(self.http2_config.http2_keepalive_timeout)
+                .http2_max_frame_size(self.http2_config.max_frame_size)
+                .http2_max_send_buf_size(self.http2_config.max_send_buf_size)
+                .http2_max_header_list_size(self.http2_config.max_header_list_size);
+
             spawn(async move {
                 let result = server.serve_connection(conn, service).await;
                 if let Err(err) = result {
-                    tracing::warn!("[VOLO] http server fail to serve: {:?}", err);
+                    tracing::debug!("[VOLO] connection error: {:?}", err);
                 }
             });
         }
         Ok(())
-    }
-
-    fn create_http_server(http2_config: &Http2Config) -> Http {
-        let mut server = Http::new();
-        server
-            .http2_only(!http2_config.accept_http1)
-            .http2_initial_stream_window_size(http2_config.init_stream_window_size)
-            .http2_initial_connection_window_size(http2_config.init_connection_window_size)
-            .http2_adaptive_window(http2_config.adaptive_window)
-            .http2_max_concurrent_streams(http2_config.max_concurrent_streams)
-            .http2_keep_alive_interval(http2_config.http2_keepalive_interval)
-            .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
-            .http2_max_frame_size(http2_config.max_frame_size)
-            .http2_max_send_buf_size(http2_config.max_send_buf_size)
-            .http2_max_header_list_size(http2_config.max_header_list_size);
-        server
     }
 }
 
