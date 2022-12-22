@@ -2,14 +2,17 @@
 
 use std::net::SocketAddr;
 
-use {name}::{{S}};
+use volo_grpc::server::{{Server, ServiceBuilder}};
+
+use {name}::S;
 
 #[volo::main]
 async fn main() {{
     let addr: SocketAddr = "[::]:8080".parse().unwrap();
     let addr = volo::net::Address::from(addr);
 
-    volo_gen::{namespace}::{service_name}Server::new(S)
+    Server::new()
+        .add_service(ServiceBuilder::new(volo_gen::{namespace}::{service_name}Server::new(S)).build())
         .run(addr)
         .await
         .unwrap();
