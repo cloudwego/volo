@@ -1,6 +1,6 @@
 [package]
 name = "volo-cli"
-version = "0.2.1"
+version = "0.3.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -22,7 +22,7 @@ keywords = ["thrift", "grpc", "protobuf", "volo", "cli"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo-build = { version = "0.2", path = "../volo-build" }
+volo-build = { version = "0.3", path = "../volo-build" }
 pilota-thrift-parser.workspace = true
 
 anyhow.workspace = true
