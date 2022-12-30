@@ -160,7 +160,7 @@ impl<L> Server<L> {
 
     /// Adds a new inner layer to the server.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -179,7 +179,7 @@ impl<L> Server<L> {
 
     /// Adds a new front layer to the server.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///

@@ -319,10 +319,12 @@ name = "examples"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "lazy_static",
  "pilota",
  "tokio",
+ "tokio-stream",
  "tracing",
  "volo",
  "volo-gen",

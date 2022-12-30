@@ -58,7 +58,7 @@ impl<S, Req>
 impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
     /// Adds a new inner layer to the server.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -80,7 +80,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
 
     /// Adds a new front layer to the server.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///

@@ -18,7 +18,7 @@ async fn main() {
     let req = volo_gen::proto_gen::hello::HelloRequest {
         name: "Volo".to_string(),
     };
-    let resp = CLIENT.clone().say_hello(req).await;
+    let resp = CLIENT.say_hello(req).await;
     match resp {
         Ok(info) => println!("{info:?}"),
         Err(e) => eprintln!("{e:?}"),

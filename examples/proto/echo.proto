@@ -11,5 +11,5 @@ message EchoResponse {
 }
 
 service Echo {
-    rpc UnaryEcho(EchoRequest) returns (EchoResponse) {}
+    rpc Echo(EchoRequest) returns (EchoResponse) {}
 }
