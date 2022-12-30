@@ -11,6 +11,10 @@ entries:
         path: ../proto/echo.proto
         includes:
           - ../proto
+      - source: local
+        path: ../proto/streaming.proto
+        includes:
+          - ../proto
   thrift:
     protocol: thrift
     filename: thrift_gen.rs

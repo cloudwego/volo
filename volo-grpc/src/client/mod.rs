@@ -298,7 +298,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
 
     /// Adds a new layer to the client.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -329,7 +329,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
 
     /// Adds a new outer layer to the client.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -360,7 +360,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
 
     /// Adds a new outer layer to the client.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///

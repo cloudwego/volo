@@ -55,7 +55,7 @@ where
 
     fn call<'cx, 's>(
         &'s self,
-        _cx: &'cx mut ServerContext,
+        cx: &'cx mut ServerContext,
         req: hyper::Request<hyper::Body>,
     ) -> Self::Future<'cx>
     where
@@ -64,7 +64,6 @@ where
         let peer_addr = self.peer_addr.clone();
 
         metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
-            let mut cx = ServerContext::default();
             cx.rpc_info.method = Some(req.uri().path().into());
 
             let mut volo_req = Request::from_http(req);
@@ -126,7 +125,7 @@ where
                 Ok::<(), Status>(())
             }));
 
-            let volo_resp = match self.inner.call(&mut cx, volo_req).await {
+            let volo_resp = match self.inner.call(cx, volo_req).await {
                 Ok(resp) => resp,
                 Err(err) => {
                     return Ok(err.into().to_http());
