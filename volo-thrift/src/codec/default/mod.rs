@@ -169,21 +169,24 @@ pub struct DefaultMakeCodec<MkZC: MakeZeroCopyCodec> {
     make_zero_copy_codec: MkZC,
 }
 
-impl<MkZC: MakeZeroCopyCodec> DefaultMakeCodec<MkZC> {
-    pub fn framed() -> DefaultMakeCodec<MakeFramedCodec<MakeThriftCodec>> {
+impl DefaultMakeCodec<MakeFramedCodec<MakeThriftCodec>> {
+    pub fn framed() -> Self {
         DefaultMakeCodec::new(framed::MakeFramedCodec::new(
             thrift::MakeThriftCodec::default(),
         ))
     }
+}
 
-    pub fn ttheader_framed() -> DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>
-    {
+impl DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>> {
+    pub fn ttheader_framed() -> Self {
         DefaultMakeCodec::new(ttheader::MakeTTHeaderCodec::new(
             framed::MakeFramedCodec::new(thrift::MakeThriftCodec::default()),
         ))
     }
+}
 
-    pub fn buffered() -> DefaultMakeCodec<MakeThriftCodec> {
+impl DefaultMakeCodec<MakeThriftCodec> {
+    pub fn buffered() -> Self {
         DefaultMakeCodec::new(thrift::MakeThriftCodec::default())
     }
 }
@@ -229,5 +232,17 @@ where
                 reader: BufReader::new(reader),
             },
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DefaultMakeCodec;
+
+    #[test]
+    fn test_mk_codec() {
+        let _framed = DefaultMakeCodec::framed();
+        let _ttheader_framed = DefaultMakeCodec::ttheader_framed();
+        let _buffered = DefaultMakeCodec::buffered();
     }
 }
