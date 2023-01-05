@@ -29,8 +29,7 @@ pub struct Init {
         short = 'r',
         long = "ref",
         requires = "git",
-        help = "Specify the git repo ref(commit, branch) for idl.\nExample: main / $TAG / \
-                $COMMIT_HASH"
+        help = "Specify the git repo ref(branch) for idl.\nExample: main / $TAG"
     )]
     pub r#ref: Option<String>,
 
