@@ -101,16 +101,7 @@ impl Init {
 
         let namespace = res
             .package
-            .map(|p| p.segments.iter().map(|s| &**s).join("::"))
-            .or_else(|| {
-                Some(
-                    res.path
-                        .file_name()?
-                        .to_string_lossy()
-                        .trim_end_matches(".rs")
-                        .to_string(),
-                )
-            });
+            .map(|p| p.segments.iter().map(|s| &**s).join("::"));
         Ok((service_name, namespace))
     }
 
@@ -268,7 +259,7 @@ impl CliCommand for Init {
             } else {
                 self.copy_thrift_template(
                     contents,
-                    self.idl.file_name().unwrap().to_str().unwrap(),
+                    self.idl.file_stem().unwrap().to_str().unwrap(),
                 )?;
             }
 
