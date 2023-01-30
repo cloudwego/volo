@@ -2,7 +2,7 @@ use std::fmt::{self, Display, Formatter};
 
 use pilota::thrift::{
     binary::TAsyncBinaryProtocol, Error as PilotaError, Message, ProtocolError, TFieldIdentifier,
-    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
+    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError, TAsyncInputProtocol,
 };
 use tokio::io::AsyncRead;
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
@@ -204,10 +204,7 @@ impl Message for ApplicationError {
         Ok(ApplicationError { kind, message })
     }
 
-    async fn decode_async<R>(protocol: &mut TAsyncBinaryProtocol<R>) -> Result<Self, PilotaError>
-    where
-        R: AsyncRead + Unpin + Send,
-    {
+    async fn decode_async<T: TAsyncInputProtocol>(protocol: &mut T) -> Result<Self, PilotaError> {
         let mut message = "general remote error".to_owned();
         let mut kind = ApplicationErrorKind::Unknown;
 

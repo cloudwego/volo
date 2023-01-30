@@ -1,13 +1,13 @@
 use bytes::BytesMut;
 use linkedbytes::LinkedBytes;
 use pilota::thrift::{
-    binary::TBinaryProtocol, ProtocolErrorKind, TAsyncBinaryProtocol, TLengthProtocol,
+    binary::TBinaryProtocol, ProtocolErrorKind, TAsyncBinaryProtocol, TLengthProtocol, compact::{TCompactInputProtocol, TCompactOutputProtocol}, TAsyncCompactProtocol,
 };
 use tokio::io::AsyncRead;
 use volo::util::buf_reader::BufReader;
 
 use super::{MakeZeroCopyCodec, ZeroCopyDecoder, ZeroCopyEncoder};
-use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
+use crate::{context::ThriftContext, EntryMessage, ThriftMessage, protocol};
 
 /// [`MakeThriftCodec`] implements [`MakeZeroCopyCodec`] to create [`ThriftCodec`].
 #[derive(Debug, Clone, Copy)]
@@ -113,18 +113,27 @@ impl ZeroCopyDecoder for ThriftCodec {
         // TODO: support using protocol from TTHeader
         let protocol = detect(&bytes)?;
         // TODO: do we need to check the response protocol at client side?
-        if let Protocol::Binary = protocol {
-            let mut p = TBinaryProtocol::new(&mut bytes, true);
-            let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
-            cx.extensions_mut().insert(protocol);
-            Ok(Some(msg))
-        } else {
-            Err(crate::Error::Pilota(
-                pilota::thrift::error::new_protocol_error(
-                    ProtocolErrorKind::NotImplemented,
-                    format!("protocol {:?} is not supported", protocol),
-                ),
-            ))
+        match protocol {
+            Protocol::Binary => {
+                let mut p = TBinaryProtocol::new(&mut bytes, true);
+                let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
+                cx.extensions_mut().insert(protocol);
+                Ok(Some(msg))
+            },
+            Protocol::ApacheCompact => {
+                let mut p = TCompactInputProtocol::new(&mut bytes);
+                let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
+                cx.extensions_mut().insert(protocol);
+                Ok(Some(msg))
+            },
+            p => {
+                Err(crate::Error::Pilota(
+                    pilota::thrift::error::new_protocol_error(
+                        ProtocolErrorKind::NotImplemented,
+                        format!("protocol {:?} is not supported", p),
+                    ),
+                ))
+            },
         }
     }
 
@@ -152,18 +161,27 @@ impl ZeroCopyDecoder for ThriftCodec {
         // TODO: support using protocol from TTHeader
         let protocol = detect(buf)?;
         // TODO: do we need to check the response protocol at client side?
-        if let Protocol::Binary = protocol {
-            let mut p = TAsyncBinaryProtocol::new(reader);
-            let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
-            cx.extensions_mut().insert(protocol);
-            Ok(Some(msg))
-        } else {
-            Err(crate::Error::Pilota(
-                pilota::thrift::error::new_protocol_error(
-                    ProtocolErrorKind::NotImplemented,
-                    format!("protocol {:?} is not supported", protocol),
-                ),
-            ))
+        match protocol {
+            Protocol::Binary => {
+                let mut p = TAsyncBinaryProtocol::new(reader);
+                let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
+                cx.extensions_mut().insert(protocol);
+                Ok(Some(msg))
+            },
+            // Protocol::ApacheCompact => {
+            //     let mut p = TAsyncCompactProtocol::new(reader);
+            //     let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
+            //     cx.extensions_mut().insert(protocol);
+            //     Ok(Some(msg))
+            // },
+            p => {
+                Err(crate::Error::Pilota(
+                    pilota::thrift::error::new_protocol_error(
+                        ProtocolErrorKind::NotImplemented,
+                        format!("protocol {:?} is not supported", p),
+                    ),
+                ))
+            },
         }
     }
 }
@@ -197,7 +215,12 @@ impl ZeroCopyEncoder for ThriftCodec {
                 let mut p = TBinaryProtocol::new(linked_bytes, true);
                 msg.encode(&mut p)?;
                 Ok(())
-            }
+            },
+            Protocol::ApacheCompact => {
+                let mut p = TCompactOutputProtocol::new(linked_bytes, true);
+                msg.encode(&mut p)?;
+                Ok(())
+            },
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,

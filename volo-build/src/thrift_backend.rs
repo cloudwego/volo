@@ -77,12 +77,11 @@ impl VoloThriftBackend {
                        #decode
                     }
 
-                    async fn decode_async<R>(
-                        protocol: &mut ::pilota::thrift::TAsyncBinaryProtocol<R>,
+                    async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
+                        protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier
                     ) -> ::core::result::Result<Self, ::volo_thrift::Error>
-                    where
-                        R: ::pilota::AsyncRead + ::core::marker::Unpin + ::core::marker::Send {
+                        {
                             #decode_async
                         }
 
@@ -109,12 +108,11 @@ impl VoloThriftBackend {
                        #decode
                     }
 
-                    async fn decode_async<R>(
-                        protocol: &mut ::pilota::thrift::TAsyncBinaryProtocol<R>,
+                    async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
+                        protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier
                     ) -> ::core::result::Result<Self, ::volo_thrift::Error>
-                    where
-                        R: ::pilota::AsyncRead + ::core::marker::Unpin + ::core::marker::Send {
+                        {
                             #decode_async
                         }
 
@@ -166,12 +164,11 @@ impl VoloThriftBackend {
                        #decode
                     }
 
-                    async fn decode_async<R>(
-                        protocol: &mut ::pilota::thrift::TAsyncBinaryProtocol<R>,
+                    async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
+                        protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier,
                     ) -> ::core::result::Result<Self, ::volo_thrift::Error>
-                    where
-                        R: ::pilota::AsyncRead + ::core::marker::Unpin + ::core::marker::Send {
+                        {
                             #decode_async
                         }
 
