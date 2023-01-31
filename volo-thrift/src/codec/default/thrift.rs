@@ -1,7 +1,9 @@
 use bytes::BytesMut;
 use linkedbytes::LinkedBytes;
 use pilota::thrift::{
-    binary::TBinaryProtocol, ProtocolErrorKind, TAsyncBinaryProtocol, TLengthProtocol, compact::{TCompactInputProtocol, TCompactOutputProtocol}, TAsyncCompactProtocol,
+    binary::TBinaryProtocol,
+    compact::{TCompactInputProtocol, TCompactOutputProtocol},
+    ProtocolErrorKind, TAsyncBinaryProtocol, TAsyncCompactProtocol, TLengthProtocol,
 };
 use tokio::io::AsyncRead;
 use volo::util::buf_reader::BufReader;
@@ -119,21 +121,19 @@ impl ZeroCopyDecoder for ThriftCodec {
                 let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))
-            },
+            }
             Protocol::ApacheCompact => {
                 let mut p = TCompactInputProtocol::new(&mut bytes);
                 let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))
-            },
-            p => {
-                Err(crate::Error::Pilota(
-                    pilota::thrift::error::new_protocol_error(
-                        ProtocolErrorKind::NotImplemented,
-                        format!("protocol {:?} is not supported", p),
-                    ),
-                ))
-            },
+            }
+            p => Err(crate::Error::Pilota(
+                pilota::thrift::error::new_protocol_error(
+                    ProtocolErrorKind::NotImplemented,
+                    format!("protocol {:?} is not supported", p),
+                ),
+            )),
         }
     }
 
@@ -167,21 +167,19 @@ impl ZeroCopyDecoder for ThriftCodec {
                 let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))
-            },
+            }
             Protocol::ApacheCompact => {
                 let mut p = TAsyncCompactProtocol::new(reader);
                 let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))
-            },
-            p => {
-                Err(crate::Error::Pilota(
-                    pilota::thrift::error::new_protocol_error(
-                        ProtocolErrorKind::NotImplemented,
-                        format!("protocol {:?} is not supported", p),
-                    ),
-                ))
-            },
+            }
+            p => Err(crate::Error::Pilota(
+                pilota::thrift::error::new_protocol_error(
+                    ProtocolErrorKind::NotImplemented,
+                    format!("protocol {:?} is not supported", p),
+                ),
+            )),
         }
     }
 }
@@ -215,12 +213,12 @@ impl ZeroCopyEncoder for ThriftCodec {
                 let mut p = TBinaryProtocol::new(linked_bytes, true);
                 msg.encode(&mut p)?;
                 Ok(())
-            },
+            }
             Protocol::ApacheCompact => {
                 let mut p = TCompactOutputProtocol::new(linked_bytes, true);
                 msg.encode(&mut p)?;
                 Ok(())
-            },
+            }
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,
@@ -243,13 +241,13 @@ impl ZeroCopyEncoder for ThriftCodec {
                 let real_size = msg.size(&mut p);
                 let malloc_size = real_size - p.zero_copy_len();
                 Ok((real_size, malloc_size))
-            },
+            }
             Protocol::ApacheCompact => {
                 let mut p = TCompactOutputProtocol::new((), true);
                 let real_size = msg.size(&mut p);
                 let malloc_size = real_size - p.zero_copy_len();
                 Ok((real_size, malloc_size))
-            },
+            }
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,

@@ -1,8 +1,9 @@
 use std::fmt::{self, Display, Formatter};
 
 use pilota::thrift::{
-    binary::TAsyncBinaryProtocol, Error as PilotaError, Message, ProtocolError, TFieldIdentifier,
-    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError, TAsyncInputProtocol,
+    binary::TAsyncBinaryProtocol, Error as PilotaError, Message, ProtocolError,
+    TAsyncInputProtocol, TFieldIdentifier, TInputProtocol, TLengthProtocol, TOutputProtocol,
+    TStructIdentifier, TType, TransportError,
 };
 use tokio::io::AsyncRead;
 use volo::loadbalance::error::{LoadBalanceError, Retryable};

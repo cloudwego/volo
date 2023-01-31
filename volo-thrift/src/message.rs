@@ -3,7 +3,8 @@ use std::sync::Arc;
 pub use pilota::thrift::Message;
 use pilota::{
     thrift::{
-        TAsyncBinaryProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier, TOutputProtocol, TAsyncInputProtocol,
+        TAsyncBinaryProtocol, TAsyncInputProtocol, TInputProtocol, TLengthProtocol,
+        TMessageIdentifier, TOutputProtocol,
     },
     AsyncRead,
 };
