@@ -7,7 +7,7 @@ use tokio::io::AsyncRead;
 use volo::util::buf_reader::BufReader;
 
 use super::{MakeZeroCopyCodec, ZeroCopyDecoder, ZeroCopyEncoder};
-use crate::{context::ThriftContext, EntryMessage, ThriftMessage, protocol};
+use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
 
 /// [`MakeThriftCodec`] implements [`MakeZeroCopyCodec`] to create [`ThriftCodec`].
 #[derive(Debug, Clone, Copy)]
@@ -168,12 +168,12 @@ impl ZeroCopyDecoder for ThriftCodec {
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))
             },
-            // Protocol::ApacheCompact => {
-            //     let mut p = TAsyncCompactProtocol::new(reader);
-            //     let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
-            //     cx.extensions_mut().insert(protocol);
-            //     Ok(Some(msg))
-            // },
+            Protocol::ApacheCompact => {
+                let mut p = TAsyncCompactProtocol::new(reader);
+                let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
+                cx.extensions_mut().insert(protocol);
+                Ok(Some(msg))
+            },
             p => {
                 Err(crate::Error::Pilota(
                     pilota::thrift::error::new_protocol_error(
@@ -243,7 +243,13 @@ impl ZeroCopyEncoder for ThriftCodec {
                 let real_size = msg.size(&mut p);
                 let malloc_size = real_size - p.zero_copy_len();
                 Ok((real_size, malloc_size))
-            }
+            },
+            Protocol::ApacheCompact => {
+                let mut p = TCompactOutputProtocol::new((), true);
+                let real_size = msg.size(&mut p);
+                let malloc_size = real_size - p.zero_copy_len();
+                Ok((real_size, malloc_size))
+            },
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,
