@@ -18,6 +18,7 @@ keywords = ["async", "rpc", "grpc", "protobuf"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
+pilota.workspace = true
 volo = { version = "0.3", path = "../volo" }
 motore = { workspace = true, features = ["tower"] }
 metainfo.workspace = true
@@ -41,7 +42,6 @@ hyper-timeout.workspace = true
 matchit.workspace = true
 percent-encoding.workspace = true
 pin-project.workspace = true
-prost.workspace = true
 tokio = { workspace = true, features = ["time", "rt", "net", "sync"] }
 tokio-stream.workspace = true
 tokio-util = { workspace = true, features = ["codec", "compat"] }

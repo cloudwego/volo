@@ -1,6 +1,6 @@
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::{Stream, StreamExt};
-use prost::Message;
+use pilota::prost::Message;
 
 use super::{DefaultEncoder, PREFIX_LEN};
 use crate::{

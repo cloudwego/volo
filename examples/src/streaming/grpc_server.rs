@@ -19,7 +19,7 @@ impl volo_gen::proto_gen::streaming::Streaming for S {
         req: Request<StreamingRequest>,
     ) -> Result<Response<StreamingResponse>, Status> {
         let resp = StreamingResponse {
-            message: format!("Unary, {}!", req.get_ref().message),
+            message: format!("Unary, {}!", req.get_ref().message).into(),
         };
         Ok(volo_grpc::Response::new(resp))
     }
@@ -36,7 +36,7 @@ impl volo_gen::proto_gen::streaming::Streaming for S {
                 match req {
                     Ok(req) => {
                         let resp = StreamingResponse {
-                            message: format!("ClientStreaming, {}!", req.message),
+                            message: format!("ClientStreaming, {}!", req.message).into(),
                         };
                         match tx.send(Ok(resp)).await {
                             Ok(_) => {}
@@ -66,7 +66,7 @@ impl volo_gen::proto_gen::streaming::Streaming for S {
     ) -> Result<Response<BoxStream<'static, Result<StreamingResponse, Status>>>, Status> {
         let req = req.into_inner();
         let repeat = std::iter::repeat(StreamingResponse {
-            message: format!("ServerStreaming, {}!", req.message),
+            message: format!("ServerStreaming, {}!", req.message).into(),
         });
         let mut resp = tokio_stream::iter(repeat);
         let (tx, rx) = mpsc::channel(64);
@@ -95,7 +95,7 @@ impl volo_gen::proto_gen::streaming::Streaming for S {
                 match req {
                     Ok(req) => {
                         let resp = StreamingResponse {
-                            message: format!("BidirectionalStreaming, {}!", req.message),
+                            message: format!("BidirectionalStreaming, {}!", req.message).into(),
                         };
                         match tx.send(Ok(resp)).await {
                             Ok(_) => {}

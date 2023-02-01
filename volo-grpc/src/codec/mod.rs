@@ -10,7 +10,7 @@ pub mod encode;
 use std::{io, marker::PhantomData, mem::size_of};
 
 use bytes::BytesMut;
-use prost::Message;
+use pilota::prost::Message;
 
 use crate::{status::Code::Internal, Status};
 
