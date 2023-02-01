@@ -9,6 +9,8 @@
 [actions-badge]: https://github.com/cloudwego/volo/actions/workflows/ci.yaml/badge.svg
 [actions-url]: https://github.com/cloudwego/volo/actions
 
+English | [中文](README-zh_cn.md)
+
 Volo is a **high-performance** and **strong-extensibility** Rust RPC framework that helps developers build microservices.
 
 Volo uses [`Motore`][Motore] as its middleware abstraction, which is powered by GAT.
