@@ -17,12 +17,16 @@ impl pilota_build::MakeBackend for MkGrpcBackend {
     type Target = VoloGrpcBackend;
 
     fn make_backend(self, context: Arc<Context>) -> Self::Target {
-        VoloGrpcBackend { cx: context }
+        VoloGrpcBackend {
+            cx: context.clone(),
+            inner: pilota_build::ProtobufBackend::new(context),
+        }
     }
 }
 
 pub struct VoloGrpcBackend {
     cx: Arc<Context>,
+    inner: pilota_build::ProtobufBackend,
 }
 
 impl VoloGrpcBackend {
@@ -498,5 +502,17 @@ impl CodegenBackend for VoloGrpcBackend {
         quote::quote! {
             async fn #name(&self, #(#args),*) -> ::std::result::Result<#ret_ty>;
         }
+    }
+
+    fn codegen_enum_impl(&self, def_id: DefId, stream: &mut TokenStream, e: &rir::Enum) {
+        self.inner.codegen_enum_impl(def_id, stream, e)
+    }
+
+    fn codegen_newtype_impl(&self, def_id: DefId, stream: &mut TokenStream, t: &rir::NewType) {
+        self.inner.codegen_newtype_impl(def_id, stream, t)
+    }
+
+    fn codegen_struct_impl(&self, def_id: DefId, stream: &mut TokenStream, s: &rir::Message) {
+        self.inner.codegen_struct_impl(def_id, stream, s)
     }
 }

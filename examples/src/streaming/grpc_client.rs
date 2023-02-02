@@ -4,6 +4,7 @@ use std::net::SocketAddr;
 
 use async_stream::stream;
 use lazy_static::lazy_static;
+use pilota::FastStr;
 use tokio_stream::StreamExt;
 
 lazy_static! {
@@ -25,7 +26,7 @@ async fn main() {
 
 async fn unary() {
     let req = volo_gen::proto_gen::streaming::StreamingRequest {
-        message: "Volo".to_string(),
+        message: FastStr::from_static_str("Volo"),
     };
     match CLIENT.unary(req).await {
         Ok(info) => println!("{info:?}"),
@@ -35,7 +36,7 @@ async fn unary() {
 
 async fn client_streaming() {
     let req = volo_gen::proto_gen::streaming::StreamingRequest {
-        message: "Volo".to_string(),
+        message: FastStr::from_static_str("Volo"),
     };
     let stream_req = stream! {
         for _ in 0..10 {
@@ -50,7 +51,7 @@ async fn client_streaming() {
 
 async fn server_streaming() {
     let req = volo_gen::proto_gen::streaming::StreamingRequest {
-        message: "Volo".to_string(),
+        message: FastStr::from_static_str("Volo"),
     };
     let stream_resp = match CLIENT.server_streaming(req).await {
         Ok(resp) => resp.into_inner(),
@@ -77,7 +78,7 @@ async fn server_streaming() {
 
 async fn bidirectional_streaming() {
     let req = volo_gen::proto_gen::streaming::StreamingRequest {
-        message: "Volo".to_string(),
+        message: FastStr::from_static_str("Volo"),
     };
     let stream_req = stream! {
         for _ in 0..10 {

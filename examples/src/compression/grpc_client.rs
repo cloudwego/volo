@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 
 use lazy_static::lazy_static;
+use pilota::FastStr;
 use volo_grpc::codec::compression::{
     CompressionEncoding::{Gzip, Identity, Zlib},
     GzipConfig, Level, ZlibConfig,
@@ -27,7 +28,7 @@ lazy_static! {
 #[volo::main]
 async fn main() {
     let req = volo_gen::proto_gen::hello::HelloRequest {
-        name: "Volo".to_string(),
+        name: FastStr::from_static_str("Volo"),
     };
     let resp = CLIENT.say_hello(req).await;
 

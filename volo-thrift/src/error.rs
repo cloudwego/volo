@@ -5,7 +5,6 @@ use pilota::thrift::{
     TAsyncInputProtocol, TFieldIdentifier, TInputProtocol, TLengthProtocol, TOutputProtocol,
     TStructIdentifier, TType, TransportError,
 };
-use tokio::io::AsyncRead;
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
 use crate::AnyhowError;

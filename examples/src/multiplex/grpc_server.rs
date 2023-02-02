@@ -14,7 +14,7 @@ impl volo_gen::proto_gen::hello::Greeter for G {
     ) -> Result<volo_grpc::Response<volo_gen::proto_gen::hello::HelloReply>, volo_grpc::Status>
     {
         let resp = volo_gen::proto_gen::hello::HelloReply {
-            message: format!("Hello, {}!", req.get_ref().name),
+            message: format!("Hello, {}!", req.get_ref().name).into(),
         };
         Ok(volo_grpc::Response::new(resp))
     }
@@ -30,7 +30,7 @@ impl volo_gen::proto_gen::echo::Echo for E {
     ) -> Result<volo_grpc::Response<volo_gen::proto_gen::echo::EchoResponse>, volo_grpc::Status>
     {
         let resp = volo_gen::proto_gen::echo::EchoResponse {
-            message: req.get_ref().message.to_string(),
+            message: req.get_ref().message.to_string().into(),
         };
         Ok(volo_grpc::Response::new(resp))
     }

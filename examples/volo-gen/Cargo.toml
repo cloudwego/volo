@@ -14,7 +14,6 @@ publish = false
 anyhow.workspace = true
 async-trait.workspace = true
 futures.workspace = true
-prost.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 pilota.workspace = true
