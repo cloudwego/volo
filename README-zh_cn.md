@@ -11,7 +11,7 @@
 
 [English](README.md) | 中文
 
-Volo 是字节跳动服务框架团队研发的 **轻量级**、**高性能**、**可扩展性强**、**易用性好**的 Rust RPC 框架，使用了 Rust 最新的 GAT 特性。
+Volo 是字节跳动服务框架团队研发的 **高性能**、**可扩展性强** 的 Rust RPC 框架，使用了 Rust 最新的 GAT 特性。
 
 Volo 使用 [`Motore`][Motore] 作为其中间件抽象层, Motore 基于 GAT 设计。
 
@@ -40,7 +40,7 @@ Volo 使用 [`Motore`][Motore] 作为其中间件抽象层, Motore 基于 GAT �
 
 Rust 以高性能和安全著称，我们在设计和实现过程中也时刻以高性能作为我们的目标，尽可能降低每一处的开销，提升每一处实现的性能。
 
-首先要说明，**和 Go 的框架对比性能是极不公平的**，因此我们不会着重比较 Volo 和 Kitex 的性能，并且我们给出的数据仅能作为参考，希望大家能够客观看待； 同时，由于在开源社区并没有找到另一款成熟的 Rust 语言的 Async 版本 Thrift RPC 框架，而且性能对比总是容易引战，因此我们希望尽可能弱化性能数据的对比，仅会公布我们自己极限 QPS 的数据。
+首先要说明，**和 Go 的框架对比性能是极不公平的**，因此我们不会着重比较 Volo 和 Kitex 的性能，并且我们给出的数据仅能作为参考，希望大家能够客观看待；同时，由于在开源社区并没有找到另一款成熟的 Rust 语言的 Async 版本 Thrift RPC 框架，而且性能对比总是容易引战，因此我们希望尽可能弱化性能数据的对比，仅会公布我们自己极限 QPS 的数据。
 
 在和 Kitex 相同的测试条件（限制 4C）下，Volo 极限 QPS 为 35W；同时，我们内部正在验证基于 [Monoio](https://github.com/bytedance/monoio)（CloudWeGo 开源的 Rust Async Runtime）的版本，极限 QPS 可以达到 44W。
 
@@ -62,7 +62,7 @@ Rust 以高性能和安全著称，我们在设计和实现过程中也时刻以
 
 相关的扩展，我们会放在 [volo-rs](https://github.com/volo-rs) 组织下，也欢迎大家贡献自己的扩展到 volo-rs。
 
-查看 [guide](https://www.cloudwego.io/zh/docs/volo/guide/) 获取更多信息
+查看 [guide](https://www.cloudwego.io/zh/docs/volo/guide/) 获取更多信息。
 
 ## 相关教程
 
