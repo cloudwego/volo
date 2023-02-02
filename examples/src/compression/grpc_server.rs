@@ -20,7 +20,7 @@ impl volo_gen::proto_gen::hello::Greeter for S {
     ) -> Result<volo_grpc::Response<volo_gen::proto_gen::hello::HelloReply>, volo_grpc::Status>
     {
         let resp = volo_gen::proto_gen::hello::HelloReply {
-            message: format!("Hello, {}!", req.get_ref().name),
+            message: format!("Hello, {}!", req.get_ref().name).into(),
         };
         Ok(volo_grpc::Response::new(resp))
     }

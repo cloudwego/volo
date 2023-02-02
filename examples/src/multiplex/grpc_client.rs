@@ -3,6 +3,7 @@
 use std::net::SocketAddr;
 
 use lazy_static::lazy_static;
+use pilota::FastStr;
 
 lazy_static! {
     static ref GREETER_CLIENT: volo_gen::proto_gen::hello::GreeterClient = {
@@ -22,7 +23,7 @@ lazy_static! {
 #[volo::main]
 async fn main() {
     let req = volo_gen::proto_gen::hello::HelloRequest {
-        name: "Volo".to_string(),
+        name: FastStr::from_static_str("Volo"),
     };
     let resp = GREETER_CLIENT.say_hello(req).await;
     match resp {
@@ -31,7 +32,7 @@ async fn main() {
     }
 
     let req = volo_gen::proto_gen::echo::EchoRequest {
-        message: "Volo".to_string(),
+        message: FastStr::from_static_str("Volo"),
     };
     let resp = ECHO_CLIENT.echo(req).await;
     match resp {

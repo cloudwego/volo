@@ -1,5 +1,5 @@
 use faststr::FastStr;
-use pilota::thrift::{Error::Protocol, Message};
+use pilota::thrift::{Error::Protocol, Message, TAsyncInputProtocol};
 use tokio::io::AsyncRead;
 
 use crate::{

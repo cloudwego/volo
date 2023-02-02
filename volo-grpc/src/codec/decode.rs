@@ -10,7 +10,7 @@ use futures::{future, Stream};
 use futures_util::ready;
 use http::StatusCode;
 use http_body::Body;
-use prost::Message;
+use pilota::prost::Message;
 use tracing::{debug, trace};
 
 use super::{DefaultDecoder, BUFFER_SIZE, PREFIX_LEN};
