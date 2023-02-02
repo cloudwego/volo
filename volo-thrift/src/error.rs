@@ -1,8 +1,9 @@
 use std::fmt::{self, Display, Formatter};
 
 use pilota::thrift::{
-    Error as PilotaError, Message, ProtocolError, TAsyncInputProtocol, TFieldIdentifier,
-    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
+    binary::TAsyncBinaryProtocol, Error as PilotaError, Message, ProtocolError,
+    TAsyncInputProtocol, TFieldIdentifier, TInputProtocol, TLengthProtocol, TOutputProtocol,
+    TStructIdentifier, TType, TransportError,
 };
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
