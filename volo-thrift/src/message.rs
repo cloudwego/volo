@@ -3,7 +3,8 @@ use std::sync::Arc;
 pub use pilota::thrift::Message;
 use pilota::{
     thrift::{
-        TAsyncBinaryProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier, TOutputProtocol,
+        TAsyncBinaryProtocol, TAsyncInputProtocol, TInputProtocol, TLengthProtocol,
+        TMessageIdentifier, TOutputProtocol,
     },
     AsyncRead,
 };
@@ -19,12 +20,10 @@ pub trait EntryMessage: Sized + Send {
         msg_ident: &TMessageIdentifier,
     ) -> Result<Self, Error>;
 
-    async fn decode_async<R>(
-        protocol: &mut TAsyncBinaryProtocol<R>,
+    async fn decode_async<T: TAsyncInputProtocol>(
+        protocol: &mut T,
         msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, Error>
-    where
-        R: AsyncRead + Unpin + Send;
+    ) -> Result<Self, Error>;
 
     fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize;
 }
@@ -45,13 +44,10 @@ where
         Message::decode(protocol, msg_ident).map(Arc::new)
     }
 
-    async fn decode_async<R>(
-        protocol: &mut TAsyncBinaryProtocol<R>,
+    async fn decode_async<T: TAsyncInputProtocol>(
+        protocol: &mut T,
         msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, Error>
-    where
-        R: AsyncRead + Unpin + Send,
-    {
+    ) -> Result<Self, Error> {
         Message::decode_async(protocol, msg_ident)
             .await
             .map(Arc::new)

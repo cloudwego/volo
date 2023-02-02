@@ -42,13 +42,10 @@ impl EntryMessage for DummyMessage {
     }
 
     #[inline]
-    async fn decode_async<R>(
-        _protocol: &mut TAsyncBinaryProtocol<R>,
+    async fn decode_async<T: TAsyncInputProtocol>(
+        _protocol: &mut T,
         _msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, crate::Error>
-    where
-        R: AsyncRead + Unpin + Send,
-    {
+    ) -> Result<Self, crate::Error> {
         unreachable!()
     }
 
@@ -182,13 +179,10 @@ where
         })
     }
 
-    pub(crate) async fn decode_async<Cx: ThriftContext + Send, R>(
-        protocol: &mut TAsyncBinaryProtocol<R>,
+    pub(crate) async fn decode_async<Cx: ThriftContext + Send, T: TAsyncInputProtocol>(
+        protocol: &mut T,
         cx: &mut Cx,
-    ) -> Result<Self, crate::Error>
-    where
-        R: AsyncRead + Unpin + Send,
-    {
+    ) -> Result<Self, crate::Error> {
         let msg_ident = protocol.read_message_begin().await?;
 
         cx.handle_decoded_msg_ident(&msg_ident);

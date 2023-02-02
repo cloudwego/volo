@@ -1,7 +1,9 @@
 use bytes::BytesMut;
 use linkedbytes::LinkedBytes;
 use pilota::thrift::{
-    binary::TBinaryProtocol, ProtocolErrorKind, TAsyncBinaryProtocol, TLengthProtocol,
+    binary::TBinaryProtocol,
+    compact::{TCompactInputProtocol, TCompactOutputProtocol},
+    ProtocolErrorKind, TAsyncBinaryProtocol, TAsyncCompactProtocol, TLengthProtocol,
 };
 use tokio::io::AsyncRead;
 use volo::util::buf_reader::BufReader;
@@ -113,18 +115,25 @@ impl ZeroCopyDecoder for ThriftCodec {
         // TODO: support using protocol from TTHeader
         let protocol = detect(&bytes)?;
         // TODO: do we need to check the response protocol at client side?
-        if let Protocol::Binary = protocol {
-            let mut p = TBinaryProtocol::new(&mut bytes, true);
-            let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
-            cx.extensions_mut().insert(protocol);
-            Ok(Some(msg))
-        } else {
-            Err(crate::Error::Pilota(
+        match protocol {
+            Protocol::Binary => {
+                let mut p = TBinaryProtocol::new(&mut bytes, true);
+                let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
+                cx.extensions_mut().insert(protocol);
+                Ok(Some(msg))
+            }
+            Protocol::ApacheCompact => {
+                let mut p = TCompactInputProtocol::new(&mut bytes);
+                let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
+                cx.extensions_mut().insert(protocol);
+                Ok(Some(msg))
+            }
+            p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,
-                    format!("protocol {:?} is not supported", protocol),
+                    format!("protocol {:?} is not supported", p),
                 ),
-            ))
+            )),
         }
     }
 
@@ -152,18 +161,25 @@ impl ZeroCopyDecoder for ThriftCodec {
         // TODO: support using protocol from TTHeader
         let protocol = detect(buf)?;
         // TODO: do we need to check the response protocol at client side?
-        if let Protocol::Binary = protocol {
-            let mut p = TAsyncBinaryProtocol::new(reader);
-            let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
-            cx.extensions_mut().insert(protocol);
-            Ok(Some(msg))
-        } else {
-            Err(crate::Error::Pilota(
+        match protocol {
+            Protocol::Binary => {
+                let mut p = TAsyncBinaryProtocol::new(reader);
+                let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
+                cx.extensions_mut().insert(protocol);
+                Ok(Some(msg))
+            }
+            Protocol::ApacheCompact => {
+                let mut p = TAsyncCompactProtocol::new(reader);
+                let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
+                cx.extensions_mut().insert(protocol);
+                Ok(Some(msg))
+            }
+            p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,
-                    format!("protocol {:?} is not supported", protocol),
+                    format!("protocol {:?} is not supported", p),
                 ),
-            ))
+            )),
         }
     }
 }
@@ -198,6 +214,11 @@ impl ZeroCopyEncoder for ThriftCodec {
                 msg.encode(&mut p)?;
                 Ok(())
             }
+            Protocol::ApacheCompact => {
+                let mut p = TCompactOutputProtocol::new(linked_bytes, true);
+                msg.encode(&mut p)?;
+                Ok(())
+            }
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,
@@ -217,6 +238,12 @@ impl ZeroCopyEncoder for ThriftCodec {
         match cx.extensions().get::<Protocol>().unwrap_or(&self.protocol) {
             Protocol::Binary => {
                 let mut p = TBinaryProtocol::new((), true);
+                let real_size = msg.size(&mut p);
+                let malloc_size = real_size - p.zero_copy_len();
+                Ok((real_size, malloc_size))
+            }
+            Protocol::ApacheCompact => {
+                let mut p = TCompactOutputProtocol::new((), true);
                 let real_size = msg.size(&mut p);
                 let malloc_size = real_size - p.zero_copy_len();
                 Ok((real_size, malloc_size))
