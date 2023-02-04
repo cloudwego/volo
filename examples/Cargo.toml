@@ -46,6 +46,14 @@ path = "src/streaming/grpc_server.rs"
 name = "streaming-grpc-client"
 path = "src/streaming/grpc_client.rs"
 
+# graceful shutdown
+[[bin]]
+name = "graceful-shutdown-server"
+path = "src/graceful-shutdown/grpc_server.rs"
+[[bin]]
+name = "graceful-shutdown-client"
+path = "src/graceful-shutdown/grpc_client.rs"
+
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
