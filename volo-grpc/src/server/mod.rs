@@ -6,7 +6,7 @@ mod meta;
 mod router;
 mod service;
 
-use std::{fmt, time::Duration};
+use std::{fmt, io, time::Duration};
 
 use motore::{
     layer::{Identity, Layer, Stack},
@@ -213,9 +213,11 @@ impl<L> Server<L> {
         }
     }
 
-    pub async fn run_graceful_shutdown<
+    /// The main entry point for the server.
+    /// Runs server with a stop signal to control graceful shutdown.
+    pub async fn run_with_shutdown<
         A: volo::net::MakeIncoming,
-        F: std::future::Future<Output = ()>,
+        F: std::future::Future<Output = io::Result<()>>,
     >(
         self,
         incoming: A,
@@ -312,42 +314,7 @@ impl<L> Server<L> {
             + 'static,
         <L::Service as Service<ServerContext, Request<hyper::Body>>>::Error: Into<Status> + Send,
     {
-        let mut incoming = incoming.make_incoming().await?;
-        tracing::info!("[VOLO] server start at: {:?}", incoming);
-
-        let service = motore::builder::ServiceBuilder::new()
-            .layer(self.layer)
-            .service(self.router);
-
-        while let Some(conn) = incoming.accept().await? {
-            tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
-            let peer_addr = conn.info.peer_addr.clone();
-
-            let service = MetaService::new(service.clone(), peer_addr)
-                .tower(|req| (ServerContext::default(), req));
-
-            // init server
-            let mut server = hyper::server::conn::Http::new();
-            server
-                .http2_only(!self.http2_config.accept_http1)
-                .http2_initial_stream_window_size(self.http2_config.init_stream_window_size)
-                .http2_initial_connection_window_size(self.http2_config.init_connection_window_size)
-                .http2_adaptive_window(self.http2_config.adaptive_window)
-                .http2_max_concurrent_streams(self.http2_config.max_concurrent_streams)
-                .http2_keep_alive_interval(self.http2_config.http2_keepalive_interval)
-                .http2_keep_alive_timeout(self.http2_config.http2_keepalive_timeout)
-                .http2_max_frame_size(self.http2_config.max_frame_size)
-                .http2_max_send_buf_size(self.http2_config.max_send_buf_size)
-                .http2_max_header_list_size(self.http2_config.max_header_list_size);
-
-            spawn(async move {
-                let result = server.serve_connection(conn, service).await;
-                if let Err(err) = result {
-                    tracing::debug!("[VOLO] connection error: {:?}", err);
-                }
-            });
-        }
-        Ok(())
+        self.run_with_shutdown(incoming, tokio::signal::ctrl_c()).await
     }
 }
 
