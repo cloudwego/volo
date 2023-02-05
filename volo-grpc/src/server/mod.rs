@@ -314,7 +314,8 @@ impl<L> Server<L> {
             + 'static,
         <L::Service as Service<ServerContext, Request<hyper::Body>>>::Error: Into<Status> + Send,
     {
-        self.run_with_shutdown(incoming, tokio::signal::ctrl_c()).await
+        self.run_with_shutdown(incoming, tokio::signal::ctrl_c())
+            .await
     }
 }
 
