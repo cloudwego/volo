@@ -281,7 +281,7 @@ impl<L> Server<L> {
                         tokio::select! {
                             _ = watch.changed() => {
                                 tracing::trace!("[VOLO] closing a pending connection");
-                                // Graceful shudown.
+                                // Graceful shutdown.
                                 hyper::server::conn::Connection::graceful_shutdown(Pin::new(&mut http_conn));
                                 // Continue to poll this connection until shutdown can finish.
                                 let result = http_conn.await;
