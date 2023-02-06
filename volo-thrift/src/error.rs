@@ -1,9 +1,8 @@
 use std::fmt::{self, Display, Formatter};
 
 use pilota::thrift::{
-    binary::TAsyncBinaryProtocol, Error as PilotaError, Message, ProtocolError,
-    TAsyncInputProtocol, TFieldIdentifier, TInputProtocol, TLengthProtocol, TOutputProtocol,
-    TStructIdentifier, TType, TransportError,
+    Error as PilotaError, Message, ProtocolError, TAsyncInputProtocol, TFieldIdentifier,
+    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
 };
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
@@ -89,7 +88,7 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self)
+        write!(f, "{self:?}")
     }
 }
 
@@ -313,7 +312,7 @@ impl TryFrom<i32> for ApplicationErrorKind {
             11 => Ok(ApplicationErrorKind::LoadBalanceError),
             _ => Err(Error::Application(ApplicationError {
                 kind: ApplicationErrorKind::Unknown,
-                message: format!("cannot convert {} to ApplicationErrorKind", from),
+                message: format!("cannot convert {from} to ApplicationErrorKind"),
             })),
         }
     }

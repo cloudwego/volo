@@ -1,5 +1,6 @@
 use std::{cell::RefCell, net::SocketAddr, str::FromStr, sync::Arc};
 
+use faststr::FastStr;
 use futures::Future;
 use metainfo::{Backward, Forward};
 use volo::{
@@ -64,7 +65,7 @@ where
         let peer_addr = self.peer_addr.clone();
 
         metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
-            cx.rpc_info.method = Some(req.uri().path().into());
+            cx.rpc_info.method = Some(FastStr::new(req.uri().path()));
 
             let mut volo_req = Request::from_http(req);
 

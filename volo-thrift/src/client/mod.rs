@@ -83,7 +83,7 @@ impl<C, Req, Resp>
             config: Default::default(),
             pool: None,
             caller_name: "".into(),
-            callee_name: service_name.into(),
+            callee_name: FastStr::new(service_name),
             address: None,
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
@@ -194,7 +194,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
 
     /// Sets the client's name sent to the server.
     pub fn caller_name(mut self, name: impl AsRef<str>) -> Self {
-        self.caller_name = name.into();
+        self.caller_name = FastStr::new(name);
         self
     }
 

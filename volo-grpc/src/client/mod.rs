@@ -65,7 +65,7 @@ impl<C, T, U>
         Self {
             http2_config: Default::default(),
             rpc_config: Default::default(),
-            callee_name: service_name.into(),
+            callee_name: FastStr::new(service_name),
             caller_name: "".into(),
             target: None,
             inner_layer: Identity::new(),
@@ -249,7 +249,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     ///
     /// Default is the empty string.
     pub fn caller_name(mut self, name: impl AsRef<str>) -> Self {
-        self.caller_name = name.into();
+        self.caller_name = FastStr::new(name);
         self
     }
 

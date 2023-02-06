@@ -2,6 +2,7 @@
 
 use std::{borrow::Cow, error::Error, fmt};
 
+use base64::Engine;
 use bytes::Bytes;
 use http::header::{HeaderMap, HeaderValue};
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
@@ -443,7 +444,8 @@ impl Status {
             let details = header_map
                 .get(GRPC_STATUS_DETAILS_HEADER)
                 .map(|h| {
-                    base64::decode(h.as_bytes())
+                    base64::engine::general_purpose::STANDARD
+                        .decode(h.as_bytes())
                         .expect("Invalid status header, expected base64 encoded value")
                 })
                 .map(Bytes::from)
@@ -572,7 +574,8 @@ impl Status {
 
         // if exists, add 'grpc-status-details-bin'
         if !self.details.is_empty() {
-            let details = base64::encode_config(&self.details[..], base64::STANDARD_NO_PAD);
+            let details =
+                base64::engine::general_purpose::STANDARD_NO_PAD.encode(&self.details[..]);
 
             header_map.insert(
                 GRPC_STATUS_DETAILS_HEADER,
@@ -1017,7 +1020,7 @@ mod tests {
 
         let header_map = status.to_header_map().unwrap();
 
-        let b64_details = base64::encode_config(DETAILS, base64::STANDARD_NO_PAD);
+        let b64_details = base64::engine::general_purpose::STANDARD_NO_PAD.encode(DETAILS);
 
         assert_eq!(header_map[GRPC_STATUS_DETAILS_HEADER], b64_details);
 

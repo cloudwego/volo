@@ -224,16 +224,13 @@ pub fn check_framed_size(size: i32, max_frame_size: i32) -> Result<(), crate::Er
     if size > max_frame_size {
         return Err(crate::Error::Pilota(pilota::thrift::new_protocol_error(
             pilota::thrift::ProtocolErrorKind::SizeLimit,
-            format!(
-                "frame size {} exceeds max frame size {}",
-                size, max_frame_size
-            ),
+            format!("frame size {size} exceeds max frame size {max_frame_size}"),
         )));
     }
     if size < 0 {
         return Err(crate::Error::Pilota(pilota::thrift::new_protocol_error(
             pilota::thrift::ProtocolErrorKind::NegativeSize,
-            format!("frame size {} is negative", size,),
+            format!("frame size {size} is negative"),
         )));
     }
     Ok(())

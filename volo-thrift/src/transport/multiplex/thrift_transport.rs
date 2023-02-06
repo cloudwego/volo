@@ -118,7 +118,7 @@ where
                             for (_, tx) in tx_map.drain() {
                                 let _ = tx.send(Err(Error::Application(ApplicationError::new(
                                     ApplicationErrorKind::Unknown,
-                                    format!("multiplex connection error: {}", e),
+                                    format!("multiplex connection error: {e}"),
                                 ))));
                             }
                             return;
@@ -225,10 +225,10 @@ where
                 Err(e) => Err(e),
             },
             Err(e) => {
-                tracing::error!("[VOLO] multiplex connection oneshot recv error: {}", e);
+                tracing::error!("[VOLO] multiplex connection oneshot recv error: {e}");
                 Err(Error::Application(ApplicationError::new(
                     ApplicationErrorKind::Unknown,
-                    format!("multiplex connection oneshot recv error: {}", e),
+                    format!("multiplex connection oneshot recv error: {e}"),
                 )))
             }
         }

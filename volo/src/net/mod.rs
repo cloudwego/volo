@@ -38,7 +38,7 @@ fn should_favor_ipv6() -> bool {
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Address::Ip(addr) => write!(f, "{}", addr),
+            Address::Ip(addr) => write!(f, "{addr}"),
             #[cfg(target_family = "unix")]
             Address::Unix(path) => write!(f, "{}", path.display()),
         }

@@ -1,12 +1,10 @@
 use faststr::FastStr;
 use pilota::thrift::{Error::Protocol, Message, TAsyncInputProtocol};
-use tokio::io::AsyncRead;
 
 use crate::{
     context::{ClientContext, ServerContext, ThriftContext},
     protocol::{
-        binary::TAsyncBinaryProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier,
-        TMessageType, TOutputProtocol,
+        TInputProtocol, TLengthProtocol, TMessageIdentifier, TMessageType, TOutputProtocol,
     },
     ApplicationError, ApplicationErrorKind, EntryMessage,
 };
@@ -144,10 +142,7 @@ where
                         e.encode(protocol)?;
                     }
                     e => {
-                        panic!(
-                            "should not call send when there is a transport error: {:?}",
-                            e
-                        );
+                        panic!("should not call send when there is a transport error: {e:?}");
                     }
                 },
             },

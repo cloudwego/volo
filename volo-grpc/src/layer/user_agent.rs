@@ -68,7 +68,7 @@ mod tests {
     fn prepends_custom_user_agent_to_default() {
         assert_eq!(
             UserAgent::new(Svc, Some(HeaderValue::from_static("Greeter 1.1"))).user_agent,
-            HeaderValue::from_str(&format!("Greeter 1.1 {}", VOLO_USER_AGENT)).unwrap()
+            HeaderValue::from_str(&format!("Greeter 1.1 {VOLO_USER_AGENT}")).unwrap()
         )
     }
 }
