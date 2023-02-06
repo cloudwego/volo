@@ -352,9 +352,9 @@ dependencies = [
 
 [[package]]
 name = "faststr"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb2ab3dc8c42a09be1cb9b468f2f91065c3d22dedc01c67039518e968efe3c81"
+checksum = "78e91abcd14d4aee805c9aad718c81283fc18d9784daada637988f55f535aa8d"
 dependencies = [
  "bytes",
  "serde",
@@ -827,10 +827,11 @@ checksum = "2dffe52ecf27772e601905b7522cb4ef790d2cc203488bbd0e2fe85fcb74566d"
 
 [[package]]
 name = "metainfo"
-version = "0.6.3"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0060958834bf7ff31f64242f784b9a79c70819c7d6130bf5cc376fae80316f2b"
+checksum = "a5ce8fafe3513815c9067acf5485058b91578aa52b17839b9671d03f5e4c20c5"
 dependencies = [
+ "faststr",
  "fxhash",
  "paste",
  "tokio",
@@ -2052,7 +2053,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "volo"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "async-broadcast",
  "async-trait",
@@ -2139,7 +2140,7 @@ dependencies = [
 
 [[package]]
 name = "volo-grpc"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2178,7 +2179,7 @@ version = "0.3.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "anyhow",
  "async-trait",
