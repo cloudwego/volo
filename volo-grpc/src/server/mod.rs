@@ -239,7 +239,7 @@ impl<L> Server<L> {
             .layer(self.layer)
             .service(self.router);
 
-        let mut signal = Box::pin(signal);
+        tokio::pin!(signal);
         let (tx, rx) = tokio::sync::watch::channel(());
 
         loop {
