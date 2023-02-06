@@ -29,7 +29,7 @@ pilota-thrift-parser = "0.4"
 
 motore = "0.3"
 
-metainfo = "0.6"
+metainfo = "0.7"
 
 anyhow = "1"
 async-broadcast = "0.5"

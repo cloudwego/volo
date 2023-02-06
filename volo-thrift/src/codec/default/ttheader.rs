@@ -5,11 +5,11 @@
 //! For more information, please visit https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/
 
 use std::{
-    collections::HashMap, convert::TryFrom, default::Default, net::SocketAddr, str::from_utf8,
-    sync::Arc, time::Duration,
+    collections::HashMap, convert::TryFrom, default::Default, net::SocketAddr, time::Duration,
 };
 
 use bytes::{Buf, BufMut, BytesMut};
+use faststr::FastStr;
 use linkedbytes::LinkedBytes;
 use metainfo::{Backward, Forward};
 use num_enum::TryFromPrimitive;
@@ -693,10 +693,11 @@ pub(crate) fn decode<Cx: ThriftContext>(
             let transform_ids_num = src.get_u8();
             let mut _transform_ids = None;
             if transform_ids_num > 0 {
-                let mut _transform_ids_inner = vec![0u8; transform_ids_num as usize];
-                src.copy_to_slice(&mut _transform_ids_inner);
+                let _transform_ids_inner = src.split_to(transform_ids_num as usize);
                 _transform_ids = Some(_transform_ids_inner);
             }
+
+            #[allow(clippy::mutable_key_type)]
             let mut headers = HashMap::new();
             let mut int_headers = HashMap::new();
             let mut _padding_num = 0usize;
@@ -719,33 +720,16 @@ pub(crate) fn decode<Cx: ThriftContext>(
                             remaining_header_size -= 2;
                             let key_len = src.get_u16();
                             remaining_header_size -= key_len as usize;
-                            let mut key = vec![0u8; key_len as usize];
-                            src.copy_to_slice(&mut key);
+                            let key = src.split_to(key_len as usize).freeze();
+
                             remaining_header_size -= 2;
                             let value_len = src.get_u16();
                             remaining_header_size -= value_len as usize;
-                            let mut value = vec![0u8; value_len as usize];
-                            src.copy_to_slice(&mut value);
+                            let value = src.split_to(value_len as usize).freeze();
+
                             headers.insert(
-                                from_utf8(&key)
-                                    .map_err(|e| {
-                                        new_protocol_error(
-                                            ProtocolErrorKind::InvalidData,
-                                            format!(
-                                                "invalid header key which is not utf-8 {key:?}: {e}"
-                                            ),
-                            )})?
-                                    .to_string(),
-                                from_utf8(&value)
-                                    .map_err(|e| {
-                                        new_protocol_error(
-                                            ProtocolErrorKind::InvalidData,
-                                            format!(
-                                                "invalid header value which is not utf-8 {key:?}: {e}"
-                                            ),
-                                        )
-                                    })?
-                                    .to_string(),
+                                unsafe { FastStr::from_bytes_unchecked(key) },
+                                unsafe { FastStr::from_bytes_unchecked(value) }
                             );
                         }
                     }
@@ -753,40 +737,34 @@ pub(crate) fn decode<Cx: ThriftContext>(
                         remaining_header_size -= 2;
                         let kv_size = src.get_u16();
                         int_headers.reserve(kv_size as usize);
+
                         for _ in 0..kv_size {
                             remaining_header_size -= 4;
                             let key = src.get_u16();
-                            let value_len = src.get_u16();
-                            remaining_header_size -= value_len as usize;
-                            let mut value = vec![0u8; value_len as usize];
-                            src.copy_to_slice(&mut value);
-                            let key = IntMetaKey::try_from(key).map_err(|e| {
-                                new_protocol_error(
-                                    ProtocolErrorKind::InvalidData,
-                                    format!("invalid int meta key {key}: {e}"),
-                                )
-                            })?;
+                            let value_len = src.get_u16() as usize;
+                            remaining_header_size -= value_len;
+                            let value = src.split_to(value_len).freeze();
+                            let key = match IntMetaKey::try_from(key) {
+                                Ok(k) => k,
+                                Err(e) => {
+                                    tracing::debug!("[VOLO] unknown int header key: {}, value: {:?}, error: {}", key, value, e);
+                                    continue;
+                                },
+                            };
 
                             int_headers.insert(
                                 key,
-                                from_utf8(&value)
-                                    .map_err(|e| {
-                                        new_protocol_error(
-                                            ProtocolErrorKind::InvalidData,
-                                            format!("invalid int meta value {value:?}: {e}"),
-                                        )
-                                    })?
-                                    .to_string(),
+                                unsafe { FastStr::from_bytes_unchecked(value) }
                             );
                         }
                     }
+
                     info::ACL_TOKEN_KEY_VALUE => {
                         remaining_header_size -= 2;
                         let token_len = src.get_u16();
                         // just ignore token
                         remaining_header_size -= token_len as usize;
-                        let mut token = vec![0u8; token_len as usize];
-                        src.copy_to_slice(&mut token);
+                        let _token = src.split_to(token_len as usize);
                     }
                     _ => {
                         let msg = format!("unexpected info id in ttheader: {info_id}");
@@ -831,7 +809,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                         .map(|(_, v)| v);
 
                     if let Some(from_service) = from_service {
-                        let mut caller = Endpoint::new(Arc::<str>::from(from_service).into());
+                        let mut caller = Endpoint::new(from_service);
                         if let Some(ad) = headers.remove(HEADER_TRANS_REMOTE_ADDR) {
                             let addr = ad.parse::<SocketAddr>();
                             if let Ok(addr) = addr {
@@ -858,7 +836,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                         .map(|(_, v)| v);
 
                     if let Some(to_service) = to_service {
-                        let callee = Endpoint::new(Arc::<str>::from(to_service).into());
+                        let callee = Endpoint::new(to_service);
 
                         cx.rpc_info_mut().callee = Some(callee);
                     }
