@@ -42,7 +42,7 @@ hyper-timeout.workspace = true
 matchit.workspace = true
 percent-encoding.workspace = true
 pin-project.workspace = true
-tokio = { workspace = true, features = ["time", "rt", "net", "sync"] }
+tokio = { workspace = true, features = ["time", "rt", "net", "sync", "signal"] }
 tokio-stream.workspace = true
 tokio-util = { workspace = true, features = ["codec", "compat"] }
 tower = { workspace = true, features = [
@@ -57,4 +57,3 @@ tracing.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
-tokio = { workspace = true, features = ["full"] }
