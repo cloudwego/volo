@@ -6,7 +6,7 @@ mod meta;
 mod router;
 mod service;
 
-use std::{fmt, time::Duration};
+use std::{fmt, io, time::Duration};
 
 use motore::{
     layer::{Identity, Layer, Stack},
@@ -214,7 +214,15 @@ impl<L> Server<L> {
     }
 
     /// The main entry point for the server.
-    pub async fn run<A: volo::net::MakeIncoming>(self, incoming: A) -> Result<(), BoxError>
+    /// Runs server with a stop signal to control graceful shutdown.
+    pub async fn run_with_shutdown<
+        A: volo::net::MakeIncoming,
+        F: std::future::Future<Output = io::Result<()>>,
+    >(
+        self,
+        incoming: A,
+        signal: F,
+    ) -> Result<(), BoxError>
     where
         L: Layer<Router>,
         L::Service: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>>
@@ -231,35 +239,83 @@ impl<L> Server<L> {
             .layer(self.layer)
             .service(self.router);
 
-        while let Some(conn) = incoming.accept().await? {
-            tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
-            let peer_addr = conn.info.peer_addr.clone();
+        tokio::pin!(signal);
+        let (tx, rx) = tokio::sync::watch::channel(());
 
-            let service = MetaService::new(service.clone(), peer_addr)
-                .tower(|req| (ServerContext::default(), req));
+        loop {
+            tokio::select! {
+                _ = &mut signal => {
+                    drop(rx);
+                    tracing::info!("[VOLO] graceful shutdown");
+                    let _ = tx.send(());
+                    // Waits for receivers to drop.
+                    tx.closed().await;
+                    return Ok(());
+                },
+                conn = incoming.accept() => {
+                    let conn = match conn? {
+                        Some(c) => c,
+                        None => return Ok(()),
+                    };
+                    tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
+                    let peer_addr = conn.info.peer_addr.clone();
 
-            // init server
-            let mut server = hyper::server::conn::Http::new();
-            server
-                .http2_only(!self.http2_config.accept_http1)
-                .http2_initial_stream_window_size(self.http2_config.init_stream_window_size)
-                .http2_initial_connection_window_size(self.http2_config.init_connection_window_size)
-                .http2_adaptive_window(self.http2_config.adaptive_window)
-                .http2_max_concurrent_streams(self.http2_config.max_concurrent_streams)
-                .http2_keep_alive_interval(self.http2_config.http2_keepalive_interval)
-                .http2_keep_alive_timeout(self.http2_config.http2_keepalive_timeout)
-                .http2_max_frame_size(self.http2_config.max_frame_size)
-                .http2_max_send_buf_size(self.http2_config.max_send_buf_size)
-                .http2_max_header_list_size(self.http2_config.max_header_list_size);
+                    let service = MetaService::new(service.clone(), peer_addr)
+                        .tower(|req| (ServerContext::default(), req));
 
-            spawn(async move {
-                let result = server.serve_connection(conn, service).await;
-                if let Err(err) = result {
-                    tracing::debug!("[VOLO] connection error: {:?}", err);
-                }
-            });
+                    // init server
+                    let mut server = hyper::server::conn::Http::new();
+                    server
+                        .http2_only(!self.http2_config.accept_http1)
+                        .http2_initial_stream_window_size(self.http2_config.init_stream_window_size)
+                        .http2_initial_connection_window_size(self.http2_config.init_connection_window_size)
+                        .http2_adaptive_window(self.http2_config.adaptive_window)
+                        .http2_max_concurrent_streams(self.http2_config.max_concurrent_streams)
+                        .http2_keep_alive_interval(self.http2_config.http2_keepalive_interval)
+                        .http2_keep_alive_timeout(self.http2_config.http2_keepalive_timeout)
+                        .http2_max_frame_size(self.http2_config.max_frame_size)
+                        .http2_max_send_buf_size(self.http2_config.max_send_buf_size)
+                        .http2_max_header_list_size(self.http2_config.max_header_list_size);
+
+                    let mut watch = rx.clone();
+                    spawn(async move {
+                        let mut http_conn = server.serve_connection(conn, service);
+                        tokio::select! {
+                            _ = watch.changed() => {
+                                tracing::trace!("[VOLO] closing a pending connection");
+                                // Graceful shutdown.
+                                hyper::server::conn::Connection::graceful_shutdown(Pin::new(&mut http_conn));
+                                // Continue to poll this connection until shutdown can finish.
+                                let result = http_conn.await;
+                                if let Err(err) = result {
+                                    tracing::debug!("[VOLO] connection error: {:?}", err);
+                                }
+                            },
+                            result = &mut http_conn => {
+                                if let Err(err) = result {
+                                    tracing::debug!("[VOLO] connection error: {:?}", err);
+                                }
+                            },
+                        }
+                    });
+                },
+            }
         }
-        Ok(())
+    }
+
+    /// The main entry point for the server.
+    pub async fn run<A: volo::net::MakeIncoming>(self, incoming: A) -> Result<(), BoxError>
+    where
+        L: Layer<Router>,
+        L::Service: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        <L::Service as Service<ServerContext, Request<hyper::Body>>>::Error: Into<Status> + Send,
+    {
+        self.run_with_shutdown(incoming, tokio::signal::ctrl_c())
+            .await
     }
 }
 
