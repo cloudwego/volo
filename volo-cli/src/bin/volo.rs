@@ -38,12 +38,10 @@ fn main() -> Result<()> {
             new_version = version.to_string().green()
         );
 
-        let update_command = format!("cargo install {pkg_name}", pkg_name = pkg_name).yellow();
+        let update_command = format!("cargo install {pkg_name}").yellow();
 
-        let update_msg = format!(
-            "You can use '{update_command}' to update to the latest version.",
-            update_command = update_command,
-        );
+        let update_msg =
+            format!("You can use '{update_command}' to update to the latest version.",);
 
         println!("\n{outdated_msg}\n{update_msg}");
     }

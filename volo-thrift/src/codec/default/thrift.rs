@@ -131,7 +131,7 @@ impl ZeroCopyDecoder for ThriftCodec {
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,
-                    format!("protocol {:?} is not supported", p),
+                    format!("protocol {p:?} is not supported"),
                 ),
             )),
         }
@@ -177,7 +177,7 @@ impl ZeroCopyDecoder for ThriftCodec {
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,
-                    format!("protocol {:?} is not supported", p),
+                    format!("protocol {p:?} is not supported"),
                 ),
             )),
         }
@@ -222,7 +222,7 @@ impl ZeroCopyEncoder for ThriftCodec {
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,
-                    format!("protocol {:?} is not supported", p),
+                    format!("protocol {p:?} is not supported"),
                 ),
             )),
         }
@@ -251,7 +251,7 @@ impl ZeroCopyEncoder for ThriftCodec {
             p => Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
                     ProtocolErrorKind::NotImplemented,
-                    format!("protocol {:?} is not supported", p),
+                    format!("protocol {p:?} is not supported"),
                 ),
             )),
         }

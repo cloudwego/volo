@@ -166,7 +166,7 @@ mod tests {
     struct MotoreContext;
 
     async fn handle(cx: &mut MotoreContext, request: String) -> Result<String, Infallible> {
-        println!("{:?}, {:?}", cx, request);
+        println!("{cx:?}, {request:?}");
         Ok::<_, Infallible>(request.to_uppercase())
     }
 

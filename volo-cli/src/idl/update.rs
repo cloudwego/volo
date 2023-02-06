@@ -34,7 +34,7 @@ impl CliCommand for Update {
             // check if the git exists in the config
             self.git.iter().for_each(|g| {
                 if !exists.contains(g) {
-                    eprintln!("git repo {} not exists in config", g);
+                    eprintln!("git repo {g} not exists in config");
                     std::process::exit(1);
                 }
             });

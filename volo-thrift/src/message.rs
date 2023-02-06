@@ -1,12 +1,8 @@
 use std::sync::Arc;
 
 pub use pilota::thrift::Message;
-use pilota::{
-    thrift::{
-        TAsyncBinaryProtocol, TAsyncInputProtocol, TInputProtocol, TLengthProtocol,
-        TMessageIdentifier, TOutputProtocol,
-    },
-    AsyncRead,
+use pilota::thrift::{
+    TAsyncInputProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier, TOutputProtocol,
 };
 
 use crate::Error;

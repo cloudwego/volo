@@ -1,6 +1,6 @@
 [package]
 name = "volo-thrift"
-version = "0.3.1"
+version = "0.3.2"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true

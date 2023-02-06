@@ -215,19 +215,14 @@ pub(crate) const HEADER_TRANS_REMOTE_ADDR: &str = "rip";
 // connection.
 pub(crate) const HEADER_CONNECTION_READY_TO_RESET: &str = "crrst";
 
-#[derive(TryFromPrimitive, Clone, Copy)]
+#[derive(TryFromPrimitive, Clone, Copy, Default)]
 #[repr(u8)]
 pub enum ProtocolId {
+    #[default]
     Binary = 0,
     Compact = 2,   // Apache Thrift compact protocol
     CompactV2 = 3, // fbthrift compact protocol
     Protobuf = 4,
-}
-
-impl Default for ProtocolId {
-    fn default() -> ProtocolId {
-        ProtocolId::Binary
-    }
 }
 
 #[derive(PartialEq, Eq, Hash, Clone, Copy, TryFromPrimitive)]
@@ -488,7 +483,7 @@ pub(crate) fn encode<Cx: ThriftContext>(
         if written_header_size > u16::MAX as usize {
             return Err(crate::Error::Pilota(pilota::thrift::new_transport_error(
                 TransportErrorKind::SizeLimit,
-                format!("ttheader header size {} overflows u16", written_header_size),
+                format!("ttheader header size {written_header_size} overflows u16"),
             )));
         }
         buf.put_u16(written_header_size.try_into().unwrap());
@@ -689,7 +684,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                     crate::Error::Pilota(
                         pilota::thrift::new_protocol_error(
                             ProtocolErrorKind::BadVersion,
-                            format!("unknown protocol id: {} in ttheader", protocol_id)
+                            format!("unknown protocol id: {protocol_id} in ttheader")
                         )
                     )
                 );
@@ -737,8 +732,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                                         new_protocol_error(
                                             ProtocolErrorKind::InvalidData,
                                             format!(
-                                                "invalid header key which is not utf-8 {:?}: {}",
-                                                key, e
+                                                "invalid header key which is not utf-8 {key:?}: {e}"
                                             ),
                             )})?
                                     .to_string(),
@@ -747,8 +741,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                                         new_protocol_error(
                                             ProtocolErrorKind::InvalidData,
                                             format!(
-                                                "invalid header value which is not utf-8 {:?}: {}",
-                                                key, e
+                                                "invalid header value which is not utf-8 {key:?}: {e}"
                                             ),
                                         )
                                     })?
@@ -770,7 +763,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                             let key = IntMetaKey::try_from(key).map_err(|e| {
                                 new_protocol_error(
                                     ProtocolErrorKind::InvalidData,
-                                    format!("invalid int meta key {}: {}", key, e),
+                                    format!("invalid int meta key {key}: {e}"),
                                 )
                             })?;
 
@@ -780,7 +773,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                                     .map_err(|e| {
                                         new_protocol_error(
                                             ProtocolErrorKind::InvalidData,
-                                            format!("invalid int meta value {:?}: {}", value, e),
+                                            format!("invalid int meta value {value:?}: {e}"),
                                         )
                                     })?
                                     .to_string(),
@@ -796,7 +789,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                         src.copy_to_slice(&mut token);
                     }
                     _ => {
-                        let msg = format!("unexpected info id in ttheader: {}", info_id);
+                        let msg = format!("unexpected info id in ttheader: {info_id}");
                         warn!("[VOLO] {}", msg);
                         return Err(crate::Error::Pilota(new_protocol_error(ProtocolErrorKind::Unknown, msg)));
                     }
