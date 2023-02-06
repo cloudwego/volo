@@ -2,7 +2,6 @@
 
 use std::{error::Error, fmt, hash::Hash};
 
-use base64::Engine;
 use bytes::Bytes;
 use http::header::HeaderValue;
 
@@ -108,7 +107,7 @@ impl value_encoding::Sealed for Binary {
     }
 
     fn from_bytes(value: &[u8]) -> Result<HeaderValue, InvalidMetadataValueBytes> {
-        let encoded_value: String = base64::engine::general_purpose::STANDARD_NO_PAD.encode(value);
+        let encoded_value: String = base64::encode_config(value, base64::STANDARD_NO_PAD);
         HeaderValue::from_maybe_shared(Bytes::from(encoded_value))
             .map_err(|_| InvalidMetadataValueBytes::new())
     }
@@ -118,10 +117,7 @@ impl value_encoding::Sealed for Binary {
     }
 
     fn from_static(value: &'static str) -> HeaderValue {
-        if base64::engine::general_purpose::STANDARD
-            .decode(value)
-            .is_err()
-        {
+        if base64::decode(value).is_err() {
             panic!("Invalid base64 passed to from_static: {value}");
         }
         // SAFETY: we have checked the bytes with base64
@@ -129,14 +125,13 @@ impl value_encoding::Sealed for Binary {
     }
 
     fn decode(value: &[u8]) -> Result<Bytes, InvalidMetadataValueBytes> {
-        base64::engine::general_purpose::STANDARD
-            .decode(value)
+        base64::decode(value)
             .map(|bytes_vec| bytes_vec.into())
             .map_err(|_| InvalidMetadataValueBytes::new())
     }
 
     fn equals(a: &HeaderValue, b: &[u8]) -> bool {
-        if let Ok(decoded) = base64::engine::general_purpose::STANDARD.decode(a.as_bytes()) {
+        if let Ok(decoded) = base64::decode(a.as_bytes()) {
             decoded == b
         } else {
             a.as_bytes() == b
