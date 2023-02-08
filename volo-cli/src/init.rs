@@ -9,7 +9,7 @@ use pilota_thrift_parser::parser::Parser as _;
 use regex::Regex;
 use volo_build::{
     model::{Entry, GitSource, Idl, Source, DEFAULT_FILENAME},
-    util::{get_repo_latest_commit_id, git_archive, DEFAULT_CONFIG_FILE},
+    util::{get_git_path, get_repo_latest_commit_id, git_archive, DEFAULT_CONFIG_FILE},
 };
 
 use crate::command::CliCommand;
@@ -235,13 +235,14 @@ impl CliCommand for Init {
             let mut lock = None;
 
             let contents = if self.git.is_some() {
-                let cwd = std::env::current_dir()?.join("target");
-                create_dir_all(&cwd).context("create target dir")?;
                 let r#ref = self.r#ref.as_deref().unwrap_or("HEAD");
-                let _ = lock.insert(get_repo_latest_commit_id(
-                    self.git.as_ref().unwrap(),
-                    r#ref,
-                )?);
+                let lock_value = get_repo_latest_commit_id(self.git.as_ref().unwrap(), r#ref)?;
+                let cwd = std::env::current_dir()?
+                    .join("target")
+                    .join(get_git_path(self.git.as_ref().unwrap().as_str())?)
+                    .join(lock_value.clone());
+                create_dir_all(&cwd).context("create target dir")?;
+                let _ = lock.insert(lock_value);
 
                 git_archive(
                     self.git.as_ref().unwrap().as_str(),
