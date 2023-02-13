@@ -1,8 +1,8 @@
 use std::fmt::{self, Display, Formatter};
 
 use pilota::thrift::{
-    Error as PilotaError, Message, ProtocolError, TAsyncInputProtocol, TFieldIdentifier,
-    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
+    Error as PilotaError, Message, ProtocolError, TAsyncInputProtocol, TInputProtocol,
+    TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
 };
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
@@ -12,18 +12,6 @@ pub type Result<T, E = Error> = core::result::Result<T, E>;
 
 const TAPPLICATION_EXCEPTION: TStructIdentifier = TStructIdentifier {
     name: "TApplicationException",
-};
-
-const ERROR_MESSAGE_FIELD: TFieldIdentifier = TFieldIdentifier {
-    name: Some("message"),
-    field_type: TType::Binary,
-    id: Some(1),
-};
-
-const ERROR_TYPE_FIELD: TFieldIdentifier = TFieldIdentifier {
-    name: Some("type"),
-    field_type: TType::I32,
-    id: Some(2),
 };
 
 #[derive(Debug)]
@@ -246,10 +234,10 @@ impl Message for ApplicationError {
 
     fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
         protocol.write_struct_begin_len(&TAPPLICATION_EXCEPTION)
-            + protocol.write_field_begin_len(&ERROR_MESSAGE_FIELD)
+            + protocol.write_field_begin_len(TType::Binary, Some(1))
             + protocol.write_string_len(&self.message)
             + protocol.write_field_end_len()
-            + protocol.write_field_begin_len(&ERROR_TYPE_FIELD)
+            + protocol.write_field_begin_len(TType::I32, Some(2))
             + protocol.write_i32_len(self.kind as i32)
             + protocol.write_field_end_len()
             + protocol.write_field_stop_len()
