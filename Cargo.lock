@@ -1112,7 +1112,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.4.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#1894d2eb0ebc3034c29b6955ae7768e5a6660155"
+source = "git+https://github.com/cloudwego/pilota?branch=main#56335f1907d95fa38daa044f65dc0e328c5a72db"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1132,7 +1132,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.4.2"
-source = "git+https://github.com/cloudwego/pilota?branch=main#1894d2eb0ebc3034c29b6955ae7768e5a6660155"
+source = "git+https://github.com/cloudwego/pilota?branch=main#56335f1907d95fa38daa044f65dc0e328c5a72db"
 dependencies = [
  "faststr",
  "fxhash",
@@ -1158,7 +1158,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#1894d2eb0ebc3034c29b6955ae7768e5a6660155"
+source = "git+https://github.com/cloudwego/pilota?branch=main#56335f1907d95fa38daa044f65dc0e328c5a72db"
 dependencies = [
  "nom",
 ]
