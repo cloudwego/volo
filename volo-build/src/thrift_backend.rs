@@ -282,7 +282,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             let name = self.cx.rust_name(m.def_id).as_syn_ident();
             let resp_type = self.cx.codegen_item_ty(m.ret.kind.clone());
             let req_fields = m.args.iter().map(|a| {
-                let name = format_ident!("{}", a.name);
+                let name = self.cx.rust_name(a.def_id).as_syn_ident();
                 let ty = self.cx.codegen_item_ty(a.ty.kind.clone());
                 let mut ty = quote! { #ty };
                 if let Some(RustWrapperArc(true)) = self.cx.tags(a.tags_id).as_ref().and_then(|tags| tags.get::<RustWrapperArc>()) {
@@ -516,7 +516,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         let ret_ty = self.inner.codegen_item_ty(method.ret.kind.clone());
         let args = method.args.iter().map(|a| {
             let ty = self.inner.codegen_item_ty(a.ty.kind.clone());
-            let ident = format_ident!("{}", a.name);
+            let ident = self.cx.rust_name(a.def_id).as_syn_ident();
             quote! {
                 #ident: #ty
             }
