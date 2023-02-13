@@ -570,9 +570,9 @@ dependencies = [
 
 [[package]]
 name = "hermit-abi"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "856b5cb0902c2b6d65d5fd97dfa30f9b70c7538e770b98eab5ed52d8db923e01"
+checksum = "fed44880c466736ef9a5c5b5facefb5ed0785676d0c02d612db14e54f0d84286"
 
 [[package]]
 name = "hex"
@@ -714,7 +714,7 @@ version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "22e18b0a45d56fe973d6db23972bf5bc46f988a4a2385deac9cc29572f09daef"
 dependencies = [
- "hermit-abi 0.3.0",
+ "hermit-abi 0.3.1",
  "io-lifetimes",
  "rustix",
  "windows-sys 0.45.0",
@@ -866,9 +866,9 @@ dependencies = [
 
 [[package]]
 name = "motore"
-version = "0.3.0"
+version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "384cd5ada2f73985da91a26b1a475e540250d93567495dd66a759ece56818297"
+checksum = "4c162abbbfc7d50998334532e5c5e8e9dcf9fc3bafd326cad76746a625633541"
 dependencies = [
  "futures",
  "motore-macros",
@@ -1059,9 +1059,9 @@ checksum = "478c572c3d73181ff3c2539045f6eb99e5491218eae919370993b890cdbdd98e"
 
 [[package]]
 name = "petgraph"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6d5014253a1331579ce62aa67443b4a658c5e7dd03d4bc6d302b94474888143"
+checksum = "4dd7d28ee937e54fe3080c91faa1c3a46c06de6252988a7f4592ba2310ef22a4"
 dependencies = [
  "fixedbitset",
  "indexmap",
@@ -1112,8 +1112,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b658dc749a0dc176373bc40a46f3aaff5182a93f19c35652067b6cb3aa10b8bf"
+source = "git+https://github.com/cloudwego/pilota?branch=main#1894d2eb0ebc3034c29b6955ae7768e5a6660155"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1124,6 +1123,7 @@ dependencies = [
  "integer-encoding",
  "lazy_static",
  "linkedbytes",
+ "paste",
  "proptest",
  "thiserror",
  "tokio",
@@ -1131,9 +1131,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b8d26d5c3d73af76760813480d4cc2f6f43f501d4126dbdb2498e69895927221"
+version = "0.4.2"
+source = "git+https://github.com/cloudwego/pilota?branch=main#1894d2eb0ebc3034c29b6955ae7768e5a6660155"
 dependencies = [
  "faststr",
  "fxhash",
@@ -1159,8 +1158,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "19404feb174a02197949b995b25d180574fbe8687c4d9be5095443dc8fdf3d07"
+source = "git+https://github.com/cloudwego/pilota?branch=main#1894d2eb0ebc3034c29b6955ae7768e5a6660155"
 dependencies = [
  "nom",
 ]
@@ -1590,9 +1588,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.92"
+version = "1.0.93"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7434af0dc1cbd59268aa98b4c22c131c0584d2232f6fb166efb993e2832e896a"
+checksum = "cad406b69c91885b5107daf2c29572f6c8cdb3c66826821e286c533490c0bc76"
 dependencies = [
  "itoa",
  "ryu",
@@ -1623,9 +1621,9 @@ dependencies = [
 
 [[package]]
 name = "signal-hook-registry"
-version = "1.4.0"
+version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e51e73328dc4ac0c7ccbda3a494dfa03df1de2f46018127f60c693f2648455b0"
+checksum = "d8229b473baa5980ac72ef434c4415e70c4b5e71b423043adb4ba059f89c99a1"
 dependencies = [
  "libc",
 ]
@@ -1739,10 +1737,11 @@ dependencies = [
 
 [[package]]
 name = "thread_local"
-version = "1.1.4"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5516c27b78311c50bf42c071425c560ac799b11c30b31f87e3081965fe5e0180"
+checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
 dependencies = [
+ "cfg-if",
  "once_cell",
 ]
 
@@ -1815,9 +1814,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-util"
-version = "0.7.4"
+version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bb2e075f03b3d66d8d8785356224ba688d2906a371015e225beeb65ca92c740"
+checksum = "5427d89453009325de0d8f342c9490009f76e999cb7672d77e46267448f7e6b2"
 dependencies = [
  "bytes",
  "futures-core",
