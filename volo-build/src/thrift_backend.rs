@@ -305,7 +305,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     None => unreachable!()
                 }
             };
-            let req_field_names = m.args.iter().map(|a| format_ident!("{}", a.name)).collect_vec();
+            let req_field_names = m.args.iter().map(|a| self.cx.rust_name(a.def_id).as_syn_ident()).collect_vec();
             let anonymous_args_send_name = self.method_args_path(&service_name, m, true);
             let exception = if let Some(p) = &m.exceptions {
                 let path = self.cx.cur_related_item_path(p.did);
@@ -370,7 +370,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         let user_handler = all_methods.iter().map(|m| {
             let name = self.cx.rust_name(m.def_id).as_syn_ident();
-            let args = m.args.iter().map(|a| format_ident!("{}", a.name));
+            let args = m.args.iter().map(|a| self.cx.rust_name(a.def_id).as_syn_ident());
             let has_exception = m.exceptions.is_some();
             let method_result_path = self.method_result_path(&service_name, m);
 
