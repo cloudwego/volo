@@ -401,7 +401,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
             if has_exception {
                 quote! {
-                    match inner.#name(#(args.#args),*).await {
+                    match self.inner.#name(#(args.#args),*).await {
                         Ok(resp) => #method_result_path::Ok(resp),
                         #(#convert_exceptions,)*
                         Err(::volo_thrift::error::UserError::Other(err)) => return Err(err),
