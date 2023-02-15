@@ -164,7 +164,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                             tokio::spawn(handle_conn_multiplex(
                                 rh,
                                 wh,
-                                service,
+                                service.clone(),
                                 self.make_codec.clone(),
                                 exit_notify_inner.clone(),
                                 exit_flag_inner.clone(),
@@ -175,7 +175,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                             tokio::spawn(handle_conn(
                                 rh,
                                 wh,
-                                service,
+                                service.clone(),
                                 self.make_codec.clone(),
                                 exit_notify_inner.clone(),
                                 exit_flag_inner.clone(),
