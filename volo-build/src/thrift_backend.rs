@@ -409,7 +409,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 }
             } else {
                 quote! {
-                    match inner.#name(#(args.#args),*).await {
+                    match self.inner.#name(#(args.#args),*).await {
                         Ok(resp) => #method_result_path::Ok(resp),
                         Err(err) => return Err(err),
                     }
@@ -421,7 +421,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         stream.extend(quote! {
             pub struct #server_name<S> {
-                inner: ::std::sync::Arc<S>, // handler
+                inner: S, // handler
             }
 
             pub struct #mk_client_name;
@@ -472,18 +472,10 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }
 
 
-            impl<S> Clone for #server_name<S> {
-                fn clone(&self) -> Self {
-                    Self {
-                        inner: self.inner.clone(),
-                    }
-                }
-            }
-
             impl<S> #server_name<S> where S: #service_name + ::core::marker::Send + ::core::marker::Sync + 'static {
                 pub fn new(inner: S) -> ::volo_thrift::server::Server<Self, ::volo::layer::Identity, #req_recv_name, ::volo_thrift::codec::default::DefaultMakeCodec<::volo_thrift::codec::default::ttheader::MakeTTHeaderCodec<::volo_thrift::codec::default::framed::MakeFramedCodec<::volo_thrift::codec::default::thrift::MakeThriftCodec>>>> {
                     ::volo_thrift::server::Server::new(Self {
-                        inner: ::std::sync::Arc::new(inner),
+                        inner,
                     })
                 }
             }
@@ -494,8 +486,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
                 type Future<'cx> = impl ::std::future::Future<Output = ::std::result::Result<Self::Response, Self::Error>> + 'cx;
 
-                fn call<'cx, 's>(& self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: #req_recv_name) -> Self::Future<'cx> where 's:'cx {
-                    let inner = self.inner.clone();
+                fn call<'cx, 's>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: #req_recv_name) -> Self::Future<'cx> where 's:'cx {
                     async move {
                         match req {
                             #(#req_recv_name::#variants(args) => Ok(
