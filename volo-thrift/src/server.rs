@@ -127,17 +127,16 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
     where
         L: Layer<S>,
         MkC: MakeCodec<OwnedReadHalf, OwnedWriteHalf>,
-        L::Service:
-            Service<ServerContext, Req, Response = S::Response> + Clone + Send + 'static + Sync,
+        L::Service: Service<ServerContext, Req, Response = S::Response> + Send + 'static + Sync,
         <L::Service as Service<ServerContext, Req>>::Error: Into<crate::Error> + Send,
         for<'cx> <L::Service as Service<ServerContext, Req>>::Future<'cx>: Send,
-        S: Service<ServerContext, Req> + Clone + Send + 'static,
+        S: Service<ServerContext, Req> + Send + 'static,
         S::Error: Into<crate::Error> + Send,
         Req: EntryMessage + Send + 'static,
         S::Response: EntryMessage + Send + 'static + Sync,
     {
         // init server
-        let service = self.layer.layer(self.service);
+        let service = Arc::new(self.layer.layer(self.service));
 
         let mut incoming = make_incoming.make_incoming().await?;
         info!("[VOLO] server start at: {:?}", incoming);
@@ -159,7 +158,6 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                     Ok(Some(conn)) => {
                         let (rh, wh) = conn.stream.into_split();
                         conn_cnt.fetch_add(1, Ordering::Relaxed);
-                        let service = service.clone();
 
                         #[cfg(feature = "multiplex")]
                         if self.multiplex {
@@ -189,7 +187,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                         tokio::spawn(handle_conn(
                             rh,
                             wh,
-                            service,
+                            service.clone(),
                             self.make_codec.clone(),
                             exit_notify_inner.clone(),
                             exit_flag_inner.clone(),
