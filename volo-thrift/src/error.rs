@@ -250,6 +250,7 @@ impl Message for ApplicationError {
 /// This list may grow, and it is not recommended to match against it.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(i8)]
 pub enum ApplicationErrorKind {
     /// Catch-all application error.
     Unknown = 0,
