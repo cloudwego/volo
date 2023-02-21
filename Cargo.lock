@@ -25,13 +25,12 @@ checksum = "224afbd727c3d6e4b90103ece64b8d1b67fbb1973b1046c2281eed3f3803f800"
 
 [[package]]
 name = "async-broadcast"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1b19760fa2b7301cf235360ffd6d3558b1ed4249edd16d6cca8d690cee265b95"
+checksum = "7c48ccdbf6ca6b121e0f586cbc0e73ae440e56c67c30fa0873b4e110d9c26d2b"
 dependencies = [
  "event-listener",
  "futures-core",
- "parking_lot 0.12.1",
 ]
 
 [[package]]
@@ -47,19 +46,20 @@ dependencies = [
 
 [[package]]
 name = "async-stream"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dad5c83079eae9969be7fadefe640a1c566901f05ff91ab221de4b6f68d9507e"
+checksum = "ad445822218ce64be7a341abfb0b1ea43b5c23aa83902542a4542e78309d8e5e"
 dependencies = [
  "async-stream-impl",
  "futures-core",
+ "pin-project-lite",
 ]
 
 [[package]]
 name = "async-stream-impl"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10f203db73a71dfa2fb6dd22763990fa26f3d2625a6da2da900d23b87d26be27"
+checksum = "e4655ae1a7b0cdf149156f780c5bf3f1352bc53cbd9e0a361a7ef7b22947e965"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -153,9 +153,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "clap"
-version = "4.1.4"
+version = "4.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f13b9c79b5d1dd500d20ef541215a6423c75829ef43117e1b4d17fd8af0b5d76"
+checksum = "ec0b0588d44d4d63a87dbd75c136c166bbfd9a86a31cb89e09906521c7d3f5e3"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -582,9 +582,9 @@ checksum = "7f24254aa9a54b5c858eaee2f5bccdb46aaf0e486a595ed5fd8f86ba55232a70"
 
 [[package]]
 name = "http"
-version = "0.2.8"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "75f43d41e26995c17e71ee126451dd3941010b0514a81a9d11f3b341debc2399"
+checksum = "bd6effc99afb63425aff9b05836f029929e345a6148a14b7ecd5ab67af944482"
 dependencies = [
  "bytes",
  "fnv",
@@ -948,18 +948,18 @@ dependencies = [
 
 [[package]]
 name = "num_enum"
-version = "0.5.9"
+version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8d829733185c1ca374f17e52b762f24f535ec625d2cc1f070e34c8a9068f341b"
+checksum = "3e0072973714303aa6e3631c7e8e777970cf4bdd25dc4932e41031027b8bcc4e"
 dependencies = [
  "num_enum_derive",
 ]
 
 [[package]]
 name = "num_enum_derive"
-version = "0.5.9"
+version = "0.5.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2be1598bf1c313dcdd12092e3f1920f463462525a21b7b4e11b4168353d0123e"
+checksum = "0629cbd6b897944899b1f10496d9c4a7ac5878d45fd61bc22e9e79bfbbc29597"
 dependencies = [
  "proc-macro-crate",
  "proc-macro2",
@@ -1112,7 +1112,8 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.5.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#65cb698f7f054a765f2c5ca7e2a09b24e0585e76"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "695e6a856fbec89ce454a8f78e63f8d3cbd2bff2297da534a66144c97619ab30"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1132,7 +1133,8 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.5.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#65cb698f7f054a765f2c5ca7e2a09b24e0585e76"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e675513d6fd0bc608f7a6010f0b20a4178ebcaa02a6cfb52dbad8f64e2f6b889"
 dependencies = [
  "faststr",
  "fxhash",
@@ -1157,8 +1159,9 @@ dependencies = [
 
 [[package]]
 name = "pilota-thrift-parser"
-version = "0.4.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#65cb698f7f054a765f2c5ca7e2a09b24e0585e76"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f2a7ef42f63c1b16301f6c27df144749d318b62e329414f7f2fffb8da49f16a"
 dependencies = [
  "nom",
 ]
@@ -1636,9 +1639,9 @@ checksum = "7bd3e3206899af3f8b12af284fafc038cc1dc2b41d1b89dd17297221c5d225de"
 
 [[package]]
 name = "slab"
-version = "0.4.7"
+version = "0.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4614a76b2a8be0058caa9dbbaf66d988527d86d003c11a94fbd335d7661edcef"
+checksum = "6528351c9bc8ab22353f9d776db39a20288e8d6c37ef8cfe3317cf875eecfc2d"
 dependencies = [
  "autocfg",
 ]
@@ -1803,9 +1806,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-stream"
-version = "0.1.11"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d660770404473ccd7bc9f8b28494a811bc18542b915c0855c51e8f419d5223ce"
+checksum = "8fb52b74f05dbf495a8fba459fdc331812b96aa086d9eb78101fa0d4569c3313"
 dependencies = [
  "futures-core",
  "pin-project-lite",
@@ -2052,7 +2055,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "volo"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "async-broadcast",
  "async-trait",
@@ -2075,7 +2078,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2139,7 +2142,7 @@ dependencies = [
 
 [[package]]
 name = "volo-grpc"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2178,7 +2181,7 @@ version = "0.3.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.3.3"
+version = "0.3.5"
 dependencies = [
  "anyhow",
  "async-trait",
