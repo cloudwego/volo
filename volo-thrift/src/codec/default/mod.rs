@@ -121,23 +121,31 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         msg: ThriftMessage<Req>,
     ) -> Result<()> {
         // first, we need to get the size of the message
+
         let (real_size, malloc_size) = self.encoder.size(cx, &msg)?;
         trace!(
             "[VOLO] codec encode message real size: {}, malloc size: {}",
             real_size,
             malloc_size
         );
-        // then we reserve the size of the message in the linked bytes
-        self.linked_bytes.reserve(malloc_size);
-        // after that, we encode the message into the linked bytes
-        self.encoder.encode(cx, &mut self.linked_bytes, msg)?;
-        self.linked_bytes
-            .write_all_vectored(&mut self.writer)
-            .await?;
-        self.writer.flush().await?;
+
+        let write_result = (|| async {
+            // then we reserve the size of the message in the linked bytes
+            self.linked_bytes.reserve(malloc_size);
+            // after that, we encode the message into the linked bytes
+            self.encoder.encode(cx, &mut self.linked_bytes, msg)?;
+            self.linked_bytes
+                .write_all_vectored(&mut self.writer)
+                .await?;
+            self.writer.flush().await?;
+
+            Ok::<(), crate::Error>(())
+        })()
+        .await;
+
         // finally, don't forget to reset the linked bytes
         self.linked_bytes.reset();
-        Ok(())
+        write_result
     }
 }
 
