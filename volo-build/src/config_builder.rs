@@ -97,6 +97,7 @@ impl ConfigBuilder {
     }
 
     pub fn write(self) -> anyhow::Result<()> {
+        println!("cargo:rerun-if-changed={}", self.filename.display());
         let f = open_config_file(self.filename)?;
         let config = read_config_from_file(&f)?;
 
