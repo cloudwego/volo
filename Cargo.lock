@@ -2176,6 +2176,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "volo-http"
+version = "0.0.0"
+
+[[package]]
 name = "volo-macros"
 version = "0.3.0"
 
