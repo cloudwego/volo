@@ -4,6 +4,7 @@ members = [
   "volo-build",
   "volo-cli",
   "volo-grpc",
+  "volo-http",
   "volo-macros",
   "volo-thrift",
 
