@@ -49,7 +49,7 @@ impl From<std::io::Error> for Error {
 
 impl From<LoadBalanceError> for Error {
     fn from(err: LoadBalanceError) -> Self {
-        new_application_error(ApplicationErrorKind::LoadBalanceError, err.to_string())
+        new_application_error(ApplicationErrorKind::InternalError, err.to_string())
     }
 }
 
@@ -119,7 +119,6 @@ impl Display for ApplicationError {
             ApplicationErrorKind::InvalidTransform => "invalid transform",
             ApplicationErrorKind::InvalidProtocol => "invalid protocol requested",
             ApplicationErrorKind::UnsupportedClientType => "unsupported protocol client",
-            ApplicationErrorKind::LoadBalanceError => "load balance error",
         };
 
         write!(f, "{}, msg: {}", error_text, self.message)
@@ -279,8 +278,6 @@ pub enum ApplicationErrorKind {
     /// Thrift endpoint requested, or is using, an unsupported auto-generated
     /// client type.
     UnsupportedClientType = 10, // ??
-    /// Service discovery caused error or retry failed.
-    LoadBalanceError = 11,
 }
 
 impl TryFrom<i32> for ApplicationErrorKind {
@@ -298,7 +295,6 @@ impl TryFrom<i32> for ApplicationErrorKind {
             8 => Ok(ApplicationErrorKind::InvalidTransform),
             9 => Ok(ApplicationErrorKind::InvalidProtocol),
             10 => Ok(ApplicationErrorKind::UnsupportedClientType),
-            11 => Ok(ApplicationErrorKind::LoadBalanceError),
             _ => Err(Error::Application(ApplicationError {
                 kind: ApplicationErrorKind::Unknown,
                 message: format!("cannot convert {from} to ApplicationErrorKind"),
