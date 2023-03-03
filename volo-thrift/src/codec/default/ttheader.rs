@@ -58,11 +58,15 @@ pub struct HasTTHeader(bool);
 #[derive(Clone)]
 pub struct TTHeaderDecoder<D: ZeroCopyDecoder> {
     inner: D,
+    buffer: BytesMut,
 }
 
 impl<D: ZeroCopyDecoder> TTHeaderDecoder<D> {
     pub fn new(inner: D) -> Self {
-        Self { inner }
+        Self {
+            inner,
+            buffer: BytesMut::new(),
+        }
     }
 }
 
@@ -78,7 +82,7 @@ where
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-        mut bytes: BytesMut,
+        bytes: &mut BytesMut,
     ) -> crate::Result<Option<ThriftMessage<Msg>>> {
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, must not be TTHeader, so just forward to inner
@@ -88,7 +92,7 @@ where
         if is_ttheader(&bytes[..HEADER_DETECT_LENGTH]) {
             let _size = bytes.get_u32() as usize;
             // decode ttheader
-            decode(cx, &mut bytes)?;
+            decode(cx, bytes)?;
             // set has ttheader flag
             cx.extensions_mut().insert(HasTTHeader(true));
         }
@@ -111,17 +115,18 @@ where
                 // read all the data out, and call inner decode instead of decode_async
                 let size = u32::from_be_bytes(buf[0..4].try_into().unwrap()) as usize;
                 reader.consume(4);
-                let mut bytes = BytesMut::with_capacity(size);
+                self.buffer.clear();
+                self.buffer.reserve(size);
                 unsafe {
-                    bytes.set_len(size);
+                    self.buffer.set_len(size);
                 }
-                reader.read_exact(&mut bytes[..size]).await?;
+                reader.read_exact(&mut self.buffer[..size]).await?;
                 // decode ttheader
-                decode(cx, &mut bytes)?;
+                decode(cx, &mut self.buffer)?;
                 // set has ttheader flag
                 cx.extensions_mut().insert(HasTTHeader(true));
                 // decode inner
-                self.inner.decode(cx, bytes)
+                self.inner.decode(cx, &mut self.buffer)
             } else {
                 // no TTHeader, just forward to inner decoder
                 self.inner.decode_async(cx, reader).await

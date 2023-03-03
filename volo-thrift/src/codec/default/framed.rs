@@ -54,6 +54,7 @@ pub struct HasFramed(bool);
 #[derive(Clone)]
 pub struct FramedDecoder<D: ZeroCopyDecoder> {
     inner: D,
+    buffer: BytesMut,
     max_frame_size: i32,
 }
 
@@ -62,6 +63,7 @@ impl<D: ZeroCopyDecoder> FramedDecoder<D> {
         Self {
             inner,
             max_frame_size,
+            buffer: BytesMut::new(),
         }
     }
 }
@@ -78,7 +80,7 @@ where
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-        mut bytes: BytesMut,
+        bytes: &mut BytesMut,
     ) -> crate::Result<Option<ThriftMessage<Msg>>> {
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, must not be Framed, so just forward to inner
@@ -112,16 +114,17 @@ where
                 reader.consume(4);
                 check_framed_size(size, self.max_frame_size)?;
 
-                let mut bytes = BytesMut::with_capacity(size as usize);
+                self.buffer.clear();
+                self.buffer.reserve(size as usize);
                 unsafe {
-                    bytes.set_len(size as usize);
+                    self.buffer.set_len(size as usize);
                 }
-                reader.read_exact(&mut bytes[..size as usize]).await?;
+                reader.read_exact(&mut self.buffer[..size as usize]).await?;
 
                 // set has framed flag
                 cx.extensions_mut().insert(HasFramed(true));
                 // decode inner
-                self.inner.decode(cx, bytes)
+                self.inner.decode(cx, &mut self.buffer)
             } else {
                 // no Framed, just forward to inner decoder
                 self.inner.decode_async(cx, reader).await

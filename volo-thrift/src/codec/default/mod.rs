@@ -79,7 +79,7 @@ pub trait ZeroCopyDecoder: Send + Sync + 'static {
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-        bytes: BytesMut,
+        bytes: &mut BytesMut,
     ) -> Result<Option<ThriftMessage<Msg>>>;
 
     /// The [`DefaultDecoder`] will always call `decode_async`, so the most outer decoder
