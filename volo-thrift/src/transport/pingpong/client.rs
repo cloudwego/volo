@@ -122,10 +122,12 @@ where
     {
         async move {
             let rpc_info = &cx.rpc_info;
-            let target =
-                rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, "address is required")
-                })?;
+            let target = rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("address is required, rpc_info: {:?}", rpc_info),
+                )
+            })?;
             let oneway = cx.message_type == TMessageType::OneWay;
             let mut transport = self.make_transport.call(target).await?;
             let resp = transport.send(cx, req, oneway).await;
@@ -133,7 +135,10 @@ where
                 if !oneway {
                     return Err(crate::Error::Pilota(new_transport_error(
                         TransportErrorKind::EndOfFile,
-                        "an unexpected end of file from server",
+                        format!(
+                            "an unexpected end of file from server, rpc_info: {:?}",
+                            cx.rpc_info
+                        ),
                     )));
                 }
             }

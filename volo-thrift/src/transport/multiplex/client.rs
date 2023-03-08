@@ -69,8 +69,13 @@ where
     fn call(&self, target: Address) -> Self::Future<'_> {
         let make_transport = self.make_transport.clone();
         async move {
-            let (rh, wh) = make_transport.make_transport(target).await?;
-            Ok(ThriftTransport::new(rh, wh, self.make_codec.clone()))
+            let (rh, wh) = make_transport.make_transport(target.clone()).await?;
+            Ok(ThriftTransport::new(
+                rh,
+                wh,
+                self.make_codec.clone(),
+                target,
+            ))
         }
     }
 }
@@ -139,10 +144,10 @@ where
     {
         async move {
             let rpc_info = &cx.rpc_info;
-            let target =
-                rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, "address is required")
-                })?;
+            let target = rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
+                let msg = format!("address is required, rpcinfo: {:?}", rpc_info);
+                io::Error::new(io::ErrorKind::InvalidData, msg)
+            })?;
             let oneway = cx.message_type == TMessageType::OneWay;
             let mut transport = self.make_transport.call(target).await?;
             let resp = transport.send(cx, req, oneway).await;
@@ -150,7 +155,10 @@ where
                 if !oneway {
                     return Err(Error::Pilota(new_transport_error(
                         TransportErrorKind::EndOfFile,
-                        "an unexpected end of file from server",
+                        format!(
+                            "an unexpected end of file from server, rpcinfo: {:?}",
+                            cx.rpc_info
+                        ),
                     )));
                 }
             }

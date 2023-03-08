@@ -8,7 +8,7 @@ use volo::{
 
 use crate::{client::CallOpt, protocol::TMessageType};
 
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Debug, Copy)]
 pub struct ServerTransportInfo {
     conn_reset: bool,
 }
@@ -27,7 +27,7 @@ impl ServerTransportInfo {
     }
 }
 
-#[derive(Default)]
+#[derive(Default, Clone, Debug, Copy)]
 pub struct PooledTransport {
     pub should_reuse: bool,
 }
@@ -41,12 +41,14 @@ impl PooledTransport {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct ClientCxInner {
     pub seq_id: i32,
     pub message_type: TMessageType,
     pub transport: PooledTransport,
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct ServerCxInner {
     pub seq_id: Option<i32>,
     pub req_msg_type: Option<TMessageType>,
@@ -290,5 +292,18 @@ impl ::volo::client::Apply<ClientContext> for CallOpt {
         caller.tags.extend(self.caller_tags);
         cx.rpc_info.config_mut().unwrap().merge(self.config);
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::context::ClientContext;
+
+    use super::{RpcInfo, Role};
+
+    #[test]
+    fn test_rpcinfo() {
+        let ri = &ClientContext::new(1, RpcInfo::with_role(Role::Client), pilota::thrift::TMessageType::Call).rpc_info;
+        println!("{:?}", ri);
     }
 }

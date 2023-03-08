@@ -29,6 +29,22 @@ pub enum Error {
     Application(ApplicationError),
 }
 
+impl Error {
+    pub fn append_msg(&mut self, msg: &str) {
+        match self {
+            Error::Pilota(e) => match e {
+                PilotaError::Transport(e) => {
+                    e.message.push_str(msg);
+                }
+                PilotaError::Protocol(e) => {
+                    e.message.push_str(msg);
+                }
+            },
+            Error::Application(e) => e.message.push_str(msg),
+        }
+    }
+}
+
 impl From<PilotaError> for Error {
     fn from(e: PilotaError) -> Self {
         Error::Pilota(e)

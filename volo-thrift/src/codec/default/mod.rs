@@ -29,7 +29,7 @@
 use bytes::BytesMut;
 use linkedbytes::LinkedBytes;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
-use tracing::trace;
+use tracing::{trace, warn};
 use volo::util::buf_reader::BufReader;
 
 use self::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec};
@@ -145,7 +145,21 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
 
         // finally, don't forget to reset the linked bytes
         self.linked_bytes.reset();
-        write_result
+        match write_result {
+            Ok(()) => Ok(()),
+            Err(mut e) => {
+                let msg = format!(
+                    ", rpcinfo: {:?}, encode real size: {}, malloc size: {}",
+                    cx.rpc_info(),
+                    real_size,
+                    malloc_size
+                );
+                e.append_msg(&msg);
+                warn!("[VOLO] thrift codec encode message error: {}", e);
+                Err(e)
+            }
+        }
+        // write_result
     }
 }
 
@@ -164,6 +178,10 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
     ) -> Result<Option<ThriftMessage<Msg>>> {
         // just to check if we have reached EOF
         if self.reader.fill_buf().await?.is_empty() {
+            trace!(
+                "[VOLO] thrift codec decode message EOF, rpcinfo: {:?}",
+                cx.rpc_info()
+            );
             return Ok(None);
         }
         // simply call the inner `decode_async`
