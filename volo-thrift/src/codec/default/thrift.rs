@@ -99,7 +99,7 @@ impl ZeroCopyDecoder for ThriftCodec {
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-        mut bytes: BytesMut,
+        bytes: &mut BytesMut,
     ) -> crate::Result<Option<ThriftMessage<Msg>>> {
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, so return error
@@ -113,17 +113,17 @@ impl ZeroCopyDecoder for ThriftCodec {
 
         // detect protocol
         // TODO: support using protocol from TTHeader
-        let protocol = detect(&bytes)?;
+        let protocol = detect(bytes)?;
         // TODO: do we need to check the response protocol at client side?
         match protocol {
             Protocol::Binary => {
-                let mut p = TBinaryProtocol::new(&mut bytes, true);
+                let mut p = TBinaryProtocol::new(bytes, true);
                 let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))
             }
             Protocol::ApacheCompact => {
-                let mut p = TCompactInputProtocol::new(&mut bytes);
+                let mut p = TCompactInputProtocol::new(bytes);
                 let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))

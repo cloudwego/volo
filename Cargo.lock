@@ -1127,9 +1127,9 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.5.4"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3280884b69307de5927e48b07cc57bb7273254c3af228571448ed1e458b2e2b2"
+checksum = "a8d1abfbd7d944a7dc4d72ebf98638aec7f85cd9fdbae5c1cfbac8a6a7561a13"
 dependencies = [
  "faststr",
  "fxhash",

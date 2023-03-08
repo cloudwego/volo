@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Ok;
+use anyhow::{Context, Ok};
 use itertools::Itertools;
 use pilota_build::BoxClonePlugin;
 
@@ -130,7 +130,8 @@ impl ConfigBuilder {
                         repo.clone(),
                         lock.to_string(),
                     );
-                    download_files_from_git(task)?;
+                    download_files_from_git(task)
+                        .with_context(|| format!("download repo {repo}"))?;
 
                     (
                         dir.join(&idl.path),
