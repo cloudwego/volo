@@ -8,7 +8,7 @@ use metainfo::MetaInfo;
 use motore::service::Service;
 use tokio::sync::futures::Notified;
 use tracing::*;
-use volo::volo_unreachable;
+use volo::{net::Address, volo_unreachable};
 
 use crate::{
     codec::{Decoder, Encoder},
@@ -23,6 +23,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     notified: Notified<'_>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     service: &Svc,
+    peer_addr: Option<Address>,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
     Svc::Error: Into<Error>,
@@ -41,15 +42,17 @@ pub async fn serve<Svc, Req, Resp, E, D>(
 
                 let msg = tokio::select! {
                     _ = &mut notified => {
-                        tracing::trace!("[VOLO] close conn by notified");
+                        tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
                         return
                     },
                     out = decoder.decode(&mut cx) => out
                 };
 
                 debug!(
-                    "[VOLO] received message: {:?}",
-                    msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta))
+                    "[VOLO] received message: {:?}, rpcinfo: {:?}, peer_addr: {:?}",
+                    msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta)),
+                    cx.rpc_info,
+                    peer_addr
                 );
 
                 match msg {
@@ -70,7 +73,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                     .unwrap();
                             if let Err(e) = encoder.encode(&mut cx, msg).await {
                                 // log it
-                                error!("[VOLO] server send response error: {:?}", e,);
+                                error!("[VOLO] server send response error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
                                 return;
                             }
                         }
@@ -79,17 +82,17 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         volo_unreachable!();
                     }
                     Ok(None) => {
-                        trace!("[VOLO] reach eof, connection has been closed by client");
+                        trace!("[VOLO] reach eof, connection has been closed by client, peer_addr: {:?}", peer_addr);
                         return;
                     }
                     Err(e) => {
-                        error!("{:?}", e);
+                        error!("[VOLO] pingpong server decode error: {:?}, peer_addr: {:?}", e, peer_addr);
                         cx.msg_type = Some(TMessageType::Exception);
                         if !matches!(e, Error::Pilota(pilota::thrift::error::Error::Transport(_))) {
                             let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e))
                                 .unwrap();
                             if let Err(e) = encoder.encode(&mut cx, msg).await {
-                                error!("[VOLO] server send error error: {:?}", e);
+                                error!("[VOLO] server send error error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
                             }
                         }
                         return;

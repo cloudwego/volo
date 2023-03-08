@@ -13,10 +13,11 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync::Notify,
 };
-use tracing::info;
+use tracing::{info, trace};
 use volo::net::{
     conn::{OwnedReadHalf, OwnedWriteHalf},
     incoming::Incoming,
+    Address,
 };
 
 use crate::{
@@ -156,6 +157,8 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
             loop {
                 match incoming.accept().await {
                     Ok(Some(conn)) => {
+                        let peer_addr = conn.info.peer_addr;
+                        trace!("[VOLO] accept connection from: {:?}", peer_addr);
                         let (rh, wh) = conn.stream.into_split();
                         conn_cnt.fetch_add(1, Ordering::Relaxed);
 
@@ -170,6 +173,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                                 exit_flag_inner.clone(),
                                 exit_mark_inner.clone(),
                                 conn_cnt.clone(),
+                                peer_addr,
                             ));
                         } else {
                             tokio::spawn(handle_conn(
@@ -181,6 +185,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                                 exit_flag_inner.clone(),
                                 exit_mark_inner.clone(),
                                 conn_cnt.clone(),
+                                peer_addr,
                             ));
                         }
                         #[cfg(not(feature = "multiplex"))]
@@ -193,6 +198,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                             exit_flag_inner.clone(),
                             exit_mark_inner.clone(),
                             conn_cnt.clone(),
+                            peer_addr,
                         ));
                     }
                     // no more incoming connections
@@ -296,6 +302,7 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
     exit_flag: Arc<parking_lot::RwLock<bool>>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
+    peer_addr: Option<Address>,
 ) where
     R: AsyncRead + Unpin + Send + Sync + 'static,
     W: AsyncWrite + Unpin + Send + Sync + 'static,
@@ -317,8 +324,12 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
 
     let (encoder, decoder) = make_codec.make_codec(rh, wh);
 
-    tracing::trace!("[VOLO] handle conn by ping-pong");
-    crate::transport::pingpong::serve(encoder, decoder, notified, exit_mark, &service).await;
+    tracing::trace!(
+        "[VOLO] handle conn by ping-pong, peer_addr: {:?}",
+        peer_addr
+    );
+    crate::transport::pingpong::serve(encoder, decoder, notified, exit_mark, &service, peer_addr)
+        .await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }
 
@@ -333,6 +344,7 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
     exit_flag: Arc<parking_lot::RwLock<bool>>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
+    peer_addr: Option<Address>,
 ) where
     R: AsyncRead + Unpin + Send + Sync + 'static,
     W: AsyncWrite + Unpin + Send + Sync + 'static,
@@ -343,6 +355,7 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
     MkC: MakeCodec<R, W>,
 {
     // get read lock and create Notified
+
     let notified = {
         let r = exit_flag.read();
         if *r {
@@ -353,7 +366,11 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
 
     let (encoder, decoder) = make_codec.make_codec(rh, wh);
 
-    info!("[VOLO] handle conn by multiplex");
-    crate::transport::multiplex::serve(encoder, decoder, notified, exit_mark, service).await;
+    info!(
+        "[VOLO] handle conn by multiplex, peer_addr: {:?}",
+        peer_addr
+    );
+    crate::transport::multiplex::serve(encoder, decoder, notified, exit_mark, service, peer_addr)
+        .await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }

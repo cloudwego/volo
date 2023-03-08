@@ -34,7 +34,7 @@ where
                 loop {
                     match channel.recv().await {
                         Ok(recv) => lb.rebalance(recv),
-                        Err(err) => warn!("[VOLO] discovering subscription error {:?}", err),
+                        Err(err) => warn!("[VOLO] discovering subscription error: {:?}", err),
                     }
                 }
             });
@@ -95,7 +95,7 @@ where
                         return Ok(resp);
                     }
                     Err(err) => {
-                        warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
+                        warn!("[VOLO] call rpcinfo: {:?}, error: {:?}", cx.rpc_info(), err);
                         if !err.retryable() {
                             return Err(err);
                         }
@@ -103,7 +103,7 @@ where
                 }
             }
             if call_count == 0 {
-                warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
+                warn!("[VOLO] zero call count, call rpcinfo: {:?}", cx.rpc_info());
             }
             Err(LoadBalanceError::Retry.into())
         }

@@ -12,7 +12,10 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync::{oneshot, Mutex},
 };
-use volo::context::{Role, RpcInfo};
+use volo::{
+    context::{Role, RpcInfo},
+    net::Address,
+};
 
 use crate::{
     codec::{Decoder, Encoder, MakeCodec},
@@ -29,6 +32,7 @@ lazy_static::lazy_static! {
 #[pin_project]
 pub struct ThriftTransport<E, Resp> {
     write_half: Arc<Mutex<WriteHalf<E>>>,
+    #[allow(clippy::type_complexity)]
     tx_map: Arc<
         Mutex<
             fxhash::FxHashMap<
@@ -70,15 +74,20 @@ where
         read_half: R,
         write_half: W,
         make_codec: MkC,
+        target: Address,
     ) -> Self
     where
         Resp: EntryMessage + Send + 'static,
     {
-        tracing::trace!("[VOLO] creating multiplex thrift transport");
+        tracing::trace!(
+            "[VOLO] creating multiplex thrift transport, target: {}",
+            target
+        );
         let id = TRANSPORT_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let (encoder, decoder) = make_codec.make_codec(read_half, write_half);
         let mut read_half = ReadHalf { decoder, id };
         let write_half = WriteHalf { encoder, id };
+        #[allow(clippy::type_complexity)]
         let tx_map: Arc<
             Mutex<
                 fxhash::FxHashMap<
@@ -101,7 +110,10 @@ where
                 .scope(RefCell::new(Default::default()), async move {
                     loop {
                         if inner_write_error.load(std::sync::atomic::Ordering::Relaxed) {
-                            tracing::trace!("[VOLO] multiplex write error, break read loop now");
+                            tracing::trace!(
+                                "[VOLO] multiplex write error, break read loop now, target: {}",
+                                target
+                            );
                             break;
                         }
                         // fake context
@@ -110,15 +122,19 @@ where
                             RpcInfo::with_role(Role::Client),
                             pilota::thrift::TMessageType::Call,
                         );
-                        let res = read_half.try_next::<Resp>(&mut cx).await;
+                        let res = read_half.try_next::<Resp>(&mut cx, target.clone()).await;
                         if let Err(e) = res {
-                            tracing::error!("[VOLO] multiplex connection read error: {}", e);
+                            tracing::error!(
+                                "[VOLO] multiplex connection read error: {}, target: {}",
+                                e,
+                                target
+                            );
                             let mut tx_map = inner_tx_map.lock().await;
                             inner_read_error.store(true, std::sync::atomic::Ordering::Relaxed);
                             for (_, tx) in tx_map.drain() {
                                 let _ = tx.send(Err(Error::Application(ApplicationError::new(
                                     ApplicationErrorKind::Unknown,
-                                    format!("multiplex connection error: {e}"),
+                                    format!("multiplex connection error: {e}, target: {target}"),
                                 ))));
                             }
                             return;
@@ -148,9 +164,10 @@ where
                             });
                         } else {
                             tracing::error!(
-                                "[VOLO] multiplex connection receive unexpected response, \
-                                 seq_id:{}",
-                                seq_id
+                                "[VOLO] multiplex connection receive unexpected response, seq_id: \
+                                 {}, target: {}",
+                                seq_id,
+                                target
                             );
                         }
                     }
@@ -247,9 +264,15 @@ where
     pub async fn try_next<T: EntryMessage>(
         &mut self,
         cx: &mut ClientContext,
+        target: Address,
     ) -> Result<Option<ThriftMessage<T>>, Error> {
         let thrift_msg = self.decoder.decode(cx).await.map_err(|e| {
-            tracing::error!("[VOLO] transport[{}] decode error: {}", self.id, e);
+            tracing::error!(
+                "[VOLO] transport[{}] decode error: {}, target: {}",
+                self.id,
+                e,
+                target
+            );
             e
         })?;
 
@@ -286,7 +309,8 @@ where
         cx: &mut impl ThriftContext,
         msg: ThriftMessage<T>,
     ) -> Result<(), Error> {
-        self.encoder.encode(cx, msg).await.map_err(|e| {
+        self.encoder.encode(cx, msg).await.map_err(|mut e| {
+            e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
             tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
             e
         })?;
