@@ -111,6 +111,8 @@ where
             if is_framed(buf) {
                 // read all the data out, and call inner decode instead of decode_async
                 let size = i32::from_be_bytes(buf[0..4].try_into().unwrap());
+                cx.stats_mut().set_read_size(size as usize + 4);
+
                 reader.consume(4);
                 check_framed_size(size, self.max_frame_size)?;
 
@@ -120,6 +122,7 @@ where
                     self.buffer.set_len(size as usize);
                 }
                 reader.read_exact(&mut self.buffer[..size as usize]).await?;
+                cx.stats_mut().record_read_end_at();
 
                 // set has framed flag
                 cx.extensions_mut().insert(HasFramed(true));

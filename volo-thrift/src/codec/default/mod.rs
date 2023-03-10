@@ -120,20 +120,34 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
     ) -> Result<()> {
-        // first, we need to get the size of the message
+        let encode_start = chrono::Local::now();
+        cx.stats_mut().set_encode_start_at(encode_start);
 
+        // first, we need to get the size of the message
         let (real_size, malloc_size) = self.encoder.size(cx, &msg)?;
         trace!(
             "[VOLO] codec encode message real size: {}, malloc size: {}",
             real_size,
             malloc_size
         );
+        cx.stats_mut().set_write_size(real_size);
 
         let write_result = (|| async {
             // then we reserve the size of the message in the linked bytes
             self.linked_bytes.reserve(malloc_size);
             // after that, we encode the message into the linked bytes
-            self.encoder.encode(cx, &mut self.linked_bytes, msg)?;
+            self.encoder
+                .encode(cx, &mut self.linked_bytes, msg)
+                .map_err(|e| {
+                    // record the error time
+                    cx.stats_mut().set_encode_end_at(chrono::Local::now());
+                    e
+                })?;
+
+            let encode_end = chrono::Local::now();
+            cx.stats_mut().set_encode_end_at(encode_end);
+            cx.stats_mut().set_write_start_at(encode_end); // encode end is also write start
+
             self.linked_bytes
                 .write_all_vectored(&mut self.writer)
                 .await?;
@@ -142,6 +156,9 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
             Ok::<(), crate::Error>(())
         })()
         .await;
+        // put write end here so we can also record the time of encode error
+        let write_end = chrono::Local::now();
+        cx.stats_mut().set_write_end_at(write_end);
 
         // finally, don't forget to reset the linked bytes
         self.linked_bytes.reset();
@@ -184,8 +201,19 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
             );
             return Ok(None);
         }
+
+        let start = chrono::Local::now();
+        cx.stats_mut().set_decode_start_at(start);
+        cx.stats_mut().set_read_start_at(start);
+
         // simply call the inner `decode_async`
-        self.decoder.decode_async(cx, &mut self.reader).await
+        let res = self.decoder.decode_async(cx, &mut self.reader).await;
+
+        let end = chrono::Local::now();
+        cx.stats_mut().set_decode_end_at(end);
+        trace!("[VOLO] thrift codec decode message cost: {:?}", end - start);
+
+        res
     }
 }
 

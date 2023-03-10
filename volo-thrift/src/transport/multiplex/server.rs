@@ -116,7 +116,9 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 let mi = metainfo::METAINFO.with(|m| m.take());
                                 tokio::spawn(async  {
                                     metainfo::METAINFO.scope(RefCell::new(mi), async move {
+                                        cx.stats.record_process_start_at();
                                         let resp = svc.call(&mut cx, req).await;
+                                        cx.stats.record_process_end_at();
 
                                         if exit_mark.load(Ordering::Relaxed) {
                                             cx.transport.set_conn_reset(true);
