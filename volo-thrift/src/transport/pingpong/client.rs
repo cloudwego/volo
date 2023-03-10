@@ -129,7 +129,9 @@ where
                 )
             })?;
             let oneway = cx.message_type == TMessageType::OneWay;
+            cx.stats.record_make_transport_start_at();
             let mut transport = self.make_transport.call(target).await?;
+            cx.stats.record_make_transport_end_at();
             let resp = transport.send(cx, req, oneway).await;
             if let Ok(None) = resp {
                 if !oneway {

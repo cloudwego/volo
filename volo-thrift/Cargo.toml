@@ -1,6 +1,6 @@
 [package]
 name = "volo-thrift"
-version = "0.3.6"
+version = "0.3.7"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -26,6 +26,7 @@ metainfo.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 bytes.workspace = true
+chrono.workspace = true
 faststr.workspace = true
 futures.workspace = true
 fxhash.workspace = true
@@ -34,6 +35,7 @@ linkedbytes.workspace = true
 linked-hash-map.workspace = true
 num_enum.workspace = true
 parking_lot.workspace = true
+paste.workspace = true
 pin-project.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = [

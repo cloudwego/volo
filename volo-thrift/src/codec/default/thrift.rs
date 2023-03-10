@@ -148,6 +148,7 @@ impl ZeroCopyDecoder for ThriftCodec {
     ) -> crate::Result<Option<ThriftMessage<Msg>>> {
         // check if is framed
         let Ok(buf) = reader.fill_buf_at_least(HEADER_DETECT_LENGTH).await else {
+            cx.stats_mut().record_read_end_at();
             // not enough bytes to detect, so return error
             return Err(crate::Error::Pilota(
                 pilota::thrift::error::new_protocol_error(
@@ -159,9 +160,12 @@ impl ZeroCopyDecoder for ThriftCodec {
 
         // detect protocol
         // TODO: support using protocol from TTHeader
-        let protocol = detect(buf)?;
+        let protocol = detect(buf).map_err(|e| {
+            cx.stats_mut().record_read_end_at();
+            e
+        })?;
         // TODO: do we need to check the response protocol at client side?
-        match protocol {
+        let res = match protocol {
             Protocol::Binary => {
                 let mut p = TAsyncBinaryProtocol::new(reader);
                 let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
@@ -180,7 +184,9 @@ impl ZeroCopyDecoder for ThriftCodec {
                     format!("protocol {p:?} is not supported"),
                 ),
             )),
-        }
+        };
+        cx.stats_mut().record_read_end_at();
+        res
     }
 }
 

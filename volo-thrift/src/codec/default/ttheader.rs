@@ -114,6 +114,8 @@ where
             if is_ttheader(buf) {
                 // read all the data out, and call inner decode instead of decode_async
                 let size = u32::from_be_bytes(buf[0..4].try_into().unwrap()) as usize;
+                cx.stats_mut().set_read_size(size + 4);
+
                 reader.consume(4);
                 self.buffer.clear();
                 self.buffer.reserve(size);
@@ -121,6 +123,9 @@ where
                     self.buffer.set_len(size);
                 }
                 reader.read_exact(&mut self.buffer[..size]).await?;
+
+                cx.stats_mut().record_read_end_at();
+
                 // decode ttheader
                 decode(cx, &mut self.buffer)?;
                 // set has ttheader flag

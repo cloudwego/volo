@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use chrono::{DateTime, Local};
+use paste::paste;
 use pilota::thrift::TMessageIdentifier;
 use volo::{
     context::{Role, RpcCx, RpcInfo},
@@ -7,6 +9,30 @@ use volo::{
 };
 
 use crate::{client::CallOpt, protocol::TMessageType};
+
+macro_rules! stat_impl {
+    ($t: ident) => {
+        paste! {
+            /// This is unstable now and may be changed in the future.
+            #[inline]
+            pub fn $t(&self) -> Option<DateTime<Local>> {
+                self.$t
+            }
+
+            /// This is unstable now and may be changed in the future.
+            #[inline]
+            pub fn [<set_ $t>](&mut self, now: DateTime<Local>) {
+                self.$t = Some(now)
+            }
+
+            /// This is unstable now and may be changed in the future.
+            #[inline]
+            pub fn [<record_ $t>](&mut self) {
+                self.$t = Some(Local::now())
+            }
+        }
+    };
+}
 
 #[derive(Default, Clone, Debug, Copy)]
 pub struct ServerTransportInfo {
@@ -24,6 +50,90 @@ impl ServerTransportInfo {
 
     pub fn reset(&mut self) {
         *self = Self { ..Self::default() }
+    }
+}
+
+/// This is unstable now and may be changed in the future.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct CommonStats {
+    // if there's a length-prefixed transport, we can get the read time
+    read_start_at: Option<DateTime<Local>>,
+    read_end_at: Option<DateTime<Local>>,
+
+    decode_start_at: Option<DateTime<Local>>,
+    decode_end_at: Option<DateTime<Local>>,
+    encode_start_at: Option<DateTime<Local>>,
+    encode_end_at: Option<DateTime<Local>>,
+    write_start_at: Option<DateTime<Local>>,
+    write_end_at: Option<DateTime<Local>>,
+
+    // size
+    read_size: Option<usize>, // only applicable to length-prefixed transport
+    write_size: Option<usize>,
+}
+
+impl CommonStats {
+    stat_impl!(read_start_at);
+    stat_impl!(read_end_at);
+    stat_impl!(decode_start_at);
+    stat_impl!(decode_end_at);
+    stat_impl!(encode_start_at);
+    stat_impl!(encode_end_at);
+    stat_impl!(write_start_at);
+    stat_impl!(write_end_at);
+
+    pub fn read_size(&self) -> Option<usize> {
+        self.read_size
+    }
+
+    pub fn set_read_size(&mut self, size: usize) {
+        self.read_size = Some(size)
+    }
+
+    pub fn write_size(&self) -> Option<usize> {
+        self.write_size
+    }
+
+    pub fn set_write_size(&mut self, size: usize) {
+        self.write_size = Some(size)
+    }
+
+    pub fn reset(&mut self) {
+        *self = Self { ..Self::default() }
+    }
+}
+
+/// This is unstable now and may be changed in the future.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ServerStats {
+    process_start_at: Option<DateTime<Local>>,
+    process_end_at: Option<DateTime<Local>>,
+}
+
+impl ServerStats {
+    stat_impl!(process_start_at);
+    stat_impl!(process_end_at);
+
+    pub fn reset(&mut self) {
+        self.process_start_at = None;
+        self.process_end_at = None;
+    }
+}
+
+/// This is unstable now and may be changed in the future.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ClientStats {
+    make_transport_start_at: Option<DateTime<Local>>,
+    make_transport_end_at: Option<DateTime<Local>>,
+}
+
+impl ClientStats {
+    stat_impl!(make_transport_start_at);
+    stat_impl!(make_transport_end_at);
+
+    pub fn reset(&mut self) {
+        self.make_transport_start_at = None;
+        self.make_transport_end_at = None;
     }
 }
 
@@ -46,6 +156,9 @@ pub struct ClientCxInner {
     pub seq_id: i32,
     pub message_type: TMessageType,
     pub transport: PooledTransport,
+    pub stats: ClientStats,
+
+    pub common_stats: CommonStats,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -54,6 +167,9 @@ pub struct ServerCxInner {
     pub req_msg_type: Option<TMessageType>,
     pub msg_type: Option<TMessageType>,
     pub transport: ServerTransportInfo,
+    pub stats: ServerStats,
+
+    pub common_stats: CommonStats,
 }
 
 pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
@@ -68,6 +184,8 @@ impl ClientContext {
                 seq_id,
                 message_type: msg_type,
                 transport: PooledTransport { should_reuse: true },
+                stats: ClientStats::default(),
+                common_stats: CommonStats::default(),
             },
         ))
     }
@@ -98,6 +216,8 @@ impl Default for ServerContext {
                 req_msg_type: None,
                 msg_type: None,
                 transport: ServerTransportInfo::default(),
+                stats: ServerStats::default(),
+                common_stats: CommonStats::default(),
             },
         ))
     }
@@ -125,6 +245,8 @@ pub trait ThriftContext: volo::context::Context<Config = Config> + Send + 'stati
     fn handle_decoded_msg_ident(&mut self, ident: &TMessageIdentifier);
     fn seq_id(&self) -> i32;
     fn msg_type(&self) -> TMessageType;
+    fn stats(&self) -> &CommonStats;
+    fn stats_mut(&mut self) -> &mut CommonStats;
 }
 
 impl ThriftContext for ClientContext {
@@ -149,6 +271,16 @@ impl ThriftContext for ClientContext {
     #[inline]
     fn msg_type(&self) -> TMessageType {
         self.message_type
+    }
+
+    #[inline]
+    fn stats(&self) -> &CommonStats {
+        &self.common_stats
+    }
+
+    #[inline]
+    fn stats_mut(&mut self) -> &mut CommonStats {
+        &mut self.common_stats
     }
 }
 
@@ -176,6 +308,16 @@ impl ThriftContext for ServerContext {
     #[inline]
     fn msg_type(&self) -> TMessageType {
         self.msg_type.unwrap()
+    }
+
+    #[inline]
+    fn stats(&self) -> &CommonStats {
+        &self.common_stats
+    }
+
+    #[inline]
+    fn stats_mut(&mut self) -> &mut CommonStats {
+        &mut self.common_stats
     }
 }
 
@@ -297,13 +439,17 @@ impl ::volo::client::Apply<ClientContext> for CallOpt {
 
 #[cfg(test)]
 mod tests {
+    use super::{Role, RpcInfo};
     use crate::context::ClientContext;
-
-    use super::{RpcInfo, Role};
 
     #[test]
     fn test_rpcinfo() {
-        let ri = &ClientContext::new(1, RpcInfo::with_role(Role::Client), pilota::thrift::TMessageType::Call).rpc_info;
+        let ri = &ClientContext::new(
+            1,
+            RpcInfo::with_role(Role::Client),
+            pilota::thrift::TMessageType::Call,
+        )
+        .rpc_info;
         println!("{:?}", ri);
     }
 }

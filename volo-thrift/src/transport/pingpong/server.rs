@@ -57,7 +57,9 @@ pub async fn serve<Svc, Req, Resp, E, D>(
 
                 match msg {
                     Ok(Some(ThriftMessage { data: Ok(req), .. })) => {
+                        cx.stats.record_process_start_at();
                         let resp = service.call(&mut cx, req).await;
+                        cx.stats.record_process_end_at();
 
                         if exit_mark.load(Ordering::Relaxed) {
                             cx.transport.set_conn_reset(true);
