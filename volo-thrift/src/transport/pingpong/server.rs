@@ -23,6 +23,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     notified: Notified<'_>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     service: &Svc,
+    stat_tracer: Arc<[crate::server::TraceFn]>,
     peer_addr: Option<Address>,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
@@ -76,6 +77,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             if let Err(e) = encoder.encode(&mut cx, msg).await {
                                 // log it
                                 error!("[VOLO] server send response error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
+                                stat_tracer.iter().for_each(|f| f(&cx));
                                 return;
                             }
                         }
@@ -97,9 +99,11 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 error!("[VOLO] server send error error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
                             }
                         }
+                        stat_tracer.iter().for_each(|f| f(&cx));
                         return;
                     }
                 }
+                stat_tracer.iter().for_each(|f| f(&cx));
 
                 metainfo::METAINFO.with(|mi| {
                     mi.borrow_mut().clear();
