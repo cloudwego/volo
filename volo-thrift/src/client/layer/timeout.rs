@@ -38,7 +38,8 @@ where
                             Ok(r) => r.map_err(Into::into),
                             Err(_) => {
                                 let msg = format!(
-                                    "[VOLO] thrift rpc call timeout, rpcinfo: {:?}, elpased: {:?}, timeout config: {:?}",
+                                    "[VOLO] thrift rpc call timeout, rpcinfo: {:?}, elpased: \
+                                     {:?}, timeout config: {:?}",
                                     cx.rpc_info,
                                     start.elapsed(),
                                     duration

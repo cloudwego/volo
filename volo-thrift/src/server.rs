@@ -29,10 +29,15 @@ use crate::{
     EntryMessage, Result,
 };
 
+/// This is unstable now and may be changed in the future.
+#[doc(hidden)]
+pub type TraceFn = fn(&ServerContext);
+
 pub struct Server<S, L, Req, MkC> {
     service: S,
     layer: L,
     make_codec: MkC,
+    stat_tracer: Vec<TraceFn>,
     _marker: PhantomData<fn(Req)>,
     #[cfg(feature = "multiplex")]
     multiplex: bool,
@@ -49,6 +54,7 @@ impl<S, Req>
             make_codec: DefaultMakeCodec::default(),
             service,
             layer: Identity::new(),
+            stat_tracer: Vec::new(),
             _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: false,
@@ -73,6 +79,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
             layer: Stack::new(layer, self.layer),
             service: self.service,
             make_codec: self.make_codec,
+            stat_tracer: self.stat_tracer,
             _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -95,10 +102,18 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
             layer: Stack::new(self.layer, layer),
             service: self.service,
             make_codec: self.make_codec,
+            stat_tracer: self.stat_tracer,
             _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
         }
+    }
+
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn stat_tracer(mut self, trace_fn: TraceFn) -> Self {
+        self.stat_tracer.push(trace_fn);
+        self
     }
 
     /// Set the codec to use for the server.
@@ -114,6 +129,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
             layer: self.layer,
             service: self.service,
             make_codec,
+            stat_tracer: self.stat_tracer,
             _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -138,6 +154,8 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
     {
         // init server
         let service = Arc::new(self.layer.layer(self.service));
+        // TODO(lyf1999): type annotation is needed here, figure out why
+        let stat_tracer: Arc<[TraceFn]> = Arc::from(self.stat_tracer);
 
         let mut incoming = make_incoming.make_incoming().await?;
         info!("[VOLO] server start at: {:?}", incoming);
@@ -169,6 +187,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                                 wh,
                                 service.clone(),
                                 self.make_codec.clone(),
+                                stat_tracer.clone(),
                                 exit_notify_inner.clone(),
                                 exit_flag_inner.clone(),
                                 exit_mark_inner.clone(),
@@ -181,6 +200,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                                 wh,
                                 service.clone(),
                                 self.make_codec.clone(),
+                                stat_tracer.clone(),
                                 exit_notify_inner.clone(),
                                 exit_flag_inner.clone(),
                                 exit_mark_inner.clone(),
@@ -194,6 +214,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                             wh,
                             service.clone(),
                             self.make_codec.clone(),
+                            stat_tracer.clone(),
                             exit_notify_inner.clone(),
                             exit_flag_inner.clone(),
                             exit_mark_inner.clone(),
@@ -286,6 +307,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
             layer: self.layer,
             service: self.service,
             make_codec: self.make_codec,
+            stat_tracer: self.stat_tracer,
             _marker: PhantomData,
             multiplex,
         }
@@ -298,6 +320,7 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
     wh: W,
     service: Svc,
     make_codec: MkC,
+    stat_tracer: Arc<[TraceFn]>,
     exit_notify: Arc<Notify>,
     exit_flag: Arc<parking_lot::RwLock<bool>>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
@@ -328,8 +351,16 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
         "[VOLO] handle conn by ping-pong, peer_addr: {:?}",
         peer_addr
     );
-    crate::transport::pingpong::serve(encoder, decoder, notified, exit_mark, &service, peer_addr)
-        .await;
+    crate::transport::pingpong::serve(
+        encoder,
+        decoder,
+        notified,
+        exit_mark,
+        &service,
+        stat_tracer,
+        peer_addr,
+    )
+    .await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }
 
@@ -340,6 +371,7 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
     wh: W,
     service: Svc,
     make_codec: MkC,
+    stat_tracer: Arc<[TraceFn]>,
     exit_notify: Arc<Notify>,
     exit_flag: Arc<parking_lot::RwLock<bool>>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
@@ -370,7 +402,15 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
         "[VOLO] handle conn by multiplex, peer_addr: {:?}",
         peer_addr
     );
-    crate::transport::multiplex::serve(encoder, decoder, notified, exit_mark, service, peer_addr)
-        .await;
+    crate::transport::multiplex::serve(
+        encoder,
+        decoder,
+        notified,
+        exit_mark,
+        service,
+        stat_tracer,
+        peer_addr,
+    )
+    .await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }

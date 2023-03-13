@@ -120,8 +120,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
     ) -> Result<()> {
-        let encode_start = chrono::Local::now();
-        cx.stats_mut().set_encode_start_at(encode_start);
+        cx.stats_mut().record_encode_start_at();
 
         // first, we need to get the size of the message
         let (real_size, malloc_size) = self.encoder.size(cx, &msg)?;
@@ -140,13 +139,12 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
                 .encode(cx, &mut self.linked_bytes, msg)
                 .map_err(|e| {
                     // record the error time
-                    cx.stats_mut().set_encode_end_at(chrono::Local::now());
+                    cx.stats_mut().record_encode_end_at();
                     e
                 })?;
 
-            let encode_end = chrono::Local::now();
-            cx.stats_mut().set_encode_end_at(encode_end);
-            cx.stats_mut().set_write_start_at(encode_end); // encode end is also write start
+            cx.stats_mut().record_encode_end_at();
+            cx.stats_mut().record_write_start_at(); // encode end is also write start
 
             self.linked_bytes
                 .write_all_vectored(&mut self.writer)
@@ -157,8 +155,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         })()
         .await;
         // put write end here so we can also record the time of encode error
-        let write_end = chrono::Local::now();
-        cx.stats_mut().set_write_end_at(write_end);
+        cx.stats_mut().record_write_end_at();
 
         // finally, don't forget to reset the linked bytes
         self.linked_bytes.reset();
@@ -202,15 +199,15 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
             return Ok(None);
         }
 
-        let start = chrono::Local::now();
-        cx.stats_mut().set_decode_start_at(start);
-        cx.stats_mut().set_read_start_at(start);
+        let start = std::time::Instant::now();
+        cx.stats_mut().record_decode_start_at();
+        cx.stats_mut().record_read_start_at();
 
         // simply call the inner `decode_async`
         let res = self.decoder.decode_async(cx, &mut self.reader).await;
 
-        let end = chrono::Local::now();
-        cx.stats_mut().set_decode_end_at(end);
+        let end = std::time::Instant::now();
+        cx.stats_mut().record_decode_end_at();
         trace!("[VOLO] thrift codec decode message cost: {:?}", end - start);
 
         res

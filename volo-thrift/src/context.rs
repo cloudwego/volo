@@ -21,12 +21,6 @@ macro_rules! stat_impl {
 
             /// This is unstable now and may be changed in the future.
             #[inline]
-            pub fn [<set_ $t>](&mut self, now: DateTime<Local>) {
-                self.$t = Some(now)
-            }
-
-            /// This is unstable now and may be changed in the future.
-            #[inline]
             pub fn [<record_ $t>](&mut self) {
                 self.$t = Some(Local::now())
             }
@@ -68,7 +62,8 @@ pub struct CommonStats {
     write_end_at: Option<DateTime<Local>>,
 
     // size
-    read_size: Option<usize>, // only applicable to length-prefixed transport
+    read_size: Option<usize>, /* only applicable to length-prefixed transport such as TTHeader
+                               * and Framed */
     write_size: Option<usize>,
 }
 
@@ -156,8 +151,9 @@ pub struct ClientCxInner {
     pub seq_id: i32,
     pub message_type: TMessageType,
     pub transport: PooledTransport,
+    /// This is unstable now and may be changed in the future.
     pub stats: ClientStats,
-
+    /// This is unstable now and may be changed in the future.
     pub common_stats: CommonStats,
 }
 
@@ -167,8 +163,9 @@ pub struct ServerCxInner {
     pub req_msg_type: Option<TMessageType>,
     pub msg_type: Option<TMessageType>,
     pub transport: ServerTransportInfo,
+    /// This is unstable now and may be changed in the future.
     pub stats: ServerStats,
-
+    /// This is unstable now and may be changed in the future.
     pub common_stats: CommonStats,
 }
 
@@ -245,7 +242,11 @@ pub trait ThriftContext: volo::context::Context<Config = Config> + Send + 'stati
     fn handle_decoded_msg_ident(&mut self, ident: &TMessageIdentifier);
     fn seq_id(&self) -> i32;
     fn msg_type(&self) -> TMessageType;
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
     fn stats(&self) -> &CommonStats;
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
     fn stats_mut(&mut self) -> &mut CommonStats;
 }
 

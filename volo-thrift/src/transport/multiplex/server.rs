@@ -25,6 +25,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     notified: Notified<'_>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     service: Svc,
+    stat_tracer: Arc<[crate::server::TraceFn]>,
     peer_addr: Option<Address>,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp> + Send + Clone + 'static + Sync,
@@ -54,8 +55,10 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                     if let Err(e) = metainfo::METAINFO.scope(RefCell::new(mi), encoder.encode::<Resp, ServerContext>(&mut cx, msg)).await {
                                         // log it
                                         error!("[VOLO] server send response error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
+                                        stat_tracer.iter().for_each(|f| f(&cx));
                                         return;
                                     }
+                                    stat_tracer.iter().for_each(|f| f(&cx));
                                 }
                                 None => {
                                     // log it
@@ -72,6 +75,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                         // log it
                                         error!("[VOLO] server send error error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
                                     }
+                                    stat_tracer.iter().for_each(|f| f(&cx));
                                     return;
                                 }
                                 None => {
