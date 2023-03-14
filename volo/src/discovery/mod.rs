@@ -35,7 +35,7 @@ pub trait Discover: Send + Sync + 'static {
     type DiscFut<'future>: Future<Output = Result<Vec<Arc<Instance>>, Self::Error>> + Send + 'future;
 
     /// `discover` allows to request an endpoint and return a discover future.
-    fn discover(&self, endpoint: &Endpoint) -> Self::DiscFut<'_>;
+    fn discover<'s>(&'s self, endpoint: &'s Endpoint) -> Self::DiscFut<'s>;
     /// `key` should return a key suitable for cache.
     fn key(&self, endpoint: &Endpoint) -> Self::Key;
     /// `watch` should return a [`async_broadcast::Receiver`] which can be used to subscribe
