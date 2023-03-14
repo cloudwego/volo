@@ -38,7 +38,11 @@ async-stream = "0.3"
 async-trait = "0.1"
 base64 = "0.13"
 bytes = "1"
-chrono = "0.4"
+chrono = { version = "0.4", default-features = false, features = [
+  "std",
+  "alloc",
+  "clock",
+] }
 clap = "4"
 colored = "2"
 dashmap = "5"
