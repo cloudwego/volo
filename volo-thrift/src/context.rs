@@ -20,6 +20,13 @@ macro_rules! stat_impl {
             }
 
             /// This is unstable now and may be changed in the future.
+            #[doc(hidden)]
+            #[inline]
+            pub fn [<set_$t>](&mut self, t: DateTime<Local>) {
+                self.$t = Some(t)
+            }
+
+            /// This is unstable now and may be changed in the future.
             #[inline]
             pub fn [<record_ $t>](&mut self) {
                 self.$t = Some(Local::now())

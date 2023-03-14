@@ -788,9 +788,9 @@ pub(crate) fn decode<Cx: ThriftContext>(
             match role {
                 Role::Client => {
                     if let Some(ad) = headers.remove(HEADER_TRANS_REMOTE_ADDR) {
-                        if let Some(_host) = ad.split(':').next() {
+                        // if let Some(_host) = ad.split(':').next() {
                             // TODO: get_idc_from_ip and set tag
-                        }
+                        // }
                         let maybe_addr = ad.parse::<SocketAddr>();
                         if let (Some(callee), Ok(addr)) =
                             (cx.rpc_info_mut().callee.as_mut(), maybe_addr)

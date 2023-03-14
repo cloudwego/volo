@@ -231,11 +231,23 @@ where
             Ok(res) => match res {
                 Ok(opt) => match opt {
                     None => Ok(None),
-                    Some((mi, _cx, msg)) => {
+                    Some((mi, new_cx, msg)) => {
                         metainfo::METAINFO.with(|m| {
                             m.borrow_mut().extend(mi);
                         });
                         // TODO: cx extend
+                        if let Some(t) = new_cx.common_stats.decode_start_at() {
+                            cx.common_stats.set_decode_start_at(t);
+                        }
+                        if let Some(t) = new_cx.common_stats.decode_end_at() {
+                            cx.common_stats.set_decode_end_at(t);
+                        }
+                        if let Some(t) = new_cx.common_stats.read_start_at() {
+                            cx.common_stats.set_read_start_at(t);
+                        }
+                        if let Some(t) = new_cx.common_stats.read_end_at() {
+                            cx.common_stats.set_read_end_at(t);
+                        }
                         Ok(Some(msg))
                     }
                 },
