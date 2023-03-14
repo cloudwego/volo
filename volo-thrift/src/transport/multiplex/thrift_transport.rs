@@ -248,6 +248,9 @@ where
                         if let Some(t) = new_cx.common_stats.read_end_at() {
                             cx.common_stats.set_read_end_at(t);
                         }
+                        if let Some(s) = new_cx.common_stats.read_size() {
+                            cx.common_stats.set_read_size(s);
+                        }
                         Ok(Some(msg))
                     }
                 },
