@@ -1,6 +1,6 @@
 use bytes::{Buf, BytesMut};
 use linkedbytes::LinkedBytes;
-use pilota::thrift::rw_ext::WriteExt;
+use pilota::thrift::{rw_ext::WriteExt, DecodeError, EncodeError, ProtocolError};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
 use tracing::trace;
 use volo::{context::Role, util::buf_reader::BufReader};
@@ -81,7 +81,7 @@ where
         &mut self,
         cx: &mut Cx,
         bytes: &mut BytesMut,
-    ) -> crate::Result<Option<ThriftMessage<Msg>>> {
+    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError> {
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, must not be Framed, so just forward to inner
             return self.inner.decode(cx, bytes);
@@ -105,7 +105,7 @@ where
         &mut self,
         cx: &mut Cx,
         reader: &mut BufReader<R>,
-    ) -> crate::Result<Option<ThriftMessage<Msg>>> {
+    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError> {
         // check if is framed
         if let Ok(buf) = reader.fill_buf_at_least(HEADER_DETECT_LENGTH).await {
             if is_framed(buf) {
@@ -177,7 +177,7 @@ where
         cx: &mut Cx,
         linked_bytes: &mut LinkedBytes,
         msg: ThriftMessage<Msg>,
-    ) -> crate::Result<()> {
+    ) -> Result<(), EncodeError> {
         let dst = linked_bytes.bytes_mut();
         // only encode framed if role is client or server has detected framed in decode
         if cx.rpc_info().role() == Role::Client
@@ -188,8 +188,7 @@ where
                 .0
         {
             // encode framed first
-            dst.write_i32(self.inner_size)
-                .map_err(Into::<pilota::thrift::error::Error>::into)?;
+            dst.write_i32(self.inner_size)?;
             trace!(
                 "[VOLO] encode message framed header size: {}",
                 self.inner_size
@@ -202,7 +201,7 @@ where
         &mut self,
         cx: &mut Cx,
         msg: &ThriftMessage<Msg>,
-    ) -> crate::Result<(usize, usize)> {
+    ) -> Result<(usize, usize), EncodeError> {
         let (real_size, malloc_size) = self.inner.size(cx, msg)?;
         self.inner_size = real_size as i32;
         // only calc framed size if role is client or server has detected framed in decode
@@ -226,18 +225,18 @@ where
 
 /// Checks the framed size according to thrift spec.
 /// https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#framed-vs-unframed-transport
-pub fn check_framed_size(size: i32, max_frame_size: i32) -> Result<(), crate::Error> {
+pub fn check_framed_size(size: i32, max_frame_size: i32) -> Result<(), ProtocolError> {
     if size > max_frame_size {
-        return Err(crate::Error::Pilota(pilota::thrift::new_protocol_error(
+        return Err(pilota::thrift::new_protocol_error(
             pilota::thrift::ProtocolErrorKind::SizeLimit,
             format!("frame size {size} exceeds max frame size {max_frame_size}"),
-        )));
+        ));
     }
     if size < 0 {
-        return Err(crate::Error::Pilota(pilota::thrift::new_protocol_error(
+        return Err(pilota::thrift::new_protocol_error(
             pilota::thrift::ProtocolErrorKind::NegativeSize,
             format!("frame size {size} is negative"),
-        )));
+        ));
     }
     Ok(())
 }

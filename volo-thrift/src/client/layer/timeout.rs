@@ -45,9 +45,9 @@ where
                                     duration
                                 );
                                 warn!(msg);
-                                Err(crate::Error::Pilota(
+                                Err(crate::Error::Pilota(pilota::thrift::Error::Transport(
                                     std::io::Error::new(std::io::ErrorKind::TimedOut, msg).into(),
-                                ))
+                                )))
                             }
                         }
                     }
