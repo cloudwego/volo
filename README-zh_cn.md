@@ -13,13 +13,13 @@
 
 Volo 是字节跳动服务框架团队研发的 **高性能**、**可扩展性强** 的 Rust RPC 框架，使用了 Rust 最新的 GAT 特性。
 
-Volo 使用 [`Motore`][Motore] 作为其中间件抽象层, Motore 基于 GAT 设计。
+Volo 使用 [`Motore`][motore] 作为其中间件抽象层, Motore 基于 GAT 设计。
 
 ## 概览
 
 ### Crates
 
-Volo 主要包含6个 crate 库:
+Volo 主要包含 6 个 crate 库:
 
 1. [`volo`][volo] - 包含框架的通用组件。
 2. [`volo-thrift`][volo-thrift] - 提供 **thrift** RPC 消息协议支持。
@@ -32,7 +32,7 @@ Volo 主要包含6个 crate 库:
 
 #### 使用 GAT 特性
 
-Volo 使用 [`Motore`][Motore] 作为其中间件抽象层, Motore 基于 GAT 设计。
+Volo 使用 [`Motore`][motore] 作为其中间件抽象层, Motore 基于 GAT 设计。
 
 通过 GAT，我们可以避免很多不必要的 Box 内存分配，以及提升易用性，给用户提供更友好的编程接口和更符合人体工程学的编程范式。
 
@@ -70,12 +70,16 @@ Volo-Thrift: https://www.cloudwego.io/zh/docs/volo/volo-thrift/getting-started/
 
 Volo-gRPC: https://www.cloudwego.io/zh/docs/volo/volo-grpc/getting-started/
 
+## 示例
+
+参考[Examples](examples).
+
 ## 相关生态
 
-- [Volo-rs][Volo-rs]: Volo 的相关生态，包含了 Volo 的许多组件
-- [Motore][Motore]: Volo 参考 Tower 设计的，使用了 GAT 的 middleware 抽象层
-- [Pilota][Pilota]: Volo 使用的 Thrift 与 Protobuf 编译器及编解码的纯 Rust 实现（不依赖 protoc）
-- [Metainfo][Metainfo]: Volo 用于进行元信息透传的组件，期望定义一套元信息透传的标准
+- [Volo-rs][volo-rs]: Volo 的相关生态，包含了 Volo 的许多组件
+- [Motore][motore]: Volo 参考 Tower 设计的，使用了 GAT 的 middleware 抽象层
+- [Pilota][pilota]: Volo 使用的 Thrift 与 Protobuf 编译器及编解码的纯 Rust 实现（不依赖 protoc）
+- [Metainfo][metainfo]: Volo 用于进行元信息透传的组件，期望定义一套元信息透传的标准
 
 ## 开发路线图
 
@@ -106,13 +110,14 @@ Volo 使用 MIT license 和 the Apache License (Version 2.0) 双重许可证。
 
   <img src="https://github.com/cloudwego/volo/raw/main/.github/assets/volo-feishu-user-group.png" alt="Volo user group" width="50%" height="50%" />
 
-[Volo-rs]: https://github.com/volo-rs
-[Motore]: https://github.com/cloudwego/motore
-[Pilota]: https://github.com/cloudwego/pilota
-[Metainfo]: https://github.com/cloudwego/metainfo
+[volo-rs]: https://github.com/volo-rs
+[motore]: https://github.com/cloudwego/motore
+[pilota]: https://github.com/cloudwego/pilota
+[metainfo]: https://github.com/cloudwego/metainfo
 [volo]: https://docs.rs/volo
 [volo-thrift]: https://docs.rs/volo-thrift
 [volo-grpc]: https://docs.rs/volo-grpc
 [volo-build]: https://docs.rs/volo-build
 [volo-cli]: https://crates.io/crates/volo-cli
 [volo-macros]: https://docs.rs/volo-macros
+[examples]: https://github.com/cloudwego/volo/tree/main/examples
