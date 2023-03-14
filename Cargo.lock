@@ -2320,7 +2320,7 @@ version = "0.3.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.3.9"
+version = "0.3.10"
 dependencies = [
  "anyhow",
  "async-trait",
