@@ -16,7 +16,8 @@ const TAPPLICATION_EXCEPTION: TStructIdentifier = TStructIdentifier {
 
 #[derive(Debug)]
 pub enum Error {
-    Pilota(PilotaError),
+    Transport(pilota::thrift::TransportError),
+    Protocol(pilota::thrift::ProtocolError),
 
     /// Errors encountered within auto-generated code, or when incoming
     /// or outgoing messages violate the Thrift spec.
@@ -32,14 +33,12 @@ pub enum Error {
 impl Error {
     pub fn append_msg(&mut self, msg: &str) {
         match self {
-            Error::Pilota(e) => match e {
-                PilotaError::Transport(e) => {
-                    e.message.push_str(msg);
-                }
-                PilotaError::Protocol(e) => {
-                    e.message.push_str(msg);
-                }
-            },
+            Error::Transport(e) => {
+                e.message.push_str(msg);
+            }
+            Error::Protocol(e) => {
+                e.message.push_str(msg);
+            }
             Error::Application(e) => e.message.push_str(msg),
         }
     }
@@ -47,22 +46,25 @@ impl Error {
 
 impl From<TransportError> for Error {
     fn from(value: TransportError) -> Self {
-        Error::Pilota(PilotaError::Transport(value))
+        Error::Transport(value)
     }
 }
 
 impl From<PilotaError> for Error {
     fn from(e: PilotaError) -> Self {
-        Error::Pilota(e)
+        match e {
+            PilotaError::Transport(e) => Error::Transport(e),
+            PilotaError::Protocol(e) => Error::Protocol(e),
+        }
     }
 }
 
 impl From<EncodeError> for Error {
     fn from(value: EncodeError) -> Self {
-        Error::Pilota(PilotaError::Protocol(ProtocolError {
+        Error::Protocol(ProtocolError {
             kind: value.kind,
             message: value.to_string(),
-        }))
+        })
     }
 }
 
@@ -70,10 +72,10 @@ impl From<DecodeError> for Error {
     fn from(value: DecodeError) -> Self {
         macro_rules! protocol_err {
             ($kind:ident) => {
-                Error::Pilota(PilotaError::Protocol(ProtocolError {
+                Error::Protocol(ProtocolError {
                     kind: pilota::thrift::ProtocolErrorKind::$kind,
                     message: value.message,
-                }))
+                })
             };
         }
 
@@ -91,14 +93,12 @@ impl From<DecodeError> for Error {
                 })
             }
             pilota::thrift::DecodeErrorKind::IOError(e) => {
-                Error::Pilota(PilotaError::Transport(TransportError::from(e)))
+                Error::Transport(TransportError::from(e))
             }
-            pilota::thrift::DecodeErrorKind::WithContext(_) => {
-                Error::Pilota(PilotaError::Protocol(ProtocolError::new(
-                    pilota::thrift::ProtocolErrorKind::Unknown,
-                    value.to_string(),
-                )))
-            }
+            pilota::thrift::DecodeErrorKind::WithContext(_) => Error::Protocol(ProtocolError::new(
+                pilota::thrift::ProtocolErrorKind::Unknown,
+                value.to_string(),
+            )),
         }
     }
 }
@@ -117,7 +117,7 @@ impl From<LoadBalanceError> for Error {
 
 impl Retryable for Error {
     fn retryable(&self) -> bool {
-        if let Error::Pilota(PilotaError::Transport(_)) = self {
+        if let Error::Transport(_) = self {
             return true;
         }
         false
@@ -400,10 +400,8 @@ pub enum ResponseError<T> {
 impl<T> From<Error> for ResponseError<T> {
     fn from(e: Error) -> Self {
         match e {
-            Error::Pilota(e) => match e {
-                PilotaError::Transport(e) => ResponseError::Transport(e),
-                PilotaError::Protocol(e) => ResponseError::Protocol(e),
-            },
+            Error::Transport(e) => ResponseError::Transport(e),
+            Error::Protocol(e) => ResponseError::Protocol(e),
             Error::Application(e) => ResponseError::Application(e),
         }
     }

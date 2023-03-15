@@ -97,7 +97,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                     Err(e) => {
                         error!("[VOLO] pingpong server decode error: {:?}, peer_addr: {:?}", e, peer_addr);
                         cx.msg_type = Some(TMessageType::Exception);
-                        if !matches!(e, Error::Pilota(pilota::thrift::error::Error::Transport(_))) {
+                        if !matches!(e, Error::Transport(_)) {
                             let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e))
                                 .unwrap();
                             if let Err(e) = encoder.encode(&mut cx, msg).await {
