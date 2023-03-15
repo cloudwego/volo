@@ -17,7 +17,7 @@ pub trait Decoder: Send + 'static {
     async fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-    ) -> crate::Result<Option<ThriftMessage<Msg>>>;
+    ) -> Result<Option<ThriftMessage<Msg>>, crate::Error>;
 }
 
 /// [`Encoder`] writes a [`ThriftMessage`] to an [`AsyncWrite`] and flushes the data.
@@ -29,7 +29,7 @@ pub trait Encoder: Send + 'static {
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
-    ) -> crate::Result<()>;
+    ) -> Result<(), crate::Error>;
 }
 
 /// [`MakeCodec`] receives an [`AsyncRead`] and an [`AsyncWrite`] and returns a

@@ -1,5 +1,5 @@
 use faststr::FastStr;
-use pilota::thrift::{Error::Protocol, Message, TAsyncInputProtocol};
+use pilota::thrift::{DecodeError, EncodeError, Error::Protocol, Message, TAsyncInputProtocol};
 
 use crate::{
     context::{ClientContext, ServerContext, ThriftContext},
@@ -27,7 +27,7 @@ pub(crate) struct DummyMessage;
 #[async_trait::async_trait]
 impl EntryMessage for DummyMessage {
     #[inline]
-    fn encode<T: TOutputProtocol>(&self, _protocol: &mut T) -> Result<(), crate::Error> {
+    fn encode<T: TOutputProtocol>(&self, _protocol: &mut T) -> Result<(), EncodeError> {
         unreachable!()
     }
 
@@ -35,7 +35,7 @@ impl EntryMessage for DummyMessage {
     fn decode<T: TInputProtocol>(
         _protocol: &mut T,
         _msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, crate::Error> {
+    ) -> Result<Self, DecodeError> {
         unreachable!()
     }
 
@@ -43,7 +43,7 @@ impl EntryMessage for DummyMessage {
     async fn decode_async<T: TAsyncInputProtocol>(
         _protocol: &mut T,
         _msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, crate::Error> {
+    ) -> Result<Self, DecodeError> {
         unreachable!()
     }
 
@@ -116,7 +116,7 @@ impl<U> ThriftMessage<U>
 where
     U: EntryMessage + Send,
 {
-    pub(crate) fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), crate::Error> {
+    pub(crate) fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError> {
         let ident = TMessageIdentifier::new(
             self.meta.method.clone(),
             self.meta.msg_type,
@@ -154,7 +154,7 @@ where
     pub(crate) fn decode<Cx: ThriftContext, T: TInputProtocol>(
         protocol: &mut T,
         cx: &mut Cx,
-    ) -> Result<Self, crate::Error> {
+    ) -> Result<Self, DecodeError> {
         let msg_ident = protocol.read_message_begin()?;
 
         cx.handle_decoded_msg_ident(&msg_ident);
@@ -177,7 +177,7 @@ where
     pub(crate) async fn decode_async<Cx: ThriftContext + Send, T: TAsyncInputProtocol>(
         protocol: &mut T,
         cx: &mut Cx,
-    ) -> Result<Self, crate::Error> {
+    ) -> Result<Self, DecodeError> {
         let msg_ident = protocol.read_message_begin().await?;
 
         cx.handle_decoded_msg_ident(&msg_ident);

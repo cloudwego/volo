@@ -1,8 +1,8 @@
 use std::fmt::{self, Display, Formatter};
 
 use pilota::thrift::{
-    Error as PilotaError, Message, ProtocolError, TAsyncInputProtocol, TInputProtocol,
-    TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
+    DecodeError, EncodeError, Error as PilotaError, Message, ProtocolError, TAsyncInputProtocol,
+    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
 };
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
@@ -45,21 +45,67 @@ impl Error {
     }
 }
 
+impl From<TransportError> for Error {
+    fn from(value: TransportError) -> Self {
+        Error::Pilota(PilotaError::Transport(value))
+    }
+}
+
 impl From<PilotaError> for Error {
     fn from(e: PilotaError) -> Self {
         Error::Pilota(e)
     }
 }
 
-impl From<ApplicationError> for Error {
-    fn from(e: ApplicationError) -> Self {
-        Error::Application(e)
+impl From<EncodeError> for Error {
+    fn from(value: EncodeError) -> Self {
+        Error::Pilota(PilotaError::Protocol(ProtocolError {
+            kind: value.kind,
+            message: value.to_string(),
+        }))
     }
 }
 
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Error::Pilota(err.into())
+impl From<DecodeError> for Error {
+    fn from(value: DecodeError) -> Self {
+        macro_rules! protocol_err {
+            ($kind:ident) => {
+                Error::Pilota(PilotaError::Protocol(ProtocolError {
+                    kind: pilota::thrift::ProtocolErrorKind::$kind,
+                    message: value.message,
+                }))
+            };
+        }
+
+        match value.kind {
+            pilota::thrift::DecodeErrorKind::InvalidData => protocol_err!(InvalidData),
+            pilota::thrift::DecodeErrorKind::NegativeSize => protocol_err!(NegativeSize),
+            pilota::thrift::DecodeErrorKind::BadVersion => protocol_err!(BadVersion),
+            pilota::thrift::DecodeErrorKind::NotImplemented => protocol_err!(NotImplemented),
+            pilota::thrift::DecodeErrorKind::DepthLimit => protocol_err!(DepthLimit),
+
+            pilota::thrift::DecodeErrorKind::UnknownMethod => {
+                Error::Application(ApplicationError {
+                    kind: ApplicationErrorKind::UnknownMethod,
+                    message: value.message,
+                })
+            }
+            pilota::thrift::DecodeErrorKind::IOError(e) => {
+                Error::Pilota(PilotaError::Transport(TransportError::from(e)))
+            }
+            pilota::thrift::DecodeErrorKind::WithContext(_) => {
+                Error::Pilota(PilotaError::Protocol(ProtocolError::new(
+                    pilota::thrift::ProtocolErrorKind::Unknown,
+                    value.to_string(),
+                )))
+            }
+        }
+    }
+}
+
+impl From<ApplicationError> for Error {
+    fn from(e: ApplicationError) -> Self {
+        Error::Application(e)
     }
 }
 
@@ -147,7 +193,7 @@ impl Message for ApplicationError {
     /// it to the remote.
     ///
     /// Application code **should never** call this method directly.
-    fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), PilotaError> {
+    fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError> {
         protocol.write_struct_begin(&TAPPLICATION_EXCEPTION)?;
 
         protocol.write_field_begin(TType::Binary, 1)?;
@@ -165,7 +211,7 @@ impl Message for ApplicationError {
         Ok(())
     }
 
-    fn decode<T: TInputProtocol>(protocol: &mut T) -> Result<Self, PilotaError> {
+    fn decode<T: TInputProtocol>(protocol: &mut T) -> Result<Self, DecodeError> {
         let mut message = "general remote error".to_owned();
         let mut kind = ApplicationErrorKind::Unknown;
 
@@ -203,10 +249,13 @@ impl Message for ApplicationError {
 
         protocol.read_struct_end()?;
 
-        Ok(ApplicationError { kind, message })
+        Ok(ApplicationError {
+            kind,
+            message: message.into(),
+        })
     }
 
-    async fn decode_async<T: TAsyncInputProtocol>(protocol: &mut T) -> Result<Self, PilotaError> {
+    async fn decode_async<T: TAsyncInputProtocol>(protocol: &mut T) -> Result<Self, DecodeError> {
         let mut message = "general remote error".to_owned();
         let mut kind = ApplicationErrorKind::Unknown;
 
@@ -244,7 +293,10 @@ impl Message for ApplicationError {
 
         protocol.read_struct_end().await?;
 
-        Ok(ApplicationError { kind, message })
+        Ok(ApplicationError {
+            kind,
+            message: message.into(),
+        })
     }
 
     fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
@@ -313,7 +365,7 @@ impl TryFrom<i32> for ApplicationErrorKind {
             10 => Ok(ApplicationErrorKind::UnsupportedClientType),
             _ => Err(Error::Application(ApplicationError {
                 kind: ApplicationErrorKind::Unknown,
-                message: format!("cannot convert {from} to ApplicationErrorKind"),
+                message: format!("cannot convert {from} to ApplicationErrorKind").into(),
             })),
         }
     }

@@ -3,7 +3,8 @@ use linkedbytes::LinkedBytes;
 use pilota::thrift::{
     binary::TBinaryProtocol,
     compact::{TCompactInputProtocol, TCompactOutputProtocol},
-    ProtocolErrorKind, TAsyncBinaryProtocol, TAsyncCompactProtocol, TLengthProtocol,
+    DecodeError, DecodeErrorKind, EncodeError, ProtocolError, ProtocolErrorKind,
+    TAsyncBinaryProtocol, TAsyncCompactProtocol, TLengthProtocol,
 };
 use tokio::io::AsyncRead;
 use volo::util::buf_reader::BufReader;
@@ -100,14 +101,12 @@ impl ZeroCopyDecoder for ThriftCodec {
         &mut self,
         cx: &mut Cx,
         bytes: &mut BytesMut,
-    ) -> crate::Result<Option<ThriftMessage<Msg>>> {
+    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError> {
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, so return error
-            return Err(crate::Error::Pilota(
-                pilota::thrift::error::new_protocol_error(
-                    ProtocolErrorKind::BadVersion,
-                    "not enough bytes to detect protocol in thrift codec",
-                ),
+            return Err(pilota::thrift::error::DecodeError::new(
+                DecodeErrorKind::BadVersion,
+                "not enough bytes to detect protocol in thrift codec",
             ));
         }
 
@@ -128,11 +127,9 @@ impl ZeroCopyDecoder for ThriftCodec {
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))
             }
-            p => Err(crate::Error::Pilota(
-                pilota::thrift::error::new_protocol_error(
-                    ProtocolErrorKind::NotImplemented,
-                    format!("protocol {p:?} is not supported"),
-                ),
+            p => Err(pilota::thrift::error::DecodeError::new(
+                DecodeErrorKind::NotImplemented,
+                format!("protocol {p:?} is not supported"),
             )),
         }
     }
@@ -145,17 +142,16 @@ impl ZeroCopyDecoder for ThriftCodec {
         &mut self,
         cx: &mut Cx,
         reader: &mut BufReader<R>,
-    ) -> crate::Result<Option<ThriftMessage<Msg>>> {
+    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError> {
         // check if is framed
         let Ok(buf) = reader.fill_buf_at_least(HEADER_DETECT_LENGTH).await else {
             cx.stats_mut().record_read_end_at();
             // not enough bytes to detect, so return error
-            return Err(crate::Error::Pilota(
-                pilota::thrift::error::new_protocol_error(
-                    ProtocolErrorKind::BadVersion,
+            return Err(pilota::thrift::error::DecodeError::new(
+                DecodeErrorKind::BadVersion,
                     "not enough bytes to detect protocol in thrift codec",
                 ),
-            ));
+            );
         };
 
         // detect protocol
@@ -178,11 +174,9 @@ impl ZeroCopyDecoder for ThriftCodec {
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))
             }
-            p => Err(crate::Error::Pilota(
-                pilota::thrift::error::new_protocol_error(
-                    ProtocolErrorKind::NotImplemented,
-                    format!("protocol {p:?} is not supported"),
-                ),
+            p => Err(pilota::thrift::error::DecodeError::new(
+                DecodeErrorKind::NotImplemented,
+                format!("protocol {p:?} is not supported"),
             )),
         };
         cx.stats_mut().record_read_end_at();
@@ -191,17 +185,17 @@ impl ZeroCopyDecoder for ThriftCodec {
 }
 
 /// Detect protocol according to https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
-pub fn detect(buf: &[u8]) -> Result<Protocol, crate::Error> {
+pub fn detect(buf: &[u8]) -> Result<Protocol, ProtocolError> {
     if buf[0] == 0x80 || buf[0] == 0x00 {
         Ok(Protocol::Binary)
     } else if buf[0] == 0x82 {
         // TODO: how do we differ ApacheCompact and FBThriftCompact?
         Ok(Protocol::ApacheCompact)
     } else {
-        Err(crate::Error::Pilota(pilota::thrift::new_protocol_error(
+        Err(pilota::thrift::new_protocol_error(
             ProtocolErrorKind::BadVersion,
             format!("unknown protocol, first byte: {}", buf[0]),
-        )))
+        ))
     }
 }
 
@@ -211,7 +205,7 @@ impl ZeroCopyEncoder for ThriftCodec {
         cx: &mut Cx,
         linked_bytes: &mut LinkedBytes,
         msg: ThriftMessage<Msg>,
-    ) -> crate::Result<()> {
+    ) -> Result<(), EncodeError> {
         // for the client side, the match expression will always be `&self.protocol`
         // TODO: use the protocol in TTHeader?
         match cx.extensions().get::<Protocol>().unwrap_or(&self.protocol) {
@@ -225,11 +219,9 @@ impl ZeroCopyEncoder for ThriftCodec {
                 msg.encode(&mut p)?;
                 Ok(())
             }
-            p => Err(crate::Error::Pilota(
-                pilota::thrift::error::new_protocol_error(
-                    ProtocolErrorKind::NotImplemented,
-                    format!("protocol {p:?} is not supported"),
-                ),
+            p => Err(pilota::thrift::error::EncodeError::new(
+                ProtocolErrorKind::NotImplemented,
+                format!("protocol {p:?} is not supported"),
             )),
         }
     }
@@ -238,7 +230,7 @@ impl ZeroCopyEncoder for ThriftCodec {
         &mut self,
         cx: &mut Cx,
         msg: &ThriftMessage<Msg>,
-    ) -> crate::Result<(usize, usize)> {
+    ) -> Result<(usize, usize), EncodeError> {
         // for the client side, the match expression will always be `&self.protocol`
         // TODO: use the protocol in TTHeader?
         match cx.extensions().get::<Protocol>().unwrap_or(&self.protocol) {
@@ -254,11 +246,9 @@ impl ZeroCopyEncoder for ThriftCodec {
                 let malloc_size = real_size - p.zero_copy_len();
                 Ok((real_size, malloc_size))
             }
-            p => Err(crate::Error::Pilota(
-                pilota::thrift::error::new_protocol_error(
-                    ProtocolErrorKind::NotImplemented,
-                    format!("protocol {p:?} is not supported"),
-                ),
+            p => Err(pilota::thrift::error::EncodeError::new(
+                ProtocolErrorKind::NotImplemented,
+                format!("protocol {p:?} is not supported"),
             )),
         }
     }

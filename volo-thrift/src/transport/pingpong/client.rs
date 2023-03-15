@@ -2,7 +2,7 @@ use std::{io, marker::PhantomData};
 
 use futures::Future;
 use motore::service::{Service, UnaryService};
-use pilota::thrift::{new_transport_error, TransportErrorKind};
+use pilota::thrift::{new_transport_error, TransportError, TransportErrorKind};
 use volo::{
     net::{dial::MakeTransport, Address},
     Unwrap,
@@ -123,10 +123,10 @@ where
         async move {
             let rpc_info = &cx.rpc_info;
             let target = rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
-                io::Error::new(
+                TransportError::from(io::Error::new(
                     io::ErrorKind::InvalidData,
                     format!("address is required, rpc_info: {:?}", rpc_info),
-                )
+                ))
             })?;
             let oneway = cx.message_type == TMessageType::OneWay;
             cx.stats.record_make_transport_start_at();
