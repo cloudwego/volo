@@ -2,7 +2,7 @@ use std::{io, marker::PhantomData};
 
 use futures::Future;
 use motore::service::{Service, UnaryService};
-use pilota::thrift::{new_transport_error, TransportError, TransportErrorKind};
+use pilota::thrift::{TransportError, TransportErrorKind};
 use volo::{
     net::{dial::MakeTransport, Address},
     Unwrap,
@@ -135,13 +135,15 @@ where
             let resp = transport.send(cx, req, oneway).await;
             if let Ok(None) = resp {
                 if !oneway {
-                    return Err(crate::Error::Pilota(new_transport_error(
-                        TransportErrorKind::EndOfFile,
-                        format!(
-                            "an unexpected end of file from server, rpc_info: {:?}",
-                            cx.rpc_info
+                    return Err(crate::Error::Transport(
+                        pilota::thrift::TransportError::new(
+                            TransportErrorKind::EndOfFile,
+                            format!(
+                                "an unexpected end of file from server, rpc_info: {:?}",
+                                cx.rpc_info
+                            ),
                         ),
-                    )));
+                    ));
                 }
             }
             if cx.transport.should_reuse && resp.is_ok() {
