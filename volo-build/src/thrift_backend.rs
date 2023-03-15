@@ -54,7 +54,7 @@ impl VoloThriftBackend {
                             Self::#variant_names(#decode_variants)
                         }),*
                         _ => {
-                            return Err(::volo_thrift::error::new_application_error(::volo_thrift::error::ApplicationErrorKind::UnknownMethod,  format!("unknown method {}", msg_ident.name)));
+                            return Err(::pilota::thrift::DecodeError::new(::pilota::thrift::DecodeErrorKind::UnknownMethod,  format!("unknown method {}", msg_ident.name)));
                         },
                     })
                 }
@@ -65,7 +65,7 @@ impl VoloThriftBackend {
             quote! {
                 #[::async_trait::async_trait]
                 impl ::volo_thrift::EntryMessage for #req_recv_name {
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::volo_thrift::Error> {
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {
                         match self {
                             #(Self::#variant_names(value) => {
                                 ::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())
@@ -73,14 +73,14 @@ impl VoloThriftBackend {
                         }
                     }
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::volo_thrift::Error> {
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {
                        #decode
                     }
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
                         protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier
-                    ) -> ::core::result::Result<Self, ::volo_thrift::Error>
+                    ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
                         {
                             #decode_async
                         }
@@ -96,7 +96,7 @@ impl VoloThriftBackend {
 
                 #[::async_trait::async_trait]
                 impl ::volo_thrift::EntryMessage for #req_send_name {
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::volo_thrift::Error> {
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {
                         match self {
                             #(Self::#variant_names(value) => {
                                 ::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())
@@ -104,14 +104,14 @@ impl VoloThriftBackend {
                         }
                     }
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::volo_thrift::Error> {
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {
                        #decode
                     }
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
                         protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier
-                    ) -> ::core::result::Result<Self, ::volo_thrift::Error>
+                    ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
                         {
                             #decode_async
                         }
@@ -139,7 +139,7 @@ impl VoloThriftBackend {
                             Self::#variant_names(#decode_item)
                         }),*
                         _ => {
-                            return Err(::volo_thrift::error::new_application_error(::volo_thrift::error::ApplicationErrorKind::UnknownMethod,  format!("unknown method {}", msg_ident.name)));
+                            return Err(::pilota::thrift::DecodeError::new(::pilota::thrift::DecodeErrorKind::UnknownMethod,  format!("unknown method {}", msg_ident.name)));
                         },
                     })
                 }
@@ -150,7 +150,7 @@ impl VoloThriftBackend {
             quote! {
                 #[::async_trait::async_trait]
                 impl ::volo_thrift::EntryMessage for #res_name {
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::volo_thrift::Error> {
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {
                         match self {
                             #(
                                 Self::#variant_names(value) => {
@@ -160,14 +160,14 @@ impl VoloThriftBackend {
                         }
                     }
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::volo_thrift::Error> {
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {
                        #decode
                     }
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
                         protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier,
-                    ) -> ::core::result::Result<Self, ::volo_thrift::Error>
+                    ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
                         {
                             #decode_async
                         }

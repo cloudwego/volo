@@ -190,7 +190,7 @@ where
     Resp: EntryMessage,
 {
     pub async fn send<Req: EntryMessage>(
-        &mut self,
+        &self,
         cx: &mut ClientContext,
         msg: ThriftMessage<Req>,
         oneway: bool,

@@ -14,6 +14,8 @@ lazy_static! {
     };
 }
 
+pub struct LogService<S>(S);
+
 #[volo::main]
 async fn main() {
     let req = volo_gen::thrift_gen::hello::HelloRequest {

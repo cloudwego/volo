@@ -28,13 +28,14 @@
 //! [Framed]: https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#framed-vs-unframed-transport
 use bytes::BytesMut;
 use linkedbytes::LinkedBytes;
+use pilota::thrift::{DecodeError, EncodeError, TransportError};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
 use tracing::{trace, warn};
 use volo::util::buf_reader::BufReader;
 
 use self::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec};
 use super::{Decoder, Encoder, MakeCodec};
-use crate::{context::ThriftContext, EntryMessage, Result, ThriftMessage};
+use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
 
 pub mod framed;
 pub mod thrift;
@@ -53,7 +54,7 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
         cx: &mut Cx,
         linked_bytes: &mut LinkedBytes,
         msg: ThriftMessage<Msg>,
-    ) -> Result<()>;
+    ) -> Result<(), EncodeError>;
 
     /// [`size`] should return the exact size of the encoded message, as we will pre-allocate
     /// a buffer for the encoded message.
@@ -66,7 +67,7 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
         &mut self,
         cx: &mut Cx,
         msg: &ThriftMessage<Msg>,
-    ) -> Result<(usize, usize)>;
+    ) -> Result<(usize, usize), EncodeError>;
 }
 
 /// [`ZeroCopyDecoder`] tries to decode a message without copying large data, so the [`BytesMut`] in
@@ -80,7 +81,7 @@ pub trait ZeroCopyDecoder: Send + Sync + 'static {
         &mut self,
         cx: &mut Cx,
         bytes: &mut BytesMut,
-    ) -> Result<Option<ThriftMessage<Msg>>>;
+    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError>;
 
     /// The [`DefaultDecoder`] will always call `decode_async`, so the most outer decoder
     /// must implement this function.
@@ -92,7 +93,7 @@ pub trait ZeroCopyDecoder: Send + Sync + 'static {
         &mut self,
         cx: &mut Cx,
         reader: &mut BufReader<R>,
-    ) -> Result<Option<ThriftMessage<Msg>>>;
+    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError>;
 }
 
 /// [`MakeZeroCopyCodec`] is used to create a [`ZeroCopyEncoder`] and a [`ZeroCopyDecoder`].
@@ -119,7 +120,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
-    ) -> Result<()> {
+    ) -> Result<(), crate::Error> {
         cx.stats_mut().record_encode_start_at();
 
         // first, we need to get the size of the message
@@ -148,8 +149,9 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
 
             self.linked_bytes
                 .write_all_vectored(&mut self.writer)
-                .await?;
-            self.writer.flush().await?;
+                .await
+                .map_err(TransportError::from)?;
+            self.writer.flush().await.map_err(TransportError::from)?;
 
             Ok::<(), crate::Error>(())
         })()
@@ -189,9 +191,19 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
     async fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-    ) -> Result<Option<ThriftMessage<Msg>>> {
+    ) -> Result<Option<ThriftMessage<Msg>>, crate::Error> {
         // just to check if we have reached EOF
-        if self.reader.fill_buf().await?.is_empty() {
+        if self
+            .reader
+            .fill_buf()
+            .await
+            .map_err(|err| {
+                crate::Error::Pilota(pilota::thrift::Error::Transport(
+                    pilota::thrift::TransportError::from(err),
+                ))
+            })?
+            .is_empty()
+        {
             trace!(
                 "[VOLO] thrift codec decode message EOF, rpcinfo: {:?}",
                 cx.rpc_info()
@@ -210,7 +222,7 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
         cx.stats_mut().record_decode_end_at();
         trace!("[VOLO] thrift codec decode message cost: {:?}", end - start);
 
-        res
+        Ok(res?)
     }
 }
 

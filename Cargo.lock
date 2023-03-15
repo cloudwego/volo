@@ -1230,8 +1230,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2b86566ddb21ac39c7c6272612e9dd113562b3e27575438a892eab46566910e"
+source = "git+https://github.com/cloudwego/pilota?branch=main#46c04b08a102a55ce93347cb753bb6f4d6c06531"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1252,8 +1251,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.5.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33e4f4a5d813777479a41ba318bfa320249232dad911f906b00df22656f7bb08"
+source = "git+https://github.com/cloudwego/pilota?branch=main#46c04b08a102a55ce93347cb753bb6f4d6c06531"
 dependencies = [
  "faststr",
  "fxhash",
@@ -1279,8 +1277,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f2a7ef42f63c1b16301f6c27df144749d318b62e329414f7f2fffb8da49f16a"
+source = "git+https://github.com/cloudwego/pilota?branch=main#46c04b08a102a55ce93347cb753bb6f4d6c06531"
 dependencies = [
  "nom",
 ]
