@@ -15,7 +15,7 @@ use faststr::FastStr;
 use futures::Future;
 use motore::{
     layer::{Identity, Layer, Stack},
-    service::{BoxCloneService, Service},
+    service::{BoxService, Service},
 };
 use pilota::thrift::TMessageType;
 use tokio::time::Duration;
@@ -466,9 +466,7 @@ where
 
 impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB>
 where
-    C: volo::client::MkClient<
-        Client<BoxCloneService<ClientContext, Req, Option<Resp>, crate::Error>>,
-    >,
+    C: volo::client::MkClient<Client<BoxService<ClientContext, Req, Option<Resp>, crate::Error>>>,
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
@@ -479,22 +477,20 @@ where
     Req: EntryMessage + Send + 'static + Sync + Clone,
     Resp: EntryMessage + Send + 'static,
     IL: Layer<MessageService<Resp, MkT, MkC>>,
-    IL::Service:
-        Service<ClientContext, Req, Response = Option<Resp>> + Sync + Clone + Send + 'static,
+    IL::Service: Service<ClientContext, Req, Response = Option<Resp>> + Sync + Send + 'static,
     <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<Error>,
     for<'cx> <IL::Service as Service<ClientContext, Req>>::Future<'cx>: Send,
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
     OL: Layer<
-        BoxCloneService<
+        BoxService<
             ClientContext,
             Req,
             Option<Resp>,
             <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error,
         >,
     >,
-    OL::Service:
-        Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone + Sync,
+    OL::Service: Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Sync,
     for<'cx> <OL::Service as Service<ClientContext, Req>>::Future<'cx>: Send,
     <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<Error>,
 {
@@ -528,11 +524,11 @@ where
             },
         };
 
-        let transport = TimeoutLayer::new().layer(self.outer_layer.layer(BoxCloneService::new(
+        let transport = TimeoutLayer::new().layer(self.outer_layer.layer(BoxService::new(
             self.mk_lb.make().layer(self.inner_layer.layer(msg_svc)),
         )));
 
-        let transport = BoxCloneService::new(transport);
+        let transport = BoxService::new(transport);
 
         self.mk_client.mk_client(Client {
             inner: Arc::new(ClientInner {
@@ -594,10 +590,10 @@ impl<S> Client<S> {
         RpcInfo::new(Role::Client, method.into(), caller, callee, config)
     }
 
-    pub fn with_opt<Opt>(self, opt: Opt) -> Client<WithOptService<S, Opt>> {
+    pub fn with_opt<Opt>(&self, opt: Opt) -> Client<WithOptService<'_, S, Opt>> {
         Client {
-            transport: WithOptService::new(self.transport, opt),
-            inner: self.inner,
+            transport: WithOptService::new(&self.transport, opt),
+            inner: self.inner.clone(),
         }
     }
 }

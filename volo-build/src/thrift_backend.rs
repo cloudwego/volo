@@ -426,7 +426,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
             pub struct #mk_client_name;
 
-            pub type #client_name = #generic_client_name<::volo::service::BoxCloneService<::volo_thrift::context::ClientContext, #req_send_name, ::std::option::Option<#res_name>, ::volo_thrift::Error>>;
+            pub type #client_name = #generic_client_name<::volo::service::BoxService<::volo_thrift::context::ClientContext, #req_send_name, ::std::option::Option<#res_name>, ::volo_thrift::Error>>;
 
             impl<S> ::volo::client::MkClient<::volo_thrift::Client<S>> for #mk_client_name {
                 type Target = #generic_client_name<S>;
@@ -441,7 +441,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             pub struct #oneshot_client_name<S>(pub ::volo_thrift::Client<S>);
 
             impl<S: ::volo::service::Service<::volo_thrift::context::ClientContext, #req_send_name, Response = ::std::option::Option<#res_name>, Error = ::volo_thrift::Error> + Send + Sync + 'static> #generic_client_name<S> {
-                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_thrift::context::ClientContext>>(self, opt: Opt) -> #oneshot_client_name<::volo::client::WithOptService<S, Opt>> {
+                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_thrift::context::ClientContext>>(&self, opt: Opt) -> #oneshot_client_name<::volo::client::WithOptService<'_, S, Opt>> {
                     #oneshot_client_name(self.0.with_opt(opt))
                 }
 

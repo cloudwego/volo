@@ -21,11 +21,7 @@ async fn main() {
     let req = volo_gen::thrift_gen::hello::HelloRequest {
         name: "volo".into(),
     };
-    let resp = CLIENT
-        .clone()
-        .with_callopt(CallOpt::default())
-        .hello(req)
-        .await;
+    let resp = CLIENT.with_callopt(CallOpt::default()).hello(req).await;
     match resp {
         Ok(info) => println!("{info:?}"),
         Err(e) => eprintln!("{e:?}"),
