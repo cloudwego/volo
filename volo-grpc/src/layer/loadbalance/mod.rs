@@ -58,7 +58,7 @@ where
             service,
         };
 
-        if let Some(mut channel) = service.discover.watch() {
+        if let Some(mut channel) = service.discover.watch(None) {
             tokio::spawn(async move {
                 loop {
                     match channel.recv().await {
