@@ -415,7 +415,7 @@ impl CodegenBackend for VoloGrpcBackend {
             pub struct #oneshot_client_name<S>(pub ::volo_grpc::Client<S>);
 
             impl<S> #generic_client_name<S> where S: ::volo::service::Service<::volo_grpc::context::ClientContext, ::volo_grpc::Request<#req_enum_name_send>, Response=::volo_grpc::Response<#resp_enum_name_recv>, Error = ::volo_grpc::Status> + Sync + Send + 'static {
-                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_grpc::context::ClientContext>>(self, opt: Opt) -> #oneshot_client_name<::volo::client::WithOptService<S, Opt>> {
+                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_grpc::context::ClientContext>>(&self, opt: Opt) -> #oneshot_client_name<::volo::client::WithOptService<'_, S, Opt>> {
                     #oneshot_client_name(self.0.with_opt(opt))
                 }
 
