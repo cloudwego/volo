@@ -197,11 +197,7 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
             .reader
             .fill_buf()
             .await
-            .map_err(|err| {
-                crate::Error::Pilota(pilota::thrift::Error::Transport(
-                    pilota::thrift::TransportError::from(err),
-                ))
-            })?
+            .map_err(|err| crate::Error::Transport(pilota::thrift::TransportError::from(err)))?
             .is_empty()
         {
             trace!(

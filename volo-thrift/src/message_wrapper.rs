@@ -1,5 +1,5 @@
 use faststr::FastStr;
-use pilota::thrift::{DecodeError, EncodeError, Error::Protocol, Message, TAsyncInputProtocol};
+use pilota::thrift::{DecodeError, EncodeError, Message, TAsyncInputProtocol};
 
 use crate::{
     context::{ClientContext, ServerContext, ThriftContext},
@@ -132,19 +132,17 @@ where
                     protocol.write_message_begin(&ident)?;
                     e.encode(protocol)?;
                 }
-                crate::Error::Pilota(e) => match e {
-                    Protocol(e) => {
-                        protocol.write_message_begin(&ident)?;
-                        let e = ApplicationError::new(
-                            ApplicationErrorKind::ProtocolError,
-                            e.message.clone(),
-                        );
-                        e.encode(protocol)?;
-                    }
-                    e => {
-                        panic!("should not call send when there is a transport error: {e:?}");
-                    }
-                },
+                crate::Error::Protocol(e) => {
+                    protocol.write_message_begin(&ident)?;
+                    let e = ApplicationError::new(
+                        ApplicationErrorKind::ProtocolError,
+                        e.message.clone(),
+                    );
+                    e.encode(protocol)?;
+                }
+                crate::Error::Transport(e) => {
+                    panic!("should not call send when there is a transport error: {e:?}");
+                }
             },
         }
         protocol.write_message_end()?;
