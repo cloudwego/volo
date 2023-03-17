@@ -2177,7 +2177,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "volo"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "async-broadcast",
  "async-trait",
