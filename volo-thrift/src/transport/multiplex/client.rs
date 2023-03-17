@@ -2,7 +2,7 @@ use std::{io, marker::PhantomData};
 
 use futures::Future;
 use motore::service::{Service, UnaryService};
-use pilota::thrift::{new_transport_error, TransportErrorKind};
+use pilota::thrift::TransportErrorKind;
 use volo::{
     net::{dial::MakeTransport, Address},
     Unwrap,
@@ -146,16 +146,16 @@ where
             let rpc_info = &cx.rpc_info;
             let target = rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
                 let msg = format!("address is required, rpcinfo: {:?}", rpc_info);
-                io::Error::new(io::ErrorKind::InvalidData, msg)
+                crate::Error::Transport(io::Error::new(io::ErrorKind::InvalidData, msg).into())
             })?;
             let oneway = cx.message_type == TMessageType::OneWay;
             cx.stats.record_make_transport_start_at();
-            let mut transport = self.make_transport.call(target).await?;
+            let transport = self.make_transport.call(target).await?;
             cx.stats.record_make_transport_end_at();
             let resp = transport.send(cx, req, oneway).await;
             if let Ok(None) = resp {
                 if !oneway {
-                    return Err(Error::Pilota(new_transport_error(
+                    return Err(Error::Transport(pilota::thrift::TransportError::new(
                         TransportErrorKind::EndOfFile,
                         format!(
                             "an unexpected end of file from server, rpcinfo: {:?}",
