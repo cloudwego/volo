@@ -1,6 +1,6 @@
 [package]
 name = "volo-thrift"
-version = "0.3.10"
+version = "0.4.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -18,7 +18,7 @@ keywords = ["async", "rpc", "thrift"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.3", path = "../volo" }
+volo = { version = "0.4", path = "../volo" }
 pilota.workspace = true
 motore.workspace = true
 metainfo.workspace = true
