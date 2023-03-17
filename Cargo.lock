@@ -177,9 +177,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.8"
+version = "4.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c3d7ae14b20b94cb02149ed21a86c423859cbe18dc7ed69845cace50e52b40a5"
+checksum = "9a9d6ada83c1edcce028902ea27dd929069c70df4c7600b131b4d9a1ad2879cc"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -193,9 +193,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.1.8"
+version = "4.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44bec8e5c9d09e439c4335b1af0abaab56dcf3b94999a936e1bb47b9134288f0"
+checksum = "fddf67631444a3a3e3e5ac51c36a5e01335302de677bd78759eaa90ab1f46644"
 dependencies = [
  "heck 0.4.1",
  "proc-macro-error",
@@ -206,9 +206,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.3.2"
+version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "350b9cf31731f9957399229e9b2adc51eeabdfbe9d71d9a0552275fd12710d09"
+checksum = "033f6b7a4acb1f358c742aaca805c939ee73b4c6209ae4318ec7aca81c42e646"
 dependencies = [
  "os_str_bytes",
 ]
@@ -808,10 +808,11 @@ dependencies = [
 
 [[package]]
 name = "io-lifetimes"
-version = "1.0.6"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfa919a82ea574332e2de6e74b4c36e74d41982b335080fa59d4ef31be20fdf3"
+checksum = "76e86b86ae312accbf05ade23ce76b625e0e47a255712b7414037385a1c05380"
 dependencies = [
+ "hermit-abi 0.3.1",
  "libc",
  "windows-sys 0.45.0",
 ]
@@ -1229,8 +1230,8 @@ dependencies = [
 
 [[package]]
 name = "pilota"
-version = "0.5.3"
-source = "git+https://github.com/cloudwego/pilota?branch=main#46c04b08a102a55ce93347cb753bb6f4d6c06531"
+version = "0.6.0"
+source = "git+https://github.com/cloudwego/pilota?branch=main#5aa7b4e016e167c9ea942c862238448c82df2be7"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1250,8 +1251,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.5.7"
-source = "git+https://github.com/cloudwego/pilota?branch=main#46c04b08a102a55ce93347cb753bb6f4d6c06531"
+version = "0.6.0"
+source = "git+https://github.com/cloudwego/pilota?branch=main#5aa7b4e016e167c9ea942c862238448c82df2be7"
 dependencies = [
  "faststr",
  "fxhash",
@@ -1277,7 +1278,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.1"
-source = "git+https://github.com/cloudwego/pilota?branch=main#46c04b08a102a55ce93347cb753bb6f4d6c06531"
+source = "git+https://github.com/cloudwego/pilota?branch=main#5aa7b4e016e167c9ea942c862238448c82df2be7"
 dependencies = [
  "nom",
 ]
@@ -1950,9 +1951,9 @@ checksum = "3ab8ed2edee10b50132aed5f331333428b011c99402b5a534154ed15746f9622"
 
 [[package]]
 name = "toml_edit"
-version = "0.19.6"
+version = "0.19.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08de71aa0d6e348f070457f85af8bd566e2bc452156a423ddf22861b3a953fae"
+checksum = "dc18466501acd8ac6a3f615dd29a3438f8ca6bb3b19537138b3106e575621274"
 dependencies = [
  "indexmap",
  "toml_datetime",
@@ -2173,7 +2174,7 @@ checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
 
 [[package]]
 name = "volo"
-version = "0.3.5"
+version = "0.4.0"
 dependencies = [
  "async-broadcast",
  "async-trait",
@@ -2196,7 +2197,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.3.4"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2222,7 +2223,7 @@ dependencies = [
 
 [[package]]
 name = "volo-cli"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2260,7 +2261,7 @@ dependencies = [
 
 [[package]]
 name = "volo-grpc"
-version = "0.3.3"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2303,7 +2304,7 @@ version = "0.3.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.3.10"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2339,12 +2340,11 @@ dependencies = [
 
 [[package]]
 name = "walkdir"
-version = "2.3.2"
+version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "808cf2735cd4b6866113f648b791c6adc5714537bc222d9347bb203386ffda56"
+checksum = "36df944cda56c7d8d8b7496af378e6b16de9284591917d307c9b4d313c44e698"
 dependencies = [
  "same-file",
- "winapi",
  "winapi-util",
 ]
 
@@ -2572,9 +2572,9 @@ checksum = "9aec5da331524158c6d1a4ac0ab1541149c0b9505fde06423b02f5ef0106b9f0"
 
 [[package]]
 name = "winnow"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee7b2c67f962bf5042bfd8b6a916178df33a26eec343ae064cb8e069f638fa6f"
+checksum = "23d020b441f92996c80d94ae9166e8501e59c7bb56121189dc9eab3bd8216966"
 dependencies = [
  "memchr",
 ]
