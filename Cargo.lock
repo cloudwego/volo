@@ -1252,9 +1252,9 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.6.0"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "acc15a42939b7aea0b1afa3fc06ee6843c4a912ca917f0cc8dcf9264114167ab"
+checksum = "3312791b003b24ca1ccf26d211c99b7819349b88bc8d68dc6b985b724f27bf9c"
 dependencies = [
  "faststr",
  "fxhash",
@@ -2264,7 +2264,7 @@ dependencies = [
 
 [[package]]
 name = "volo-grpc"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2307,7 +2307,7 @@ version = "0.3.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.4.2"
+version = "0.4.3"
 dependencies = [
  "anyhow",
  "async-trait",
