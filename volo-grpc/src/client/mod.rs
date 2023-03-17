@@ -486,10 +486,10 @@ impl<S> Client<S> {
         )
     }
 
-    pub fn with_opt<Opt>(&self, opt: Opt) -> Client<WithOptService<'_, S, Opt>> {
+    pub fn with_opt<Opt>(self, opt: Opt) -> Client<WithOptService<S, Opt>> {
         Client {
-            transport: WithOptService::new(&self.transport, opt),
-            inner: self.inner.clone(),
+            transport: WithOptService::new(self.transport, opt),
+            inner: self.inner,
         }
     }
 }

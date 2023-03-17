@@ -3,13 +3,13 @@ use motore::Service;
 
 pub trait ClientService<Cx, Req>: Service<Cx, Req> {}
 
-pub struct WithOptService<'s, S, Opt> {
-    inner: &'s S,
+pub struct WithOptService<S, Opt> {
+    inner: S,
     opt: Opt,
 }
 
-impl<'s, S, Opt> WithOptService<'s, S, Opt> {
-    pub fn new(inner: &'s S, opt: Opt) -> Self {
+impl<S, Opt> WithOptService<S, Opt> {
+    pub fn new(inner: S, opt: Opt) -> Self {
         Self { inner, opt }
     }
 }
@@ -38,7 +38,7 @@ pub trait OneShotService<Cx, Request> {
         Self: 'cx;
 }
 
-impl<'s, S, Cx, Req, Opt> OneShotService<Cx, Req> for WithOptService<'s, S, Opt>
+impl<S, Cx, Req, Opt> OneShotService<Cx, Req> for WithOptService<S, Opt>
 where
     Cx: 'static + Send,
     Opt: 'static + Send + Sync + Apply<Cx, Error = S::Error>,
