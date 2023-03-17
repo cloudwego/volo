@@ -470,7 +470,7 @@ where
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
-        Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone + Sync,
+        Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Sync,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error: Into<Error>,
     for<'cx> <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Future<'cx>:
         Send,
