@@ -48,51 +48,59 @@ pub fn ensure_file(filename: &Path) -> std::io::Result<File> {
         .open(filename)
 }
 
+const PILOTA_CREATED_FILE_NAME: &str = "pilota_crated";
+
 /// Pull the minimal, expected .thrift files from a git repository.
 pub fn download_files_from_git(task: Task) -> anyhow::Result<()> {
     ensure_path(&task.dir)?;
+    if task.dir.join(PILOTA_CREATED_FILE_NAME).exists() {
+        return Ok(());
+    }
 
     git_archive(&task.repo, &task.lock, &task.dir)?;
 
     Ok(())
 }
 
+fn run_command(command: &mut Command) -> anyhow::Result<()> {
+    command.status().map_err(anyhow::Error::from).and_then(|s| {
+        if s.success() {
+            Ok(())
+        } else {
+            bail!("run {:?} failed, exit status: {:?}", command, s)
+        }
+    })
+}
+
 pub fn git_archive(repo: &str, revision: &str, dir: &Path) -> anyhow::Result<()> {
-    Command::new("git")
-        .arg("init")
-        .current_dir(dir)
-        .spawn()
-        .expect("failed to spawn git archive")
-        .wait()?;
+    run_command(Command::new("git").arg("init").current_dir(dir))?;
+    run_command(
+        Command::new("git")
+            .arg("remote")
+            .arg("add")
+            .arg("origin")
+            .arg(repo)
+            .current_dir(dir),
+    )?;
 
-    Command::new("git")
-        .arg("remote")
-        .arg("add")
-        .arg("origin")
-        .arg(repo)
-        .current_dir(dir)
-        .spawn()
-        .expect("failed to set remote")
-        .wait()?;
+    run_command(
+        Command::new("git")
+            .arg("fetch")
+            .arg("origin")
+            .arg(revision)
+            .arg("--depth=1")
+            .current_dir(dir),
+    )?;
 
-    Command::new("git")
-        .arg("fetch")
-        .arg("origin")
-        .arg(revision)
-        .arg("--depth=1")
-        .current_dir(dir)
-        .spawn()
-        .expect("failed to fetch origin")
-        .wait()?;
+    run_command(
+        Command::new("git")
+            .arg("reset")
+            .arg("--hard")
+            .arg(revision)
+            .current_dir(dir),
+    )?;
 
-    Command::new("git")
-        .arg("reset")
-        .arg("--hard")
-        .arg(revision)
-        .current_dir(dir)
-        .spawn()
-        .expect("failed to reset git revision")
-        .wait()?;
+    std::fs::write(dir.join(PILOTA_CREATED_FILE_NAME), "")?;
 
     Ok(())
 }
