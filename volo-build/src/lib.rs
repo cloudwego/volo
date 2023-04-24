@@ -88,6 +88,11 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
+    pub fn ignore_unused(mut self, ignore_unused: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.ignore_unused(ignore_unused);
+        self
+    }
+
     pub fn touch(
         mut self,
         items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>,

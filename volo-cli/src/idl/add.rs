@@ -68,6 +68,7 @@ impl CliCommand for Add {
                             r#ref: self.r#ref.clone(),
                             lock: Some(lock),
                         }),
+                        ignore_unused: true,
                         touch: vec![],
                         path: self.idl.clone(),
                         includes: self.includes.clone(),
@@ -75,6 +76,7 @@ impl CliCommand for Add {
                 } else {
                     Idl {
                         source: Source::Local,
+                        ignore_unused: true,
                         touch: vec![],
                         path: self.idl.clone(),
                         includes: self.includes.clone(),
