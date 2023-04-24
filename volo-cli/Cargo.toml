@@ -1,6 +1,6 @@
 [package]
 name = "volo-cli"
-version = "0.4.1"
+version = "0.4.2"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
