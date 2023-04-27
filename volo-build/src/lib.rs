@@ -16,6 +16,7 @@ pub mod grpc_backend;
 pub mod model;
 pub mod thrift_backend;
 pub mod util;
+pub mod workspace;
 
 pub use config_builder::ConfigBuilder;
 pub use pilota_build::{
@@ -115,7 +116,8 @@ impl<MkB, Parser> Builder<MkB, Parser> {
 
 impl<MkB, P> Builder<MkB, P>
 where
-    MkB: MakeBackend,
+    MkB: MakeBackend + Send,
+    MkB::Target: Send,
     P: Parser,
 {
     pub fn include_dirs(mut self, include_dirs: Vec<PathBuf>) -> Self {
@@ -134,8 +136,21 @@ where
             return Ok(());
         }
 
-        self.pilota_builder
-            .compile(&self.idls, out_dir.join(self.filename));
+        self.pilota_builder.compile(
+            &self.idls,
+            pilota_build::Output::File(out_dir.join(self.filename)),
+        );
         Ok(())
     }
 }
+
+macro_rules! join_multi_strs {
+    ($sep: tt, |$($s: tt),*| ->  $f: tt) => {
+        {
+            #[allow(unused_parens)]
+            itertools::izip!($(&$s),*).map(|($($s),*)| format!($f)).join($sep)
+        }
+    };
+}
+
+pub(crate) use join_multi_strs;

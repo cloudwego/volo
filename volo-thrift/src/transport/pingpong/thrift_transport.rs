@@ -91,7 +91,7 @@ where
         cx: &mut ClientContext,
     ) -> Result<Option<ThriftMessage<T>>, Error> {
         let thrift_msg = self.decoder.decode(cx).await.map_err(|e| {
-            let mut e = crate::Error::from(e);
+            let mut e = e;
             e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
             tracing::error!("[VOLO] transport[{}] decode error: {}", self.id, e);
             e
