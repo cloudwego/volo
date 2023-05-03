@@ -1,3 +1,4 @@
+pub mod consistent_hash;
 pub mod error;
 mod layer;
 pub mod random;
@@ -10,6 +11,9 @@ use crate::{
     discovery::{Change, Discover},
     net::Address,
 };
+
+#[derive(Clone, Copy, Debug)]
+pub struct RequestCode(pub u64);
 
 /// [`LoadBalance`] promise the feature of the load balance policy.
 pub trait LoadBalance<D>: Send + Sync + 'static

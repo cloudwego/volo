@@ -456,6 +456,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "lazy_static",
+ "metainfo",
  "pilota",
  "tokio",
  "tokio-stream",
