@@ -249,10 +249,7 @@ impl Message for ApplicationError {
 
         protocol.read_struct_end()?;
 
-        Ok(ApplicationError {
-            kind,
-            message: message.into(),
-        })
+        Ok(ApplicationError { kind, message })
     }
 
     async fn decode_async<T: TAsyncInputProtocol>(protocol: &mut T) -> Result<Self, DecodeError> {
@@ -293,10 +290,7 @@ impl Message for ApplicationError {
 
         protocol.read_struct_end().await?;
 
-        Ok(ApplicationError {
-            kind,
-            message: message.into(),
-        })
+        Ok(ApplicationError { kind, message })
     }
 
     fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
@@ -365,7 +359,7 @@ impl TryFrom<i32> for ApplicationErrorKind {
             10 => Ok(ApplicationErrorKind::UnsupportedClientType),
             _ => Err(Error::Application(ApplicationError {
                 kind: ApplicationErrorKind::Unknown,
-                message: format!("cannot convert {from} to ApplicationErrorKind").into(),
+                message: format!("cannot convert {from} to ApplicationErrorKind"),
             })),
         }
     }

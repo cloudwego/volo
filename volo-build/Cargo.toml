@@ -19,6 +19,7 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 pilota-build.workspace = true
 
+faststr.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 dirs.workspace = true

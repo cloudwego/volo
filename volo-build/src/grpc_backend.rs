@@ -1,518 +1,571 @@
-use std::sync::Arc;
-
+use faststr::FastStr;
 use itertools::Itertools;
 use pilota_build::{
     db::RirDatabase,
     rir,
     rir::Method,
     tags::protobuf::{ClientStreaming, ServerStreaming},
-    CodegenBackend, Context, DefId, IdentName,
+    CodegenBackend, Context, DefId, IdentName, Symbol,
 };
-use proc_macro2::{Ident, TokenStream};
-use quote::{format_ident, quote};
 
 pub struct MkGrpcBackend;
 
 impl pilota_build::MakeBackend for MkGrpcBackend {
     type Target = VoloGrpcBackend;
 
-    fn make_backend(self, context: Arc<Context>) -> Self::Target {
+    fn make_backend(self, context: Context) -> Self::Target {
         VoloGrpcBackend {
-            cx: context.clone(),
             inner: pilota_build::ProtobufBackend::new(context),
         }
     }
 }
 
+#[derive(Clone)]
 pub struct VoloGrpcBackend {
-    cx: Arc<Context>,
     inner: pilota_build::ProtobufBackend,
 }
 
 impl VoloGrpcBackend {
-    fn trait_input_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> TokenStream {
-        let ty = self.cx.codegen_item_ty(ty.kind);
+    fn trait_input_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> FastStr {
+        let ty = self.cx().codegen_item_ty(ty.kind);
 
         if streaming {
-            quote!(::volo_grpc::Request<::volo_grpc::RecvStream<#ty>>)
+            format!("::volo_grpc::Request<::volo_grpc::RecvStream<{ty}>>").into()
         } else {
-            quote!(::volo_grpc::Request<#ty>)
+            format!("::volo_grpc::Request<{ty}>").into()
         }
     }
 
-    fn trait_output_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> TokenStream {
-        let ret_ty = self.cx.codegen_item_ty(ty.kind);
+    fn trait_output_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> FastStr {
+        let ret_ty = self.cx().codegen_item_ty(ty.kind);
 
         if streaming {
-            quote!(::volo_grpc::Response<::volo_grpc::BoxStream<'static, ::std::result::Result<#ret_ty, ::volo_grpc::Status>>>, ::volo_grpc::Status)
+            format!(
+                "::volo_grpc::Response<::volo_grpc::BoxStream<'static, \
+                 ::std::result::Result<{ret_ty}, ::volo_grpc::Status>>>, ::volo_grpc::Status"
+            )
+            .into()
         } else {
-            quote!(::volo_grpc::Response<#ret_ty>, ::volo_grpc::Status)
+            format!("::volo_grpc::Response<{ret_ty}>, ::volo_grpc::Status").into()
         }
     }
 
-    fn client_input_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> TokenStream {
-        let ty = self.cx.codegen_item_ty(ty.kind);
+    fn client_input_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> FastStr {
+        let ty = self.cx().codegen_item_ty(ty.kind);
 
         if streaming {
-            quote!(impl ::volo_grpc::IntoStreamingRequest<Message = #ty>)
+            format!("impl ::volo_grpc::IntoStreamingRequest<Message = {ty}>").into()
         } else {
-            quote!(impl ::volo_grpc::IntoRequest<#ty>)
+            format!("impl ::volo_grpc::IntoRequest<{ty}>").into()
         }
     }
 
-    fn client_output_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> TokenStream {
-        let ret_ty = self.cx.codegen_item_ty(ty.kind);
+    fn client_output_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> FastStr {
+        let ret_ty = self.cx().codegen_item_ty(ty.kind);
 
         if streaming {
-            quote!(::std::result::Result<::volo_grpc::Response<impl ::futures::Stream<Item = ::std::result::Result<#ret_ty,::volo_grpc::Status>>>, ::volo_grpc::Status>)
+            format!(
+                "::std::result::Result<::volo_grpc::Response<impl ::futures::Stream<Item = \
+                 ::std::result::Result<{ret_ty},::volo_grpc::Status>>>, ::volo_grpc::Status>"
+            )
+            .into()
         } else {
-            quote!(::std::result::Result<::volo_grpc::Response<#ret_ty>, ::volo_grpc::Status>)
+            format!("::std::result::Result<::volo_grpc::Response<{ret_ty}>, ::volo_grpc::Status>")
+                .into()
         }
     }
 
-    fn build_client_req(&self, _ty: pilota_build::ty::Ty, streaming: bool) -> TokenStream {
+    fn build_client_req(&self, _ty: pilota_build::ty::Ty, streaming: bool) -> FastStr {
         if streaming {
-            quote!(requests
-                .into_streaming_request()
-                .map(|s| ::volo_grpc::codegen::StreamExt::map(s, |m| ::std::result::Result::Ok(m))))
+            "requests.into_streaming_request().map(|s| ::volo_grpc::codegen::StreamExt::map(s, |m| \
+             ::std::result::Result::Ok(m)))"
+                .to_string()
+                .into()
         } else {
-            quote!(requests.into_request().map(|m| ::futures::stream::once(
-                ::futures::future::ready(::std::result::Result::Ok(m))
-            )))
+            "requests.into_request().map(|m| \
+             ::futures::stream::once(::futures::future::ready(::std::result::Result::Ok(m))))"
+                .to_string()
+                .into()
         }
     }
 
     fn build_client_resp(
         &self,
-        resp_enum_name: &Ident,
-        variant_name: &Ident,
+        resp_enum_name: &Symbol,
+        variant_name: &Symbol,
         _ty: pilota_build::ty::Ty,
         streaming: bool,
-    ) -> TokenStream {
-        let resp_stream = quote! {
-            let (mut metadata, extensions, message_stream) = resp.into_parts();
-            let mut message_stream = match message_stream {
-                #resp_enum_name::#variant_name(stream) => stream,
+    ) -> FastStr {
+        let resp_stream = format!(
+            r#"let (mut metadata, extensions, message_stream) = resp.into_parts();
+            let mut message_stream = match message_stream {{
+                {resp_enum_name}::{variant_name}(stream) => stream,
                 #[allow(unreachable_patterns)]
                 _ => return Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
-            };
-        };
+            }};"#
+        );
 
         if streaming {
-            quote! {
-                #resp_stream
-                Ok(::volo_grpc::Response::from_parts(metadata, extensions, message_stream))
+            format! {
+                r#"{resp_stream}
+                Ok(::volo_grpc::Response::from_parts(metadata, extensions, message_stream))"#
             }
         } else {
-            quote! {
-                #resp_stream
+            format! {
+                r#"{resp_stream}
                 let message = ::volo_grpc::codegen::StreamExt::try_next(&mut message_stream)
                     .await
-                    .map_err(|mut status| {
+                    .map_err(|mut status| {{
                         status.metadata_mut().merge(metadata.clone());
                         status
-                    })?
+                    }})?
                     .ok_or_else(|| ::volo_grpc::Status::new(::volo_grpc::Code::Internal, "Missing response message."))?;
-                if let Some(trailers) = message_stream.trailers().await? {
+                if let Some(trailers) = message_stream.trailers().await? {{
                     metadata.merge(trailers);
-                }
-                Ok(::volo_grpc::Response::from_parts(metadata, extensions, message))
+                }}
+                Ok(::volo_grpc::Response::from_parts(metadata, extensions, message))"#
             }
-        }
+        }.into()
     }
 
     fn build_server_req(
         &self,
-        req_enum_name: &Ident,
-        variant_name: &Ident,
+        req_enum_name: &Symbol,
+        variant_name: &Symbol,
         _ty: pilota_build::ty::Ty,
         streaming: bool,
-    ) -> TokenStream {
-        let req_stream = quote! {
-            let (mut metadata, extensions, message_stream) = req.into_parts();
-            let mut message_stream = match message_stream {
-                #req_enum_name::#variant_name(stream) => stream,
+    ) -> FastStr {
+        let req_stream = format!(
+            r#"let (mut metadata, extensions, message_stream) = req.into_parts();
+            let mut message_stream = match message_stream {{
+                {req_enum_name}::{variant_name}(stream) => stream,
                 #[allow(unreachable_patterns)]
                 _ => return Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
-            };
-        };
+            }};"#
+        );
         if streaming {
-            quote! {
-                #req_stream
-                let req = ::volo_grpc::Request::from_parts(metadata, extensions, message_stream);
+            format! {
+                r#"{req_stream}
+                let req = ::volo_grpc::Request::from_parts(metadata, extensions, message_stream);"#
             }
         } else {
-            quote! {
-                #req_stream
+            format! {
+                r#"{req_stream}
                 ::futures::pin_mut!(message_stream);
                 let message = ::volo_grpc::codegen::StreamExt::try_next(&mut message_stream)
                     .await?
                     .ok_or_else(|| ::volo_grpc::Status::new(::volo_grpc::Code::Internal, "Missing request message."))?;
-                if let Some(trailers) = message_stream.trailers().await? {
+                if let Some(trailers) = message_stream.trailers().await? {{
                     metadata.merge(trailers);
-                }
-                let req = ::volo_grpc::Request::from_parts(metadata, extensions, message);
+                }}
+                let req = ::volo_grpc::Request::from_parts(metadata, extensions, message);"#
             }
-        }
+        }.into()
     }
 
-    fn build_server_call(&self, method: &Method) -> TokenStream {
-        let method_name = self.cx.rust_name(method.def_id).as_syn_ident();
-        quote! {
-            let resp = inner.#method_name(req).await;
-        }
+    fn build_server_call(&self, method: &Method) -> FastStr {
+        let method_name = self.cx().rust_name(method.def_id);
+        format!("let resp = inner.{method_name}(req).await;").into()
     }
 
     fn build_server_resp(
         &self,
-        resp_enum_name: &Ident,
-        variant_name: &Ident,
+        resp_enum_name: &Symbol,
+        variant_name: &Symbol,
         _ty: pilota_build::ty::Ty,
         streaming: bool,
-    ) -> TokenStream {
+    ) -> FastStr {
         if streaming {
-            quote!(resp.map(|r| r.map(|s|  #resp_enum_name::#variant_name(s))))
+            format!("resp.map(|r| r.map(|s|  {resp_enum_name}::{variant_name}(s)))").into()
         } else {
-            quote!(resp.map(|r| r.map(|m| #resp_enum_name::#variant_name(::std::boxed::Box::pin( ::futures::stream::once(::futures::future::ok(m)))))))
+            format!(
+                "resp.map(|r| r.map(|m| {resp_enum_name}::{variant_name}(::std::boxed::Box::pin( \
+                 ::futures::stream::once(::futures::future::ok(m))))))"
+            )
+            .into()
         }
     }
 }
 
 impl CodegenBackend for VoloGrpcBackend {
-    fn codegen_service_impl(&self, def_id: DefId, stream: &mut TokenStream, s: &rir::Service) {
-        let service_name = self.cx.rust_name(def_id).as_syn_ident();
-        let server_name = format_ident!("{}Server", service_name);
-        let client_builder_name = format_ident!("{}ClientBuilder", service_name);
-        let generic_client_name = format_ident!("{}GenericClient", service_name);
-        let client_name = format_ident!("{}Client", service_name);
-        let oneshot_client_name = format_ident!("{}OneShotClient", service_name);
+    fn codegen_service_impl(&self, def_id: DefId, stream: &mut String, s: &rir::Service) {
+        let service_name = self.cx().rust_name(def_id);
+        let server_name = format!("{}Server", service_name);
+        let client_builder_name = format!("{}ClientBuilder", service_name);
+        let generic_client_name = format!("{}GenericClient", service_name);
+        let client_name = format!("{}Client", service_name);
+        let oneshot_client_name = format!("{}OneShotClient", service_name);
 
-        let file_id = self.cx.node(def_id).unwrap().file_id;
-        let file = self.cx.file(file_id).unwrap();
+        let file_id = self.cx().node(def_id).unwrap().file_id;
+        let file = self.cx().file(file_id).unwrap();
 
         let package = file.package.iter().join(".");
         let name = format!("{package}.{}", s.name);
 
-        let req_enum_name_send = format_ident!("{}RequestSend", service_name);
-        let resp_enum_name_send = format_ident!("{}ResponseSend", service_name);
-        let req_enum_name_recv = format_ident!("{}RequestRecv", service_name);
-        let resp_enum_name_recv = format_ident!("{}ResponseRecv", service_name);
+        let req_enum_name_send = format!("{}RequestSend", service_name);
+        let resp_enum_name_send = format!("{}ResponseSend", service_name);
+        let req_enum_name_recv = format!("{}RequestRecv", service_name);
+        let resp_enum_name_recv = format!("{}ResponseRecv", service_name);
         let paths = s
             .methods
             .iter()
             .map(|method| format!("/{package}.{}/{}", s.name, method.name))
             .collect::<Vec<_>>();
 
-        let req_matches = s.methods.iter().map(|method| {
-            let variant_name = self
-                .cx
-                .rust_name(method.def_id)
-                .upper_camel_ident()
-                .as_syn_ident();
-            let path = format!("/{package}.{}/{}", s.name, method.name);
-            let client_streaming = self.cx.node_contains_tag::<ClientStreaming>(method.def_id);
-            let input_ty = &method.args[0].ty;
+        let req_matches = s
+            .methods
+            .iter()
+            .map(|method| {
+                let variant_name = self.cx().rust_name(method.def_id).0.upper_camel_ident();
+                let path = format!("/{package}.{}/{}", s.name, method.name);
+                let client_streaming = self
+                    .cx()
+                    .node_contains_tag::<ClientStreaming>(method.def_id);
+                let input_ty = &method.args[0].ty;
 
-            let server_streaming = self.cx.node_contains_tag::<ServerStreaming>(method.def_id);
-            let output_ty = &method.ret;
+                let server_streaming = self
+                    .cx()
+                    .node_contains_tag::<ServerStreaming>(method.def_id);
+                let output_ty = &method.ret;
 
-            let req = self.build_server_req(
-                &req_enum_name_recv,
-                &variant_name,
-                input_ty.clone(),
-                client_streaming,
-            );
+                let req = self.build_server_req(
+                    &req_enum_name_recv.clone().into(),
+                    &variant_name.clone().into(),
+                    input_ty.clone(),
+                    client_streaming,
+                );
 
-            let call = self.build_server_call(method);
+                let call = self.build_server_call(method);
 
-            let resp = self.build_server_resp(
-                &resp_enum_name_send,
-                &variant_name,
-                output_ty.clone(),
-                server_streaming,
-            );
+                let resp = self.build_server_resp(
+                    &resp_enum_name_send.clone().into(),
+                    &variant_name.into(),
+                    output_ty.clone(),
+                    server_streaming,
+                );
 
-            quote! {
-                #path => {
-                    #req
-                    #call
-                    #resp
-                },
-            }
-        });
+                format! {
+                    r#""{path}" => {{
+                    {req}
+                    {call}
+                    {resp}
+                }},"#
+                }
+            })
+            .join("");
 
         let enum_variant_names = s
             .methods
             .iter()
-            .map(|method| {
-                self.cx
-                    .rust_name(method.def_id)
-                    .upper_camel_ident()
-                    .as_syn_ident()
-            })
+            .map(|method| self.cx().rust_name(method.def_id).0.upper_camel_ident())
             .collect::<Vec<_>>();
 
         let req_tys = s
             .methods
             .iter()
-            .map(|method| self.cx.codegen_item_ty(method.args[0].ty.kind.clone()))
+            .map(|method| self.cx().codegen_item_ty(method.args[0].ty.kind.clone()))
             .collect::<Vec<_>>();
         let resp_tys = s
             .methods
             .iter()
-            .map(|method| self.cx.codegen_item_ty(method.ret.kind.clone()))
+            .map(|method| self.cx().codegen_item_ty(method.ret.kind.clone()))
             .collect::<Vec<_>>();
 
         let mut client_methods = Vec::new();
         let mut oneshot_client_methods = Vec::new();
 
         s.methods.iter().for_each(|method| {
-            let method_name = self.cx.rust_name(method.def_id).as_syn_ident();
+            let method_name = self.cx().rust_name(method.def_id);
 
             let path = format!("/{package}.{}/{}", s.name, method.name);
             let input_ty = &method.args[0].ty;
-            let client_streaming = self.cx.node_contains_tag::<ClientStreaming>(method.def_id);
+            let client_streaming = self.cx().node_contains_tag::<ClientStreaming>(method.def_id);
             let req_ty = self.client_input_ty(input_ty.clone(), client_streaming);
 
             let output_ty = &method.ret;
-            let server_streaming = self.cx.node_contains_tag::<ServerStreaming>(method.def_id);
+            let server_streaming = self.cx().node_contains_tag::<ServerStreaming>(method.def_id);
 
-            let variant_name = self.cx.rust_name(method.def_id).upper_camel_ident().as_syn_ident();
+            let variant_name = self.cx().rust_name(method.def_id).0.upper_camel_ident();
 
             let resp_ty = self.client_output_ty(output_ty.clone(), server_streaming);
 
             let req = self.build_client_req(input_ty.clone(), client_streaming);
 
-            let resp = self.build_client_resp(&resp_enum_name_recv, &variant_name, output_ty.clone(), server_streaming);
+            let resp = self.build_client_resp(&resp_enum_name_recv.clone().into(), &variant_name.clone().into(), output_ty.clone(), server_streaming);
 
             client_methods.push(
-                quote! {
-                    pub async fn #method_name(
+                format! {
+                    r#"pub async fn {method_name}(
                         &self,
-                        requests: #req_ty,
-                    ) -> #resp_ty {
-                        let req = #req.map(|message| #req_enum_name_send::#variant_name(::std::boxed::Box::pin(message) as _));
-                        let mut cx = self.0.make_cx(#path);
+                        requests: {req_ty},
+                    ) -> {resp_ty} {{
+                        let req = {req}.map(|message| {req_enum_name_send}::{variant_name}(::std::boxed::Box::pin(message) as _));
+                        let mut cx = self.0.make_cx("{path}");
 
                         let resp = ::volo::Service::call(&self.0, &mut cx, req).await?;
-
-                        #resp
-                    }
+                        {resp}
+                    }}"#
                 }
             );
 
             oneshot_client_methods.push(
-                quote! {
-                    pub async fn #method_name(
+                format! {
+                    r#"pub async fn {method_name}(
                         self,
-                        requests: #req_ty,
-                    ) -> #resp_ty {
-                        let req = #req.map(|message| #req_enum_name_send::#variant_name(::std::boxed::Box::pin(message) as _));
-                        let mut cx = self.0.make_cx(#path);
+                        requests: {req_ty},
+                    ) -> {resp_ty} {{
+                        let req = {req}.map(|message| {req_enum_name_send}::{variant_name}(::std::boxed::Box::pin(message) as _));
+                        let mut cx = self.0.make_cx("{path}");
 
                         let resp = ::volo::client::OneShotService::call(self.0, &mut cx, req).await?;
 
-                        #resp
-                    }
+                        {resp}
+                    }}"#
                 }
             );
         });
 
-        let mk_client_name = format_ident!("Mk{}", generic_client_name);
+        let mk_client_name = format!("Mk{}", generic_client_name);
 
-        stream.extend(quote! {
-            pub enum #req_enum_name_send {
-                #(#enum_variant_names(::volo_grpc::BoxStream<'static, ::std::result::Result<#req_tys, ::volo_grpc::Status>>),)*
-            }
+        let client_methods = client_methods.join("\n");
+        let oneshot_client_methods = oneshot_client_methods.join("\n");
 
-            impl ::volo_grpc::SendEntryMessage for #req_enum_name_send {
-                fn into_body(self,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
-                    match self {
-                        #(Self::#enum_variant_names(s) => {
-                            ::volo_grpc::codec::encode::encode(s,compression_encoding)
-                        },)*
-                    }
-                }
-            }
+        let req_enum_send_variants = crate::join_multi_strs!(
+            "\n",
+            |enum_variant_names, req_tys| -> "{enum_variant_names}(::volo_grpc::BoxStream<'static, ::std::result::Result<{req_tys}, ::volo_grpc::Status>>),"
+        );
 
-            pub enum #req_enum_name_recv {
-                #(#enum_variant_names(::volo_grpc::RecvStream<#req_tys>),)*
-            }
+        let req_enum_recv_variants = crate::join_multi_strs!(
+            "\n",
+            |enum_variant_names, req_tys| -> "{enum_variant_names}(::volo_grpc::RecvStream<{req_tys}>),"
+        );
 
-            impl ::volo_grpc::RecvEntryMessage for #req_enum_name_recv {
-                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::Body, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status> {
-                    match method {
-                        #(Some(#paths) => {
-                            Ok(Self::#enum_variant_names(::volo_grpc::RecvStream::new(body, kind,compression_encoding)))
-                        })*
+        let resp_enum_send_variants = crate::join_multi_strs!(
+            "\n",
+            |enum_variant_names, resp_tys| -> "{enum_variant_names}(::volo_grpc::BoxStream<'static, ::std::result::Result<{resp_tys}, ::volo_grpc::Status>>),"
+        );
+
+        let resp_enum_recv_variants = crate::join_multi_strs!(
+            "\n",
+            |enum_variant_names, resp_tys| -> "{enum_variant_names}(::volo_grpc::RecvStream<{resp_tys}>),"
+        );
+
+        let req_send_into_body = crate::join_multi_strs!(
+            "",
+            |enum_variant_names| -> "Self::{enum_variant_names}(s) => {{
+                ::volo_grpc::codec::encode::encode(s, compression_encoding)
+            }}," 
+        );
+
+        let req_recv_from_body = crate::join_multi_strs!(
+            "",
+            |paths, enum_variant_names| -> "Some(\"{paths}\") => {{
+                Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind,compression_encoding)))
+            }},"
+        );
+
+        let resp_send_into_body = crate::join_multi_strs!(
+            "",
+            |enum_variant_names| -> "Self::{enum_variant_names}(s) => {{
+                ::volo_grpc::codec::encode::encode(s,compression_encoding)
+            }},"
+        );
+
+        let resp_recv_from_body = crate::join_multi_strs!(
+            "",
+            |paths, enum_variant_names| -> "Some(\"{paths}\") => {{
+                Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind, compression_encoding)))
+            }}"
+        );
+
+        stream.push_str(&format! {
+            r#"pub enum {req_enum_name_send} {{
+                {req_enum_send_variants}
+            }}
+
+            impl ::volo_grpc::SendEntryMessage for {req_enum_name_send} {{
+                fn into_body(self,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {{
+                    match self {{
+                        {req_send_into_body}
+                    }}
+                }}
+            }}
+
+            pub enum {req_enum_name_recv} {{
+                {req_enum_recv_variants}
+            }}
+
+            impl ::volo_grpc::RecvEntryMessage for {req_enum_name_recv} {{
+                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::Body, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status> {{
+                    match method {{
+                        {req_recv_from_body}
                         _ => Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
-                    }
-                }
-            }
+                    }}
+                }}
+            }}
 
-            pub enum #resp_enum_name_send {
-                #(#enum_variant_names(::volo_grpc::BoxStream<'static, ::std::result::Result<#resp_tys, ::volo_grpc::Status>>),)*
-            }
+            pub enum {resp_enum_name_send} {{
+                {resp_enum_send_variants}
+            }}
 
-            impl ::volo_grpc::SendEntryMessage for #resp_enum_name_send {
-                fn into_body(self,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {
-                    match self {
-                        #(Self::#enum_variant_names(s) => {
-                            ::volo_grpc::codec::encode::encode(s,compression_encoding)
-                        },)*
-                    }
-                }
-            }
+            impl ::volo_grpc::SendEntryMessage for {resp_enum_name_send} {{
+                fn into_body(self,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Bytes, ::volo_grpc::Status>> {{
+                    match self {{
+                        {resp_send_into_body}
+                    }}
+                }}
+            }}
 
-            pub enum #resp_enum_name_recv {
-                #(#enum_variant_names(::volo_grpc::RecvStream<#resp_tys>),)*
-            }
+            pub enum {resp_enum_name_recv} {{
+                {resp_enum_recv_variants}
+            }}
 
-            impl ::volo_grpc::RecvEntryMessage for #resp_enum_name_recv {
+            impl ::volo_grpc::RecvEntryMessage for {resp_enum_name_recv} {{
                 fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::Body, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status>
                 where
                     Self: ::core::marker::Sized,
-                {
-                    match method {
-                        #(Some(#paths) => {
-                            Ok(Self::#enum_variant_names(::volo_grpc::RecvStream::new(body, kind,compression_encoding)))
-                        })*
+                {{
+                    match method {{
+                        {resp_recv_from_body}
                         _ => Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
-                    }
-                }
-            }
+                    }}
+                }}
+            }}
 
-            pub struct #client_builder_name {}
-            impl #client_builder_name {
+            pub struct {client_builder_name} {{}}
+            impl {client_builder_name} {{
                 pub fn new(
                     service_name: impl AsRef<str>,
                 ) -> ::volo_grpc::client::ClientBuilder<
                     ::volo::layer::Identity,
                     ::volo::layer::Identity,
-                    #mk_client_name,
+                    {mk_client_name},
                     ::volo_grpc::layer::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<()>, ::volo::discovery::DummyDiscover>,
-                    #req_enum_name_send,
-                    #resp_enum_name_recv,
-                > {
-                    ::volo_grpc::client::ClientBuilder::new(#mk_client_name, service_name)
-                }
-            }
+                    {req_enum_name_send},
+                    {resp_enum_name_recv},
+                > {{
+                    ::volo_grpc::client::ClientBuilder::new({mk_client_name}, service_name)
+                }}
+            }}
 
-            pub struct #mk_client_name;
+            pub struct {mk_client_name};
 
-            pub type #client_name = #generic_client_name<::volo::service::BoxCloneService<::volo_grpc::context::ClientContext, ::volo_grpc::Request<#req_enum_name_send>, ::volo_grpc::Response<#resp_enum_name_recv>, ::volo_grpc::Status>>;
+            pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, ::volo_grpc::Response<{resp_enum_name_recv}>, ::volo_grpc::Status>>;
 
-            impl<S> ::volo::client::MkClient<::volo_grpc::Client<S>> for #mk_client_name {
-                type Target = #generic_client_name<S>;
-                fn mk_client(&self, service: ::volo_grpc::Client<S>) -> Self::Target {
-                    #generic_client_name(service)
-                }
-            }
+            impl<S> ::volo::client::MkClient<::volo_grpc::Client<S>> for {mk_client_name} {{
+                type Target = {generic_client_name}<S>;
+                fn mk_client(&self, service: ::volo_grpc::Client<S>) -> Self::Target {{
+                    {generic_client_name}(service)
+                }}
+            }}
 
             #[derive(Clone)]
-            pub struct #generic_client_name<S>(pub ::volo_grpc::Client<S>);
+            pub struct {generic_client_name}<S>(pub ::volo_grpc::Client<S>);
 
-            pub struct #oneshot_client_name<S>(pub ::volo_grpc::Client<S>);
+            pub struct {oneshot_client_name}<S>(pub ::volo_grpc::Client<S>);
 
-            impl<S> #generic_client_name<S> where S: ::volo::service::Service<::volo_grpc::context::ClientContext, ::volo_grpc::Request<#req_enum_name_send>, Response=::volo_grpc::Response<#resp_enum_name_recv>, Error = ::volo_grpc::Status> + Sync + Send + 'static {
-                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_grpc::context::ClientContext>>(self, opt: Opt) -> #oneshot_client_name<::volo::client::WithOptService<S, Opt>> {
-                    #oneshot_client_name(self.0.with_opt(opt))
-                }
+            impl<S> {generic_client_name}<S> where S: ::volo::service::Service<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + Sync + Send + 'static {{
+                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_grpc::context::ClientContext>>(self, opt: Opt) -> {oneshot_client_name}<::volo::client::WithOptService<S, Opt>> {{
+                    {oneshot_client_name}(self.0.with_opt(opt))
+                }}
 
-                #(#client_methods)*
-            }
+                {client_methods}
+            }}
 
-            impl<S: ::volo::client::OneShotService<::volo_grpc::context::ClientContext,::volo_grpc::Request<#req_enum_name_send>, Response=::volo_grpc::Response<#resp_enum_name_recv>, Error = ::volo_grpc::Status> + Send + Sync + 'static> #oneshot_client_name<S> {
-                #(#oneshot_client_methods)*
-            }
+            impl<S: ::volo::client::OneShotService<::volo_grpc::context::ClientContext,::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + Send + Sync + 'static> {oneshot_client_name}<S> {{
+                {oneshot_client_methods}
+            }}
 
-            pub struct #server_name<S> {
+            pub struct {server_name}<S> {{
                 inner: ::std::sync::Arc<S>,
-            }
+            }}
 
-            impl<S> Clone for #server_name<S> {
-                fn clone(&self) -> Self {
-                    #server_name {
+            impl<S> Clone for {server_name}<S> {{
+                fn clone(&self) -> Self {{
+                    {server_name} {{
                         inner: self.inner.clone(),
-                    }
-                }
-            }
+                    }}
+                }}
+            }}
 
-            impl<S> #server_name<S> {
-                pub fn new(inner: S) -> Self {
-                    Self {
+            impl<S> {server_name}<S> {{
+                pub fn new(inner: S) -> Self {{
+                    Self {{
                         inner: ::std::sync::Arc::new(inner),
-                    }
-                }
-            }
+                    }}
+                }}
+            }}
 
-            impl<S> ::volo::service::Service<::volo_grpc::context::ServerContext, ::volo_grpc::Request<#req_enum_name_recv>> for #server_name<S>
+            impl<S> ::volo::service::Service<::volo_grpc::context::ServerContext, ::volo_grpc::Request<{req_enum_name_recv}>> for {server_name}<S>
             where
-                S: #service_name + ::core::marker::Send + ::core::marker::Sync + 'static,
-            {
-                type Response = ::volo_grpc::Response<#resp_enum_name_send>;
+                S: {service_name} + ::core::marker::Send + ::core::marker::Sync + 'static,
+            {{
+                type Response = ::volo_grpc::Response<{resp_enum_name_send}>;
                 type Error = ::volo_grpc::status::Status;
                 type Future<'cx> = impl ::std::future::Future<Output = ::std::result::Result<Self::Response, Self::Error>> + 'cx;
 
-                fn call<'cx, 's>(&'s self, cx: &'cx mut ::volo_grpc::context::ServerContext, req: ::volo_grpc::Request<#req_enum_name_recv>) -> Self::Future<'cx>
+                fn call<'cx, 's>(&'s self, cx: &'cx mut ::volo_grpc::context::ServerContext, req: ::volo_grpc::Request<{req_enum_name_recv}>) -> Self::Future<'cx>
                 where
                     's: 'cx,
-                {
+                {{
                     let inner = self.inner.clone();
-                    async move {
-                        match cx.rpc_info.method().unwrap().as_str() {
-                            #(#req_matches)*
-                            path => {
+                    async move {{
+                        match cx.rpc_info.method().unwrap().as_str() {{
+                            {req_matches}
+                            path => {{
                                 let path = path.to_string();
-                                Err(::volo_grpc::Status::unimplemented(::std::format!("Unimplemented http path: {}", path)))
-                            }
-                        }
-                    }
-                }
-            }
+                                Err(::volo_grpc::Status::unimplemented(::std::format!("Unimplemented http path: {{}}", path)))
+                            }}
+                        }}
+                    }}
+                }}
+            }}
 
-            impl<S: #service_name> ::volo_grpc::server::NamedService for #server_name<S> {
-                const NAME: &'static str = #name;
-            }
+            impl<S: {service_name}> ::volo_grpc::server::NamedService for {server_name}<S> {{
+                const NAME: &'static str = "{name}";
+            }}"#
         });
     }
 
-    fn codegen_service_method(
-        &self,
-        _service_def_id: DefId,
-        method: &rir::Method,
-    ) -> proc_macro2::TokenStream {
-        let client_streaming = self.cx.node_contains_tag::<ClientStreaming>(method.def_id);
-        let args = method.args.iter().map(|a| {
-            let ty = self.trait_input_ty(a.ty.clone(), client_streaming);
+    fn codegen_service_method(&self, _service_def_id: DefId, method: &rir::Method) -> String {
+        let client_streaming = self
+            .cx()
+            .node_contains_tag::<ClientStreaming>(method.def_id);
+        let args = method
+            .args
+            .iter()
+            .map(|a| {
+                let ty = self.trait_input_ty(a.ty.clone(), client_streaming);
 
-            let ident = format_ident!("{}", a.name);
-            quote::quote! {
-                #ident: #ty
-            }
-        });
+                let ident = &a.name;
+                format!("{ident}: {ty}")
+            })
+            .join(",");
 
         let ret_ty = self.trait_output_ty(
             method.ret.clone(),
-            self.cx.node_contains_tag::<ServerStreaming>(method.def_id),
+            self.cx()
+                .node_contains_tag::<ServerStreaming>(method.def_id),
         );
 
-        let name = self.cx.rust_name(method.def_id).as_syn_ident();
+        let name = self.cx().rust_name(method.def_id);
 
-        quote::quote! {
-            async fn #name(&self, #(#args),*) -> ::std::result::Result<#ret_ty>;
-        }
+        format!("async fn {name}(&self, {args}) -> ::std::result::Result<{ret_ty}>;")
     }
 
-    fn codegen_enum_impl(&self, def_id: DefId, stream: &mut TokenStream, e: &rir::Enum) {
+    fn codegen_enum_impl(&self, def_id: DefId, stream: &mut String, e: &rir::Enum) {
         self.inner.codegen_enum_impl(def_id, stream, e)
     }
 
-    fn codegen_newtype_impl(&self, def_id: DefId, stream: &mut TokenStream, t: &rir::NewType) {
+    fn codegen_newtype_impl(&self, def_id: DefId, stream: &mut String, t: &rir::NewType) {
         self.inner.codegen_newtype_impl(def_id, stream, t)
     }
 
-    fn codegen_struct_impl(&self, def_id: DefId, stream: &mut TokenStream, s: &rir::Message) {
+    fn codegen_struct_impl(&self, def_id: DefId, stream: &mut String, s: &rir::Message) {
         self.inner.codegen_struct_impl(def_id, stream, s)
+    }
+
+    fn cx(&self) -> &Context {
+        self.inner.cx()
     }
 }
