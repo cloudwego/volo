@@ -43,7 +43,7 @@ impl VoloThriftBackend {
             let mk_decode = |is_async: bool| {
                 let helper = DecodeHelper::new(is_async);
                 let decode_variants = helper.codegen_item_decode();
-                let match_methods = crate::join_multi_strs!("", |methods_names, variant_names| -> "{methods_names} => {{ Self::{variant_names}({decode_variants}) }},");
+                let match_methods = crate::join_multi_strs!("", |methods_names, variant_names| -> "\"{methods_names}\" => {{ Self::{variant_names}({decode_variants}) }},");
 
                 format! {
                     r#"Ok(match &*msg_ident.name {{
@@ -122,11 +122,10 @@ impl VoloThriftBackend {
                 let helper = DecodeHelper::new(is_async);
                 let decode_item = helper.codegen_item_decode();
 
-                let match_methods = crate::join_multi_strs!("", |methods_names, variant_names| -> "{methods_names} => {{ Self::{variant_names}({decode_item}) }},");
+                let match_methods = crate::join_multi_strs!("", |methods_names, variant_names| -> "\"{methods_names}\" => {{ Self::{variant_names}({decode_item}) }},");
 
                 format!(
-                    r#"let is_err = matches!(msg_ident.message_type, ::pilota::thrift::TMessageType::Exception);
-                    Ok(match &*msg_ident.name {{
+                    r#"Ok(match &*msg_ident.name {{
                         {match_methods}
                         _ => {{
                             return Err(::pilota::thrift::DecodeError::new(::pilota::thrift::DecodeErrorKind::UnknownMethod,  format!("unknown method {{}}", msg_ident.name)));
