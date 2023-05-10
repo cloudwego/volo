@@ -346,7 +346,7 @@ pub struct Config {
 impl Config {
     pub fn new() -> Self {
         Self {
-            rpc_timeout: Some(DEFAULT_RPC_TIMEOUT),
+            rpc_timeout: None,
             connect_timeout: None,
             read_write_timeout: None,
             max_frame_size: DEFAULT_MAX_FRAME_SIZE,
