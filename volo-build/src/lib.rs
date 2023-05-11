@@ -9,7 +9,8 @@ use std::{
 };
 
 use anyhow::anyhow;
-use pilota_build::parser::Parser;
+use itertools::Itertools;
+use pilota_build::{parser::Parser, IdlService};
 
 pub mod config_builder;
 pub mod grpc_backend;
@@ -137,7 +138,10 @@ where
         }
 
         self.pilota_builder.compile(
-            &self.idls,
+            self.idls
+                .into_iter()
+                .map(IdlService::from_path)
+                .collect_vec(),
             pilota_build::Output::File(out_dir.join(self.filename)),
         );
         Ok(())
