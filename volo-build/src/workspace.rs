@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use pilota_build::Plugin;
 
 pub struct Builder<MkB, P> {
     pilota_builder: pilota_build::Builder<MkB, P>,
@@ -15,7 +15,7 @@ impl Builder<crate::thrift_backend::MkThriftBackend, crate::parser::ThriftParser
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct WorkspaceConfig {
-    pub(crate) files: Vec<PathBuf>,
+    pub(crate) services: Vec<pilota_build::IdlService>,
 }
 
 impl<MkB, P> Builder<MkB, P>
@@ -30,6 +30,11 @@ where
         let config = serde_yaml::from_slice::<WorkspaceConfig>(&config).unwrap();
 
         self.pilota_builder
-            .compile(&config.files, pilota_build::Output::Workspace(work_dir));
+            .compile(config.services, pilota_build::Output::Workspace(work_dir));
+    }
+
+    pub fn plugin(mut self, plugin: impl Plugin + 'static) -> Self {
+        self.pilota_builder = self.pilota_builder.plugin(plugin);
+        self
     }
 }
