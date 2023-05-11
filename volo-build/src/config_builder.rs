@@ -1,15 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Ok};
-use itertools::Itertools;
+use anyhow::Ok;
 use pilota_build::BoxClonePlugin;
 
-use crate::{
-    model::{GitSource, Source},
-    util::{
-        download_files_from_git, get_git_path, open_config_file, read_config_from_file, Task,
-        DEFAULT_CONFIG_FILE, DEFAULT_DIR,
-    },
+use crate::util::{
+    get_or_download_idl, open_config_file, read_config_from_file, LocalIdl, DEFAULT_CONFIG_FILE,
 };
 
 pub struct ConfigBuilder {
@@ -113,42 +108,16 @@ impl ConfigBuilder {
             }
 
             for idl in entry.idls {
-                let (path, includes) = if let Source::Git(GitSource {
-                    ref repo, ref lock, ..
-                }) = idl.source
-                {
-                    let lock = lock.as_ref().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "please exec 'volo idl update' or specify the lock for {}",
-                            repo
-                        )
-                    })?;
-                    let dir = DEFAULT_DIR.join(get_git_path(repo.as_str())?).join(lock);
-                    let task = Task::new(
-                        vec![idl.path.to_string_lossy().to_string()],
-                        dir.clone(),
-                        repo.clone(),
-                        lock.to_string(),
-                    );
-                    download_files_from_git(task)
-                        .with_context(|| format!("download repo {repo}"))?;
-
-                    (
-                        dir.join(&idl.path),
-                        idl.includes
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|v| dir.join(v))
-                            .collect_vec(),
-                    )
-                } else {
-                    (idl.path.to_path_buf(), idl.includes.unwrap_or_default())
-                };
+                let LocalIdl {
+                    path,
+                    includes,
+                    touch,
+                } = get_or_download_idl(idl)?;
 
                 builder = builder
                     .add_service(path.clone())
                     .includes(includes)
-                    .touch([(path, idl.touch)]);
+                    .touch([(path, touch)]);
             }
 
             builder.write()?;
