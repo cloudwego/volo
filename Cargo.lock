@@ -1346,7 +1346,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.6.2"
-source = "git+https://github.com/cloudwego/pilota?branch=main#a3116408ce6093f2b93343799116cd25f02113ee"
+source = "git+https://github.com/cloudwego/pilota?branch=main#a74b5f1134f7f82d7f917213358bab2c77d37fba"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1367,6 +1367,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.7.0"
+source = "git+https://github.com/cloudwego/pilota?branch=main#a74b5f1134f7f82d7f917213358bab2c77d37fba"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -1379,7 +1380,7 @@ dependencies = [
  "paste",
  "petgraph",
  "phf",
- "pilota-thrift-parser 0.4.2",
+ "pilota-thrift-parser",
  "proc-macro2",
  "protobuf-parse2",
  "protobuf2",
@@ -1398,14 +1399,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.2"
-dependencies = [
- "nom",
-]
-
-[[package]]
-name = "pilota-thrift-parser"
-version = "0.4.2"
-source = "git+https://github.com/cloudwego/pilota?branch=main#a3116408ce6093f2b93343799116cd25f02113ee"
+source = "git+https://github.com/cloudwego/pilota?branch=main#a74b5f1134f7f82d7f917213358bab2c77d37fba"
 dependencies = [
  "nom",
 ]
@@ -2420,7 +2414,7 @@ dependencies = [
  "lazy_static",
  "log",
  "normpath",
- "pilota-thrift-parser 0.4.2 (git+https://github.com/cloudwego/pilota?branch=main)",
+ "pilota-thrift-parser",
  "pretty_env_logger",
  "regex",
  "run_script",

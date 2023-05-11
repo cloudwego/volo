@@ -6,9 +6,10 @@ use std::{
 };
 
 use anyhow::{bail, Context};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 
-use crate::model::Config;
+use crate::model::{Config, GitSource, Idl, Source};
 
 lazy_static! {
     pub static ref DEFAULT_DIR: PathBuf = std::path::Path::new(
@@ -60,6 +61,51 @@ pub fn download_files_from_git(task: Task) -> anyhow::Result<()> {
     git_archive(&task.repo, &task.lock, &task.dir)?;
 
     Ok(())
+}
+
+pub struct LocalIdl {
+    pub path: PathBuf,
+    pub includes: Vec<PathBuf>,
+    pub touch: Vec<String>,
+}
+
+pub fn get_or_download_idl(idl: Idl) -> anyhow::Result<LocalIdl> {
+    let (path, includes) = if let Source::Git(GitSource {
+        ref repo, ref lock, ..
+    }) = idl.source
+    {
+        let lock = lock.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "please exec 'volo idl update' or specify the lock for {}",
+                repo
+            )
+        })?;
+        let dir = DEFAULT_DIR.join(get_git_path(repo.as_str())?).join(lock);
+        let task = Task::new(
+            vec![idl.path.to_string_lossy().to_string()],
+            dir.clone(),
+            repo.clone(),
+            lock.to_string(),
+        );
+        download_files_from_git(task).with_context(|| format!("download repo {repo}"))?;
+
+        (
+            dir.join(&idl.path),
+            idl.includes
+                .unwrap_or_default()
+                .into_iter()
+                .map(|v| dir.join(v))
+                .collect_vec(),
+        )
+    } else {
+        (idl.path.to_path_buf(), idl.includes.unwrap_or_default())
+    };
+
+    Ok(LocalIdl {
+        path,
+        includes,
+        touch: idl.touch,
+    })
 }
 
 fn run_command(command: &mut Command) -> anyhow::Result<()> {
