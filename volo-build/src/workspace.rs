@@ -42,7 +42,7 @@ where
             .services
             .into_iter()
             .map(|s| {
-                get_or_download_idl(s.idl).map(|idl| IdlService {
+                get_or_download_idl(s.idl, work_dir.join("target")).map(|idl| IdlService {
                     path: idl.path,
                     config: s.config,
                 })
