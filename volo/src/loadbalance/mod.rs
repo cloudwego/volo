@@ -13,7 +13,7 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub struct RequestCode(pub u64);
+pub struct RequestCode(pub u32);
 
 /// [`LoadBalance`] promise the feature of the load balance policy.
 pub trait LoadBalance<D>: Send + Sync + 'static

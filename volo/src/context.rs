@@ -41,8 +41,8 @@ pub struct RpcCx<I, Config> {
     pub extensions: Extensions,
 }
 
-#[derive(Default, Debug)]
-pub struct Extensions(pub TypeMap);
+#[derive(Default)]
+pub struct Extensions(TypeMap);
 
 impl std::ops::Deref for Extensions {
     type Target = TypeMap;

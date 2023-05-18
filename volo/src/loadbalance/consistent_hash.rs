@@ -1,10 +1,4 @@
-use std::{
-    cmp::min,
-    collections::HashSet,
-    future::Future,
-    hash::{Hash, Hasher},
-    sync::Arc,
-};
+use std::{cmp::min, collections::HashSet, future::Future, hash::Hash, sync::Arc};
 
 use dashmap::{mapref::entry::Entry, DashMap};
 
@@ -73,7 +67,7 @@ impl From<Instance> for RealNode {
 /// and serial number), and the virtualnode will be sorted by the hash value.
 struct VirtualNode {
     real_node: Arc<RealNode>,
-    hash: u64,
+    hash: u32,
 }
 
 impl PartialOrd for VirtualNode {
@@ -99,7 +93,7 @@ pub struct InstancePicker {
     shared_instances: Arc<WeightedInstances>,
 
     /// used for searching the virtual node
-    request_code: u64,
+    request_code: u32,
 
     /// The index of the last selected virtual node
     last_pick: Option<usize>,
@@ -213,9 +207,29 @@ where
                 weight = instance.weight;
             }
             let str = instance.address.to_string();
+            let vnode_lens = virtual_factor * weight;
+            // try to reuse the buffer
+            let mut buf = format!("{}#{}", str, vnode_lens).into_bytes();
+            let mut sharp_pos = 0;
+            for (i, bytei) in buf.iter().enumerate() {
+                if *bytei == b'#' {
+                    sharp_pos = i;
+                    break;
+                }
+            }
             for i in 0..(virtual_factor * weight) {
-                // get hash value by address and serial number.
-                let hash = Self::hash(&str, i);
+                let mut serial = i;
+                let mut pos = buf.len();
+                while serial > 0 {
+                    pos -= 1;
+                    buf[pos] = b'0' + (serial % 10) as u8;
+                    serial /= 10;
+                }
+                for bytej in buf.iter_mut().take(pos).skip(sharp_pos + 1) {
+                    *bytej = b'0';
+                }
+                // get address#i with leading zeros
+                let hash = mur3::murmurhash3_x86_32(&buf, 0);
                 virtual_nodes.push(VirtualNode {
                     real_node: real_node.clone(),
                     hash,
@@ -227,13 +241,6 @@ where
             real_nodes,
             virtual_nodes,
         }
-    }
-
-    fn hash(address: &str, index: u32) -> u64 {
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        address.hash(&mut hasher);
-        index.hash(&mut hasher);
-        hasher.finish()
     }
 }
 
@@ -325,7 +332,7 @@ mod tests {
     }
 
     #[inline]
-    fn set_request_code(code: u64) {
+    fn set_request_code(code: u32) {
         metainfo::METAINFO
             .try_with(|m| m.borrow_mut().insert(RequestCode(code)))
             .unwrap();
@@ -420,7 +427,7 @@ mod tests {
         );
         assert_eq!(weighted_instances.real_nodes.len(), instances.len());
         for _ in 0..100 {
-            let request_key = rand::random::<u64>();
+            let request_key = rand::random::<u32>();
             set_request_code(request_key);
             let picker = lb.get_picker(&empty, &discovery).await.unwrap();
             let all1 = picker.collect::<Vec<_>>();
@@ -446,7 +453,7 @@ mod tests {
         let discovery = StaticDiscover::new(instances.clone());
         let lb = ConsistentHashBalance::new(opt.clone());
         for _ in 0..times {
-            let request_key = rand::random::<u64>();
+            let request_key = rand::random::<u32>();
             set_request_code(request_key);
             let picker = lb.get_picker(&empty, &discovery).await.unwrap();
             let all = picker.collect::<Vec<_>>();
@@ -488,8 +495,9 @@ mod tests {
             let exact = count as f64;
             let expect = instance.weight as f64 / sum_weight as f64 * sum_visits as f64;
             max_eps = max_eps.max(((exact - expect).abs() / expect) as f64);
-            assert!((exact - expect).abs() / expect < 0.2);
         }
+        // println!("max_eps: {}", max_eps);
+        assert!(max_eps < 0.1);
     }
 
     #[tokio::test]

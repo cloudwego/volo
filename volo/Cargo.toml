@@ -38,3 +38,4 @@ tokio = { workspace = true, features = ["net", "time", "sync", "io-util"] }
 tokio-stream = { workspace = true, features = ["net"] }
 tower.workspace = true
 tracing.workspace = true
+mur3 = "0.1"
