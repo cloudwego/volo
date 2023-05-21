@@ -60,10 +60,10 @@ anyhow.workspace = true
 async-stream.workspace = true
 async-trait.workspace = true
 lazy_static.workspace = true
+metainfo.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tracing.workspace = true
-metainfo.workspace = true
 
 pilota.workspace = true
 volo = { path = "../volo" }

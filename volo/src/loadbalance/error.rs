@@ -7,8 +7,8 @@ pub enum LoadBalanceError {
     Retry,
     #[error("load balance discovery error: {0:?}")]
     Discover(#[from] BoxError),
-    #[error("miss request_key for consistent hash balance")]
-    MissRequestKey,
+    #[error("miss request_hash for consistent hash balance")]
+    MissRequestHash,
 }
 
 pub trait Retryable {

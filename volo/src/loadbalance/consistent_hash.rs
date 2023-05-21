@@ -2,7 +2,7 @@ use std::{cmp::min, collections::HashSet, future::Future, hash::Hash, sync::Arc}
 
 use dashmap::{mapref::entry::Entry, DashMap};
 
-use super::{error::LoadBalanceError, LoadBalance, RequestCode};
+use super::{error::LoadBalanceError, LoadBalance, RequestHash};
 use crate::{
     context::Endpoint,
     discovery::{Change, Discover, Instance},
@@ -93,7 +93,7 @@ pub struct InstancePicker {
     shared_instances: Arc<WeightedInstances>,
 
     /// used for searching the virtual node
-    request_code: u32,
+    request_hash: u32,
 
     /// The index of the last selected virtual node
     last_pick: Option<usize>,
@@ -123,8 +123,8 @@ impl Iterator for InstancePicker {
             None => {
                 // init states
                 self.replicas = min(self.replicas, self.shared_instances.real_nodes.len());
-                // find the first virtual node whose hash is greater than request_code
-                let mut index = virtual_nodes.partition_point(|vn| vn.hash < self.request_code);
+                // find the first virtual node whose hash is greater than request_hash
+                let mut index = virtual_nodes.partition_point(|vn| vn.hash < self.request_hash);
                 if index == virtual_nodes.len() {
                     index = 0;
                 }
@@ -264,13 +264,13 @@ where
         Self: 'future,
     {
         async move {
-            let request_key = metainfo::METAINFO
-                .try_with(|m| m.borrow().get::<RequestCode>().copied())
-                .map_err(|_| LoadBalanceError::MissRequestKey)?;
-            if request_key.is_none() {
-                return Err(LoadBalanceError::MissRequestKey);
+            let request_hash = metainfo::METAINFO
+                .try_with(|m| m.borrow().get::<RequestHash>().copied())
+                .map_err(|_| LoadBalanceError::MissRequestHash)?;
+            if request_hash.is_none() {
+                return Err(LoadBalanceError::MissRequestHash);
             }
-            let request_key = request_key.unwrap().0;
+            let request_hash = request_hash.unwrap().0;
             let key = discover.key(endpoint);
             let weighted_list = match self.router.entry(key) {
                 Entry::Occupied(e) => e.get().clone(),
@@ -288,7 +288,7 @@ where
             };
             Ok(InstancePicker {
                 shared_instances: weighted_list,
-                request_code: request_key,
+                request_hash,
                 last_pick: None,
                 used: HashSet::new(),
                 replicas: self.option.replicas,
@@ -319,7 +319,7 @@ mod tests {
     use crate::{
         context::Endpoint,
         discovery::{Instance, StaticDiscover},
-        loadbalance::RequestCode,
+        loadbalance::RequestHash,
         net::Address,
     };
 
@@ -332,9 +332,9 @@ mod tests {
     }
 
     #[inline]
-    fn set_request_code(code: u32) {
+    fn set_request_hash(code: u32) {
         metainfo::METAINFO
-            .try_with(|m| m.borrow_mut().insert(RequestCode(code)))
+            .try_with(|m| m.borrow_mut().insert(RequestHash(code)))
             .unwrap();
     }
 
@@ -368,7 +368,7 @@ mod tests {
             weighted: true,
         };
         let lb = ConsistentHashBalance::new(opt);
-        set_request_code(0);
+        set_request_hash(0);
         let picker = lb.get_picker(&empty, &discover).await.unwrap();
         let all = picker.collect::<Vec<_>>();
         assert_eq!(all.len(), 2);
@@ -381,7 +381,7 @@ mod tests {
             weighted: true,
         };
         let lb = ConsistentHashBalance::new(opt);
-        set_request_code(0);
+        set_request_hash(0);
         let picker = lb.get_picker(&empty, &discover).await.unwrap();
         let all = picker.collect::<Vec<_>>();
         assert_eq!(all.len(), 1);
@@ -427,8 +427,8 @@ mod tests {
         );
         assert_eq!(weighted_instances.real_nodes.len(), instances.len());
         for _ in 0..100 {
-            let request_key = rand::random::<u32>();
-            set_request_code(request_key);
+            let request_hash = rand::random::<u32>();
+            set_request_hash(request_hash);
             let picker = lb.get_picker(&empty, &discovery).await.unwrap();
             let all1 = picker.collect::<Vec<_>>();
             for _ in 0..3 {
@@ -453,8 +453,8 @@ mod tests {
         let discovery = StaticDiscover::new(instances.clone());
         let lb = ConsistentHashBalance::new(opt.clone());
         for _ in 0..times {
-            let request_key = rand::random::<u32>();
-            set_request_code(request_key);
+            let request_hash = rand::random::<u32>();
+            set_request_hash(request_hash);
             let picker = lb.get_picker(&empty, &discovery).await.unwrap();
             let all = picker.collect::<Vec<_>>();
             for address in all {
@@ -482,21 +482,32 @@ mod tests {
         // TODO: Using standard deviation to evaluate load balancing is better?
         let mut rng = rand::thread_rng();
         let mut instances = vec![];
-        for i in 0..100 {
+        for _ in 0..50 {
             let w = rng.gen_range(10..=100);
-            instances.push(new_instance(format!("127.0.0.1:{}", i), w));
+            let sub_net = rng.gen_range(0..=255);
+            let port = rng.gen_range(1000..=65535);
+            instances.push(new_instance(format!("172.17.0.{}:{}", sub_net, port), w));
+            instances.push(new_instance(format!("192.168.32.{}:{}", sub_net, port), w));
         }
         let result = simulate_random_picks(instances.clone(), 1000000).await;
         let sum_visits = result.values().sum::<usize>();
         let sum_weight = instances.iter().map(|i| i.weight).sum::<u32>();
+        let mut deviation = 0.0;
         let mut max_eps: f64 = 0.0;
-        for instance in instances {
+        for instance in instances.iter() {
             let count: usize = *(result.get(&(instance.address)).unwrap_or(&0));
             let exact = count as f64;
             let expect = instance.weight as f64 / sum_weight as f64 * sum_visits as f64;
-            max_eps = max_eps.max(((exact - expect).abs() / expect) as f64);
+            let eps = (exact - expect).abs() / expect;
+            // compute the standard deviation
+            deviation = deviation + (eps * eps);
+            max_eps = max_eps.max(eps);
         }
-        // println!("max_eps: {}", max_eps);
+        println!("max_eps: {}", max_eps);
+        println!(
+            "standard deviation: {}",
+            (deviation / instances.len() as f64).sqrt()
+        );
         assert!(max_eps < 0.1);
     }
 

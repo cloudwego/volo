@@ -13,7 +13,7 @@ use volo::{
     discovery::StaticDiscover,
     loadbalance::{
         consistent_hash::{ConsistentHashBalance, ConsistentHashOption},
-        RequestCode,
+        RequestHash,
     },
 };
 
@@ -32,9 +32,9 @@ lazy_static! {
 }
 
 #[inline]
-fn set_request_code(code: u32) {
+fn set_request_hash(code: u32) {
     metainfo::METAINFO
-        .try_with(|m| m.borrow_mut().insert(RequestCode(code)))
+        .try_with(|m| m.borrow_mut().insert(RequestHash(code)))
         .unwrap();
 }
 
@@ -60,7 +60,7 @@ async fn main() {
                 let req = volo_gen::proto_gen::hello::HelloRequest {
                     name: FastStr::from_static_str("Volo"),
                 };
-                set_request_code(ip_to_u32(&get_local_ip().unwrap()));
+                set_request_hash(ip_to_u32(&get_local_ip().unwrap()));
                 let resp = CLIENT.say_hello(req).await;
                 match resp {
                     Ok(info) => println!("{info:?}"),
@@ -71,7 +71,7 @@ async fn main() {
                 let req = volo_gen::proto_gen::hello::HelloRequest {
                     name: FastStr::from_static_str("Volo"),
                 };
-                set_request_code(1000);
+                set_request_hash(1000);
                 let resp = CLIENT.clone().say_hello(req).await;
                 match resp {
                     Ok(info) => println!("{info:?}"),
