@@ -32,7 +32,7 @@ lazy_static! {
 }
 
 #[inline]
-fn set_request_hash(code: u32) {
+fn set_request_hash(code: u64) {
     metainfo::METAINFO
         .try_with(|m| m.borrow_mut().insert(RequestHash(code)))
         .unwrap();
@@ -45,10 +45,10 @@ fn get_local_ip() -> Option<IpAddr> {
     socket.local_addr().ok()?.ip().into()
 }
 
-fn ip_to_u32(ip: &IpAddr) -> u32 {
+fn ip_to_u64(ip: &IpAddr) -> u64 {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     ip.hash(&mut hasher);
-    hasher.finish() as u32
+    hasher.finish()
 }
 
 #[volo::main]
@@ -60,7 +60,7 @@ async fn main() {
                 let req = volo_gen::proto_gen::hello::HelloRequest {
                     name: FastStr::from_static_str("Volo"),
                 };
-                set_request_hash(ip_to_u32(&get_local_ip().unwrap()));
+                set_request_hash(ip_to_u64(&get_local_ip().unwrap()));
                 let resp = CLIENT.say_hello(req).await;
                 match resp {
                     Ok(info) => println!("{info:?}"),

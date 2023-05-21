@@ -67,7 +67,7 @@ impl From<Instance> for RealNode {
 /// and serial number), and the virtualnode will be sorted by the hash value.
 struct VirtualNode {
     real_node: Arc<RealNode>,
-    hash: u32,
+    hash: u64,
 }
 
 impl PartialOrd for VirtualNode {
@@ -93,7 +93,7 @@ pub struct InstancePicker {
     shared_instances: Arc<WeightedInstances>,
 
     /// used for searching the virtual node
-    request_hash: u32,
+    request_hash: u64,
 
     /// The index of the last selected virtual node
     last_pick: Option<usize>,
@@ -229,7 +229,7 @@ where
                     *bytej = b'0';
                 }
                 // get address#i with leading zeros
-                let hash = mur3::murmurhash3_x86_32(&buf, 0);
+                let hash = mur3::murmurhash3_x64_128(&buf, 0).0;
                 virtual_nodes.push(VirtualNode {
                     real_node: real_node.clone(),
                     hash,
@@ -332,7 +332,7 @@ mod tests {
     }
 
     #[inline]
-    fn set_request_hash(code: u32) {
+    fn set_request_hash(code: u64) {
         metainfo::METAINFO
             .try_with(|m| m.borrow_mut().insert(RequestHash(code)))
             .unwrap();
@@ -427,7 +427,7 @@ mod tests {
         );
         assert_eq!(weighted_instances.real_nodes.len(), instances.len());
         for _ in 0..100 {
-            let request_hash = rand::random::<u32>();
+            let request_hash = rand::random::<u64>();
             set_request_hash(request_hash);
             let picker = lb.get_picker(&empty, &discovery).await.unwrap();
             let all1 = picker.collect::<Vec<_>>();
@@ -453,7 +453,7 @@ mod tests {
         let discovery = StaticDiscover::new(instances.clone());
         let lb = ConsistentHashBalance::new(opt.clone());
         for _ in 0..times {
-            let request_hash = rand::random::<u32>();
+            let request_hash = rand::random::<u64>();
             set_request_hash(request_hash);
             let picker = lb.get_picker(&empty, &discovery).await.unwrap();
             let all = picker.collect::<Vec<_>>();
