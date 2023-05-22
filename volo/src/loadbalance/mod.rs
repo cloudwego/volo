@@ -12,7 +12,7 @@ use crate::{
     net::Address,
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Ord, Eq, Hash)]
 pub struct RequestHash(pub u64);
 
 /// [`LoadBalance`] promise the feature of the load balance policy.

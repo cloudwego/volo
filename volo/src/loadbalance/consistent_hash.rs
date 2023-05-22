@@ -93,7 +93,7 @@ pub struct InstancePicker {
     shared_instances: Arc<WeightedInstances>,
 
     /// used for searching the virtual node
-    request_hash: u64,
+    request_hash: RequestHash,
 
     /// The index of the last selected virtual node
     last_pick: Option<usize>,
@@ -124,7 +124,7 @@ impl Iterator for InstancePicker {
                 // init states
                 self.replicas = min(self.replicas, self.shared_instances.real_nodes.len());
                 // find the first virtual node whose hash is greater than request_hash
-                let mut index = virtual_nodes.partition_point(|vn| vn.hash < self.request_hash);
+                let mut index = virtual_nodes.partition_point(|vn| vn.hash < self.request_hash.0);
                 if index == virtual_nodes.len() {
                     index = 0;
                 }
@@ -236,7 +236,7 @@ where
                 });
             }
         }
-        virtual_nodes.sort();
+        virtual_nodes.sort_unstable();
         WeightedInstances {
             real_nodes,
             virtual_nodes,
@@ -270,7 +270,7 @@ where
             if request_hash.is_none() {
                 return Err(LoadBalanceError::MissRequestHash);
             }
-            let request_hash = request_hash.unwrap().0;
+            let request_hash = request_hash.unwrap();
             let key = discover.key(endpoint);
             let weighted_list = match self.router.entry(key) {
                 Entry::Occupied(e) => e.get().clone(),
