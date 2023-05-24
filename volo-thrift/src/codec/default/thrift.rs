@@ -116,6 +116,14 @@ impl ZeroCopyDecoder for ThriftCodec {
         // TODO: do we need to check the response protocol at client side?
         match protocol {
             Protocol::Binary => {
+                #[cfg(feature = "unsafe-codec")]
+                let buf =
+                    unsafe { std::slice::from_raw_parts_mut(bytes.as_mut_ptr(), bytes.len()) };
+                #[cfg(feature = "unsafe-codec")]
+                let mut p = unsafe {
+                    pilota::thrift::binary_unsafe::TBinaryProtocol::new(bytes, buf, true)
+                };
+                #[cfg(not(feature = "unsafe-codec"))]
                 let mut p = TBinaryProtocol::new(bytes, true);
                 let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
                 cx.extensions_mut().insert(protocol);
@@ -210,6 +218,18 @@ impl ZeroCopyEncoder for ThriftCodec {
         // TODO: use the protocol in TTHeader?
         match cx.extensions().get::<Protocol>().unwrap_or(&self.protocol) {
             Protocol::Binary => {
+                #[cfg(feature = "unsafe-codec")]
+                let buf = unsafe {
+                    std::slice::from_raw_parts_mut(
+                        linked_bytes.bytes_mut().as_mut_ptr(),
+                        linked_bytes.bytes_mut().len(),
+                    )
+                };
+                #[cfg(feature = "unsafe-codec")]
+                let mut p = unsafe {
+                    pilota::thrift::binary_unsafe::TBinaryProtocol::new(linked_bytes, buf, true)
+                };
+                #[cfg(not(feature = "unsafe-codec"))]
                 let mut p = TBinaryProtocol::new(linked_bytes, true);
                 msg.encode(&mut p)?;
                 Ok(())
