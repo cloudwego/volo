@@ -211,6 +211,8 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
         cx.stats_mut().record_decode_start_at();
         cx.stats_mut().record_read_start_at();
 
+        trace!("[VOLO] codec decode message received: {:?}", self.reader.buffer());
+
         // simply call the inner `decode_async`
         let res = self.decoder.decode_async(cx, &mut self.reader).await;
 
