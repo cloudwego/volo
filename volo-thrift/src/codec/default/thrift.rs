@@ -126,6 +126,13 @@ impl ZeroCopyDecoder for ThriftCodec {
                 #[cfg(not(feature = "unsafe-codec"))]
                 let mut p = TBinaryProtocol::new(bytes, true);
                 let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
+                #[cfg(feature = "unsafe-codec")]
+                {
+                    use bytes::Buf;
+                    use pilota::thrift::TInputProtocol;
+                    let index = p.index();
+                    p.buf_mut().advance(index);
+                }
                 cx.extensions_mut().insert(protocol);
                 Ok(Some(msg))
             }
@@ -232,6 +239,15 @@ impl ZeroCopyEncoder for ThriftCodec {
                 #[cfg(not(feature = "unsafe-codec"))]
                 let mut p = TBinaryProtocol::new(linked_bytes, true);
                 msg.encode(&mut p)?;
+                #[cfg(feature = "unsafe-codec")]
+                {
+                    use bytes::BufMut;
+                    use pilota::thrift::TOutputProtocol;
+                    let index = p.index();
+                    unsafe {
+                        p.buf_mut().bytes_mut().advance_mut(index);
+                    }
+                }
                 Ok(())
             }
             Protocol::ApacheCompact => {
