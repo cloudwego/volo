@@ -355,12 +355,12 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }).flat_map(|e| {
                 match &*e {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
-                        let _name = self.cx().rust_name(v.did);
-                        format!("Some({res_recv_name}::{enum_variant}({result_path}::{name}(err))) => Err(::volo_thrift::error::ResponseError::UserException({exception}::{name}(err)))")
+                        let name = self.cx().rust_name(v.did);
+                        format!("Some({res_recv_name}::{enum_variant}({result_path}::{name}(err))) => Err(::volo_thrift::error::ResponseError::UserException({exception}::{name}(err))),")
                     }).collect::<Vec<_>>(),
                     _ => panic!()
                 }
-            }).join(",");
+            }).join("");
 
             client_methods.push(format! {
                 r#"pub async fn {name}(&self {req_fields}) -> ::std::result::Result<{resp_type}, ::volo_thrift::error::ResponseError<{exception}>> {{
@@ -428,16 +428,15 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                             .variants
                             .iter()
                             .map(|v| {
-                                let _name = self.cx().rust_name(v.did);
+                                let name = self.cx().rust_name(v.did);
                                 format!(
-                                "Err(::volo_thrift::error::UserError::UserException({exception}::#\
-                                 name(err))) => #method_result_path::#name(err)"
+                                "Err(::volo_thrift::error::UserError::UserException({exception}::{name}(err))) => {method_result_path}::{name}(err),"
                             )
                             })
                             .collect::<Vec<_>>(),
                         _ => panic!(),
                     })
-                    .join(",");
+                    .join("");
 
                 if has_exception {
                     format! {
