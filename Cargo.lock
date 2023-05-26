@@ -456,6 +456,7 @@ dependencies = [
  "async-stream",
  "async-trait",
  "lazy_static",
+ "metainfo",
  "pilota",
  "tokio",
  "tokio-stream",
@@ -1042,6 +1043,12 @@ dependencies = [
  "quote",
  "syn 1.0.109",
 ]
+
+[[package]]
+name = "mur3"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97af489e1e21b68de4c390ecca6703318bc1aa16e9733bcb62c089b73c6fbb1b"
 
 [[package]]
 name = "nom"
@@ -2267,6 +2274,7 @@ dependencies = [
  "lazy_static",
  "metainfo",
  "motore",
+ "mur3",
  "once_cell",
  "pin-project",
  "rand",
