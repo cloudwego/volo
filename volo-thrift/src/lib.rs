@@ -8,6 +8,7 @@ pub mod error;
 mod message;
 mod message_wrapper;
 mod protocol;
+pub mod tracing;
 pub mod transport;
 
 pub mod client;
