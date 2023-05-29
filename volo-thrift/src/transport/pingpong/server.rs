@@ -48,22 +48,17 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         cx.rpc_info.caller = Some(caller);
                     }
 
-                    let msg = async {
-                        let result = tokio::select! {
-                            _ = &mut notified => {
-                                tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
-                                return None;
-                            },
-                            out = decoder.decode(&mut cx) => Some(out)
-                        };
-                        Span::current().record(ServerField::RECV_SIZE, cx.common_stats.read_size());
-                        result
-                    }.instrument(span!(Level::TRACE, ServerState::DECODE)).await;
-
-                    if let None = msg {
-                        return;
-                    }
-                    let msg = msg.unwrap();
+                    let msg = tokio::select! {
+                        _ = &mut notified => {
+                            tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
+                            return;
+                        },
+                        out = async {
+                            let result = decoder.decode(&mut cx).await;
+                            Span::current().record(ServerField::RECV_SIZE, cx.common_stats.read_size());
+                            result
+                        }.instrument(span!(Level::TRACE, ServerState::DECODE)) => out
+                    };
 
                     debug!(
                         "[VOLO] received message: {:?}, rpcinfo: {:?}, peer_addr: {:?}",
