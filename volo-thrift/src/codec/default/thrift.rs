@@ -1,4 +1,4 @@
-use bytes::BytesMut;
+use bytes::Bytes;
 use linkedbytes::LinkedBytes;
 use pilota::thrift::{
     binary::TBinaryProtocol,
@@ -100,7 +100,7 @@ impl ZeroCopyDecoder for ThriftCodec {
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-        bytes: &mut BytesMut,
+        bytes: &mut Bytes,
     ) -> Result<Option<ThriftMessage<Msg>>, DecodeError> {
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, so return error
@@ -117,11 +117,8 @@ impl ZeroCopyDecoder for ThriftCodec {
         match protocol {
             Protocol::Binary => {
                 #[cfg(feature = "unsafe-codec")]
-                let buf =
-                    unsafe { std::slice::from_raw_parts_mut(bytes.as_mut_ptr(), bytes.len()) };
-                #[cfg(feature = "unsafe-codec")]
                 let mut p = unsafe {
-                    pilota::thrift::binary_unsafe::TBinaryProtocol::new(bytes, buf, true)
+                    pilota::thrift::binary_unsafe::TBinaryUnsafeInputProtocol::new(bytes)
                 };
                 #[cfg(not(feature = "unsafe-codec"))]
                 let mut p = TBinaryProtocol::new(bytes, true);
@@ -235,7 +232,11 @@ impl ZeroCopyEncoder for ThriftCodec {
                 };
                 #[cfg(feature = "unsafe-codec")]
                 let mut p = unsafe {
-                    pilota::thrift::binary_unsafe::TBinaryProtocol::new(linked_bytes, buf, true)
+                    pilota::thrift::binary_unsafe::TBinaryUnsafeOutputProtocol::new(
+                        linked_bytes,
+                        buf,
+                        true,
+                    )
                 };
                 #[cfg(not(feature = "unsafe-codec"))]
                 let mut p = TBinaryProtocol::new(linked_bytes, true);

@@ -1,4 +1,4 @@
-use bytes::{Buf, BytesMut};
+use bytes::{Buf, Bytes, BytesMut};
 use linkedbytes::LinkedBytes;
 use pilota::thrift::{rw_ext::WriteExt, DecodeError, EncodeError, ProtocolError};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
@@ -54,7 +54,6 @@ pub struct HasFramed(bool);
 #[derive(Clone)]
 pub struct FramedDecoder<D: ZeroCopyDecoder> {
     inner: D,
-    buffer: BytesMut,
     max_frame_size: i32,
 }
 
@@ -63,7 +62,6 @@ impl<D: ZeroCopyDecoder> FramedDecoder<D> {
         Self {
             inner,
             max_frame_size,
-            buffer: BytesMut::new(),
         }
     }
 }
@@ -80,7 +78,7 @@ where
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-        bytes: &mut BytesMut,
+        bytes: &mut Bytes,
     ) -> Result<Option<ThriftMessage<Msg>>, DecodeError> {
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, must not be Framed, so just forward to inner
@@ -116,18 +114,19 @@ where
                 reader.consume(4);
                 check_framed_size(size, self.max_frame_size)?;
 
-                self.buffer.clear();
-                self.buffer.reserve(size as usize);
+                let mut buffer = BytesMut::with_capacity(size as usize);
+
                 unsafe {
-                    self.buffer.set_len(size as usize);
+                    buffer.set_len(size as usize);
                 }
-                reader.read_exact(&mut self.buffer[..size as usize]).await?;
+                reader.read_exact(&mut buffer[..size as usize]).await?;
                 cx.stats_mut().record_read_end_at();
 
+                let mut buffer = buffer.freeze();
                 // set has framed flag
                 cx.extensions_mut().insert(HasFramed(true));
                 // decode inner
-                self.inner.decode(cx, &mut self.buffer)
+                self.inner.decode(cx, &mut buffer)
             } else {
                 // no Framed, just forward to inner decoder
                 self.inner.decode_async(cx, reader).await

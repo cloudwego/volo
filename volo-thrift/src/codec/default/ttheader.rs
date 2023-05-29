@@ -8,7 +8,7 @@ use std::{
     collections::HashMap, convert::TryFrom, default::Default, net::SocketAddr, time::Duration,
 };
 
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use faststr::FastStr;
 use linkedbytes::LinkedBytes;
 use metainfo::{Backward, Forward};
@@ -58,15 +58,11 @@ pub struct HasTTHeader(bool);
 #[derive(Clone)]
 pub struct TTHeaderDecoder<D: ZeroCopyDecoder> {
     inner: D,
-    buffer: BytesMut,
 }
 
 impl<D: ZeroCopyDecoder> TTHeaderDecoder<D> {
     pub fn new(inner: D) -> Self {
-        Self {
-            inner,
-            buffer: BytesMut::new(),
-        }
+        Self { inner }
     }
 }
 
@@ -82,7 +78,7 @@ where
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-        bytes: &mut BytesMut,
+        bytes: &mut Bytes,
     ) -> Result<Option<ThriftMessage<Msg>>, DecodeError> {
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, must not be TTHeader, so just forward to inner
@@ -117,21 +113,22 @@ where
                 cx.stats_mut().set_read_size(size + 4);
 
                 reader.consume(4);
-                self.buffer.clear();
-                self.buffer.reserve(size);
+                let mut buffer = BytesMut::with_capacity(size);
                 unsafe {
-                    self.buffer.set_len(size);
+                    buffer.set_len(size);
                 }
-                reader.read_exact(&mut self.buffer[..size]).await?;
+                reader.read_exact(&mut buffer[..size]).await?;
 
                 cx.stats_mut().record_read_end_at();
 
+                let mut buffer = buffer.freeze();
+
                 // decode ttheader
-                decode(cx, &mut self.buffer)?;
+                decode(cx, &mut buffer)?;
                 // set has ttheader flag
                 cx.extensions_mut().insert(HasTTHeader(true));
                 // decode inner
-                self.inner.decode(cx, &mut self.buffer)
+                self.inner.decode(cx, &mut buffer)
             } else {
                 // no TTHeader, just forward to inner decoder
                 self.inner.decode_async(cx, reader).await
@@ -678,7 +675,7 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Encod
 
 pub(crate) fn decode<Cx: ThriftContext>(
     cx: &mut Cx,
-    src: &mut BytesMut,
+    src: &mut Bytes,
 ) -> Result<(), pilota::thrift::DecodeError> {
     metainfo::METAINFO.with(|metainfo| {
             let metainfo = &mut *metainfo.borrow_mut();
@@ -728,12 +725,12 @@ pub(crate) fn decode<Cx: ThriftContext>(
                             remaining_header_size -= 2;
                             let key_len = src.get_u16();
                             remaining_header_size -= key_len as usize;
-                            let key = src.split_to(key_len as usize).freeze();
+                            let key = src.split_to(key_len as usize);
 
                             remaining_header_size -= 2;
                             let value_len = src.get_u16();
                             remaining_header_size -= value_len as usize;
-                            let value = src.split_to(value_len as usize).freeze();
+                            let value = src.split_to(value_len as usize);
 
                             headers.insert(
                                 unsafe { FastStr::from_bytes_unchecked(key) },
@@ -751,7 +748,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                             let key = src.get_u16();
                             let value_len = src.get_u16() as usize;
                             remaining_header_size -= value_len;
-                            let value = src.split_to(value_len).freeze();
+                            let value = src.split_to(value_len);
                             let key = match IntMetaKey::try_from(key) {
                                 Ok(k) => k,
                                 Err(e) => {
