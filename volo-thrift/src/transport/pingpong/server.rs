@@ -39,7 +39,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     metainfo::METAINFO
         .scope(RefCell::new(MetaInfo::default()), async {
             loop {
-                async {
+                let result = async {
                     // new context
                     let mut cx = ServerContext::default();
                     if let Some(peer_addr) = &peer_addr {
@@ -51,7 +51,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                     let msg = tokio::select! {
                         _ = &mut notified => {
                             tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
-                            return;
+                            return Err(());
                         },
                         out = async {
                             let result = decoder.decode(&mut cx).await;
@@ -93,7 +93,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                     // log it
                                     error!("[VOLO] server send response error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
                                     stat_tracer.iter().for_each(|f| f(&cx));
-                                    return;
+                                    return Err(());
                                 }
                             }
                         }
@@ -102,7 +102,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         }
                         Ok(None) => {
                             trace!("[VOLO] reach eof, connection has been closed by client, peer_addr: {:?}", peer_addr);
-                            return;
+                            return Err(());
                         }
                         Err(e) => {
                             error!("[VOLO] pingpong server decode error: {:?}, peer_addr: {:?}", e, peer_addr);
@@ -115,15 +115,19 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 }
                             }
                             stat_tracer.iter().for_each(|f| f(&cx));
-                            return;
+                            return Err(());
                         }
                     }
                     stat_tracer.iter().for_each(|f| f(&cx));
 
                     metainfo::METAINFO.with(|mi| {
                         mi.borrow_mut().clear();
-                    })
+                    });
+                    Ok(())
                 }.instrument(span!(Level::TRACE, ServerState::SERVE)).await;
+                if let Err(_) = result {
+                    break;
+                }
             }
         }).await;
 }
