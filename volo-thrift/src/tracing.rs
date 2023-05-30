@@ -1,15 +1,34 @@
-pub struct ServerState(&'static str);
+use tracing::Span;
 
-impl ServerState {
-    pub const DECODE: &'static str = "volo-server-decode";
-    pub const HANDLE: &'static str = "volo-server-handle";
-    pub const ENCODE: &'static str = "volo-server-encode";
-    pub const SERVE: &'static str = "volo-server-serve";
+use crate::context::ServerContext;
+
+pub trait SpanProvider: 'static + Send + Sync + Clone {
+    fn on_serve(&self) -> Span {
+        Span::none()
+    }
+
+    fn on_decode(&self) -> Span {
+        Span::none()
+    }
+
+    fn on_encode(&self) -> Span {
+        Span::none()
+    }
+
+    fn leave_decode(&self, context: &ServerContext) {
+        let _ = context;
+    }
+
+    fn leave_encode(&self, context: &ServerContext) {
+        let _ = context;
+    }
+
+    fn leave_serve(&self, context: &ServerContext) {
+        let _ = context;
+    }
 }
 
-pub struct ServerField(&'static str);
+#[derive(Clone)]
+pub struct DefaultProvider;
 
-impl ServerField {
-    pub const SEND_SIZE: &'static str = "volo-server-send-size";
-    pub const RECV_SIZE: &'static str = "volo-server-recv-size";
-}
+impl SpanProvider for DefaultProvider {}
