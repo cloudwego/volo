@@ -30,6 +30,28 @@ pub enum Error {
     Application(ApplicationError),
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct DummyError;
+
+#[async_trait::async_trait]
+impl Message for DummyError {
+    fn encode<T: TOutputProtocol>(&self, _protocol: &mut T) -> Result<(), EncodeError> {
+        panic!()
+    }
+
+    fn decode<T: TInputProtocol>(_protocol: &mut T) -> Result<Self, DecodeError> {
+        panic!()
+    }
+
+    async fn decode_async<T: TAsyncInputProtocol>(_protocol: &mut T) -> Result<Self, DecodeError> {
+        panic!()
+    }
+
+    fn size<T: TLengthProtocol>(&self, _protocol: &mut T) -> usize {
+        panic!()
+    }
+}
+
 impl Error {
     pub fn append_msg(&mut self, msg: &str) {
         match self {

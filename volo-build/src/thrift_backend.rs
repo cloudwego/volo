@@ -416,7 +416,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 let exception: FastStr = if let Some(p) = &m.exceptions {
                     self.cx().cur_related_item_path(p.did)
                 } else {
-                    "::pilota::thrift::DummyError".into()
+                    "::volo_thrift::error::DummyError".into()
                 };
 
                 let convert_exceptions = m
