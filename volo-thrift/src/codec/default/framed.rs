@@ -49,7 +49,7 @@ impl<Inner: MakeZeroCopyCodec> MakeZeroCopyCodec for MakeFramedCodec<Inner> {
 }
 
 /// This is used to tell the encoder to encode framed header at server side.
-pub struct HasFramed(bool);
+pub struct HasFramed;
 
 #[derive(Clone)]
 pub struct FramedDecoder<D: ZeroCopyDecoder> {
@@ -89,7 +89,7 @@ where
             let size = bytes.get_i32();
             check_framed_size(size, self.max_frame_size)?;
             // set has framed flag
-            cx.extensions_mut().insert(HasFramed(true));
+            cx.conditions_mut().insert::<HasFramed>();
         }
         // decode inner
         self.inner.decode(cx, bytes)
@@ -124,7 +124,7 @@ where
 
                 let mut buffer = buffer.freeze();
                 // set has framed flag
-                cx.extensions_mut().insert(HasFramed(true));
+                cx.conditions_mut().insert::<HasFramed>();
                 // decode inner
                 self.inner.decode(cx, &mut buffer)
             } else {
@@ -179,13 +179,7 @@ where
     ) -> Result<(), EncodeError> {
         let dst = linked_bytes.bytes_mut();
         // only encode framed if role is client or server has detected framed in decode
-        if cx.rpc_info().role() == Role::Client
-            || cx
-                .extensions()
-                .get::<HasFramed>()
-                .unwrap_or(&HasFramed(false))
-                .0
-        {
+        if cx.rpc_info().role() == Role::Client || cx.conditions().contains::<HasFramed>() {
             // encode framed first
             dst.write_i32(self.inner_size)?;
             trace!(
@@ -204,13 +198,7 @@ where
         let (real_size, malloc_size) = self.inner.size(cx, msg)?;
         self.inner_size = real_size as i32;
         // only calc framed size if role is client or server has detected framed in decode
-        if cx.rpc_info().role() == Role::Client
-            || cx
-                .extensions()
-                .get::<HasFramed>()
-                .unwrap_or(&HasFramed(false))
-                .0
-        {
+        if cx.rpc_info().role() == Role::Client || cx.conditions().contains::<HasFramed>() {
             check_framed_size(self.inner_size, self.max_frame_size)?;
             Ok((
                 real_size + FRAMED_HEADER_SIZE,

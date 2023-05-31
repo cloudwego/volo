@@ -137,7 +137,7 @@ where
             return Ok(());
         }
 
-        self.pilota_builder.compile(
+        self.pilota_builder.compile_with_config(
             self.idls
                 .into_iter()
                 .map(IdlService::from_path)

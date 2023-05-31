@@ -369,12 +369,19 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     }});
                     let mut cx = self.0.make_cx("{method_name_str}", {oneway});
                     #[allow(unreachable_patterns)]
-                    match ::volo::service::Service::call(&self.0, &mut cx, req).await? {{
+                    let resp = match ::volo::service::Service::call(&self.0, &mut cx, req).await? {{
                         Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => Ok(resp),
                         {convert_exceptions}
                         {none},
                         _ => unreachable!()
-                    }}
+                    }};
+                    ::volo_thrift::context::CLIENT_CONTEXT_CACHE.with(|cache| {{
+                        let mut cache = cache.borrow_mut();
+                        if cache.len() < cache.capacity() {{
+                            cache.push(cx);
+                        }}
+                    }});
+                    resp
                 }}"#
             });
 
@@ -385,12 +392,19 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     }});
                     let mut cx = self.0.make_cx("{method_name_str}", {oneway});
                     #[allow(unreachable_patterns)]
-                    match ::volo::client::OneShotService::call(self.0, &mut cx, req).await? {{
+                    let resp = match ::volo::client::OneShotService::call(self.0, &mut cx, req).await? {{
                         Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => Ok(resp),
                         {convert_exceptions}
                         {none},
                         _ => unreachable!()
-                    }}
+                    }};
+                    ::volo_thrift::context::CLIENT_CONTEXT_CACHE.with(|cache| {{
+                        let mut cache = cache.borrow_mut();
+                        if cache.len() < cache.capacity() {{
+                            cache.push(cx);
+                        }}
+                    }});
+                    resp
                 }}"#
             });
         });

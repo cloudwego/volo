@@ -51,7 +51,7 @@ where
             .unwrap();
 
         self.pilota_builder
-            .compile(services, pilota_build::Output::Workspace(work_dir));
+            .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
     }
 
     pub fn plugin(mut self, plugin: impl Plugin + 'static) -> Self {
