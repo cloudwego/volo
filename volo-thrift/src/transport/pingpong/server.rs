@@ -47,9 +47,13 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     cache.pop().unwrap_or_default()
                 });
                 if let Some(peer_addr) = &peer_addr {
-                    let mut caller = Endpoint::new("-".into());
-                    caller.set_address(peer_addr.clone());
-                    cx.rpc_info.caller = Some(caller);
+                    if let Some(caller) = cx.rpc_info.caller_mut() {
+                        caller.set_address(peer_addr.clone());
+                    } else {
+                        let mut caller = Endpoint::new("-".into());
+                        caller.set_address(peer_addr.clone());
+                        cx.rpc_info.caller = Some(caller);
+                    }
                 }
 
                 let result = async {
