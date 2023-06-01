@@ -72,7 +72,7 @@ pub enum Protocol {
     FBThriftCompact,
 }
 
-/// Use condition to optimize performance(reduce a Box call).
+/// Use ZST to optimize performance(reduce a Box call).
 pub struct ProtocolBinary;
 pub struct ProtocolApacheCompact;
 
@@ -134,13 +134,13 @@ impl ZeroCopyDecoder for ThriftCodec {
                     let index = p.index();
                     p.buf_mut().advance(index);
                 }
-                cx.conditions_mut().insert::<ProtocolBinary>();
+                cx.extensions_mut().insert(ProtocolBinary);
                 Ok(Some(msg))
             }
             Protocol::ApacheCompact => {
                 let mut p = TCompactInputProtocol::new(bytes);
                 let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
-                cx.conditions_mut().insert::<ProtocolApacheCompact>();
+                cx.extensions_mut().insert(ProtocolApacheCompact);
                 Ok(Some(msg))
             }
             p => Err(pilota::thrift::error::DecodeError::new(
@@ -181,13 +181,13 @@ impl ZeroCopyDecoder for ThriftCodec {
             Protocol::Binary => {
                 let mut p = TAsyncBinaryProtocol::new(reader);
                 let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
-                cx.conditions_mut().insert::<ProtocolBinary>();
+                cx.extensions_mut().insert(ProtocolBinary);
                 Ok(Some(msg))
             }
             Protocol::ApacheCompact => {
                 let mut p = TAsyncCompactProtocol::new(reader);
                 let msg = ThriftMessage::<Msg>::decode_async(&mut p, cx).await?;
-                cx.conditions_mut().insert::<ProtocolApacheCompact>();
+                cx.extensions_mut().insert(ProtocolApacheCompact);
                 Ok(Some(msg))
             }
             p => Err(pilota::thrift::error::DecodeError::new(
@@ -225,9 +225,9 @@ impl ZeroCopyEncoder for ThriftCodec {
         // for the client side, the match expression will always be `&self.protocol`
         // TODO: use the protocol in TTHeader?
         let mut protocol = self.protocol;
-        if cx.conditions().contains::<ProtocolBinary>() {
+        if cx.extensions().contains::<ProtocolBinary>() {
             protocol = Protocol::Binary;
-        } else if cx.conditions().contains::<ProtocolApacheCompact>() {
+        } else if cx.extensions().contains::<ProtocolApacheCompact>() {
             protocol = Protocol::ApacheCompact;
         }
         match protocol {
@@ -282,9 +282,9 @@ impl ZeroCopyEncoder for ThriftCodec {
         // for the client side, the match expression will always be `&self.protocol`
         // TODO: use the protocol in TTHeader?
         let mut protocol = self.protocol;
-        if cx.conditions().contains::<ProtocolBinary>() {
+        if cx.extensions().contains::<ProtocolBinary>() {
             protocol = Protocol::Binary;
-        } else if cx.conditions().contains::<ProtocolApacheCompact>() {
+        } else if cx.extensions().contains::<ProtocolApacheCompact>() {
             protocol = Protocol::ApacheCompact;
         }
         match protocol {
