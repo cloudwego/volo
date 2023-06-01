@@ -14,11 +14,11 @@ use crate::{
     codec::{Decoder, Encoder},
     context::{ServerContext, SERVER_CONTEXT_CACHE},
     protocol::TMessageType,
-    tracing::{ServerField, ServerState},
+    tracing::SpanProvider,
     DummyMessage, EntryMessage, Error, ThriftMessage,
 };
 
-pub async fn serve<Svc, Req, Resp, E, D>(
+pub async fn serve<Svc, Req, Resp, E, D, SP>(
     mut encoder: E,
     mut decoder: D,
     notified: Notified<'_>,
@@ -26,6 +26,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     service: &Svc,
     stat_tracer: Arc<[crate::server::TraceFn]>,
     peer_addr: Option<Address>,
+    span_provider: SP,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
     Svc::Error: Into<Error>,
@@ -33,36 +34,36 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     Resp: EntryMessage,
     E: Encoder,
     D: Decoder,
+    SP: SpanProvider,
 {
     tokio::pin!(notified);
 
     metainfo::METAINFO
         .scope(RefCell::new(MetaInfo::default()), async {
             loop {
-                let result = async {
-                    // new context
-                    let mut cx = SERVER_CONTEXT_CACHE.with(|cache| {
-                        let mut cache = cache.borrow_mut();
-                        cache.pop().unwrap_or_default()
-                    });
-                    if let Some(peer_addr) = &peer_addr {
-                        let mut caller = Endpoint::new("-".into());
-                        caller.set_address(peer_addr.clone());
-                        cx.rpc_info.caller = Some(caller);
-                    }
+                // new context
+                let mut cx = SERVER_CONTEXT_CACHE.with(|cache| {
+                    let mut cache = cache.borrow_mut();
+                    cache.pop().unwrap_or_default()
+                });
+                if let Some(peer_addr) = &peer_addr {
+                    let mut caller = Endpoint::new("-".into());
+                    caller.set_address(peer_addr.clone());
+                    cx.rpc_info.caller = Some(caller);
+                }
 
+                let result = async {
                     let msg = tokio::select! {
                         _ = &mut notified => {
                             tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
                             return Err(());
                         },
                         out = async {
-                            let result = decoder.decode(&mut cx).await;
-                            Span::current().record(ServerField::RECV_SIZE, cx.common_stats.read_size());
-                            result
-                        }.instrument(span!(Level::TRACE, ServerState::DECODE)) => out
+                            let msg = decoder.decode(&mut cx).await;
+                            span_provider.leave_decode(&cx);
+                            msg
+                        }.instrument(span_provider.on_decode()) => out
                     };
-
                     debug!(
                         "[VOLO] received message: {:?}, rpcinfo: {:?}, peer_addr: {:?}",
                         msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta)),
@@ -73,7 +74,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                     match msg {
                         Ok(Some(ThriftMessage { data: Ok(req), .. })) => {
                             cx.stats.record_process_start_at();
-                            let resp = service.call(&mut cx, req).instrument(span!(Level::TRACE, ServerState::HANDLE)).await;
+                            let resp = service.call(&mut cx, req).await;
                             cx.stats.record_process_end_at();
 
                             if exit_mark.load(Ordering::Relaxed) {
@@ -90,9 +91,9 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                         .unwrap();
                                 if let Err(e) = async {
                                     let result = encoder.encode(&mut cx, msg).await;
-                                    Span::current().record(ServerField::SEND_SIZE, cx.common_stats.write_size());
+                                    span_provider.leave_encode(&cx);
                                     result
-                                }.instrument(span!(Level::TRACE, ServerState::ENCODE)).await {
+                                }.instrument(span_provider.on_encode()).await {
                                     // log it
                                     error!("[VOLO] server send response error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
                                     stat_tracer.iter().for_each(|f| f(&cx));
@@ -123,6 +124,11 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                     }
                     stat_tracer.iter().for_each(|f| f(&cx));
 
+                    metainfo::METAINFO.with(|mi| {
+                        mi.borrow_mut().clear();
+                    });
+
+                    span_provider.leave_serve(&cx);
                     SERVER_CONTEXT_CACHE.with(|cache| {
                         let mut cache = cache.borrow_mut();
                         if cache.len() < cache.capacity() {
@@ -130,12 +136,8 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             cache.push(cx);
                         }
                     });
-
-                    metainfo::METAINFO.with(|mi| {
-                        mi.borrow_mut().clear();
-                    });
                     Ok(())
-                }.instrument(span!(Level::TRACE, ServerState::SERVE)).await;
+                }.instrument(span_provider.on_serve()).await;
                 if let Err(_) = result {
                     break;
                 }

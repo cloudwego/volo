@@ -26,6 +26,7 @@ use crate::{
         DefaultMakeCodec, MakeCodec,
     },
     context::ServerContext,
+    tracing::{DefaultProvider, SpanProvider},
     EntryMessage, Result,
 };
 
@@ -33,18 +34,25 @@ use crate::{
 #[doc(hidden)]
 pub type TraceFn = fn(&ServerContext);
 
-pub struct Server<S, L, Req, MkC> {
+pub struct Server<S, L, Req, MkC, SP> {
     service: S,
     layer: L,
     make_codec: MkC,
     stat_tracer: Vec<TraceFn>,
-    _marker: PhantomData<fn(Req)>,
     #[cfg(feature = "multiplex")]
     multiplex: bool,
+    span_provider: SP,
+    _marker: PhantomData<Req>,
 }
 
 impl<S, Req>
-    Server<S, Identity, Req, DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>>
+    Server<
+        S,
+        Identity,
+        Req,
+        DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>,
+        DefaultProvider,
+    >
 {
     pub fn new(service: S) -> Self
     where
@@ -55,14 +63,15 @@ impl<S, Req>
             service,
             layer: Identity::new(),
             stat_tracer: Vec::new(),
-            _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: false,
+            span_provider: DefaultProvider {},
+            _marker: PhantomData,
         }
     }
 }
 
-impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
+impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
     /// Adds a new inner layer to the server.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
@@ -74,15 +83,16 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<Inner>(self, layer: Inner) -> Server<S, Stack<Inner, L>, Req, MkC> {
+    pub fn layer<Inner>(self, layer: Inner) -> Server<S, Stack<Inner, L>, Req, MkC, SP> {
         Server {
             layer: Stack::new(layer, self.layer),
             service: self.service,
             make_codec: self.make_codec,
             stat_tracer: self.stat_tracer,
-            _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
+            span_provider: self.span_provider,
+            _marker: PhantomData,
         }
     }
 
@@ -97,15 +107,16 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>, Req, MkC> {
+    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>, Req, MkC, SP> {
         Server {
             layer: Stack::new(self.layer, layer),
             service: self.service,
             make_codec: self.make_codec,
             stat_tracer: self.stat_tracer,
-            _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
+            span_provider: self.span_provider,
+            _marker: PhantomData,
         }
     }
 
@@ -124,15 +135,16 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
     /// If you only want to transform metadata across microservices, you can use [`metainfo`] to do
     /// this.
     #[doc(hidden)]
-    pub fn make_codec<MakeCodec>(self, make_codec: MakeCodec) -> Server<S, L, Req, MakeCodec> {
+    pub fn make_codec<MakeCodec>(self, make_codec: MakeCodec) -> Server<S, L, Req, MakeCodec, SP> {
         Server {
             layer: self.layer,
             service: self.service,
             make_codec,
             stat_tracer: self.stat_tracer,
-            _marker: PhantomData,
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
+            span_provider: self.span_provider,
+            _marker: PhantomData,
         }
     }
 
@@ -151,6 +163,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
         S::Error: Into<crate::Error> + Send,
         Req: EntryMessage + Send + 'static,
         S::Response: EntryMessage + Send + 'static + Sync,
+        SP: SpanProvider,
     {
         // init server
         let service = Arc::new(self.layer.layer(self.service));
@@ -206,6 +219,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                                 exit_mark_inner.clone(),
                                 conn_cnt.clone(),
                                 peer_addr,
+                                self.span_provider.clone(),
                             ));
                         }
                         #[cfg(not(feature = "multiplex"))]
@@ -220,6 +234,7 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
                             exit_mark_inner.clone(),
                             conn_cnt.clone(),
                             peer_addr,
+                            self.span_provider.clone(),
                         ));
                     }
                     // no more incoming connections
@@ -302,20 +317,34 @@ impl<S, L, Req, MkC> Server<S, L, Req, MkC> {
     ///
     /// Not recommend for most users.
     #[doc(hidden)]
-    pub fn multiplex(self, multiplex: bool) -> Server<S, L, Req, MkC> {
+    pub fn multiplex(self, multiplex: bool) -> Server<S, L, Req, MkC, SP> {
         Server {
             layer: self.layer,
             service: self.service,
             make_codec: self.make_codec,
             stat_tracer: self.stat_tracer,
-            _marker: PhantomData,
             multiplex,
+            span_provider: self.span_provider,
+            _marker: PhantomData,
+        }
+    }
+
+    pub fn span_provider<P: SpanProvider>(self, provider: P) -> Server<S, L, Req, MkC, P> {
+        Server {
+            layer: self.layer,
+            service: self.service,
+            make_codec: self.make_codec,
+            stat_tracer: self.stat_tracer,
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
+            span_provider: provider,
+            _marker: PhantomData,
         }
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
+async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
     rh: R,
     wh: W,
     service: Svc,
@@ -326,6 +355,7 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer_addr: Option<Address>,
+    span_provider: SP,
 ) where
     R: AsyncRead + Unpin + Send + Sync + 'static,
     W: AsyncWrite + Unpin + Send + Sync + 'static,
@@ -335,6 +365,7 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
     Req: EntryMessage + Send + 'static,
     Resp: EntryMessage + Send + 'static,
     MkC: MakeCodec<R, W>,
+    SP: SpanProvider,
 {
     // get read lock and create Notified
     let notified = {
@@ -359,6 +390,7 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC>(
         &service,
         stat_tracer,
         peer_addr,
+        span_provider,
     )
     .await;
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
