@@ -194,8 +194,8 @@ impl Endpoint {
 
     /// Insert a tag into this `Endpoint`.
     #[inline]
-    pub fn insert_faststr<T: Into<FastStr> + Send + Sync + 'static>(&mut self, val: T) {
-        self.faststr_tags.insert(val);
+    pub fn insert_faststr<T: Send + Sync + 'static>(&mut self, val: FastStr) {
+        self.faststr_tags.insert::<T>(val);
     }
 
     /// Check if `Endpoint` tags contain entry

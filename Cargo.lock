@@ -986,9 +986,9 @@ dependencies = [
 
 [[package]]
 name = "metainfo"
-version = "0.7.4"
+version = "0.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46862dabb26745556f92a5ab301ecdf24380bbe1612ade526412a01726267726"
+checksum = "e688d0297eb1f8bb438cc9145f24d8dd1d1fce1bb02857ec140f6d7bb9bf404a"
 dependencies = [
  "faststr",
  "fxhash",
