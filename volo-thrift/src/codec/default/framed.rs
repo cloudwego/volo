@@ -89,7 +89,7 @@ where
             let size = bytes.get_i32();
             check_framed_size(size, self.max_frame_size)?;
             // set has framed flag
-            cx.conditions_mut().insert::<HasFramed>();
+            cx.extensions_mut().insert(HasFramed);
         }
         // decode inner
         self.inner.decode(cx, bytes)
@@ -124,7 +124,7 @@ where
 
                 let mut buffer = buffer.freeze();
                 // set has framed flag
-                cx.conditions_mut().insert::<HasFramed>();
+                cx.extensions_mut().insert(HasFramed);
                 // decode inner
                 self.inner.decode(cx, &mut buffer)
             } else {
@@ -179,7 +179,7 @@ where
     ) -> Result<(), EncodeError> {
         let dst = linked_bytes.bytes_mut();
         // only encode framed if role is client or server has detected framed in decode
-        if cx.rpc_info().role() == Role::Client || cx.conditions().contains::<HasFramed>() {
+        if cx.rpc_info().role() == Role::Client || cx.extensions().contains::<HasFramed>() {
             // encode framed first
             dst.write_i32(self.inner_size)?;
             trace!(
@@ -198,7 +198,7 @@ where
         let (real_size, malloc_size) = self.inner.size(cx, msg)?;
         self.inner_size = real_size as i32;
         // only calc framed size if role is client or server has detected framed in decode
-        if cx.rpc_info().role() == Role::Client || cx.conditions().contains::<HasFramed>() {
+        if cx.rpc_info().role() == Role::Client || cx.extensions().contains::<HasFramed>() {
             check_framed_size(self.inner_size, self.max_frame_size)?;
             Ok((
                 real_size + FRAMED_HEADER_SIZE,

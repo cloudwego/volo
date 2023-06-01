@@ -90,7 +90,7 @@ where
             // decode ttheader
             decode(cx, bytes)?;
             // set has ttheader flag
-            cx.conditions_mut().insert::<HasTTHeader>();
+            cx.extensions_mut().insert(HasTTHeader);
         }
         // decode inner
         self.inner.decode(cx, bytes)
@@ -126,7 +126,7 @@ where
                 // decode ttheader
                 decode(cx, &mut buffer)?;
                 // set has ttheader flag
-                cx.conditions_mut().insert::<HasTTHeader>();
+                cx.extensions_mut().insert(HasTTHeader);
                 // decode inner
                 self.inner.decode(cx, &mut buffer)
             } else {
@@ -171,7 +171,7 @@ where
     ) -> Result<(), EncodeError> {
         let dst = linked_bytes.bytes_mut();
         // only encode ttheader if role is client or server has detected ttheader in decode
-        if cx.rpc_info().role() == Role::Client || cx.conditions().contains::<HasTTHeader>() {
+        if cx.rpc_info().role() == Role::Client || cx.extensions().contains::<HasTTHeader>() {
             // encode ttheader first
             encode(cx, dst, self.inner_size)?;
         }
@@ -186,7 +186,7 @@ where
         let (real_size, malloc_size) = self.inner.size(cx, msg)?;
         self.inner_size = real_size;
         // only calc ttheader size if role is client or server has detected ttheader in decode
-        if cx.rpc_info().role() == Role::Client || cx.conditions().contains::<HasTTHeader>() {
+        if cx.rpc_info().role() == Role::Client || cx.extensions().contains::<HasTTHeader>() {
             let size = encode_size(cx)?;
             Ok((real_size + size, malloc_size + size))
         } else {

@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashSet, fmt::Debug};
+use std::fmt::Debug;
 
 use faststr::FastStr;
 pub use metainfo::MetaInfo;
@@ -23,16 +23,6 @@ macro_rules! newtype_impl_context {
             }
 
             #[inline]
-            fn conditions_mut(&mut self) -> &mut $crate::context::Conditions {
-                self.$inner.conditions_mut()
-            }
-
-            #[inline]
-            fn conditions(&self) -> &$crate::context::Conditions {
-                self.$inner.conditions()
-            }
-
-            #[inline]
             fn extensions_mut(&mut self) -> &mut $crate::context::Extensions {
                 self.$inner.extensions_mut()
             }
@@ -50,10 +40,6 @@ const DEFAULT_MAP_CAPACITY: usize = 10;
 pub struct RpcCx<I, Config> {
     pub rpc_info: RpcInfo<Config>,
     pub inner: I,
-    /// `conditions` is used to store some bool conditions.
-    ///
-    /// This is used for performance optimization compared to `Extensions`.
-    pub conditions: Conditions,
     pub extensions: Extensions,
 }
 
@@ -74,93 +60,11 @@ impl std::ops::DerefMut for Extensions {
     }
 }
 
-#[derive(Default)]
-pub struct Conditions(HashSet<TypeId>);
-
-impl Conditions {
-    #[inline]
-    pub fn new() -> Self {
-        Self(HashSet::with_capacity(DEFAULT_MAP_CAPACITY))
-    }
-
-    #[inline]
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self(HashSet::with_capacity(capacity))
-    }
-
-    #[inline]
-    pub fn insert<T: Send + Sync + 'static>(&mut self) {
-        self.0.insert(TypeId::of::<T>());
-    }
-
-    #[inline]
-    pub fn get<T: Send + Sync + 'static>(&self) -> Option<&TypeId> {
-        self.0.get(&TypeId::of::<T>())
-    }
-
-    #[inline]
-    pub fn contains<T: 'static>(&self) -> bool {
-        self.0.contains(&TypeId::of::<T>())
-    }
-
-    #[inline]
-    pub fn remove<T: 'static>(&mut self) -> bool {
-        self.0.remove(&TypeId::of::<T>())
-    }
-
-    #[inline]
-    pub fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    #[inline]
-    pub fn extend(&mut self, other: Self) {
-        self.0.extend(other.0)
-    }
-
-    #[inline]
-    pub fn iter(&self) -> ::std::collections::hash_set::Iter<'_, TypeId> {
-        self.0.iter()
-    }
-
-    #[inline]
-    pub fn is_empty(&self) -> bool {
-        self.0.is_empty()
-    }
-
-    #[inline]
-    pub fn len(&self) -> usize {
-        self.0.len()
-    }
-
-    #[inline]
-    pub fn capacity(&self) -> usize {
-        self.0.capacity()
-    }
-}
-
-impl std::ops::Deref for Conditions {
-    type Target = HashSet<TypeId>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl std::ops::DerefMut for Conditions {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 pub trait Context {
     type Config: Send + Debug;
 
     fn rpc_info(&self) -> &RpcInfo<Self::Config>;
     fn rpc_info_mut(&mut self) -> &mut RpcInfo<Self::Config>;
-
-    fn conditions(&self) -> &Conditions;
-    fn conditions_mut(&mut self) -> &mut Conditions;
 
     fn extensions(&self) -> &Extensions;
     fn extensions_mut(&mut self) -> &mut Extensions;
@@ -180,16 +84,6 @@ where
     #[inline]
     fn rpc_info_mut(&mut self) -> &mut RpcInfo<Self::Config> {
         &mut self.rpc_info
-    }
-
-    #[inline]
-    fn conditions(&self) -> &Conditions {
-        &self.conditions
-    }
-
-    #[inline]
-    fn conditions_mut(&mut self) -> &mut Conditions {
-        &mut self.conditions
     }
 
     #[inline]
@@ -222,7 +116,6 @@ impl<I, Config> RpcCx<I, Config> {
         Self {
             rpc_info: ri,
             inner,
-            conditions: Conditions(HashSet::with_capacity(DEFAULT_MAP_CAPACITY)),
             extensions: Extensions(TypeMap::with_capacity(DEFAULT_MAP_CAPACITY)),
         }
     }
@@ -230,7 +123,6 @@ impl<I, Config> RpcCx<I, Config> {
     pub fn reset(&mut self, inner: I) {
         self.rpc_info.clear();
         self.inner = inner;
-        self.conditions.clear();
         self.extensions.clear();
     }
 }
