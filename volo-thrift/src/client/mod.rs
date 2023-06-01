@@ -21,7 +21,7 @@ use pilota::thrift::TMessageType;
 use tokio::time::Duration;
 use volo::{
     client::WithOptService,
-    context::{Endpoint, Role, RpcInfo},
+    context::{Context, Endpoint, Role, RpcInfo},
     discovery::{Discover, DummyDiscover},
     loadbalance::{random::WeightedRandomBalance, LbConfig, MkLbLayer},
     net::{
@@ -35,7 +35,7 @@ use crate::{
         default::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec},
         DefaultMakeCodec, MakeCodec,
     },
-    context::{ClientContext, Config},
+    context::{ClientContext, Config, CLIENT_CONTEXT_CACHE},
     error::{Error, Result},
     transport::{pingpong, pool},
     EntryMessage, ThriftMessage,
@@ -570,17 +570,56 @@ struct ClientInner {
 
 impl<S> Client<S> {
     pub fn make_cx(&self, method: &'static str, oneway: bool) -> ClientContext {
-        ClientContext::new(
-            self.inner
-                .seq_id
-                .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
-            self.make_rpc_info(method),
-            if oneway {
-                TMessageType::OneWay
-            } else {
-                TMessageType::Call
-            },
-        )
+        CLIENT_CONTEXT_CACHE.with(|cache| {
+            let mut cache = cache.borrow_mut();
+            cache
+                .pop()
+                .and_then(|mut cx| {
+                    // The generated code only push the cx to the cache, we need to reset
+                    // it after we pop it from the cache.
+                    cx.reset(
+                        self.inner
+                            .seq_id
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                        if oneway {
+                            TMessageType::OneWay
+                        } else {
+                            TMessageType::Call
+                        },
+                    );
+                    // reset rpc_info
+                    cx.rpc_info_mut()
+                        .caller_mut()
+                        .unwrap()
+                        .set_service_name(self.inner.caller_name.clone());
+                    cx.rpc_info_mut()
+                        .callee_mut()
+                        .unwrap()
+                        .set_service_name(self.inner.callee_name.clone());
+                    if let Some(target) = &self.inner.address {
+                        cx.rpc_info_mut()
+                            .callee_mut()
+                            .unwrap()
+                            .set_address(target.clone());
+                    }
+                    cx.rpc_info_mut().config = Some(self.inner.config);
+                    cx.rpc_info_mut().method = Some(FastStr::from_static_str(method));
+                    Some(cx)
+                })
+                .unwrap_or_else(|| {
+                    ClientContext::new(
+                        self.inner
+                            .seq_id
+                            .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+                        self.make_rpc_info(method),
+                        if oneway {
+                            TMessageType::OneWay
+                        } else {
+                            TMessageType::Call
+                        },
+                    )
+                })
+        })
     }
 
     fn make_rpc_info(&self, method: &'static str) -> RpcInfo<Config> {

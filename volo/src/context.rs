@@ -1,8 +1,8 @@
-use std::fmt::Debug;
+use std::{any::TypeId, collections::HashSet, fmt::Debug};
 
 use faststr::FastStr;
 pub use metainfo::MetaInfo;
-use metainfo::TypeMap;
+use metainfo::{FastStrMap, TypeMap};
 
 use super::net::Address;
 
@@ -23,6 +23,16 @@ macro_rules! newtype_impl_context {
             }
 
             #[inline]
+            fn conditions_mut(&mut self) -> &mut $crate::context::Conditions {
+                self.$inner.conditions_mut()
+            }
+
+            #[inline]
+            fn conditions(&self) -> &$crate::context::Conditions {
+                self.$inner.conditions()
+            }
+
+            #[inline]
             fn extensions_mut(&mut self) -> &mut $crate::context::Extensions {
                 self.$inner.extensions_mut()
             }
@@ -35,9 +45,15 @@ macro_rules! newtype_impl_context {
     };
 }
 
+const DEFAULT_MAP_CAPACITY: usize = 10;
+
 pub struct RpcCx<I, Config> {
     pub rpc_info: RpcInfo<Config>,
     pub inner: I,
+    /// `conditions` is used to store some bool conditions.
+    ///
+    /// This is used for performance optimization compared to `Extensions`.
+    pub conditions: Conditions,
     pub extensions: Extensions,
 }
 
@@ -58,11 +74,93 @@ impl std::ops::DerefMut for Extensions {
     }
 }
 
+#[derive(Default)]
+pub struct Conditions(HashSet<TypeId>);
+
+impl Conditions {
+    #[inline]
+    pub fn new() -> Self {
+        Self(HashSet::with_capacity(DEFAULT_MAP_CAPACITY))
+    }
+
+    #[inline]
+    pub fn with_capacity(capacity: usize) -> Self {
+        Self(HashSet::with_capacity(capacity))
+    }
+
+    #[inline]
+    pub fn insert<T: Send + Sync + 'static>(&mut self) {
+        self.0.insert(TypeId::of::<T>());
+    }
+
+    #[inline]
+    pub fn get<T: Send + Sync + 'static>(&self) -> Option<&TypeId> {
+        self.0.get(&TypeId::of::<T>())
+    }
+
+    #[inline]
+    pub fn contains<T: 'static>(&self) -> bool {
+        self.0.contains(&TypeId::of::<T>())
+    }
+
+    #[inline]
+    pub fn remove<T: 'static>(&mut self) -> bool {
+        self.0.remove(&TypeId::of::<T>())
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.0.clear();
+    }
+
+    #[inline]
+    pub fn extend(&mut self, other: Self) {
+        self.0.extend(other.0)
+    }
+
+    #[inline]
+    pub fn iter(&self) -> ::std::collections::hash_set::Iter<'_, TypeId> {
+        self.0.iter()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    #[inline]
+    pub fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
+}
+
+impl std::ops::Deref for Conditions {
+    type Target = HashSet<TypeId>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Conditions {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 pub trait Context {
     type Config: Send + Debug;
 
     fn rpc_info(&self) -> &RpcInfo<Self::Config>;
     fn rpc_info_mut(&mut self) -> &mut RpcInfo<Self::Config>;
+
+    fn conditions(&self) -> &Conditions;
+    fn conditions_mut(&mut self) -> &mut Conditions;
 
     fn extensions(&self) -> &Extensions;
     fn extensions_mut(&mut self) -> &mut Extensions;
@@ -82,6 +180,16 @@ where
     #[inline]
     fn rpc_info_mut(&mut self) -> &mut RpcInfo<Self::Config> {
         &mut self.rpc_info
+    }
+
+    #[inline]
+    fn conditions(&self) -> &Conditions {
+        &self.conditions
+    }
+
+    #[inline]
+    fn conditions_mut(&mut self) -> &mut Conditions {
+        &mut self.conditions
     }
 
     #[inline]
@@ -114,8 +222,16 @@ impl<I, Config> RpcCx<I, Config> {
         Self {
             rpc_info: ri,
             inner,
-            extensions: Default::default(),
+            conditions: Conditions(HashSet::with_capacity(DEFAULT_MAP_CAPACITY)),
+            extensions: Extensions(TypeMap::with_capacity(DEFAULT_MAP_CAPACITY)),
         }
+    }
+
+    pub fn reset(&mut self, inner: I) {
+        self.rpc_info.clear();
+        self.inner = inner;
+        self.conditions.clear();
+        self.extensions.clear();
     }
 }
 
@@ -125,6 +241,12 @@ pub struct Endpoint {
     /// `service_name` is the most important information, which is used by the service discovering.
     pub service_name: FastStr,
     pub address: Option<Address>,
+    /// `faststr_tags` is a optimized typemap to store additional information of the endpoint.
+    ///
+    /// Use `FastStrMap` instead of `TypeMap` can reduce the Box allocation.
+    ///
+    /// This is mainly for performance optimization.
+    pub faststr_tags: FastStrMap,
     /// `tags` is used to store additional information of the endpoint.
     ///
     /// Users can use `tags` to store custom data, such as the datacenter name or the region name,
@@ -139,7 +261,8 @@ impl Endpoint {
         Self {
             service_name,
             address: None,
-            tags: TypeMap::default(),
+            faststr_tags: FastStrMap::with_capacity(DEFAULT_MAP_CAPACITY),
+            tags: Default::default(),
         }
     }
 
@@ -152,6 +275,11 @@ impl Endpoint {
     #[inline]
     pub fn service_name(&self) -> FastStr {
         self.service_name.clone()
+    }
+
+    #[inline]
+    pub fn set_service_name(&mut self, service_name: FastStr) {
+        self.service_name = service_name;
     }
 
     /// Insert a tag into this `Endpoint`.
@@ -172,6 +300,24 @@ impl Endpoint {
         self.tags.get::<T>()
     }
 
+    /// Insert a tag into this `Endpoint`.
+    #[inline]
+    pub fn insert_faststr<T: Into<FastStr> + Send + Sync + 'static>(&mut self, val: T) {
+        self.faststr_tags.insert(val);
+    }
+
+    /// Check if `Endpoint` tags contain entry
+    #[inline]
+    pub fn contains_faststr<T: 'static>(&self) -> bool {
+        self.faststr_tags.contains::<T>()
+    }
+
+    /// Get a reference to a tag previously inserted on this `Endpoint`.
+    #[inline]
+    pub fn get_faststr<T: 'static>(&self) -> Option<&FastStr> {
+        self.faststr_tags.get::<T>()
+    }
+
     /// Sets the address.
     #[inline]
     pub fn set_address(&mut self, address: Address) {
@@ -182,6 +328,15 @@ impl Endpoint {
     #[inline]
     pub fn address(&self) -> Option<Address> {
         self.address.clone()
+    }
+
+    /// Clear the information
+    #[inline]
+    pub fn clear(&mut self) {
+        self.service_name = FastStr::from_static_str("");
+        self.address = None;
+        self.faststr_tags.clear();
+        self.tags.clear();
     }
 }
 
@@ -233,6 +388,11 @@ impl<Config> RpcInfo<Config> {
     }
 
     #[inline]
+    pub fn set_role(&mut self, role: Role) {
+        self.role = role;
+    }
+
+    #[inline]
     pub fn method(&self) -> Option<&FastStr> {
         self.method.as_ref()
     }
@@ -270,5 +430,18 @@ impl<Config> RpcInfo<Config> {
     #[inline]
     pub fn config_mut(&mut self) -> Option<&mut Config> {
         self.config.as_mut()
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.role = Role::Client;
+        if let Some(ep) = self.caller_mut() {
+            ep.clear()
+        }
+        if let Some(ep) = self.callee_mut() {
+            ep.clear()
+        }
+        self.method = None;
+        self.config = None;
     }
 }

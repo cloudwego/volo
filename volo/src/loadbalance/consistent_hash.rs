@@ -324,11 +324,7 @@ mod tests {
     };
 
     fn empty_endpoint() -> Endpoint {
-        Endpoint {
-            service_name: faststr::FastStr::new_inline(""),
-            address: None,
-            tags: Default::default(),
-        }
+        Endpoint::new("".into())
     }
 
     #[inline]

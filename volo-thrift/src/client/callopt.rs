@@ -33,13 +33,15 @@
 //! }
 //! ```
 
-use metainfo::TypeMap;
+use metainfo::{FastStrMap, TypeMap};
 use volo::net::Address;
 
 use crate::context::Config;
 
 #[derive(Debug, Default)]
 pub struct CallOpt {
+    /// Sets the callee faststr_tags for the call.
+    pub callee_faststr_tags: FastStrMap,
     /// Sets the callee tags for the call.
     pub callee_tags: TypeMap,
     /// Sets the address for the call.
@@ -47,6 +49,8 @@ pub struct CallOpt {
     /// The client will skip the discovery and loadbalance Service if this is set.
     pub address: Option<Address>,
     pub config: Config,
+    /// Sets the caller faststr_tags for the call.
+    pub caller_faststr_tags: FastStrMap,
     /// Sets the caller tags for the call.
     pub caller_tags: TypeMap,
 }

@@ -12,7 +12,7 @@ use volo::{context::Endpoint, net::Address, volo_unreachable};
 
 use crate::{
     codec::{Decoder, Encoder},
-    context::ServerContext,
+    context::{ServerContext, SERVER_CONTEXT_CACHE},
     protocol::TMessageType,
     tracing::{ServerField, ServerState},
     DummyMessage, EntryMessage, Error, ThriftMessage,
@@ -41,7 +41,10 @@ pub async fn serve<Svc, Req, Resp, E, D>(
             loop {
                 let result = async {
                     // new context
-                    let mut cx = ServerContext::default();
+                    let mut cx = SERVER_CONTEXT_CACHE.with(|cache| {
+                        let mut cache = cache.borrow_mut();
+                        cache.pop().unwrap_or_default()
+                    });
                     if let Some(peer_addr) = &peer_addr {
                         let mut caller = Endpoint::new("-".into());
                         caller.set_address(peer_addr.clone());
@@ -119,6 +122,14 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         }
                     }
                     stat_tracer.iter().for_each(|f| f(&cx));
+
+                    SERVER_CONTEXT_CACHE.with(|cache| {
+                        let mut cache = cache.borrow_mut();
+                        if cache.len() < cache.capacity() {
+                            cx.reset(Default::default());
+                            cache.push(cx);
+                        }
+                    });
 
                     metainfo::METAINFO.with(|mi| {
                         mi.borrow_mut().clear();
