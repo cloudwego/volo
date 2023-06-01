@@ -211,7 +211,7 @@ impl ClientContext {
         self.rpc_info.clear();
         self.seq_id = seq_id;
         self.message_type = msg_type;
-        self.transport.set_reuse(true);
+        self.transport.should_reuse = true;
         self.stats.reset();
         self.common_stats.reset();
     }
