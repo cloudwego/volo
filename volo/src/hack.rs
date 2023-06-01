@@ -3,6 +3,7 @@ pub trait Unwrap<T> {
 }
 
 impl<T> Unwrap<T> for Option<T> {
+    #[inline]
     fn volo_unwrap(self) -> T {
         #[cfg(not(feature = "unsafe_unchecked"))]
         return self.unwrap();
@@ -15,6 +16,7 @@ impl<T> Unwrap<T> for Option<T> {
 }
 
 impl<T, E: std::fmt::Debug> Unwrap<T> for Result<T, E> {
+    #[inline]
     fn volo_unwrap(self) -> T {
         #[cfg(not(feature = "unsafe_unchecked"))]
         return self.unwrap();

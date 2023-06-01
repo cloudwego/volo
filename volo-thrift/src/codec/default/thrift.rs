@@ -19,6 +19,7 @@ pub struct MakeThriftCodec {
 }
 
 impl MakeThriftCodec {
+    #[inline]
     pub fn new() -> Self {
         Self {
             protocol: Protocol::Binary,
@@ -48,6 +49,7 @@ impl MakeThriftCodec {
 }
 
 impl Default for MakeThriftCodec {
+    #[inline]
     fn default() -> Self {
         Self::new()
     }
@@ -58,6 +60,7 @@ impl MakeZeroCopyCodec for MakeThriftCodec {
 
     type Decoder = ThriftCodec;
 
+    #[inline]
     fn make_codec(&self) -> (Self::Encoder, Self::Decoder) {
         let codec = ThriftCodec::new(self.protocol);
         (codec, codec)
@@ -88,12 +91,14 @@ pub struct ThriftCodec {
 impl ThriftCodec {
     /// The `protocol` only takes effect at client side. The server side will auto detect the
     /// protocol.
+    #[inline]
     pub fn new(protocol: Protocol) -> Self {
         Self { protocol }
     }
 }
 
 impl Default for ThriftCodec {
+    #[inline]
     fn default() -> Self {
         Self::new(Protocol::Binary)
     }
@@ -101,6 +106,7 @@ impl Default for ThriftCodec {
 
 #[async_trait::async_trait]
 impl ZeroCopyDecoder for ThriftCodec {
+    #[inline]
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -150,6 +156,7 @@ impl ZeroCopyDecoder for ThriftCodec {
         }
     }
 
+    #[inline]
     async fn decode_async<
         Msg: Send + EntryMessage,
         Cx: ThriftContext,
@@ -201,6 +208,7 @@ impl ZeroCopyDecoder for ThriftCodec {
 }
 
 /// Detect protocol according to https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
+#[inline]
 pub fn detect(buf: &[u8]) -> Result<Protocol, ProtocolError> {
     if buf[0] == 0x80 || buf[0] == 0x00 {
         Ok(Protocol::Binary)
@@ -216,6 +224,7 @@ pub fn detect(buf: &[u8]) -> Result<Protocol, ProtocolError> {
 }
 
 impl ZeroCopyEncoder for ThriftCodec {
+    #[inline]
     fn encode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -274,6 +283,7 @@ impl ZeroCopyEncoder for ThriftCodec {
         }
     }
 
+    #[inline]
     fn size<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,

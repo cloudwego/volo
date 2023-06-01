@@ -116,6 +116,7 @@ pub struct DefaultEncoder<E, W> {
 impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
     for DefaultEncoder<E, W>
 {
+    #[inline]
     async fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -188,6 +189,7 @@ pub struct DefaultDecoder<D, R> {
 impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
     for DefaultDecoder<D, R>
 {
+    #[inline]
     async fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -283,6 +285,7 @@ where
     type Encoder = DefaultEncoder<MkZC::Encoder, W>;
     type Decoder = DefaultDecoder<MkZC::Decoder, R>;
 
+    #[inline]
     fn make_codec(&self, reader: R, writer: W) -> (Self::Encoder, Self::Decoder) {
         let (encoder, decoder) = self.make_zero_copy_codec.make_codec();
         (

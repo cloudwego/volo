@@ -21,6 +21,7 @@ pub struct MakeFramedCodec<Inner: MakeZeroCopyCodec> {
 }
 
 impl<Inner: MakeZeroCopyCodec> MakeFramedCodec<Inner> {
+    #[inline]
     pub fn new(inner: Inner) -> Self {
         Self {
             inner,
@@ -28,6 +29,7 @@ impl<Inner: MakeZeroCopyCodec> MakeFramedCodec<Inner> {
         }
     }
 
+    #[inline]
     pub fn with_max_frame_size(mut self, max_frame_size: i32) -> Self {
         self.max_frame_size = max_frame_size;
         self
@@ -39,6 +41,7 @@ impl<Inner: MakeZeroCopyCodec> MakeZeroCopyCodec for MakeFramedCodec<Inner> {
 
     type Decoder = FramedDecoder<Inner::Decoder>;
 
+    #[inline]
     fn make_codec(&self) -> (Self::Encoder, Self::Decoder) {
         let (encoder, decoder) = self.inner.make_codec();
         (
@@ -58,6 +61,7 @@ pub struct FramedDecoder<D: ZeroCopyDecoder> {
 }
 
 impl<D: ZeroCopyDecoder> FramedDecoder<D> {
+    #[inline]
     pub fn new(inner: D, max_frame_size: i32) -> Self {
         Self {
             inner,
@@ -75,6 +79,7 @@ impl<D> ZeroCopyDecoder for FramedDecoder<D>
 where
     D: ZeroCopyDecoder,
 {
+    #[inline]
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -95,6 +100,7 @@ where
         self.inner.decode(cx, bytes)
     }
 
+    #[inline]
     async fn decode_async<
         Msg: Send + EntryMessage,
         Cx: ThriftContext,
@@ -138,6 +144,7 @@ where
 }
 
 /// Detect protocol according to https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
+#[inline]
 pub fn is_framed(buf: &[u8]) -> bool {
     // binary
     // in practice, using (buf[4] == 0x80 || buf[4] == 0x00) according to the spec is likely to be
@@ -156,6 +163,7 @@ pub struct FramedEncoder<E: ZeroCopyEncoder> {
 }
 
 impl<E: ZeroCopyEncoder> FramedEncoder<E> {
+    #[inline]
     pub fn new(inner: E, max_frame_size: i32) -> Self {
         Self {
             inner,
@@ -171,6 +179,7 @@ impl<E> ZeroCopyEncoder for FramedEncoder<E>
 where
     E: ZeroCopyEncoder,
 {
+    #[inline]
     fn encode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -190,6 +199,7 @@ where
         self.inner.encode(cx, linked_bytes, msg)
     }
 
+    #[inline]
     fn size<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -212,6 +222,7 @@ where
 
 /// Checks the framed size according to thrift spec.
 /// https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#framed-vs-unframed-transport
+#[inline]
 pub fn check_framed_size(size: i32, max_frame_size: i32) -> Result<(), ProtocolError> {
     if size > max_frame_size {
         return Err(pilota::thrift::new_protocol_error(

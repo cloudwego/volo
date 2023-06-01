@@ -49,12 +49,14 @@ pub struct Extensions(TypeMap);
 impl std::ops::Deref for Extensions {
     type Target = TypeMap;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl std::ops::DerefMut for Extensions {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -100,18 +102,21 @@ where
 impl<I, Config> std::ops::Deref for RpcCx<I, Config> {
     type Target = I;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
 impl<I, Config> std::ops::DerefMut for RpcCx<I, Config> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
 impl<I, Config> RpcCx<I, Config> {
+    #[inline]
     pub fn new(ri: RpcInfo<Config>, inner: I) -> Self {
         Self {
             rpc_info: ri,
@@ -120,6 +125,7 @@ impl<I, Config> RpcCx<I, Config> {
         }
     }
 
+    #[inline]
     pub fn reset(&mut self, inner: I) {
         self.rpc_info.clear();
         self.inner = inner;
@@ -248,6 +254,7 @@ pub struct RpcInfo<Config> {
 }
 
 impl<Config> RpcInfo<Config> {
+    #[inline]
     pub fn with_role(role: Role) -> RpcInfo<Config> {
         RpcInfo {
             role,
@@ -258,6 +265,7 @@ impl<Config> RpcInfo<Config> {
         }
     }
 
+    #[inline]
     pub fn new(
         role: Role,
         method: FastStr,

@@ -28,10 +28,12 @@ impl<Message> EntryMessage for Arc<Message>
 where
     Message: EntryMessage + Sync,
 {
+    #[inline]
     fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError> {
         (**self).encode(protocol)
     }
 
+    #[inline]
     fn decode<T: TInputProtocol>(
         protocol: &mut T,
         msg_ident: &TMessageIdentifier,
@@ -39,6 +41,7 @@ where
         Message::decode(protocol, msg_ident).map(Arc::new)
     }
 
+    #[inline]
     async fn decode_async<T: TAsyncInputProtocol>(
         protocol: &mut T,
         msg_ident: &TMessageIdentifier,
@@ -48,6 +51,7 @@ where
             .map(Arc::new)
     }
 
+    #[inline]
     fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
         (**self).size(protocol)
     }

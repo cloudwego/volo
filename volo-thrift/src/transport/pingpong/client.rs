@@ -35,6 +35,7 @@ where
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
 {
     #[allow(unused)]
+    #[inline]
     pub fn new(make_transport: MkT, make_codec: MkC) -> Self {
         Self {
             make_transport,
@@ -52,6 +53,7 @@ where
     type Error = io::Error;
     type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>> + 's;
 
+    #[inline]
     fn call(&self, target: Address) -> Self::Future<'_> {
         let make_transport = self.make_transport.clone();
         async move {
@@ -112,6 +114,7 @@ where
 
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx where Self:'cx;
 
+    #[inline]
     fn call<'cx, 's>(
         &'s self,
         cx: &'cx mut ClientContext,

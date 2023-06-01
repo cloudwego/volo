@@ -41,14 +41,17 @@ pub struct ServerTransportInfo {
 }
 
 impl ServerTransportInfo {
+    #[inline]
     pub fn is_conn_reset(&self) -> bool {
         self.conn_reset
     }
 
+    #[inline]
     pub fn set_conn_reset(&mut self, reset: bool) {
         self.conn_reset = reset
     }
 
+    #[inline]
     pub fn reset(&mut self) {
         *self = Self { ..Self::default() }
     }
@@ -84,22 +87,27 @@ impl CommonStats {
     stat_impl!(write_start_at);
     stat_impl!(write_end_at);
 
+    #[inline]
     pub fn read_size(&self) -> Option<usize> {
         self.read_size
     }
 
+    #[inline]
     pub fn set_read_size(&mut self, size: usize) {
         self.read_size = Some(size)
     }
 
+    #[inline]
     pub fn write_size(&self) -> Option<usize> {
         self.write_size
     }
 
+    #[inline]
     pub fn set_write_size(&mut self, size: usize) {
         self.write_size = Some(size)
     }
 
+    #[inline]
     pub fn reset(&mut self) {
         *self = Self { ..Self::default() }
     }
@@ -116,6 +124,7 @@ impl ServerStats {
     stat_impl!(process_start_at);
     stat_impl!(process_end_at);
 
+    #[inline]
     pub fn reset(&mut self) {
         self.process_start_at = None;
         self.process_end_at = None;
@@ -133,6 +142,7 @@ impl ClientStats {
     stat_impl!(make_transport_start_at);
     stat_impl!(make_transport_end_at);
 
+    #[inline]
     pub fn reset(&mut self) {
         self.make_transport_start_at = None;
         self.make_transport_end_at = None;
@@ -145,6 +155,7 @@ pub struct PooledTransport {
 }
 
 impl PooledTransport {
+    #[inline]
     pub fn set_reuse(&mut self, should_reuse: bool) {
         if !self.should_reuse && should_reuse {
             panic!("cannot reuse a transport which should_reuse is false");
@@ -181,6 +192,7 @@ pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 newtype_impl_context!(ClientContext, Config, 0);
 
 impl ClientContext {
+    #[inline]
     pub fn new(seq_id: i32, ri: RpcInfo<Config>, msg_type: TMessageType) -> Self {
         Self(RpcCx::new(
             ri,
@@ -194,6 +206,7 @@ impl ClientContext {
         ))
     }
 
+    #[inline]
     pub fn reset(&mut self, seq_id: i32, msg_type: TMessageType) {
         self.rpc_info.clear();
         self.seq_id = seq_id;
@@ -207,12 +220,14 @@ impl ClientContext {
 impl std::ops::Deref for ClientContext {
     type Target = RpcCx<ClientCxInner, Config>;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl std::ops::DerefMut for ClientContext {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -231,6 +246,7 @@ thread_local! {
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 impl Default for ServerContext {
+    #[inline]
     fn default() -> Self {
         Self(RpcCx::new(
             RpcInfo::with_role(Role::Server),
@@ -244,12 +260,14 @@ newtype_impl_context!(ServerContext, Config, 0);
 impl std::ops::Deref for ServerContext {
     type Target = RpcCx<ServerCxInner, Config>;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl std::ops::DerefMut for ServerContext {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
@@ -356,6 +374,7 @@ pub struct Config {
 }
 
 impl Config {
+    #[inline]
     pub fn new() -> Self {
         Self {
             rpc_timeout: None,
@@ -365,6 +384,7 @@ impl Config {
         }
     }
 
+    #[inline]
     pub fn rpc_timeout(&self) -> Option<Duration> {
         self.rpc_timeout
     }
@@ -372,49 +392,60 @@ impl Config {
     /// Sets the rpc timeout.
     ///
     /// This can be set both by the client builder and the CallOpt.
+    #[inline]
     pub fn set_rpc_timeout(&mut self, rpc_timeout: Option<Duration>) {
         self.rpc_timeout = rpc_timeout;
     }
 
+    #[inline]
     pub fn rpc_timeout_or_default(&self) -> Duration {
         self.rpc_timeout.unwrap_or(DEFAULT_RPC_TIMEOUT)
     }
 
+    #[inline]
     pub fn connect_timeout(&self) -> Option<Duration> {
         self.connect_timeout
     }
 
+    #[inline]
     pub fn connect_timeout_or_default(&self) -> Duration {
         self.connect_timeout.unwrap_or(DEFAULT_CONNECT_TIMEOUT)
     }
 
     /// Sets the connect timeout.
+    #[inline]
     pub fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
         self.connect_timeout = timeout;
     }
 
+    #[inline]
     pub fn read_write_timeout(&self) -> Option<Duration> {
         self.read_write_timeout
     }
 
+    #[inline]
     pub fn read_write_timeout_or_default(&self) -> Duration {
         self.read_write_timeout
             .unwrap_or(DEFAULT_READ_WRITE_TIMEOUT)
     }
 
+    #[inline]
     /// Sets the read write timeout(a.k.a. IO timeout).
     pub(crate) fn set_read_write_timeout(&mut self, timeout: Option<Duration>) {
         self.read_write_timeout = timeout;
     }
 
+    #[inline]
     pub fn max_frame_size(&self) -> u32 {
         self.max_frame_size
     }
 
+    #[inline]
     pub(crate) fn set_max_frame_size(&mut self, size: u32) {
         self.max_frame_size = size
     }
 
+    #[inline]
     pub fn merge(&mut self, other: Self) {
         self.max_frame_size = other.max_frame_size;
         if let Some(t) = other.rpc_timeout {

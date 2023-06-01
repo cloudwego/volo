@@ -55,6 +55,7 @@ where
         Cx: 'cx,
         Self: 'cx;
 
+    #[inline]
     fn call<'cx>(self, cx: &'cx mut Cx, req: Req) -> Self::Future<'cx>
     where
         Self: 'cx,
