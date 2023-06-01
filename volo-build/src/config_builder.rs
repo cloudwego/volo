@@ -5,6 +5,7 @@ use pilota_build::BoxClonePlugin;
 
 use crate::util::{
     get_or_download_idl, open_config_file, read_config_from_file, LocalIdl, DEFAULT_CONFIG_FILE,
+    DEFAULT_DIR,
 };
 
 pub struct ConfigBuilder {
@@ -120,7 +121,7 @@ impl ConfigBuilder {
                     includes,
                     touch,
                     ignore_unused,
-                } = get_or_download_idl(idl)?;
+                } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
 
                 builder = builder
                     .add_service(path.clone())

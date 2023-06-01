@@ -200,11 +200,7 @@ mod tests {
 
     #[test]
     fn test_static_discover() {
-        let empty = Endpoint {
-            service_name: faststr::FastStr::new(""),
-            address: None,
-            tags: Default::default(),
-        };
+        let empty = Endpoint::new("".into());
         let discover = StaticDiscover::from(vec![
             "127.0.0.1:8000".parse().unwrap(),
             "127.0.0.2:9000".parse().unwrap(),

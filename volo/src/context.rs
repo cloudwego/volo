@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use faststr::FastStr;
 pub use metainfo::MetaInfo;
-use metainfo::TypeMap;
+use metainfo::{FastStrMap, TypeMap};
 
 use super::net::Address;
 
@@ -34,6 +34,8 @@ macro_rules! newtype_impl_context {
         }
     };
 }
+
+const DEFAULT_MAP_CAPACITY: usize = 10;
 
 pub struct RpcCx<I, Config> {
     pub rpc_info: RpcInfo<Config>,
@@ -114,8 +116,14 @@ impl<I, Config> RpcCx<I, Config> {
         Self {
             rpc_info: ri,
             inner,
-            extensions: Default::default(),
+            extensions: Extensions(TypeMap::with_capacity(DEFAULT_MAP_CAPACITY)),
         }
+    }
+
+    pub fn reset(&mut self, inner: I) {
+        self.rpc_info.clear();
+        self.inner = inner;
+        self.extensions.clear();
     }
 }
 
@@ -125,6 +133,12 @@ pub struct Endpoint {
     /// `service_name` is the most important information, which is used by the service discovering.
     pub service_name: FastStr,
     pub address: Option<Address>,
+    /// `faststr_tags` is a optimized typemap to store additional information of the endpoint.
+    ///
+    /// Use `FastStrMap` instead of `TypeMap` can reduce the Box allocation.
+    ///
+    /// This is mainly for performance optimization.
+    pub faststr_tags: FastStrMap,
     /// `tags` is used to store additional information of the endpoint.
     ///
     /// Users can use `tags` to store custom data, such as the datacenter name or the region name,
@@ -139,7 +153,8 @@ impl Endpoint {
         Self {
             service_name,
             address: None,
-            tags: TypeMap::default(),
+            faststr_tags: FastStrMap::with_capacity(DEFAULT_MAP_CAPACITY),
+            tags: Default::default(),
         }
     }
 
@@ -152,6 +167,11 @@ impl Endpoint {
     #[inline]
     pub fn service_name(&self) -> FastStr {
         self.service_name.clone()
+    }
+
+    #[inline]
+    pub fn set_service_name(&mut self, service_name: FastStr) {
+        self.service_name = service_name;
     }
 
     /// Insert a tag into this `Endpoint`.
@@ -172,6 +192,24 @@ impl Endpoint {
         self.tags.get::<T>()
     }
 
+    /// Insert a tag into this `Endpoint`.
+    #[inline]
+    pub fn insert_faststr<T: Send + Sync + 'static>(&mut self, val: FastStr) {
+        self.faststr_tags.insert::<T>(val);
+    }
+
+    /// Check if `Endpoint` tags contain entry
+    #[inline]
+    pub fn contains_faststr<T: 'static>(&self) -> bool {
+        self.faststr_tags.contains::<T>()
+    }
+
+    /// Get a reference to a tag previously inserted on this `Endpoint`.
+    #[inline]
+    pub fn get_faststr<T: 'static>(&self) -> Option<&FastStr> {
+        self.faststr_tags.get::<T>()
+    }
+
     /// Sets the address.
     #[inline]
     pub fn set_address(&mut self, address: Address) {
@@ -182,6 +220,15 @@ impl Endpoint {
     #[inline]
     pub fn address(&self) -> Option<Address> {
         self.address.clone()
+    }
+
+    /// Clear the information
+    #[inline]
+    pub fn clear(&mut self) {
+        self.service_name = FastStr::from_static_str("");
+        self.address = None;
+        self.faststr_tags.clear();
+        self.tags.clear();
     }
 }
 
@@ -233,6 +280,11 @@ impl<Config> RpcInfo<Config> {
     }
 
     #[inline]
+    pub fn set_role(&mut self, role: Role) {
+        self.role = role;
+    }
+
+    #[inline]
     pub fn method(&self) -> Option<&FastStr> {
         self.method.as_ref()
     }
@@ -270,5 +322,17 @@ impl<Config> RpcInfo<Config> {
     #[inline]
     pub fn config_mut(&mut self) -> Option<&mut Config> {
         self.config.as_mut()
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        if let Some(ep) = self.caller_mut() {
+            ep.clear()
+        }
+        if let Some(ep) = self.callee_mut() {
+            ep.clear()
+        }
+        self.method = None;
+        self.config = None;
     }
 }

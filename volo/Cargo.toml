@@ -29,6 +29,7 @@ faststr.workspace = true
 futures.workspace = true
 lazy_static.workspace = true
 metainfo.workspace = true
+mur3.workspace = true
 once_cell.workspace = true
 pin-project.workspace = true
 rand.workspace = true

@@ -21,12 +21,12 @@ repository = "https://github.com/cloudwego/volo"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-# pilota = "0.6"
-# pilota-build = "0.6"
-# pilota-thrift-parser = "0.4"
-pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" }
-pilota-build = { git = "https://github.com/cloudwego/pilota", branch = "main" }
-pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota", branch = "main" }
+pilota = "0.7"
+pilota-build = "0.7"
+pilota-thrift-parser = "0.4"
+# pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" }
+# pilota-build = { git = "https://github.com/cloudwego/pilota", branch = "main" }
+# pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota", branch = "main" }
 
 motore = "0.3"
 
@@ -65,6 +65,7 @@ linkedbytes = "0.1"
 linked-hash-map = "0.5"
 log = "0.4"
 matchit = "0.7"
+mur3 = "0.1"
 nom = "7"
 normpath = "1"
 num_enum = "0.6"
@@ -74,7 +75,7 @@ paste = "1"
 pathdiff = "0.2"
 percent-encoding = "2"
 pin-project = "1"
-pretty_env_logger = "0.4"
+pretty_env_logger = "0.5"
 proc-macro2 = "1"
 quote = "1"
 rand = "0.8"
@@ -93,7 +94,7 @@ tokio-util = "0.7"
 tower = "0.4"
 tracing = "0.1"
 tracing-subscriber = "0.3"
-update-informer = "0.6"
+update-informer = "1"
 url_path = "0.1"
 walkdir = "2"
 

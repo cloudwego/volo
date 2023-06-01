@@ -164,7 +164,7 @@ pub struct ClientCxInner {
     pub common_stats: CommonStats,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct ServerCxInner {
     pub seq_id: Option<i32>,
     pub req_msg_type: Option<TMessageType>,
@@ -193,6 +193,15 @@ impl ClientContext {
             },
         ))
     }
+
+    pub fn reset(&mut self, seq_id: i32, msg_type: TMessageType) {
+        self.rpc_info.clear();
+        self.seq_id = seq_id;
+        self.message_type = msg_type;
+        self.transport.set_reuse(true);
+        self.stats.reset();
+        self.common_stats.reset();
+    }
 }
 
 impl std::ops::Deref for ClientContext {
@@ -209,20 +218,23 @@ impl std::ops::DerefMut for ClientContext {
     }
 }
 
+thread_local! {
+    #[doc(hidden)]
+    /// This should only be used in the generated code.
+    pub static CLIENT_CONTEXT_CACHE: std::cell::RefCell<Vec<ClientContext>> = std::cell::RefCell::new(Vec::with_capacity(128));
+}
+
+thread_local! {
+    pub(crate) static SERVER_CONTEXT_CACHE: std::cell::RefCell<Vec<ServerContext>> = std::cell::RefCell::new(Vec::with_capacity(128));
+}
+
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 impl Default for ServerContext {
     fn default() -> Self {
         Self(RpcCx::new(
             RpcInfo::with_role(Role::Server),
-            ServerCxInner {
-                seq_id: None,
-                req_msg_type: None,
-                msg_type: None,
-                transport: ServerTransportInfo::default(),
-                stats: ServerStats::default(),
-                common_stats: CommonStats::default(),
-            },
+            Default::default(),
         ))
     }
 }
@@ -433,13 +445,24 @@ impl ::volo::client::Apply<ClientContext> for CallOpt {
 
     #[inline]
     fn apply(self, cx: &mut ClientContext) -> Result<(), Self::Error> {
-        let callee = cx.rpc_info.callee.as_mut().unwrap();
-        callee.tags.extend(self.callee_tags);
-        if let Some(a) = &self.address {
-            callee.set_address(a.clone());
+        let caller = cx.rpc_info.caller_mut().unwrap();
+        if !self.caller_faststr_tags.is_empty() {
+            caller.faststr_tags.extend(self.caller_faststr_tags);
         }
-        let caller = cx.rpc_info.caller.as_mut().unwrap();
-        caller.tags.extend(self.caller_tags);
+        if !self.caller_tags.is_empty() {
+            caller.tags.extend(self.caller_tags);
+        }
+
+        let callee = cx.rpc_info.callee_mut().unwrap();
+        if !self.callee_faststr_tags.is_empty() {
+            callee.faststr_tags.extend(self.callee_faststr_tags);
+        }
+        if !self.callee_tags.is_empty() {
+            callee.tags.extend(self.callee_tags);
+        }
+        if let Some(addr) = self.address {
+            callee.set_address(addr);
+        }
         cx.rpc_info.config_mut().unwrap().merge(self.config);
         Ok(())
     }

@@ -42,7 +42,7 @@ where
             .services
             .into_iter()
             .map(|s| {
-                get_or_download_idl(s.idl).map(|idl| IdlService {
+                get_or_download_idl(s.idl, work_dir.join("target")).map(|idl| IdlService {
                     path: idl.path,
                     config: s.config,
                 })
@@ -51,7 +51,7 @@ where
             .unwrap();
 
         self.pilota_builder
-            .compile(services, pilota_build::Output::Workspace(work_dir));
+            .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
     }
 
     pub fn plugin(mut self, plugin: impl Plugin + 'static) -> Self {

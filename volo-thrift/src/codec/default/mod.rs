@@ -26,7 +26,7 @@
 //! [Kitex]: https://github.com/cloudwego/kitex
 //! [TTHeader]: https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/
 //! [Framed]: https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#framed-vs-unframed-transport
-use bytes::BytesMut;
+use bytes::Bytes;
 use linkedbytes::LinkedBytes;
 use pilota::thrift::{DecodeError, EncodeError, TransportError};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
@@ -70,17 +70,17 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
     ) -> Result<(usize, usize), EncodeError>;
 }
 
-/// [`ZeroCopyDecoder`] tries to decode a message without copying large data, so the [`BytesMut`] in
+/// [`ZeroCopyDecoder`] tries to decode a message without copying large data, so the [`Bytes`] in
 /// the [`decode`] method is not designed to be reused, and the implementation can use
-/// `BytesMut::freeze` to get a [`Bytes`] and hand it to the user directly.
+/// `Bytes::split_to` to get a [`Bytes`] and hand it to the user directly.
 #[async_trait::async_trait]
 pub trait ZeroCopyDecoder: Send + Sync + 'static {
-    /// If the outer decoder is framed, it can reads all the payload into a [`BytesMut`] and
+    /// If the outer decoder is framed, it can reads all the payload into a [`Bytes`] and
     /// call this function for better performance.
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-        bytes: &mut BytesMut,
+        bytes: &mut Bytes,
     ) -> Result<Option<ThriftMessage<Msg>>, DecodeError>;
 
     /// The [`DefaultDecoder`] will always call `decode_async`, so the most outer decoder
@@ -210,6 +210,11 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
         let start = std::time::Instant::now();
         cx.stats_mut().record_decode_start_at();
         cx.stats_mut().record_read_start_at();
+
+        trace!(
+            "[VOLO] codec decode message received: {:?}",
+            self.reader.buffer()
+        );
 
         // simply call the inner `decode_async`
         let res = self.decoder.decode_async(cx, &mut self.reader).await;

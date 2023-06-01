@@ -70,7 +70,7 @@ pub struct LocalIdl {
     pub ignore_unused: bool,
 }
 
-pub fn get_or_download_idl(idl: Idl) -> anyhow::Result<LocalIdl> {
+pub fn get_or_download_idl(idl: Idl, target_dir: impl AsRef<Path>) -> anyhow::Result<LocalIdl> {
     let (path, includes) = if let Source::Git(GitSource {
         ref repo, ref lock, ..
     }) = idl.source
@@ -81,7 +81,10 @@ pub fn get_or_download_idl(idl: Idl) -> anyhow::Result<LocalIdl> {
                 repo
             )
         })?;
-        let dir = DEFAULT_DIR.join(get_git_path(repo.as_str())?).join(lock);
+        let dir = target_dir
+            .as_ref()
+            .join(get_git_path(repo.as_str())?)
+            .join(lock);
         let task = Task::new(
             vec![idl.path.to_string_lossy().to_string()],
             dir.clone(),

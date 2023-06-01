@@ -168,11 +168,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_weighted_random() {
-        let empty = Endpoint {
-            service_name: faststr::FastStr::new_inline(""),
-            address: None,
-            tags: Default::default(),
-        };
+        let empty = Endpoint::new("".into());
         let discover = StaticDiscover::from(vec![
             "127.0.0.1:8000".parse().unwrap(),
             "127.0.0.2:9000".parse().unwrap(),
