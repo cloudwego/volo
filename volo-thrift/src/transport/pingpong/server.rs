@@ -58,15 +58,15 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
 
                 let result = async {
                     let msg = tokio::select! {
-                        _ = &mut notified => {
-                            tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
-                            return Err(());
-                        },
                         out = async {
                             let msg = decoder.decode(&mut cx).await;
                             span_provider.leave_decode(&cx);
                             msg
-                        }.instrument(span_provider.on_decode()) => out
+                        }.instrument(span_provider.on_decode()) => out,
+                        _ = &mut notified => {
+                            tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
+                            return Err(());
+                        },
                     };
                     debug!(
                         "[VOLO] received message: {:?}, rpcinfo: {:?}, peer_addr: {:?}",
