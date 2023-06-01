@@ -326,7 +326,6 @@ impl<Config> RpcInfo<Config> {
 
     #[inline]
     pub fn clear(&mut self) {
-        self.role = Role::Client;
         if let Some(ep) = self.caller_mut() {
             ep.clear()
         }
