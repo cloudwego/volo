@@ -56,25 +56,24 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     }
                 }
 
-                let result = async {
-                    let msg = tokio::select! {
-                        out = async {
-                            let msg = decoder.decode(&mut cx).await;
-                            span_provider.leave_decode(&cx);
-                            msg
-                        }.instrument(span_provider.on_decode()) => out,
-                        _ = &mut notified => {
-                            tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
-                            return Err(());
-                        },
-                    };
-                    debug!(
-                        "[VOLO] received message: {:?}, rpcinfo: {:?}, peer_addr: {:?}",
-                        msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta)),
-                        cx.rpc_info,
-                        peer_addr
-                    );
+                let msg = tokio::select! {
+                    _ = &mut notified => {
+                        tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
+                        return;
+                    },
+                    out = decoder.decode(&mut cx) => out
+                };
+                debug!(
+                    "[VOLO] received message: {:?}, rpcinfo: {:?}, peer_addr: {:?}",
+                    msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta)),
+                    cx.rpc_info,
+                    peer_addr
+                );
 
+                // it is promised safe here, because span only reads cx before handling polling
+                let tracing_cx = unsafe { std::mem::transmute(&cx) };
+
+                let result = async {
                     match msg {
                         Ok(Some(ThriftMessage { data: Ok(req), .. })) => {
                             cx.stats.record_process_start_at();
@@ -97,7 +96,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                     let result = encoder.encode(&mut cx, msg).await;
                                     span_provider.leave_encode(&cx);
                                     result
-                                }.instrument(span_provider.on_encode()).await {
+                                }.instrument(span_provider.on_encode(tracing_cx)).await {
                                     // log it
                                     error!("[VOLO] server send response error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
                                     stat_tracer.iter().for_each(|f| f(&cx));
@@ -141,7 +140,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                         }
                     });
                     Ok(())
-                }.instrument(span_provider.on_serve()).await;
+                }.instrument(span_provider.on_serve(tracing_cx)).await;
                 if let Err(_) = result {
                     break;
                 }
