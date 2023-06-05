@@ -185,7 +185,11 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
 
         // spawn accept loop
         let handler = tokio::spawn(async move {
+            let exit_flag = exit_flag_inner.clone();
             loop {
+                if *exit_flag.read() {
+                    break Ok(());
+                }
                 match incoming.accept().await {
                     Ok(Some(conn)) => {
                         let peer_addr = conn.info.peer_addr;
@@ -202,7 +206,6 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
                                 self.make_codec.clone(),
                                 stat_tracer.clone(),
                                 exit_notify_inner.clone(),
-                                exit_flag_inner.clone(),
                                 exit_mark_inner.clone(),
                                 conn_cnt.clone(),
                                 peer_addr,
@@ -215,7 +218,6 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
                                 self.make_codec.clone(),
                                 stat_tracer.clone(),
                                 exit_notify_inner.clone(),
-                                exit_flag_inner.clone(),
                                 exit_mark_inner.clone(),
                                 conn_cnt.clone(),
                                 peer_addr,
@@ -230,7 +232,6 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
                             self.make_codec.clone(),
                             stat_tracer.clone(),
                             exit_notify_inner.clone(),
-                            exit_flag_inner.clone(),
                             exit_mark_inner.clone(),
                             conn_cnt.clone(),
                             peer_addr,
@@ -307,6 +308,10 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
             if gconn_cnt.load(Ordering::Relaxed) == 0 {
                 break;
             }
+            trace!(
+                "[VOLO] gracefully exiting, remaining connection count: {}",
+                gconn_cnt.load(Ordering::Relaxed)
+            );
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
         Ok(())
@@ -351,7 +356,6 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
     make_codec: MkC,
     stat_tracer: Arc<[TraceFn]>,
     exit_notify: Arc<Notify>,
-    exit_flag: Arc<parking_lot::RwLock<bool>>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer_addr: Option<Address>,
@@ -367,15 +371,6 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
     MkC: MakeCodec<R, W>,
     SP: SpanProvider,
 {
-    // get read lock and create Notified
-    let notified = {
-        let r = exit_flag.read();
-        if *r {
-            return;
-        }
-        exit_notify.notified()
-    };
-
     let (encoder, decoder) = make_codec.make_codec(rh, wh);
 
     tracing::trace!(
@@ -385,7 +380,7 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
     crate::transport::pingpong::serve(
         encoder,
         decoder,
-        notified,
+        exit_notify.notified(),
         exit_mark,
         &service,
         stat_tracer,
@@ -405,7 +400,6 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
     make_codec: MkC,
     stat_tracer: Arc<[TraceFn]>,
     exit_notify: Arc<Notify>,
-    exit_flag: Arc<parking_lot::RwLock<bool>>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer_addr: Option<Address>,
@@ -418,16 +412,6 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
     Resp: EntryMessage + Send + 'static,
     MkC: MakeCodec<R, W>,
 {
-    // get read lock and create Notified
-
-    let notified = {
-        let r = exit_flag.read();
-        if *r {
-            return;
-        }
-        exit_notify.notified()
-    };
-
     let (encoder, decoder) = make_codec.make_codec(rh, wh);
 
     info!(
@@ -437,7 +421,7 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
     crate::transport::multiplex::serve(
         encoder,
         decoder,
-        notified,
+        exit_notify.notified(),
         exit_mark,
         service,
         stat_tracer,
