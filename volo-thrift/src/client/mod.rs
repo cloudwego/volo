@@ -11,7 +11,6 @@ use std::{
     sync::{atomic::AtomicI32, Arc},
 };
 
-use faststr::FastStr;
 use futures::Future;
 use motore::{
     layer::{Identity, Layer, Stack},
@@ -28,6 +27,7 @@ use volo::{
         dial::{DefaultMakeTransport, MakeTransport},
         Address,
     },
+    FastStr,
 };
 
 use crate::{

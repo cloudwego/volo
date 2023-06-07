@@ -1,12 +1,11 @@
 use std::{cell::RefCell, net::SocketAddr, str::FromStr, sync::Arc};
 
-use faststr::FastStr;
 use futures::Future;
 use metainfo::{Backward, Forward};
 use volo::{
     context::{Context, Endpoint},
     net::Address,
-    Service,
+    FastStr, Service,
 };
 
 use crate::{

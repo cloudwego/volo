@@ -9,7 +9,6 @@ use std::{
 };
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
-use faststr::FastStr;
 use linkedbytes::LinkedBytes;
 use metainfo::{Backward, Forward};
 use num_enum::TryFromPrimitive;
@@ -19,6 +18,7 @@ use tracing::{trace, warn};
 use volo::{
     context::{Endpoint, Role},
     util::buf_reader::BufReader,
+    FastStr,
 };
 
 use super::MakeZeroCopyCodec;
