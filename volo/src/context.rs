@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 
-use faststr::FastStr;
 pub use metainfo::MetaInfo;
 use metainfo::{FastStrMap, TypeMap};
 
 use super::net::Address;
+use crate::FastStr;
 
 #[macro_export]
 macro_rules! newtype_impl_context {

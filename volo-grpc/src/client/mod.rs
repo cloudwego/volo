@@ -11,7 +11,6 @@ mod meta;
 use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
 
 pub use callopt::CallOpt;
-use faststr::FastStr;
 use futures::Future;
 pub use meta::MetaService;
 use motore::{
@@ -25,6 +24,7 @@ use volo::{
     discovery::{Discover, DummyDiscover},
     loadbalance::{random::WeightedRandomBalance, MkLbLayer},
     net::Address,
+    FastStr,
 };
 
 use crate::{

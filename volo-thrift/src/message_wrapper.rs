@@ -1,5 +1,5 @@
-use faststr::FastStr;
 use pilota::thrift::{DecodeError, EncodeError, Message, TAsyncInputProtocol};
+use volo::FastStr;
 
 use crate::{
     context::{ClientContext, ServerContext, ThriftContext},
