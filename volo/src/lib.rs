@@ -19,6 +19,7 @@ pub mod client;
 mod hack;
 mod macros;
 
+pub use faststr::FastStr;
 pub use metainfo::METAINFO;
 
 /// volo::spawn will spawn a task and derive the metainfo
