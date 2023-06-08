@@ -53,14 +53,13 @@ async fn server_streaming() {
     let req = volo_gen::proto_gen::streaming::StreamingRequest {
         message: FastStr::from_static_str("Volo"),
     };
-    let stream_resp = match CLIENT.server_streaming(req).await {
+    let mut stream_resp = match CLIENT.server_streaming(req).await {
         Ok(resp) => resp.into_inner(),
         Err(e) => {
             eprintln!("ServerStreaming, {e:?}");
             return;
         }
     };
-    let mut stream_resp = stream_resp.take(10);
     loop {
         match stream_resp.next().await {
             Some(Ok(info)) => {
@@ -68,6 +67,7 @@ async fn server_streaming() {
             }
             Some(Err(e)) => {
                 eprintln!("ServerStreaming, {e:?}");
+                break;
             }
             None => {
                 break;
@@ -100,6 +100,7 @@ async fn bidirectional_streaming() {
             }
             Some(Err(e)) => {
                 eprintln!("BidirectionalStreaming, {e:?}");
+                break;
             }
             None => {
                 break;

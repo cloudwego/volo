@@ -29,35 +29,25 @@ impl volo_gen::proto_gen::streaming::Streaming for S {
         req: Request<RecvStream<StreamingRequest>>,
     ) -> Result<Response<StreamingResponse>, Status> {
         let req = req.into_inner();
-        let (tx, mut rx) = mpsc::channel(64);
-        tokio::spawn(async move {
-            tokio::pin!(req);
-            while let Some(req) = req.next().await {
-                match req {
-                    Ok(req) => {
-                        let resp = StreamingResponse {
+        let mut req = req.take(10);
+        let mut resp = None;
+        while let Some(result) = req.next().await {
+            match result {
+                Ok(req) => {
+                    if resp.is_none() {
+                        resp = Some(Ok(StreamingResponse {
                             message: format!("ClientStreaming, {}!", req.message).into(),
-                        };
-                        match tx.send(Ok(resp)).await {
-                            Ok(_) => {}
-                            Err(err) => {
-                                eprintln!("client_streaming send error: {err}");
-                                break;
-                            }
-                        }
+                        }));
                     }
-                    Err(e) => match tx.send(Err(e)).await {
-                        Ok(_) => {}
-                        Err(_) => break,
-                    },
+                }
+                Err(err) => {
+                    eprintln!("client streaming poll request error: {err}");
+                    resp = Some(Err(err));
+                    break;
                 }
             }
-        });
-        let mut resp = Err(Status::internal("client disconnected"));
-        while let Some(r) = rx.recv().await {
-            resp = r;
         }
-        resp.map(Response::new)
+        resp.unwrap().map(Response::new)
     }
 
     async fn server_streaming(
@@ -68,8 +58,8 @@ impl volo_gen::proto_gen::streaming::Streaming for S {
         let repeat = std::iter::repeat(StreamingResponse {
             message: format!("ServerStreaming, {}!", req.message).into(),
         });
-        let mut resp = tokio_stream::iter(repeat);
-        let (tx, rx) = mpsc::channel(64);
+        let mut resp = tokio_stream::iter(repeat).take(10);
+        let (tx, rx) = mpsc::channel(16);
         tokio::spawn(async move {
             while let Some(resp) = resp.next().await {
                 match tx.send(Result::<_, Status>::Ok(resp)).await {
@@ -88,7 +78,8 @@ impl volo_gen::proto_gen::streaming::Streaming for S {
         req: Request<RecvStream<StreamingRequest>>,
     ) -> Result<Response<BoxStream<'static, Result<StreamingResponse, Status>>>, Status> {
         let req = req.into_inner();
-        let (tx, rx) = mpsc::channel(64);
+        let req = req.take(10);
+        let (tx, rx) = mpsc::channel(16);
         tokio::spawn(async move {
             tokio::pin!(req);
             while let Some(req) = req.next().await {
