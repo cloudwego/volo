@@ -1,4 +1,3 @@
-use faststr::FastStr;
 use itertools::Itertools;
 use pilota_build::{
     db::RirDatabase,
@@ -7,6 +6,7 @@ use pilota_build::{
     tags::protobuf::{ClientStreaming, ServerStreaming},
     CodegenBackend, Context, DefId, IdentName, Symbol,
 };
+use volo::FastStr;
 
 pub struct MkGrpcBackend;
 
