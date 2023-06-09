@@ -28,7 +28,6 @@ async-stream.workspace = true
 async-trait.workspace = true
 base64.workspace = true
 bytes.workspace = true
-faststr.workspace = true
 fxhash.workspace = true
 futures-util.workspace = true
 futures.workspace = true

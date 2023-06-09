@@ -17,9 +17,10 @@ keywords = ["thrift", "grpc", "protobuf", "volo", "build"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
+volo = { version = "0.5", path = "../volo" }
+
 pilota-build.workspace = true
 
-faststr.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 dirs.workspace = true

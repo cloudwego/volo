@@ -1,10 +1,10 @@
-use faststr::FastStr;
 use itertools::Itertools;
 use pilota_build::{
     codegen::thrift::DecodeHelper, db::RirDatabase, rir, rir::Method, tags::RustWrapperArc,
     CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
 };
 use quote::format_ident;
+use volo::FastStr;
 
 #[derive(Clone)]
 pub struct VoloThriftBackend {
