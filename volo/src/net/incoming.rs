@@ -243,6 +243,7 @@ mod linux_helper {
 
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
         socket.set_reuse_address(true)?;
+        socket.set_nonblocking(true)?;
 
         let backlog = max_listener_backlog();
         socket.bind(&socket2::SockAddr::from(addr))?;
@@ -256,6 +257,7 @@ mod linux_helper {
     ) -> std::io::Result<UnixListener> {
         let socket = Socket::new(Domain::UNIX, Type::STREAM, None)?;
         socket.set_reuse_address(true)?;
+        socket.set_nonblocking(true)?;
 
         let backlog = max_listener_backlog();
 
