@@ -246,7 +246,6 @@ mod linux_helper {
 
         let backlog = max_listener_backlog();
         socket.bind(&socket2::SockAddr::from(addr))?;
-        socket.set_nodelay(true)?;
         socket.listen(backlog)?;
 
         Ok(socket.into())
@@ -265,7 +264,6 @@ mod linux_helper {
             std::fs::remove_file(&path)?;
         }
         socket.bind(&socket2::SockAddr::unix(path)?)?;
-        socket.set_nodelay(true)?;
         socket.listen(backlog)?;
 
         // Convert the socket into a UnixListener
