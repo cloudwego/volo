@@ -370,8 +370,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     let mut cx = self.0.make_cx("{method_name_str}", {oneway});
                     #[allow(unreachable_patterns)]
                     let resp = match ::volo::service::Service::call(&self.0, &mut cx, req).await? {{
-                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => Ok(resp),
-                        {convert_exceptions}
+                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => Ok(resp),{convert_exceptions}
                         {none},
                         _ => unreachable!()
                     }};
@@ -393,8 +392,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     let mut cx = self.0.make_cx("{method_name_str}", {oneway});
                     #[allow(unreachable_patterns)]
                     let resp = match ::volo::client::OneShotService::call(self.0, &mut cx, req).await? {{
-                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => Ok(resp),
-                        {convert_exceptions}
+                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => Ok(resp),{convert_exceptions}
                         {none},
                         _ => unreachable!()
                     }};
