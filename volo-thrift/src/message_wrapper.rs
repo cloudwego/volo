@@ -137,7 +137,7 @@ where
                 crate::Error::Protocol(e) => {
                     protocol.write_message_begin(&ident)?;
                     let e = ApplicationError::new(
-                        ApplicationErrorKind::ProtocolError,
+                        ApplicationErrorKind::PROTOCOL_ERROR,
                         e.message.clone(),
                     );
                     e.encode(protocol)?;
