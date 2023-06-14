@@ -110,7 +110,7 @@ impl From<DecodeError> for Error {
 
             pilota::thrift::DecodeErrorKind::UnknownMethod => {
                 Error::Application(ApplicationError {
-                    kind: ApplicationErrorKind::UnknownMethod,
+                    kind: ApplicationErrorKind::UNKNOWN_METHOD,
                     message: value.message,
                 })
             }
@@ -133,7 +133,7 @@ impl From<ApplicationError> for Error {
 
 impl From<LoadBalanceError> for Error {
     fn from(err: LoadBalanceError) -> Self {
-        new_application_error(ApplicationErrorKind::InternalError, err.to_string())
+        new_application_error(ApplicationErrorKind::INTERNAL_ERROR, err.to_string())
     }
 }
 
@@ -148,13 +148,13 @@ impl Retryable for Error {
 
 impl From<AnyhowError> for Error {
     fn from(err: AnyhowError) -> Self {
-        new_application_error(ApplicationErrorKind::Unknown, err.to_string())
+        new_application_error(ApplicationErrorKind::UNKNOWN, err.to_string())
     }
 }
 
 impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
     fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
-        new_application_error(ApplicationErrorKind::Unknown, err.to_string())
+        new_application_error(ApplicationErrorKind::UNKNOWN, err.to_string())
     }
 }
 
@@ -192,17 +192,18 @@ impl ApplicationError {
 impl Display for ApplicationError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let error_text = match self.kind {
-            ApplicationErrorKind::Unknown => "service error",
-            ApplicationErrorKind::UnknownMethod => "unknown service method",
-            ApplicationErrorKind::InvalidMessageType => "wrong message type received",
-            ApplicationErrorKind::WrongMethodName => "unknown method reply received",
-            ApplicationErrorKind::BadSequenceId => "out of order sequence id",
-            ApplicationErrorKind::MissingResult => "missing method result",
-            ApplicationErrorKind::InternalError => "remote service threw exception",
-            ApplicationErrorKind::ProtocolError => "protocol error",
-            ApplicationErrorKind::InvalidTransform => "invalid transform",
-            ApplicationErrorKind::InvalidProtocol => "invalid protocol requested",
-            ApplicationErrorKind::UnsupportedClientType => "unsupported protocol client",
+            ApplicationErrorKind::UNKNOWN => "service error",
+            ApplicationErrorKind::UNKNOWN_METHOD => "unknown service method",
+            ApplicationErrorKind::INVALID_MESSAGE_TYPE => "wrong message type received",
+            ApplicationErrorKind::WRONG_METHOD_NAME => "unknown method reply received",
+            ApplicationErrorKind::BAD_SEQUENCE_ID => "out of order sequence id",
+            ApplicationErrorKind::MISSING_RESULT => "missing method result",
+            ApplicationErrorKind::INTERNAL_ERROR => "remote service threw exception",
+            ApplicationErrorKind::PROTOCOL_ERROR => "protocol error",
+            ApplicationErrorKind::INVALID_TRANSFORM => "invalid transform",
+            ApplicationErrorKind::INVALID_PROTOCOL => "invalid protocol requested",
+            ApplicationErrorKind::UNSUPPORTED_CLIENT_TYPE => "unsupported protocol client",
+            _ => "other error",
         };
 
         write!(f, "{}, msg: {}", error_text, self.message)
@@ -223,7 +224,7 @@ impl Message for ApplicationError {
         protocol.write_field_end()?;
 
         protocol.write_field_begin(TType::I32, 2)?;
-        protocol.write_i32(self.kind as i32)?;
+        protocol.write_i32(self.kind.as_i32())?;
         protocol.write_field_end()?;
 
         protocol.write_field_stop()?;
@@ -235,7 +236,7 @@ impl Message for ApplicationError {
 
     fn decode<T: TInputProtocol>(protocol: &mut T) -> Result<Self, DecodeError> {
         let mut message = "general remote error".to_owned();
-        let mut kind = ApplicationErrorKind::Unknown;
+        let mut kind = ApplicationErrorKind::UNKNOWN;
 
         protocol.read_struct_begin()?;
 
@@ -259,7 +260,7 @@ impl Message for ApplicationError {
                 2 => {
                     let remote_type_as_int = protocol.read_i32()?;
                     let remote_kind: ApplicationErrorKind = TryFrom::try_from(remote_type_as_int)
-                        .unwrap_or(ApplicationErrorKind::Unknown);
+                        .unwrap_or(ApplicationErrorKind::UNKNOWN);
                     protocol.read_field_end()?;
                     kind = remote_kind;
                 }
@@ -276,7 +277,7 @@ impl Message for ApplicationError {
 
     async fn decode_async<T: TAsyncInputProtocol>(protocol: &mut T) -> Result<Self, DecodeError> {
         let mut message = "general remote error".to_owned();
-        let mut kind = ApplicationErrorKind::Unknown;
+        let mut kind = ApplicationErrorKind::UNKNOWN;
 
         protocol.read_struct_begin().await?;
 
@@ -300,7 +301,7 @@ impl Message for ApplicationError {
                 2 => {
                     let remote_type_as_int = protocol.read_i32().await?;
                     let remote_kind: ApplicationErrorKind = TryFrom::try_from(remote_type_as_int)
-                        .unwrap_or(ApplicationErrorKind::Unknown);
+                        .unwrap_or(ApplicationErrorKind::UNKNOWN);
                     protocol.read_field_end().await?;
                     kind = remote_kind;
                 }
@@ -321,7 +322,7 @@ impl Message for ApplicationError {
             + protocol.write_string_len(&self.message)
             + protocol.write_field_end_len()
             + protocol.write_field_begin_len(TType::I32, Some(2))
-            + protocol.write_i32_len(self.kind as i32)
+            + protocol.write_i32_len(self.kind.as_i32())
             + protocol.write_field_end_len()
             + protocol.write_field_stop_len()
             + protocol.write_struct_end_len()
@@ -333,57 +334,52 @@ impl Message for ApplicationError {
 /// This list may grow, and it is not recommended to match against it.
 #[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(i8)]
-pub enum ApplicationErrorKind {
+#[repr(transparent)]
+pub struct ApplicationErrorKind(i32);
+
+impl ApplicationErrorKind {
     /// Catch-all application error.
-    Unknown = 0,
+    pub const UNKNOWN: Self = Self(0);
     /// Made service call to an unknown service method.
-    UnknownMethod = 1,
+    pub const UNKNOWN_METHOD: Self = Self(1);
     /// Received an unknown Thrift message type. That is, not one of the
     /// `thrift::protocol::TMessageType` variants.
-    InvalidMessageType = 2,
+    pub const INVALID_MESSAGE_TYPE: Self = Self(2);
     /// Method name in a service reply does not match the name of the
     /// receiving service method.
-    WrongMethodName = 3,
+    pub const WRONG_METHOD_NAME: Self = Self(3);
     /// Received an out-of-order Thrift message.
-    BadSequenceId = 4,
+    pub const BAD_SEQUENCE_ID: Self = Self(4);
     /// Service reply is missing required fields.
-    MissingResult = 5,
+    pub const MISSING_RESULT: Self = Self(5);
     /// Auto-generated code failed unexpectedly.
-    InternalError = 6,
+    pub const INTERNAL_ERROR: Self = Self(6);
     /// Thrift protocol error. When possible use `Error::ProtocolError` with a
     /// specific `ProtocolErrorKind` instead.
-    ProtocolError = 7,
+    pub const PROTOCOL_ERROR: Self = Self(7);
     /// *Unknown*. Included only for compatibility with existing Thrift
     /// implementations.
-    InvalidTransform = 8, // ??
+    pub const INVALID_TRANSFORM: Self = Self(8); // ??
     /// Thrift endpoint requested, or is using, an unsupported encoding.
-    InvalidProtocol = 9, // ??
+    pub const INVALID_PROTOCOL: Self = Self(9); // ??
     /// Thrift endpoint requested, or is using, an unsupported auto-generated
     /// client type.
-    UnsupportedClientType = 10, // ??
+    pub const UNSUPPORTED_CLIENT_TYPE: Self = Self(10); // ??
+
+    pub fn as_i32(self) -> i32 {
+        self.0
+    }
 }
 
-impl TryFrom<i32> for ApplicationErrorKind {
-    type Error = Error;
-    fn try_from(from: i32) -> Result<Self, Self::Error> {
-        match from {
-            0 => Ok(ApplicationErrorKind::Unknown),
-            1 => Ok(ApplicationErrorKind::UnknownMethod),
-            2 => Ok(ApplicationErrorKind::InvalidMessageType),
-            3 => Ok(ApplicationErrorKind::WrongMethodName),
-            4 => Ok(ApplicationErrorKind::BadSequenceId),
-            5 => Ok(ApplicationErrorKind::MissingResult),
-            6 => Ok(ApplicationErrorKind::InternalError),
-            7 => Ok(ApplicationErrorKind::ProtocolError),
-            8 => Ok(ApplicationErrorKind::InvalidTransform),
-            9 => Ok(ApplicationErrorKind::InvalidProtocol),
-            10 => Ok(ApplicationErrorKind::UnsupportedClientType),
-            _ => Err(Error::Application(ApplicationError {
-                kind: ApplicationErrorKind::Unknown,
-                message: format!("cannot convert {from} to ApplicationErrorKind"),
-            })),
-        }
+impl From<i32> for ApplicationErrorKind {
+    fn from(from: i32) -> Self {
+        Self(from)
+    }
+}
+
+impl From<ApplicationErrorKind> for i32 {
+    fn from(value: ApplicationErrorKind) -> Self {
+        value.as_i32()
     }
 }
 

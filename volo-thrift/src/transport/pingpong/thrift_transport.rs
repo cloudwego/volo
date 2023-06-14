@@ -107,7 +107,7 @@ where
                     cx.rpc_info(),
                 );
                 return Err(Error::Application(ApplicationError::new(
-                    ApplicationErrorKind::BadSequenceId,
+                    ApplicationErrorKind::BAD_SEQUENCE_ID,
                     format!("seq_id not match, rpcinfo: {:?}", cx.rpc_info()),
                 )));
             }
