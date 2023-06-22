@@ -244,6 +244,8 @@ mod linux_helper {
         let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
         socket.set_reuse_address(true)?;
         socket.set_nonblocking(true)?;
+        socket.set_reuse_port(true)?;
+        socket.set_cloexec(true)?;
 
         let backlog = max_listener_backlog();
         socket.bind(&socket2::SockAddr::from(addr))?;
@@ -258,6 +260,7 @@ mod linux_helper {
         let socket = Socket::new(Domain::UNIX, Type::STREAM, None)?;
         socket.set_reuse_address(true)?;
         socket.set_nonblocking(true)?;
+        socket.set_cloexec(true)?;
 
         let backlog = max_listener_backlog();
 
