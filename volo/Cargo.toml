@@ -35,7 +35,7 @@ nix.workspace = true
 once_cell.workspace = true
 pin-project.workspace = true
 rand.workspace = true
-socket2.workspace = true
+socket2 = { workspace = true, features = ["all"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "time", "sync", "io-util"] }
 tokio-stream = { workspace = true, features = ["net"] }
