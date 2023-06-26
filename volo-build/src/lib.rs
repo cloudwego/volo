@@ -119,7 +119,7 @@ impl<MkB, P> Builder<MkB, P>
 where
     MkB: MakeBackend + Send,
     MkB::Target: Send,
-    P: Parser,
+    P: Parser + Default,
 {
     pub fn include_dirs(mut self, include_dirs: Vec<PathBuf>) -> Self {
         self.pilota_builder = self.pilota_builder.include_dirs(include_dirs);
@@ -145,6 +145,17 @@ where
             pilota_build::Output::File(out_dir.join(self.filename)),
         );
         Ok(())
+    }
+
+    pub fn init_service(self) -> Option<(String, String)> {
+        assert_eq!(self.idls.len(), 1);
+        self.pilota_builder.init_service(
+            self.idls
+                .into_iter()
+                .map(IdlService::from_path)
+                .nth(0)
+                .unwrap(),
+        )
     }
 }
 

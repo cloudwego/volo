@@ -12,7 +12,7 @@ async fn main() {{
     let addr = volo::net::Address::from(addr);
 
     Server::new()
-        .add_service(ServiceBuilder::new(volo_gen::{namespace}::{service_name}Server::new(S)).build())
+        .add_service(ServiceBuilder::new(volo_gen::{service_global_name}Server::new(S)).build())
         .run(addr)
         .await
         .unwrap();

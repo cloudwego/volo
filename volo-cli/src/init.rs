@@ -8,6 +8,7 @@ use lazy_static::lazy_static;
 use pilota_thrift_parser::parser::Parser as _;
 use regex::Regex;
 use volo_build::{
+    config_builder::InitBuilder,
     model::{Entry, GitSource, Idl, Source, DEFAULT_FILENAME},
     util::{get_git_path, get_repo_latest_commit_id, git_archive, DEFAULT_CONFIG_FILE},
 };
@@ -58,55 +59,12 @@ impl Init {
         }
     }
 
-    fn parse_grpc(&self, contents: String) -> anyhow::Result<(String, String)> {
-        lazy_static! {
-            static ref PACKAGE_NAME: Regex = Regex::new(r"package\s+([^;]+);").unwrap();
-            static ref SERVICE_NAME: Regex = Regex::new(r"service\s+(\w+)\s+\{").unwrap();
-        }
-        let package_name = PACKAGE_NAME
-            .captures(&contents)
-            .and_then(|cap| cap.get(1))
-            .ok_or_else(|| anyhow::anyhow!("package name not found"))?;
-        let namespace = package_name
-            .as_str()
-            .split('.')
-            .collect::<Vec<_>>()
-            .join("::");
-        let service_name = SERVICE_NAME
-            .captures_iter(&contents)
-            .last()
-            .and_then(|cap| cap.get(1))
-            .ok_or_else(|| anyhow::anyhow!("service name not found"))?;
-        Ok((service_name.as_str().into(), namespace))
+    fn init_gen(&self, config_entry: Entry) -> anyhow::Result<(String, String)> {
+        InitBuilder::new(config_entry).init()
     }
 
-    fn parse_thrift(&self, contents: String) -> anyhow::Result<(String, Option<String>)> {
-        let (_remain, res) =
-            pilota_thrift_parser::File::parse(contents.as_str()).expect("parse thrift idl failed");
-        let service = res
-            .items
-            .iter()
-            .filter_map(|item| match item {
-                pilota_thrift_parser::Item::Service(s) => Some(s),
-                _ => None,
-            })
-            .last();
-
-        if service.is_none() {
-            return Err(anyhow::anyhow!("no service found!"));
-        }
-
-        // try to get and parse idl file, to get the last service's name
-        let service_name = service.unwrap().name.to_upper_camel_case();
-
-        let namespace = res
-            .package
-            .map(|p| p.segments.iter().map(|s| &**s).join("::"));
-        Ok((service_name, namespace))
-    }
-
-    fn copy_grpc_template(&self, contents: String) -> anyhow::Result<()> {
-        let (service_name, namespace) = self.parse_grpc(contents)?;
+    fn copy_grpc_template(&self, config_entry: Entry) -> anyhow::Result<()> {
+        let (service_global_name, methods) = self.init_gen(config_entry)?;
 
         let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
@@ -133,15 +91,14 @@ impl Init {
             "templates/grpc/src/bin/server_rs",
             "src/bin/server.rs",
             name = &name,
-            service_name = &service_name,
-            namespace = &namespace,
+            service_global_name = &service_global_name,
         );
         crate::templates_to_target_file!(
             folder,
             "templates/grpc/src/lib_rs",
             "src/lib.rs",
-            service_name = &service_name,
-            namespace = &namespace,
+            service_global_name = &service_global_name,
+            methods = &methods,
         );
 
         // volo-gen dirs
@@ -165,15 +122,11 @@ impl Init {
         Ok(())
     }
 
-    fn copy_thrift_template(&self, contents: String, filename: &str) -> anyhow::Result<()> {
-        let (service_name, mut namespace) = self.parse_thrift(contents)?;
+    fn copy_thrift_template(&self, filename: &str, config_entry: Entry) -> anyhow::Result<()> {
+        let (service_global_name, methods) = self.init_gen(config_entry)?;
         let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
         let folder = cwd.as_path();
-        if namespace.is_none() {
-            namespace = Some(filename.to_string());
-        }
-        let namespace = unsafe { namespace.unwrap_unchecked() };
 
         // root dirs
         crate::templates_to_target_file!(
@@ -196,15 +149,14 @@ impl Init {
             "templates/thrift/src/bin/server_rs",
             "src/bin/server.rs",
             name = &name,
-            service_name = &service_name,
-            namespace = &namespace,
+            service_global_name = &service_global_name,
         );
         crate::templates_to_target_file!(
             folder,
             "templates/thrift/src/lib_rs",
             "src/lib.rs",
-            service_name = &service_name,
-            namespace = &namespace,
+            service_global_name = &service_global_name,
+            methods = &methods,
         );
 
         // volo-gen dirs
@@ -255,15 +207,6 @@ impl CliCommand for Init {
                 std::fs::read_to_string(&self.idl).context("read idl")?
             };
 
-            if self.is_grpc_project() {
-                self.copy_grpc_template(contents)?;
-            } else {
-                self.copy_thrift_template(
-                    contents,
-                    self.idl.file_stem().unwrap().to_str().unwrap(),
-                )?;
-            }
-
             let mut idl = Idl::new();
             idl.includes = self.includes.clone();
             if let Some(git) = self.git.as_ref() {
@@ -275,23 +218,24 @@ impl CliCommand for Init {
                 idl.path = self.idl.clone();
             } else {
                 // we will move volo.yml to volo-gen, so we need to add .. to includes and idl path
+                // TODO@wy fix path promblem
                 if let Some(includes) = &mut idl.includes {
                     for i in includes {
                         if i.is_absolute() {
                             continue;
                         }
-                        *i = PathBuf::new().join("../").join(i.clone());
+                        *i = PathBuf::new().join("./").join(i.clone());
                     }
                 }
                 if self.idl.is_absolute() {
                     idl.path = self.idl.clone();
                 } else {
-                    idl.path = PathBuf::new().join("../").join(self.idl.clone());
+                    idl.path = PathBuf::new().join("./").join(self.idl.clone());
                 }
             }
 
             let entry = config.entries.entry(cx.entry_name);
-            match entry {
+            let entry = match entry {
                 std::collections::hash_map::Entry::Occupied(mut e) => {
                     // find the specified idl and update it.
                     let mut found = false;
@@ -322,14 +266,23 @@ impl CliCommand for Init {
                     if !found {
                         e.get_mut().idls.push(idl);
                     }
+                    e.get().clone()
                 }
                 std::collections::hash_map::Entry::Vacant(e) => {
-                    e.insert(Entry {
+                    let entry = Entry {
                         protocol: idl.protocol(),
                         filename: PathBuf::from(DEFAULT_FILENAME),
                         idls: vec![idl],
-                    });
+                    };
+                    e.insert(entry.clone());
+                    entry
                 }
+            };
+
+            if self.is_grpc_project() {
+                self.copy_grpc_template(entry)?;
+            } else {
+                self.copy_thrift_template(self.idl.file_stem().unwrap().to_str().unwrap(), entry)?;
             }
             Ok(())
         })?;

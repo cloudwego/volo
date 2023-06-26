@@ -3,9 +3,12 @@ use std::path::{Path, PathBuf};
 use anyhow::Ok;
 use pilota_build::BoxClonePlugin;
 
-use crate::util::{
-    get_or_download_idl, open_config_file, read_config_from_file, LocalIdl, DEFAULT_CONFIG_FILE,
-    DEFAULT_DIR,
+use crate::{
+    model::Entry,
+    util::{
+        get_or_download_idl, open_config_file, read_config_from_file, LocalIdl,
+        DEFAULT_CONFIG_FILE, DEFAULT_DIR,
+    },
 };
 
 pub struct ConfigBuilder {
@@ -14,7 +17,7 @@ pub struct ConfigBuilder {
 }
 
 #[allow(clippy::large_enum_variant)]
-enum InnerBuilder {
+pub enum InnerBuilder {
     Protobuf(
         crate::Builder<crate::grpc_backend::MkGrpcBackend, pilota_build::parser::ProtobufParser>,
     ),
@@ -43,6 +46,13 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => inner.write(),
             InnerBuilder::Thrift(inner) => inner.write(),
+        }
+    }
+
+    fn init_service(self) -> Option<(String, String)> {
+        match self {
+            InnerBuilder::Protobuf(inner) => inner.init_service(),
+            InnerBuilder::Thrift(inner) => inner.init_service(),
         }
     }
 
@@ -141,5 +151,45 @@ impl ConfigBuilder {
 impl Default for ConfigBuilder {
     fn default() -> Self {
         ConfigBuilder::new(PathBuf::from(DEFAULT_CONFIG_FILE))
+    }
+}
+
+pub struct InitBuilder {
+    entry: Entry,
+}
+
+impl InitBuilder {
+    pub fn new(entry: Entry) -> Self {
+        InitBuilder { entry }
+    }
+
+    pub fn init(self) -> anyhow::Result<(String, String)> {
+        let mut builder = match self.entry.protocol {
+            crate::model::IdlProtocol::Thrift => InnerBuilder::thrift(),
+            crate::model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
+        }
+        .filename(self.entry.filename);
+
+        for idl in self.entry.idls {
+            let LocalIdl {
+                path,
+                includes,
+                touch,
+                ignore_unused,
+            } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
+            // TODO@wy is dir_path correct for volo-cli init?
+            // reduce git download
+
+            builder = builder
+                .add_service(path.clone())
+                .includes(includes)
+                .touch([(path, touch)])
+                .ignore_unused(ignore_unused);
+        }
+
+        let result = builder
+            .init_service()
+            .ok_or_else(|| anyhow::anyhow!("no service found"))?;
+        Ok(result)
     }
 }

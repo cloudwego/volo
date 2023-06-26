@@ -31,7 +31,7 @@ impl<MkB, P> Builder<MkB, P>
 where
     MkB: pilota_build::MakeBackend + Send,
     MkB::Target: Send,
-    P: pilota_build::parser::Parser,
+    P: pilota_build::parser::Parser + Default,
 {
     pub fn gen(self) {
         let work_dir = std::env::current_dir().unwrap();
