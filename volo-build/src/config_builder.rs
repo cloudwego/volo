@@ -49,7 +49,7 @@ impl InnerBuilder {
         }
     }
 
-    fn init_service(self) -> Option<(String, String)> {
+    fn init_service(self) -> anyhow::Result<(String, String)> {
         match self {
             InnerBuilder::Protobuf(inner) => inner.init_service(),
             InnerBuilder::Thrift(inner) => inner.init_service(),
@@ -177,8 +177,6 @@ impl InitBuilder {
                 touch,
                 ignore_unused,
             } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
-            // TODO@wy is dir_path correct for volo-cli init?
-            // reduce git download
 
             builder = builder
                 .add_service(path.clone())
@@ -187,9 +185,6 @@ impl InitBuilder {
                 .ignore_unused(ignore_unused);
         }
 
-        let result = builder
-            .init_service()
-            .ok_or_else(|| anyhow::anyhow!("no service found"))?;
-        Ok(result)
+        builder.init_service()
     }
 }

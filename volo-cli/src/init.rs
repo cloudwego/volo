@@ -1,16 +1,10 @@
 use std::{fs::create_dir_all, path::PathBuf};
 
-use anyhow::Context;
 use clap::{value_parser, Parser};
-use heck::ToUpperCamelCase;
-use itertools::Itertools;
-use lazy_static::lazy_static;
-use pilota_thrift_parser::parser::Parser as _;
-use regex::Regex;
 use volo_build::{
     config_builder::InitBuilder,
     model::{Entry, GitSource, Idl, Source, DEFAULT_FILENAME},
-    util::{get_git_path, get_repo_latest_commit_id, git_archive, DEFAULT_CONFIG_FILE},
+    util::{get_repo_latest_commit_id, DEFAULT_CONFIG_FILE},
 };
 
 use crate::command::CliCommand;
@@ -122,7 +116,7 @@ impl Init {
         Ok(())
     }
 
-    fn copy_thrift_template(&self, filename: &str, config_entry: Entry) -> anyhow::Result<()> {
+    fn copy_thrift_template(&self, config_entry: Entry) -> anyhow::Result<()> {
         let (service_global_name, methods) = self.init_gen(config_entry)?;
         let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
@@ -186,27 +180,11 @@ impl CliCommand for Init {
         volo_build::util::with_config(|config| {
             let mut lock = None;
 
-            let contents = if self.git.is_some() {
+            if self.git.is_some() {
                 let r#ref = self.r#ref.as_deref().unwrap_or("HEAD");
                 let lock_value = get_repo_latest_commit_id(self.git.as_ref().unwrap(), r#ref)?;
-                let cwd = std::env::current_dir()?
-                    .join("target")
-                    .join(get_git_path(self.git.as_ref().unwrap().as_str())?)
-                    .join(lock_value.clone());
-                create_dir_all(&cwd).context("create target dir")?;
                 let _ = lock.insert(lock_value);
-
-                git_archive(
-                    self.git.as_ref().unwrap().as_str(),
-                    lock.as_ref().unwrap(),
-                    cwd.as_path(),
-                )
-                .context("git archive")?;
-                std::fs::read_to_string(cwd.join(&self.idl)).context("read idl")?
-            } else {
-                std::fs::read_to_string(&self.idl).context("read idl")?
-            };
-
+            }
             let mut idl = Idl::new();
             idl.includes = self.includes.clone();
             if let Some(git) = self.git.as_ref() {
@@ -217,25 +195,39 @@ impl CliCommand for Init {
                 });
                 idl.path = self.idl.clone();
             } else {
+                idl.path = self.idl.clone();
+            }
+
+            let mut entry = Entry {
+                protocol: idl.protocol(),
+                filename: PathBuf::from(DEFAULT_FILENAME),
+                idls: vec![idl.clone()],
+            };
+            if self.is_grpc_project() {
+                self.copy_grpc_template(entry.clone())?;
+            } else {
+                self.copy_thrift_template(entry.clone())?;
+            }
+
+            if let Some(_) = self.git.as_ref() {
+            } else {
                 // we will move volo.yml to volo-gen, so we need to add .. to includes and idl path
-                // TODO@wy fix path promblem
-                if let Some(includes) = &mut idl.includes {
+                let idl = entry.idls.get_mut(0).unwrap();
+                if let Some(includes) = &mut (*idl).includes {
                     for i in includes {
                         if i.is_absolute() {
                             continue;
                         }
-                        *i = PathBuf::new().join("./").join(i.clone());
+                        *i = PathBuf::new().join("../").join(i.clone());
                     }
                 }
-                if self.idl.is_absolute() {
-                    idl.path = self.idl.clone();
-                } else {
-                    idl.path = PathBuf::new().join("./").join(self.idl.clone());
+                if !idl.path.is_absolute() {
+                    idl.path = PathBuf::new().join("../").join(self.idl.clone());
                 }
             }
 
-            let entry = config.entries.entry(cx.entry_name);
-            let entry = match entry {
+            let config_entry = config.entries.entry(cx.entry_name);
+            match config_entry {
                 std::collections::hash_map::Entry::Occupied(mut e) => {
                     // find the specified idl and update it.
                     let mut found = false;
@@ -266,24 +258,12 @@ impl CliCommand for Init {
                     if !found {
                         e.get_mut().idls.push(idl);
                     }
-                    e.get().clone()
                 }
                 std::collections::hash_map::Entry::Vacant(e) => {
-                    let entry = Entry {
-                        protocol: idl.protocol(),
-                        filename: PathBuf::from(DEFAULT_FILENAME),
-                        idls: vec![idl],
-                    };
-                    e.insert(entry.clone());
-                    entry
+                    e.insert(entry);
                 }
             };
 
-            if self.is_grpc_project() {
-                self.copy_grpc_template(entry)?;
-            } else {
-                self.copy_thrift_template(self.idl.file_stem().unwrap().to_str().unwrap(), entry)?;
-            }
             Ok(())
         })?;
 

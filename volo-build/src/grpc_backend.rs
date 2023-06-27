@@ -34,7 +34,7 @@ impl VoloGrpcBackend {
     ) -> FastStr {
         let ty = self.cx().codegen_item_ty(ty.kind);
         let ty_str = if global_path {
-            format!("{}", ty.global_path_for_volo_gen())
+            format!("volo_gen{}", ty.global_path_for_volo_gen())
         } else {
             format!("{}", ty)
         };
@@ -54,7 +54,7 @@ impl VoloGrpcBackend {
     ) -> FastStr {
         let ret_ty = self.cx().codegen_item_ty(ty.kind);
         let ret_ty_str = if global_path {
-            format!("{}", ret_ty.global_path_for_volo_gen())
+            format!("volo_gen{}", ret_ty.global_path_for_volo_gen())
         } else {
             format!("{}", ret_ty)
         };
@@ -67,6 +67,32 @@ impl VoloGrpcBackend {
             .into()
         } else {
             format!("::volo_grpc::Response<{ret_ty_str}>, ::volo_grpc::Status").into()
+        }
+    }
+
+    fn trait_result_ty(&self, streaming: bool) -> FastStr {
+        if streaming {
+            format!(
+                r#"
+					let repeat = std::iter::repeat(Default::default());
+					let mut resp = tokio_stream::iter(repeat);
+					let (tx, rx) = mpsc::channel(64);
+					tokio::spawn(async move {{
+						while let Some(resp) = resp.next().await {{
+							match tx.send(::std::result::Result::<_, ::volo_grpc::Status>::Ok(resp)).await {{
+								Ok(_) => {{}}
+								Err(_) => {{
+									break;
+								}}
+							}}
+						}}
+					}});
+					Ok(::volo_grpc::Response::new(Box::pin(ReceiverStream::new(rx))))
+				"#
+            )
+            .into()
+        } else {
+            format!("::volo_grpc::Response::new(Default::default())").into()
         }
     }
 
@@ -589,7 +615,8 @@ impl CodegenBackend for VoloGrpcBackend {
                 let ty = self.trait_input_ty(a.ty.clone(), client_streaming, true);
 
                 let ident = &a.name;
-                format!("{ident}: {ty}")
+                // args are unsed, add _ to avoid unused variable warning
+                format!("_{ident}: {ty}")
             })
             .join(",");
 
@@ -600,12 +627,14 @@ impl CodegenBackend for VoloGrpcBackend {
             true,
         );
 
+        let default_result = self.trait_result_ty(client_streaming);
+
         let name = self.cx().rust_name(method.def_id);
 
         format!(
             r#"async fn {name}(&self, {args}) -> ::std::result::Result<{ret_ty}>{{
-			Ok(Default::default())
-		}}"#
+				Ok({default_result})
+			}}"#
         )
     }
 

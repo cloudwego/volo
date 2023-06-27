@@ -589,6 +589,52 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         format!("async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, {exception}>;")
     }
 
+    fn codegen_service_method_with_global_path(
+        &self,
+        _service_def_id: DefId,
+        method: &Method,
+    ) -> String {
+        let name = self.cx().rust_name(method.def_id);
+        let ret_ty = self
+            .inner
+            .codegen_item_ty(method.ret.kind.clone())
+            .global_path_for_volo_gen();
+        let mut ret_ty = format!("volo_gen{ret_ty}");
+        if let Some(RustWrapperArc(true)) = self
+            .cx()
+            .tags(method.ret.tags_id)
+            .as_ref()
+            .and_then(|tags| tags.get::<RustWrapperArc>())
+        {
+            ret_ty = format!("::std::sync::Arc<{ret_ty}>");
+        }
+        let args = method
+            .args
+            .iter()
+            .map(|a| {
+                let ty = self
+                    .inner
+                    .codegen_item_ty(a.ty.kind.clone())
+                    .global_path_for_volo_gen();
+                let ident = self.cx().rust_name(a.def_id);
+                format!("_{ident}: volo_gen{ty}")
+            })
+            .join(",");
+
+        let exception: FastStr = if let Some(p) = &method.exceptions {
+            let exception = self.inner.item_path(p.did).join("::");
+            format! {"::volo_thrift::error::UserError<volo_gen::{exception}>" }.into()
+        } else {
+            "::volo_thrift::AnyhowError".into()
+        };
+
+        format!(
+            r#"async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, {exception}>{{
+					Ok(Default::default())
+				}}"#
+        )
+    }
+
     fn codegen_enum_impl(&self, def_id: DefId, stream: &mut String, e: &rir::Enum) {
         self.inner.codegen_enum_impl(def_id, stream, e)
     }
