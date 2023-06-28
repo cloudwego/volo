@@ -152,8 +152,7 @@ where
         self.pilota_builder.init_service(
             self.idls
                 .into_iter()
-                .map(IdlService::from_path)
-                .nth(0)
+                .map(IdlService::from_path).next()
                 .unwrap(),
         )
     }

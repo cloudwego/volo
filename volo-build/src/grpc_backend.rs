@@ -72,27 +72,25 @@ impl VoloGrpcBackend {
 
     fn trait_result_ty(&self, streaming: bool) -> FastStr {
         if streaming {
-            format!(
-                r#"
+            r#"
 					let repeat = std::iter::repeat(Default::default());
 					let mut resp = tokio_stream::iter(repeat);
 					let (tx, rx) = mpsc::channel(64);
-					tokio::spawn(async move {{
-						while let Some(resp) = resp.next().await {{
-							match tx.send(::std::result::Result::<_, ::volo_grpc::Status>::Ok(resp)).await {{
-								Ok(_) => {{}}
-								Err(_) => {{
+					tokio::spawn(async move {
+						while let Some(resp) = resp.next().await {
+							match tx.send(::std::result::Result::<_, ::volo_grpc::Status>::Ok(resp)).await {
+								Ok(_) => {}
+								Err(_) => {
 									break;
-								}}
-							}}
-						}}
-					}});
+								}
+							}
+						}
+					});
 					Ok(::volo_grpc::Response::new(Box::pin(ReceiverStream::new(rx))))
 				"#
-            )
             .into()
         } else {
-            format!("Ok(::volo_grpc::Response::new(Default::default()))").into()
+            "Ok(::volo_grpc::Response::new(Default::default()))".into()
         }
     }
 

@@ -209,11 +209,11 @@ impl CliCommand for Init {
                 self.copy_thrift_template(entry.clone())?;
             }
 
-            if let Some(_) = self.git.as_ref() {
+            if self.git.as_ref().is_some() {
             } else {
                 // we will move volo.yml to volo-gen, so we need to add .. to includes and idl path
                 let idl = entry.idls.get_mut(0).unwrap();
-                if let Some(includes) = &mut (*idl).includes {
+                if let Some(includes) = &mut idl.includes {
                     for i in includes {
                         if i.is_absolute() {
                             continue;
