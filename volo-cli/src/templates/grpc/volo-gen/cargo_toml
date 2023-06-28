@@ -12,8 +12,10 @@ pilota.workspace = true
 
 anyhow.workspace = true
 async-trait.workspace = true
+async-stream.workspace = true
 futures.workspace = true
 tokio = {{ workspace = true, features = ["full"] }}
+tokio-stream.workspace = true
 
 [build-dependencies]
 volo-build.workspace = true

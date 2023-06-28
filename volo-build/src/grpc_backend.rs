@@ -92,7 +92,7 @@ impl VoloGrpcBackend {
             )
             .into()
         } else {
-            format!("::volo_grpc::Response::new(Default::default())").into()
+            format!("Ok(::volo_grpc::Response::new(Default::default()))").into()
         }
     }
 
@@ -620,20 +620,18 @@ impl CodegenBackend for VoloGrpcBackend {
             })
             .join(",");
 
-        let ret_ty = self.trait_output_ty(
-            method.ret.clone(),
-            self.cx()
-                .node_contains_tag::<ServerStreaming>(method.def_id),
-            true,
-        );
+        let server_streaming = self
+            .cx()
+            .node_contains_tag::<ServerStreaming>(method.def_id);
+        let ret_ty = self.trait_output_ty(method.ret.clone(), server_streaming, true);
 
-        let default_result = self.trait_result_ty(client_streaming);
+        let default_result = self.trait_result_ty(server_streaming);
 
         let name = self.cx().rust_name(method.def_id);
 
         format!(
             r#"async fn {name}(&self, {args}) -> ::std::result::Result<{ret_ty}>{{
-				Ok({default_result})
+				{default_result}
 			}}"#
         )
     }

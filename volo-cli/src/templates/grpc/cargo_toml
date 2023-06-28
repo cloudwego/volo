@@ -13,8 +13,11 @@ volo-grpc.workspace = true
 pilota.workspace = true
 
 anyhow.workspace = true
+async-stream.workspace = true
 async-trait.workspace = true
+futures.workspace = true
 tokio = {{ workspace = true, features = ["full"] }}
+tokio-stream.workspace = true
 
 [profile.release]
 opt-level = 3
@@ -42,6 +45,8 @@ volo-grpc = "*"
 pilota = "*"
 
 anyhow = "1"
+async-stream = "0.3"
 async-trait = "0.1"
 futures = "0.3"
 tokio = "1"
+tokio-stream = "0.1"
