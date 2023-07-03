@@ -224,7 +224,7 @@ mod linux_helper {
         }
         let fields = get_fields(&line);
         if let Ok(n) = fields[0].parse() {
-            if n > (1 << 16 - 1) {
+            if n > ((1 << 16) - 1) {
                 max_ack_backlog(n)
             } else {
                 n
