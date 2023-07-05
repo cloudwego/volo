@@ -34,7 +34,7 @@ impl VoloGrpcBackend {
     ) -> FastStr {
         let ty = self.cx().codegen_item_ty(ty.kind);
         let ty_str = if global_path {
-            format!("volo_gen{}", ty.global_path_for_volo_gen())
+            format!("volo_gen{}", ty.global_path())
         } else {
             format!("{}", ty)
         };
@@ -54,7 +54,7 @@ impl VoloGrpcBackend {
     ) -> FastStr {
         let ret_ty = self.cx().codegen_item_ty(ty.kind);
         let ret_ty_str = if global_path {
-            format!("volo_gen{}", ret_ty.global_path_for_volo_gen())
+            format!("volo_gen{}", ret_ty.global_path())
         } else {
             format!("{}", ret_ty)
         };
@@ -73,9 +73,10 @@ impl VoloGrpcBackend {
     fn trait_result_ty(&self, streaming: bool) -> FastStr {
         if streaming {
             r#"
+					use ::volo_grpc::StreamExt;
 					let repeat = std::iter::repeat(Default::default());
-					let mut resp = tokio_stream::iter(repeat);
-					let (tx, rx) = mpsc::channel(64);
+					let mut resp = ::volo_grpc::iter(repeat);
+					let (tx, rx) = ::volo_grpc::mpsc::channel(64);
 					tokio::spawn(async move {
 						while let Some(resp) = resp.next().await {
 							match tx.send(::std::result::Result::<_, ::volo_grpc::Status>::Ok(resp)).await {
@@ -86,7 +87,7 @@ impl VoloGrpcBackend {
 							}
 						}
 					});
-					Ok(::volo_grpc::Response::new(Box::pin(ReceiverStream::new(rx))))
+					Ok(::volo_grpc::Response::new(Box::pin(::volo_grpc::ReceiverStream::new(rx))))
 				"#
             .into()
         } else {

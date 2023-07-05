@@ -119,7 +119,7 @@ impl<MkB, P> Builder<MkB, P>
 where
     MkB: MakeBackend + Send,
     MkB::Target: Send,
-    P: Parser + Default,
+    P: Parser,
 {
     pub fn include_dirs(mut self, include_dirs: Vec<PathBuf>) -> Self {
         self.pilota_builder = self.pilota_builder.include_dirs(include_dirs);
@@ -152,7 +152,8 @@ where
         self.pilota_builder.init_service(
             self.idls
                 .into_iter()
-                .map(IdlService::from_path).next()
+                .map(IdlService::from_path)
+                .next()
                 .unwrap(),
         )
     }

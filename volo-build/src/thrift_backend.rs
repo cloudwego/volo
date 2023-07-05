@@ -598,7 +598,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         let ret_ty = self
             .inner
             .codegen_item_ty(method.ret.kind.clone())
-            .global_path_for_volo_gen();
+            .global_path();
         let mut ret_ty = format!("volo_gen{ret_ty}");
         if let Some(RustWrapperArc(true)) = self
             .cx()
@@ -612,10 +612,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             .args
             .iter()
             .map(|a| {
-                let ty = self
-                    .inner
-                    .codegen_item_ty(a.ty.kind.clone())
-                    .global_path_for_volo_gen();
+                let ty = self.inner.codegen_item_ty(a.ty.kind.clone()).global_path();
                 let ident = self.cx().rust_name(a.def_id);
                 format!("_{ident}: volo_gen{ty}")
             })
