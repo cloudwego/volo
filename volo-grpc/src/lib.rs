@@ -28,5 +28,3 @@ pub use message::{RecvEntryMessage, SendEntryMessage};
 pub use request::{IntoRequest, IntoStreamingRequest, Request};
 pub use response::Response;
 pub use status::{Code, Status};
-pub use tokio::sync::mpsc;
-pub use tokio_stream::{iter, wrappers::ReceiverStream, StreamExt};
