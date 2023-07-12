@@ -172,9 +172,8 @@ impl ZeroCopyDecoder for ThriftCodec {
             // not enough bytes to detect, so return error
             return Err(pilota::thrift::error::DecodeError::new(
                 DecodeErrorKind::BadVersion,
-                    "not enough bytes to detect protocol in thrift codec",
-                ),
-            );
+                "not enough bytes to detect protocol in thrift codec",
+            ));
         };
 
         // detect protocol
