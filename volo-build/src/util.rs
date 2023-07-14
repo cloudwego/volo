@@ -67,7 +67,6 @@ pub struct LocalIdl {
     pub path: PathBuf,
     pub includes: Vec<PathBuf>,
     pub touch: Vec<String>,
-    pub ignore_unused: bool,
 }
 
 pub fn get_or_download_idl(idl: Idl, target_dir: impl AsRef<Path>) -> anyhow::Result<LocalIdl> {
@@ -109,7 +108,6 @@ pub fn get_or_download_idl(idl: Idl, target_dir: impl AsRef<Path>) -> anyhow::Re
         path,
         includes,
         touch: idl.touch,
-        ignore_unused: idl.ignore_unused,
     })
 }
 

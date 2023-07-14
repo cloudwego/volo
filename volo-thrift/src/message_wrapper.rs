@@ -97,15 +97,15 @@ where
 
         match &self.data {
             Ok(inner) => {
-                protocol.write_message_begin_len(&ident)
+                protocol.message_begin_len(&ident)
                     + inner.size(protocol)
-                    + protocol.write_message_end_len()
+                    + protocol.message_end_len()
             }
             Err(inner) => match inner {
                 crate::Error::Application(e) => {
-                    protocol.write_message_begin_len(&ident)
+                    protocol.message_begin_len(&ident)
                         + e.size(protocol)
-                        + protocol.write_message_end_len()
+                        + protocol.message_end_len()
                 }
                 _ => 0,
             },
