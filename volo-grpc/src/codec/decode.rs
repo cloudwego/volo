@@ -47,7 +47,7 @@ enum State {
     Error,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Kind {
     Request,
     Response(StatusCode),
@@ -190,10 +190,13 @@ impl<T: Message + Default> Stream for RecvStream<T> {
             let chunk = match ready!(Pin::new(&mut self.body).poll_data(cx)) {
                 Some(Ok(d)) => Some(d),
                 Some(Err(e)) => {
-                    let _ = std::mem::replace(&mut self.state, State::Error);
                     let err: crate::BoxError = e.into();
-                    debug!("[VOLO] decoder inner stream error: {:?}", err);
                     let status = Status::from_error(err);
+                    if self.kind == Kind::Request && status.code() == Code::Cancelled {
+                        return Poll::Ready(None);
+                    }
+                    debug!("[VOLO] decoder inner stream error: {:?}", status);
+                    let _ = std::mem::replace(&mut self.state, State::Error);
                     return Poll::Ready(Some(Err(status)));
                 }
                 None => None,

@@ -1,6 +1,6 @@
 //! These codes are copied from `tonic/src/status.rs` and may be modified by us.
 
-use std::{borrow::Cow, error::Error, fmt};
+use std::{borrow::Cow, error::Error, fmt, sync::Arc};
 
 use bytes::Bytes;
 use http::header::{HeaderMap, HeaderValue};
@@ -40,6 +40,7 @@ const GRPC_STATUS_DETAILS_HEADER: &str = "grpc-status-details-bin";
 /// assert_eq!(status1.code(), Code::InvalidArgument);
 /// assert_eq!(status1.code(), status2.code());
 /// ```
+#[derive(Clone)]
 pub struct Status {
     /// The gRPC status code, found in the `grpc-status` header.
     code: Code,
@@ -52,19 +53,7 @@ pub struct Status {
     /// or by `Status` fields above, they will be ignored.
     metadata: MetadataMap,
     /// Optional underlying error.
-    source: Option<Box<dyn Error + Send + Sync + 'static>>,
-}
-
-impl Clone for Status {
-    fn clone(&self) -> Self {
-        Self {
-            code: self.code,
-            message: self.message.clone(),
-            details: self.details.clone(),
-            metadata: self.metadata.clone(),
-            source: None,
-        }
-    }
+    source: Option<Arc<dyn Error + Send + Sync + 'static>>,
 }
 
 /// gRPC status codes used by `Status`.
@@ -334,7 +323,11 @@ impl Status {
     // ==== transform between Error and HeaderMap ====
 
     pub fn from_error(err: BoxError) -> Self {
-        Self::try_from_error(err).unwrap_or_else(|err| Self::new(Code::Unknown, err.to_string()))
+        Self::try_from_error(err).unwrap_or_else(|err| {
+            let mut status = Self::new(Code::Unknown, err.to_string());
+            status.source = Some(err.into());
+            status
+        })
     }
 
     pub fn try_from_error(err: BoxError) -> Result<Self, BoxError> {
@@ -362,7 +355,16 @@ impl Status {
     // transform between http2 and grpc error code.
     // refer to https://github.com/grpc/grpc/blob/master/doc/statuscodes.md.
     pub fn from_h2_error(err: Box<h2::Error>) -> Self {
-        let code = match err.reason() {
+        let code = Self::code_from_h2(&err);
+
+        let mut status = Self::new(code, format!("h2 protocol error: {err}"));
+        status.source = Some(Arc::new(*err));
+        status
+    }
+
+    fn code_from_h2(err: &h2::Error) -> Code {
+        // See https://github.com/grpc/grpc/blob/3977c30/doc/PROTOCOL-HTTP2.md#errors
+        match err.reason() {
             Some(h2::Reason::NO_ERROR)
             | Some(h2::Reason::PROTOCOL_ERROR)
             | Some(h2::Reason::INTERNAL_ERROR)
@@ -376,11 +378,7 @@ impl Status {
             Some(h2::Reason::INADEQUATE_SECURITY) => Code::PermissionDenied,
 
             _ => Code::Unknown,
-        };
-
-        let mut status = Self::new(code, format!("h2 protocol error: {err}"));
-        status.source = Some(err);
-        status
+        }
     }
 
     pub fn to_h2_error(&self) -> h2::Error {
@@ -412,6 +410,12 @@ impl Status {
         // > can be corrected if retried with a backoff.
         if err.is_timeout() || err.is_connect() {
             return Some(Self::unavailable(err.to_string()));
+        }
+        if let Some(h2_err) = err.source().and_then(|e| e.downcast_ref::<h2::Error>()) {
+            let code = Self::code_from_h2(h2_err);
+            let status = Self::new(code, format!("h2 protocol error: {}", err));
+
+            return Some(status);
         }
         None
     }
