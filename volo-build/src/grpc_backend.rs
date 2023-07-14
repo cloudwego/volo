@@ -1,4 +1,3 @@
-use faststr::FastStr;
 use itertools::Itertools;
 use pilota_build::{
     db::RirDatabase,
@@ -7,6 +6,7 @@ use pilota_build::{
     tags::protobuf::{ClientStreaming, ServerStreaming},
     CodegenBackend, Context, DefId, IdentName, Symbol,
 };
+use volo::FastStr;
 
 pub struct MkGrpcBackend;
 
@@ -26,27 +26,72 @@ pub struct VoloGrpcBackend {
 }
 
 impl VoloGrpcBackend {
-    fn trait_input_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> FastStr {
+    fn trait_input_ty(
+        &self,
+        ty: pilota_build::ty::Ty,
+        streaming: bool,
+        global_path: bool,
+    ) -> FastStr {
         let ty = self.cx().codegen_item_ty(ty.kind);
+        let ty_str = if global_path {
+            format!("volo_gen{}", ty.global_path())
+        } else {
+            format!("{}", ty)
+        };
 
         if streaming {
-            format!("::volo_grpc::Request<::volo_grpc::RecvStream<{ty}>>").into()
+            format!("::volo_grpc::Request<::volo_grpc::RecvStream<{ty_str}>>").into()
         } else {
-            format!("::volo_grpc::Request<{ty}>").into()
+            format!("::volo_grpc::Request<{ty_str}>").into()
         }
     }
 
-    fn trait_output_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> FastStr {
+    fn trait_output_ty(
+        &self,
+        ty: pilota_build::ty::Ty,
+        streaming: bool,
+        global_path: bool,
+    ) -> FastStr {
         let ret_ty = self.cx().codegen_item_ty(ty.kind);
+        let ret_ty_str = if global_path {
+            format!("volo_gen{}", ret_ty.global_path())
+        } else {
+            format!("{}", ret_ty)
+        };
 
         if streaming {
             format!(
                 "::volo_grpc::Response<::volo_grpc::BoxStream<'static, \
-                 ::std::result::Result<{ret_ty}, ::volo_grpc::Status>>>, ::volo_grpc::Status"
+                 ::std::result::Result<{ret_ty_str}, ::volo_grpc::Status>>>, ::volo_grpc::Status"
             )
             .into()
         } else {
-            format!("::volo_grpc::Response<{ret_ty}>, ::volo_grpc::Status").into()
+            format!("::volo_grpc::Response<{ret_ty_str}>, ::volo_grpc::Status").into()
+        }
+    }
+
+    fn trait_result_ty(&self, streaming: bool) -> FastStr {
+        if streaming {
+            r#"
+					use ::volo_grpc::codegen::StreamExt;
+					let repeat = std::iter::repeat(Default::default());
+					let mut resp = ::volo_grpc::codegen::iter(repeat);
+					let (tx, rx) = ::volo_grpc::codegen::mpsc::channel(64);
+					tokio::spawn(async move {
+						while let Some(resp) = resp.next().await {
+							match tx.send(::std::result::Result::<_, ::volo_grpc::Status>::Ok(resp)).await {
+								Ok(_) => {}
+								Err(_) => {
+									break;
+								}
+							}
+						}
+					});
+					Ok(::volo_grpc::Response::new(Box::pin(::volo_grpc::codegen::ReceiverStream::new(rx))))
+				"#
+            .into()
+        } else {
+            "Ok(::volo_grpc::Response::new(Default::default()))".into()
         }
     }
 
@@ -535,7 +580,7 @@ impl CodegenBackend for VoloGrpcBackend {
             .args
             .iter()
             .map(|a| {
-                let ty = self.trait_input_ty(a.ty.clone(), client_streaming);
+                let ty = self.trait_input_ty(a.ty.clone(), client_streaming, false);
 
                 let ident = &a.name;
                 format!("{ident}: {ty}")
@@ -546,11 +591,48 @@ impl CodegenBackend for VoloGrpcBackend {
             method.ret.clone(),
             self.cx()
                 .node_contains_tag::<ServerStreaming>(method.def_id),
+            false,
         );
 
         let name = self.cx().rust_name(method.def_id);
 
         format!("async fn {name}(&self, {args}) -> ::std::result::Result<{ret_ty}>;")
+    }
+
+    fn codegen_service_method_with_global_path(
+        &self,
+        _service_def_id: DefId,
+        method: &Method,
+    ) -> String {
+        let client_streaming = self
+            .cx()
+            .node_contains_tag::<ClientStreaming>(method.def_id);
+        let args = method
+            .args
+            .iter()
+            .map(|a| {
+                let ty = self.trait_input_ty(a.ty.clone(), client_streaming, true);
+
+                let ident = &a.name;
+                // args are unsed, add _ to avoid unused variable warning
+                format!("_{ident}: {ty}")
+            })
+            .join(",");
+
+        let server_streaming = self
+            .cx()
+            .node_contains_tag::<ServerStreaming>(method.def_id);
+        let ret_ty = self.trait_output_ty(method.ret.clone(), server_streaming, true);
+
+        let default_result = self.trait_result_ty(server_streaming);
+
+        let name = self.cx().rust_name(method.def_id);
+
+        format!(
+            r#"async fn {name}(&self, {args}) -> ::std::result::Result<{ret_ty}>{{
+				{default_result}
+			}}"#
+        )
     }
 
     fn codegen_enum_impl(&self, def_id: DefId, stream: &mut String, e: &rir::Enum) {

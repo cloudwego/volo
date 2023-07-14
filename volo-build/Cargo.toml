@@ -1,6 +1,6 @@
 [package]
 name = "volo-build"
-version = "0.5.0"
+version = "0.5.1"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -17,9 +17,10 @@ keywords = ["thrift", "grpc", "protobuf", "volo", "build"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
+volo = { version = "0.5", path = "../volo" }
+
 pilota-build.workspace = true
 
-faststr.workspace = true
 anyhow.workspace = true
 async-trait.workspace = true
 dirs.workspace = true

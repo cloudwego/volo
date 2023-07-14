@@ -146,6 +146,17 @@ where
         );
         Ok(())
     }
+
+    pub fn init_service(self) -> anyhow::Result<(String, String)> {
+        assert_eq!(self.idls.len(), 1);
+        self.pilota_builder.init_service(
+            self.idls
+                .into_iter()
+                .map(IdlService::from_path)
+                .next()
+                .unwrap(),
+        )
+    }
 }
 
 macro_rules! join_multi_strs {

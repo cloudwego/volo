@@ -133,7 +133,7 @@ where
                             inner_read_error.store(true, std::sync::atomic::Ordering::Relaxed);
                             for (_, tx) in tx_map.drain() {
                                 let _ = tx.send(Err(Error::Application(ApplicationError::new(
-                                    ApplicationErrorKind::Unknown,
+                                    ApplicationErrorKind::UNKNOWN,
                                     format!("multiplex connection error: {e}, target: {target}"),
                                 ))));
                             }
@@ -200,13 +200,13 @@ where
         // check error and closed
         if self.read_error.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(Error::Application(ApplicationError::new(
-                ApplicationErrorKind::Unknown,
+                ApplicationErrorKind::UNKNOWN,
                 "multiplex connection error".to_string(),
             )));
         }
         if self.read_closed.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(Error::Application(ApplicationError::new(
-                ApplicationErrorKind::Unknown,
+                ApplicationErrorKind::UNKNOWN,
                 "multiplex connection closed".to_string(),
             )));
         }
@@ -259,7 +259,7 @@ where
             Err(e) => {
                 tracing::error!("[VOLO] multiplex connection oneshot recv error: {e}");
                 Err(Error::Application(ApplicationError::new(
-                    ApplicationErrorKind::Unknown,
+                    ApplicationErrorKind::UNKNOWN,
                     format!("multiplex connection oneshot recv error: {e}"),
                 )))
             }

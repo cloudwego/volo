@@ -33,7 +33,7 @@ jobs:
     # - uses: Swatinem/rust-cache@v1
     - name: Run tests
       run: |
-        cargo check
+        cargo check --features multiplex
         cargo test
 
   test-linux-aarch64:
@@ -47,7 +47,7 @@ jobs:
       # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
-          cargo check
+          cargo check --features multiplex
           cargo test
 
   test-macos:
@@ -61,7 +61,7 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
-          cargo check
+          cargo check --features multiplex
           cargo test
 
   test-windows:
@@ -75,7 +75,7 @@ jobs:
       - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
-          cargo check
+          cargo check --features multiplex
           cargo test
 
   lint:
