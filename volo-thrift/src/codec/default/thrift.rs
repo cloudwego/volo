@@ -133,6 +133,13 @@ impl ZeroCopyDecoder for ThriftCodec {
                 #[cfg(not(feature = "unsafe-codec"))]
                 let mut p = TBinaryProtocol::new(bytes, true);
                 let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
+                #[cfg(feature = "unsafe-codec")]
+                {
+                    use bytes::Buf;
+                    use pilota::thrift::TInputProtocol;
+                    let index = p.index();
+                    p.buf().advance(index);
+                }
                 cx.extensions_mut().insert(ProtocolBinary);
                 Ok(Some(msg))
             }
