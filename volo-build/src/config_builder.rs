@@ -86,13 +86,6 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.touch(items)),
         }
     }
-
-    pub fn ignore_unused(self, ignore: bool) -> Self {
-        match self {
-            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.ignore_unused(ignore)),
-            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.ignore_unused(ignore)),
-        }
-    }
 }
 
 impl ConfigBuilder {
@@ -130,14 +123,12 @@ impl ConfigBuilder {
                     path,
                     includes,
                     touch,
-                    ignore_unused,
                 } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
 
                 builder = builder
                     .add_service(path.clone())
                     .includes(includes)
                     .touch([(path, touch)])
-                    .ignore_unused(ignore_unused);
             }
 
             builder.write()?;
@@ -175,14 +166,12 @@ impl InitBuilder {
                 path,
                 includes,
                 touch,
-                ignore_unused,
             } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
 
             builder = builder
                 .add_service(path.clone())
                 .includes(includes)
                 .touch([(path, touch)])
-                .ignore_unused(ignore_unused);
         }
 
         builder.init_service()

@@ -317,15 +317,15 @@ impl Message for ApplicationError {
     }
 
     fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
-        protocol.write_struct_begin_len(&TAPPLICATION_EXCEPTION)
-            + protocol.write_field_begin_len(TType::Binary, Some(1))
-            + protocol.write_string_len(&self.message)
-            + protocol.write_field_end_len()
-            + protocol.write_field_begin_len(TType::I32, Some(2))
-            + protocol.write_i32_len(self.kind.as_i32())
-            + protocol.write_field_end_len()
-            + protocol.write_field_stop_len()
-            + protocol.write_struct_end_len()
+        protocol.struct_begin_len(&TAPPLICATION_EXCEPTION)
+            + protocol.field_begin_len(TType::Binary, Some(1))
+            + protocol.string_len(&self.message)
+            + protocol.field_end_len()
+            + protocol.field_begin_len(TType::I32, Some(2))
+            + protocol.i32_len(self.kind.as_i32())
+            + protocol.field_end_len()
+            + protocol.field_stop_len()
+            + protocol.struct_end_len()
     }
 }
 

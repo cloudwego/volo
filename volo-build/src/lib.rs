@@ -38,7 +38,7 @@ impl Builder<thrift_backend::MkThriftBackend, parser::ThriftParser> {
             pilota_builder: pilota_build::Builder::thrift()
                 .with_backend(thrift_backend::MkThriftBackend),
             out_dir: Default::default(),
-            filename: "volo_gen".into(),
+            filename: "volo_gen.rs".into(),
             idls: Default::default(),
             config_file_path: "volo.yml".into(),
         }
@@ -51,7 +51,7 @@ impl Builder<grpc_backend::MkGrpcBackend, parser::ProtobufParser> {
             pilota_builder: pilota_build::Builder::protobuf()
                 .with_backend(grpc_backend::MkGrpcBackend),
             out_dir: Default::default(),
-            filename: "volo_gen".into(),
+            filename: "volo_gen.rs".into(),
             idls: Default::default(),
             config_file_path: "volo.yml".into(),
         }
@@ -100,6 +100,11 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>,
     ) -> Self {
         self.pilota_builder = self.pilota_builder.touch(items);
+        self
+    }
+
+    pub fn keep_unknown_fields(mut self, keep_unknown_fields: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.keep_unknown_fields(keep_unknown_fields);
         self
     }
 

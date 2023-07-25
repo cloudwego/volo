@@ -138,7 +138,7 @@ impl ZeroCopyDecoder for ThriftCodec {
                     use bytes::Buf;
                     use pilota::thrift::TInputProtocol;
                     let index = p.index();
-                    p.buf_mut().advance(index);
+                    p.buf().advance(index);
                 }
                 cx.extensions_mut().insert(ProtocolBinary);
                 Ok(Some(msg))

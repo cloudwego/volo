@@ -21,3 +21,5 @@ entries:
     idls:
       - source: local
         path: ../thrift_idl/hello.thrift
+      - source: local
+        path: ../thrift_idl/echo.thrift
