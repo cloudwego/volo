@@ -103,7 +103,10 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
-    pub fn keep_unknown_fields(mut self, keep_unknown_fields: bool) -> Self {
+    pub fn keep_unknown_fields(
+        mut self,
+        keep_unknown_fields: impl IntoIterator<Item = PathBuf>,
+    ) -> Self {
         self.pilota_builder = self.pilota_builder.keep_unknown_fields(keep_unknown_fields);
         self
     }
