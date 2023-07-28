@@ -23,3 +23,6 @@ entries:
         path: ../thrift_idl/hello.thrift
       - source: local
         path: ../thrift_idl/echo.thrift
+      - source: local
+        path: ../thrift_idl/echo_unknown.thrift
+        keep_unknown_fields: true

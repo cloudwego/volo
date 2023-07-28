@@ -86,6 +86,15 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.touch(items)),
         }
     }
+
+    pub fn keep_unknown_fields(self, keep: impl IntoIterator<Item = PathBuf>) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.keep_unknown_fields(keep))
+            }
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.keep_unknown_fields(keep)),
+        }
+    }
 }
 
 impl ConfigBuilder {
@@ -123,12 +132,16 @@ impl ConfigBuilder {
                     path,
                     includes,
                     touch,
+                    keep_unknown_fields,
                 } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
 
                 builder = builder
                     .add_service(path.clone())
                     .includes(includes)
-                    .touch([(path, touch)])
+                    .touch([(path.clone(), touch)]);
+                if keep_unknown_fields {
+                    builder = builder.keep_unknown_fields([path])
+                }
             }
 
             builder.write()?;
@@ -166,12 +179,16 @@ impl InitBuilder {
                 path,
                 includes,
                 touch,
+                keep_unknown_fields,
             } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
 
             builder = builder
                 .add_service(path.clone())
                 .includes(includes)
-                .touch([(path, touch)])
+                .touch([(path.clone(), touch)]);
+            if keep_unknown_fields {
+                builder = builder.keep_unknown_fields([path])
+            }
         }
 
         builder.init_service()

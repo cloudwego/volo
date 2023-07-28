@@ -521,9 +521,9 @@ checksum = "6999dc1837253364c2ebb0704ba97994bd874e8f195d665c50b7548f6ea92764"
 
 [[package]]
 name = "faststr"
-version = "0.2.3"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dfefb0b7147544e93222aa0d5489cfdba2d012603f2f7f0567a67977bb93481f"
+checksum = "df6df26864bf2bd44803afbdad5a3b1c32185be12224dd8cb028ecfae59e4bf2"
 dependencies = [
  "bytes",
  "serde",
@@ -1380,7 +1380,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.7.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#75324e8430b2ca615e362df604d3b7e7f86a8c84"
+source = "git+https://github.com/cloudwego/pilota?branch=main#62867731ecbf0dab1e6284e29d611a5418f03a24"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1401,7 +1401,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.7.7"
-source = "git+https://github.com/cloudwego/pilota?branch=main#75324e8430b2ca615e362df604d3b7e7f86a8c84"
+source = "git+https://github.com/cloudwego/pilota?branch=main#62867731ecbf0dab1e6284e29d611a5418f03a24"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -1433,7 +1433,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.2"
-source = "git+https://github.com/cloudwego/pilota?branch=main#75324e8430b2ca615e362df604d3b7e7f86a8c84"
+source = "git+https://github.com/cloudwego/pilota?branch=main#62867731ecbf0dab1e6284e29d611a5418f03a24"
 dependencies = [
  "nom",
 ]
@@ -1820,7 +1820,7 @@ checksum = "79ea77c539259495ce8ca47f53e66ae0330a8819f67e23ac96ca02f50e7b7d36"
 dependencies = [
  "log",
  "ring",
- "rustls-webpki 0.101.1",
+ "rustls-webpki 0.101.2",
  "sct",
 ]
 
@@ -1845,9 +1845,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.101.1"
+version = "0.101.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15f36a6828982f422756984e47912a7a51dcbc2a197aa791158f8ca61cd8204e"
+checksum = "513722fd73ad80a71f72b61009ea1b584bcfa1483ca93949c8f290298837fa59"
 dependencies = [
  "ring",
  "untrusted",
@@ -1939,18 +1939,18 @@ checksum = "b0293b4b29daaf487284529cc2f5675b8e57c61f70167ba415a463651fd6a918"
 
 [[package]]
 name = "serde"
-version = "1.0.175"
+version = "1.0.177"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d25439cd7397d044e2748a6fe2432b5e85db703d6d097bd014b3c0ad1ebff0b"
+checksum = "63ba2516aa6bf82e0b19ca8b50019d52df58455d3cf9bdaf6315225fdd0c560a"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.175"
+version = "1.0.177"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b23f7ade6f110613c0d63858ddb8b94c1041f550eab58a16b371bdf2c9c80ab4"
+checksum = "401797fe7833d72109fedec6bfcbe67c0eed9b99772f26eb8afd261f0abc6fd3"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1959,9 +1959,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.103"
+version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d03b412469450d4404fe8499a268edd7f8b79fecb074b0d812ad64ca21f4031b"
+checksum = "076066c5f1078eac5b722a31827a8832fe108bed65dfa75e233c89f8206e976c"
 dependencies = [
  "itoa",
  "ryu",

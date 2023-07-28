@@ -35,6 +35,12 @@ pub struct Idl {
     pub includes: Option<Vec<PathBuf>>,
     #[serde(skip_serializing_if = "Vec::is_empty", default = "Vec::new")]
     pub touch: Vec<String>,
+    #[serde(default = "default_keep_unknown_fields")]
+    pub keep_unknown_fields: bool,
+}
+
+fn default_keep_unknown_fields() -> bool {
+    false
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -74,6 +80,7 @@ impl Idl {
             path: PathBuf::from(""),
             includes: None,
             touch: Vec::default(),
+            keep_unknown_fields: false,
         }
     }
 

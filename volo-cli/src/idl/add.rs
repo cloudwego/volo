@@ -71,6 +71,7 @@ impl CliCommand for Add {
                         touch: vec![],
                         path: self.idl.clone(),
                         includes: self.includes.clone(),
+                        keep_unknown_fields: false,
                     }
                 } else {
                     Idl {
@@ -78,6 +79,7 @@ impl CliCommand for Add {
                         touch: vec![],
                         path: self.idl.clone(),
                         includes: self.includes.clone(),
+                        keep_unknown_fields: false,
                     }
                 }
             };
