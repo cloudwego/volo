@@ -72,7 +72,7 @@ struct VirtualNode {
 
 impl PartialOrd for VirtualNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.hash.partial_cmp(&other.hash)
+        Some(self.cmp(other))
     }
 }
 
