@@ -54,7 +54,7 @@ where
                     None => self.inner.call(cx, req).await.map_err(Into::into),
                 }
             } else {
-                self.inner.call(cx, req).await.map_err(Into::into)
+                unreachable!("rpc_info.config should never be None")
             }
         }
     }

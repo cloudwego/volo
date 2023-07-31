@@ -584,8 +584,8 @@ impl<VE: ValueEncoding> Eq for MetadataValue<VE> {}
 
 impl<VE: ValueEncoding> PartialOrd for MetadataValue<VE> {
     #[inline]
-    fn partial_cmp(&self, other: &MetadataValue<VE>) -> Option<cmp::Ordering> {
-        self.inner.partial_cmp(&other.inner)
+    fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
+        Some(self.cmp(other))
     }
 }
 

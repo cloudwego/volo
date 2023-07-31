@@ -141,7 +141,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     });
                     Ok(())
                 }.instrument(span_provider.on_serve(tracing_cx)).await;
-                if let Err(_) = result {
+                if result.is_err() {
                     break;
                 }
             }
