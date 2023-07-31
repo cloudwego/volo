@@ -62,6 +62,8 @@ pub struct ClientBuilder<IL, OL, MkClient, Req, Resp, MkT, MkC, LB> {
     mk_lb: LB,
     _marker: PhantomData<(*const Req, *const Resp)>,
 
+    disable_timeout_layer: bool,
+
     #[cfg(feature = "multiplex")]
     multiplex: bool,
 }
@@ -93,6 +95,8 @@ impl<C, Req, Resp>
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
 
+            disable_timeout_layer: false,
+
             #[cfg(feature = "multiplex")]
             multiplex: false,
         }
@@ -120,6 +124,8 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
             make_codec: self.make_codec,
             mk_lb: self.mk_lb.load_balance(load_balance),
 
+            disable_timeout_layer: self.disable_timeout_layer,
+
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
         }
@@ -142,6 +148,8 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
             make_transport: self.make_transport,
             make_codec: self.make_codec,
             mk_lb: self.mk_lb.discover(discover),
+
+            disable_timeout_layer: self.disable_timeout_layer,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -198,6 +206,13 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
         self
     }
 
+    /// Disable the default timeout layer.
+    #[doc(hidden)]
+    pub fn disable_timeout_layer(mut self) -> Self {
+        self.disable_timeout_layer = true;
+        self
+    }
+
     pub fn mk_load_balance<NLB>(
         self,
         mk_load_balance: NLB,
@@ -215,6 +230,8 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             make_transport: self.make_transport,
             make_codec: self.make_codec,
             mk_lb: mk_load_balance,
+
+            disable_timeout_layer: self.disable_timeout_layer,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -247,6 +264,8 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             make_codec,
             mk_lb: self.mk_lb,
 
+            disable_timeout_layer: self.disable_timeout_layer,
+
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
         }
@@ -271,6 +290,8 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             make_transport,
             make_codec: self.make_codec,
             mk_lb: self.mk_lb,
+
+            disable_timeout_layer: self.disable_timeout_layer,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -299,7 +320,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ///
     /// After we call `.layer_inner(baz)`, we will get: foo -> bar -> baz.
     ///
-    /// The overall order for layers is: Timeout -> outer -> LoadBalance -> [inner] -> transport.
+    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
     pub fn layer_inner<Inner>(
         self,
         layer: Inner,
@@ -317,6 +338,8 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             make_transport: self.make_transport,
             make_codec: self.make_codec,
             mk_lb: self.mk_lb,
+
+            disable_timeout_layer: self.disable_timeout_layer,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -354,6 +377,8 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             make_codec: self.make_codec,
             mk_lb: self.mk_lb,
 
+            disable_timeout_layer: self.disable_timeout_layer,
+
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
         }
@@ -371,7 +396,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ///
     /// After we call `.layer_outer_front(baz)`, we will get: baz -> foo -> bar.
     ///
-    /// The overall order for layers is: Timeout -> [outer] -> LoadBalance -> inner -> transport.
+    /// The overall order for layers is: [outer] -> Timeout -> LoadBalance -> inner -> transport.
     pub fn layer_outer_front<Outer>(
         self,
         layer: Outer,
@@ -389,6 +414,8 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             make_transport: self.make_transport,
             make_codec: self.make_codec,
             mk_lb: self.mk_lb,
+
+            disable_timeout_layer: self.disable_timeout_layer,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -412,6 +439,8 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             make_transport: self.make_transport,
             make_codec: self.make_codec,
             mk_lb: self.mk_lb,
+
+            disable_timeout_layer: self.disable_timeout_layer,
 
             multiplex,
         }
@@ -467,13 +496,22 @@ where
 impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB>
 where
     C: volo::client::MkClient<
-        Client<BoxCloneService<ClientContext, Req, Option<Resp>, crate::Error>>,
+        Client<
+            BoxCloneService<
+                ClientContext,
+                Req,
+                Option<Resp>,
+                <OL::Service as Service<ClientContext, Req>>::Error,
+            >,
+        >,
     >,
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
-    <LB::Layer as Layer<IL::Service>>::Service:
-        Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone + Sync,
-    <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error: Into<Error>,
+    <LB::Layer as Layer<IL::Service>>::Service: Service<ClientContext, Req, Response = Option<Resp>, Error = Error>
+        + 'static
+        + Send
+        + Clone
+        + Sync,
     for<'cx> <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Future<'cx>:
         Send,
     Req: EntryMessage + Send + 'static + Sync + Clone,
@@ -485,14 +523,7 @@ where
     for<'cx> <IL::Service as Service<ClientContext, Req>>::Future<'cx>: Send,
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
-    OL: Layer<
-        BoxCloneService<
-            ClientContext,
-            Req,
-            Option<Resp>,
-            <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Error,
-        >,
-    >,
+    OL: Layer<BoxCloneService<ClientContext, Req, Option<Resp>, Error>>,
     OL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone + Sync,
     for<'cx> <OL::Service as Service<ClientContext, Req>>::Future<'cx>: Send,
@@ -528,11 +559,15 @@ where
             },
         };
 
-        let transport = TimeoutLayer::new().layer(self.outer_layer.layer(BoxCloneService::new(
-            self.mk_lb.make().layer(self.inner_layer.layer(msg_svc)),
-        )));
-
-        let transport = BoxCloneService::new(transport);
+        let transport = if !self.disable_timeout_layer {
+            BoxCloneService::new(self.outer_layer.layer(BoxCloneService::new(
+                TimeoutLayer::new().layer(self.mk_lb.make().layer(self.inner_layer.layer(msg_svc))),
+            )))
+        } else {
+            BoxCloneService::new(self.outer_layer.layer(BoxCloneService::new(
+                self.mk_lb.make().layer(self.inner_layer.layer(msg_svc)),
+            )))
+        };
 
         self.mk_client.mk_client(Client {
             inner: Arc::new(ClientInner {
