@@ -768,6 +768,12 @@ impl From<LoadBalanceError> for Status {
     }
 }
 
+impl From<anyhow::Error> for Status {
+    fn from(err: anyhow::Error) -> Self {
+        Self::from_error(err.into())
+    }
+}
+
 impl Retryable for Status {
     fn retryable(&self) -> bool {
         matches!(
