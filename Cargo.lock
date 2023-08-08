@@ -943,15 +943,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "itertools"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1379,8 +1370,9 @@ dependencies = [
 
 [[package]]
 name = "pilota"
-version = "0.7.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#62867731ecbf0dab1e6284e29d611a5418f03a24"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cea60b1e80be5b47ca99355190f6dc60a734a6828dcf14c77333ca58285d32fa"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1394,21 +1386,23 @@ dependencies = [
  "paste",
  "proptest",
  "serde",
+ "smallvec",
  "thiserror",
  "tokio",
 ]
 
 [[package]]
 name = "pilota-build"
-version = "0.7.7"
-source = "git+https://github.com/cloudwego/pilota?branch=main#62867731ecbf0dab1e6284e29d611a5418f03a24"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34ca709c529b4224d073a8f775897ed35c6557c4b098d91b504e1bf0e1c61fc2"
 dependencies = [
  "anyhow",
  "dashmap",
  "faststr",
  "fxhash",
  "heck 0.4.1",
- "itertools 0.10.5",
+ "itertools",
  "lazy_static",
  "normpath",
  "paste",
@@ -1433,7 +1427,8 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.4.2"
-source = "git+https://github.com/cloudwego/pilota?branch=main#62867731ecbf0dab1e6284e29d611a5418f03a24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6248d1c9c5eb01b579ae6b9373eca87919a205e41d7b815758cdf323d97029f0"
 dependencies = [
  "nom",
 ]
@@ -2524,13 +2519,13 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.5.1"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-trait",
  "dirs",
  "heck 0.4.1",
- "itertools 0.11.0",
+ "itertools",
  "lazy_static",
  "nom",
  "normpath",
@@ -2551,13 +2546,13 @@ dependencies = [
 
 [[package]]
 name = "volo-cli"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "clap",
  "colored",
  "heck 0.4.1",
- "itertools 0.11.0",
+ "itertools",
  "lazy_static",
  "log",
  "normpath",
@@ -2589,7 +2584,7 @@ dependencies = [
 
 [[package]]
 name = "volo-grpc"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2631,7 +2626,7 @@ version = "0.3.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "async-trait",
