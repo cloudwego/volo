@@ -58,6 +58,7 @@ impl Init {
     }
 
     fn copy_grpc_template(&self, config_entry: Entry) -> anyhow::Result<()> {
+        std::env::set_var("OUT_DIR", "/tmp/idl");
         let (service_global_name, methods) = self.init_gen(config_entry)?;
 
         let name = self.name.replace(['.', '-'], "_");
@@ -117,7 +118,9 @@ impl Init {
     }
 
     fn copy_thrift_template(&self, config_entry: Entry) -> anyhow::Result<()> {
+        std::env::set_var("OUT_DIR", "/tmp/idl");
         let (service_global_name, methods) = self.init_gen(config_entry)?;
+
         let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
         let folder = cwd.as_path();
