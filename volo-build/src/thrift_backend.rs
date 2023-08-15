@@ -64,8 +64,14 @@ impl VoloThriftBackend {
             let decode = mk_decode(false);
             let decode_async = mk_decode(true);
 
-            let match_encode = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())}}");
-            let match_size = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::volo_thrift::Message::size(value, protocol)}}");
+            let mut match_encode = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())}}");
+            let mut match_size = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::volo_thrift::Message::size(value, protocol)}}");
+
+            if variant_names.is_empty() {
+                match_encode = "_ => unreachable!(),".to_string();
+                match_size = "_ => unreachable!(),".to_string();
+            }
+
             format! {
                 r#"#[::async_trait::async_trait]
                 impl ::volo_thrift::EntryMessage for {req_recv_name} {{
@@ -140,8 +146,13 @@ impl VoloThriftBackend {
                 )
             };
 
-            let match_encode = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())}}");
-            let match_size = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::volo_thrift::Message::size(value, protocol)}}");
+            let mut match_encode = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())}}");
+            let mut match_size = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::volo_thrift::Message::size(value, protocol)}}");
+
+            if variant_names.is_empty() {
+                match_encode = "_ => unreachable!(),".to_string();
+                match_size = "_ => unreachable!(),".to_string();
+            }
 
             let decode = mk_decode(false);
             let decode_async = mk_decode(true);
