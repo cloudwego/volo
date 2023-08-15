@@ -1,10 +1,7 @@
 use std::collections::HashSet;
 
 use clap::Parser;
-use volo_build::{
-    model::{GitSource, Source},
-    util::get_repo_latest_commit_id,
-};
+use volo_build::model::{GitSource, Source};
 
 use crate::{command::CliCommand, context::Context};
 
@@ -69,25 +66,9 @@ impl CliCommand for Update {
                 }
             };
 
-            should_update_gits.into_iter().try_for_each(|git_source| {
-                let commit_id = unsafe {
-                    get_repo_latest_commit_id(
-                        &git_source.as_ref().unwrap().repo,
-                        git_source
-                            .as_ref()
-                            .unwrap()
-                            .r#ref
-                            .as_deref()
-                            .unwrap_or("HEAD"),
-                    )
-                }?;
-
-                unsafe {
-                    let _ = git_source.as_mut().unwrap().lock.insert(commit_id);
-                }
-
-                Ok::<(), anyhow::Error>(())
-            })?;
+            should_update_gits
+                .into_iter()
+                .try_for_each(|git_source| unsafe { git_source.as_mut().unwrap().update() })?;
 
             Ok(())
         })

@@ -27,6 +27,12 @@ pub struct WorkspaceConfig {
     pub(crate) services: Vec<Service>,
 }
 
+impl WorkspaceConfig {
+    pub fn update_idls(&mut self) -> anyhow::Result<()> {
+        self.services.iter_mut().try_for_each(|s| s.idl.update())
+    }
+}
+
 impl<MkB, P> Builder<MkB, P>
 where
     MkB: pilota_build::MakeBackend + Send,
