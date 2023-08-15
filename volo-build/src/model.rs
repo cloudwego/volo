@@ -2,6 +2,8 @@ use std::{collections::HashMap, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+use crate::util::get_repo_latest_commit_id;
+
 pub const DEFAULT_ENTRY_NAME: &str = "default";
 pub const DEFAULT_FILENAME: &str = "volo_gen.rs";
 
@@ -39,6 +41,15 @@ pub struct Idl {
     pub keep_unknown_fields: bool,
 }
 
+impl Idl {
+    pub fn update(&mut self) -> anyhow::Result<()> {
+        match &mut self.source {
+            Source::Git(git_source) => git_source.update(),
+            Source::Local => Ok(()),
+        }
+    }
+}
+
 fn default_keep_unknown_fields() -> bool {
     false
 }
@@ -59,6 +70,17 @@ pub struct GitSource {
     pub r#ref: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub lock: Option<String>,
+}
+
+impl GitSource {
+    pub fn update(&mut self) -> anyhow::Result<()> {
+        let commit_id =
+            get_repo_latest_commit_id(&self.repo, self.r#ref.as_deref().unwrap_or("HEAD"))?;
+
+        let _ = self.lock.insert(commit_id);
+
+        Ok::<(), anyhow::Error>(())
+    }
 }
 
 impl Config {
