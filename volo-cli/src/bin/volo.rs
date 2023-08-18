@@ -8,7 +8,7 @@ use volo_cli::model;
 fn main() -> Result<()> {
     // set default log level if not set
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "INFO");
+        std::env::set_var("RUST_LOG", "WARN");
     }
     pretty_env_logger::init();
 
