@@ -14,6 +14,8 @@ pub mod loadbalance;
 pub mod net;
 pub mod util;
 pub use hack::Unwrap;
+#[cfg(target_family = "unix")]
+pub mod hotrestart;
 
 pub mod client;
 mod hack;

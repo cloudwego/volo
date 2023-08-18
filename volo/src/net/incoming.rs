@@ -68,7 +68,7 @@ pub trait MakeIncoming {
     async fn make_incoming(self) -> io::Result<Self::Incoming>;
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(target_family = "unix")]
 #[async_trait::async_trait]
 impl MakeIncoming for Address {
     type Incoming = DefaultIncoming;
@@ -76,18 +76,18 @@ impl MakeIncoming for Address {
     async fn make_incoming(self) -> io::Result<Self::Incoming> {
         match self {
             Address::Ip(addr) => {
-                TcpListener::from_std(linux_helper::create_tcp_listener_with_max_backlog(addr)?)
-                    .map(DefaultIncoming::from)
+                let listener = unix_helper::create_tcp_listener_with_max_backlog(addr).await;
+                TcpListener::from_std(listener?).map(DefaultIncoming::from)
             }
             Address::Unix(addr) => {
-                UnixListener::from_std(linux_helper::create_unix_listener_with_max_backlog(addr)?)
-                    .map(DefaultIncoming::from)
+                let listener = unix_helper::create_unix_listener_with_max_backlog(addr).await;
+                UnixListener::from_std(listener?).map(DefaultIncoming::from)
             }
         }
     }
 }
 
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(target_family = "unix"))]
 #[async_trait::async_trait]
 impl MakeIncoming for Address {
     type Incoming = DefaultIncoming;
@@ -113,15 +113,15 @@ impl Stream for DefaultIncoming {
     }
 }
 
-#[cfg(target_os = "linux")]
-mod linux_helper {
+#[cfg(target_family = "unix")]
+mod unix_helper {
 
     use std::{
         fs::File,
         io::{BufRead, BufReader},
         net::{SocketAddr, TcpListener},
         os::{
-            fd::{FromRawFd, IntoRawFd},
+            fd::{AsRawFd, FromRawFd, IntoRawFd},
             unix::net::UnixListener,
         },
         path::Path,
@@ -129,11 +129,14 @@ mod linux_helper {
 
     use socket2::{Domain, Protocol, Socket, Type};
 
+    use crate::hotrestart::DEFAULT_HOT_RESTART;
+
     /// Returns major and minor kernel version numbers, parsed from
     /// the nix::sys::utsname's release field, or 0, 0 if the version can't be obtained
     /// or parsed.
     ///
     /// Currently only implemented for Linux.
+    #[cfg(target_os = "linux")]
     pub fn kernel_version() -> (i32, i32) {
         let uname_info = if let Ok(uname_info) = nix::sys::utsname::uname() {
             uname_info
@@ -193,6 +196,7 @@ mod linux_helper {
     ///   - uint32 in kernel version >= 4.1
     ///
     /// Truncate number to avoid wrapping.
+    #[cfg(target_os = "linux")]
     pub fn max_ack_backlog(n: i32) -> i32 {
         let (major, minor) = kernel_version();
         let size = if major > 4 || (major == 4 && minor >= 1) {
@@ -209,6 +213,7 @@ mod linux_helper {
         }
     }
 
+    #[cfg(target_os = "linux")]
     pub fn max_listener_backlog() -> i32 {
         let file = File::open("/proc/sys/net/core/somaxconn");
         let file = match file {
@@ -234,7 +239,18 @@ mod linux_helper {
         }
     }
 
-    pub fn create_tcp_listener_with_max_backlog(addr: SocketAddr) -> std::io::Result<TcpListener> {
+    pub async fn create_tcp_listener_with_max_backlog(
+        addr: SocketAddr,
+    ) -> std::io::Result<TcpListener> {
+        if let Ok(Some(raw_fd)) = DEFAULT_HOT_RESTART
+            .dup_parent_listener_sock(addr.to_string())
+            .await
+        {
+            DEFAULT_HOT_RESTART.register_listener_fd(addr.to_string(), raw_fd);
+            let socket = unsafe { Socket::from_raw_fd(raw_fd) };
+            return Ok(socket.into());
+        }
+
         let domain = if addr.is_ipv4() {
             Domain::IPV4
         } else {
@@ -247,32 +263,49 @@ mod linux_helper {
         socket.set_reuse_port(true)?;
         socket.set_cloexec(true)?;
 
-        let backlog = max_listener_backlog();
         socket.bind(&socket2::SockAddr::from(addr))?;
+
+        #[cfg(target_os = "linux")]
+        let backlog = max_listener_backlog();
+        #[cfg(not(target_os = "linux"))]
+        let backlog = libc::SOMAXCONN as i32;
         socket.listen(backlog)?;
 
+        DEFAULT_HOT_RESTART.register_listener_fd(addr.to_string(), socket.as_raw_fd());
         Ok(socket.into())
     }
 
-    pub fn create_unix_listener_with_max_backlog<P: AsRef<Path>>(
+    pub async fn create_unix_listener_with_max_backlog<P: AsRef<Path>>(
         path: P,
     ) -> std::io::Result<UnixListener> {
+        if let Ok(Some(raw_fd)) = DEFAULT_HOT_RESTART
+            .dup_parent_listener_sock(path.as_ref().to_str().unwrap().to_string())
+            .await
+        {
+            DEFAULT_HOT_RESTART
+                .register_listener_fd(path.as_ref().to_str().unwrap().to_string(), raw_fd);
+            let unix_listener = unsafe { UnixListener::from_raw_fd(raw_fd) };
+            return Ok(unix_listener);
+        }
+
         let socket = Socket::new(Domain::UNIX, Type::STREAM, None)?;
-        socket.set_reuse_address(true)?;
         socket.set_nonblocking(true)?;
         socket.set_cloexec(true)?;
-
-        let backlog = max_listener_backlog();
 
         let path = path.as_ref();
         if path.exists() {
             std::fs::remove_file(&path)?;
         }
         socket.bind(&socket2::SockAddr::unix(path)?)?;
+        #[cfg(target_os = "linux")]
+        let backlog = max_listener_backlog();
+        #[cfg(not(target_os = "linux"))]
+        let backlog = libc::SOMAXCONN as i32;
         socket.listen(backlog)?;
 
         // Convert the socket into a UnixListener
         let raw_fd = socket.into_raw_fd();
+        DEFAULT_HOT_RESTART.register_listener_fd(path.to_str().unwrap().to_string(), raw_fd);
         let unix_listener = unsafe { UnixListener::from_raw_fd(raw_fd) };
 
         Ok(unix_listener)
