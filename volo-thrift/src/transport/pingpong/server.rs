@@ -54,6 +54,8 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                         caller.set_address(peer_addr.clone());
                         cx.rpc_info.caller = Some(caller);
                     }
+                } else if cx.rpc_info.caller().is_none() {
+                    cx.rpc_info.caller = Some(Endpoint::new("-".into()));
                 }
 
                 let msg = tokio::select! {
