@@ -4,7 +4,10 @@ use std::{
 };
 
 use futures_util::{ready, stream};
+<<<<<<< HEAD
 use http::{Response, StatusCode};
+=======
+>>>>>>> init
 use http_body_util::{Full, StreamBody};
 use hyper::body::{Body, Bytes, Frame};
 use pin_project_lite::pin_project;
@@ -78,6 +81,7 @@ impl From<()> for RespBody {
         }
     }
 }
+<<<<<<< HEAD
 
 pub trait IntoResponse {
     fn into_response(self) -> Response<RespBody>;
@@ -137,3 +141,5 @@ impl IntoResponse for StatusCode {
             .unwrap()
     }
 }
+=======
+>>>>>>> init

@@ -520,6 +520,9 @@ dependencies = [
  "bytes",
  "http",
  "hyper 1.0.0-rc.4",
+<<<<<<< HEAD
+>>>>>>> init
+=======
 >>>>>>> init
  "lazy_static",
  "metainfo",
@@ -2708,7 +2711,10 @@ dependencies = [
 name = "volo-http"
 version = "0.0.0"
 dependencies = [
+<<<<<<< HEAD
  "async-trait",
+=======
+>>>>>>> init
  "bytes",
  "futures-util",
  "http",

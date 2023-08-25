@@ -3,11 +3,18 @@ use std::{future::Future, net::SocketAddr};
 use http::{Method, Response, StatusCode};
 use http_body_util::Full;
 use hyper::{
+<<<<<<< HEAD
     body::{Body, Bytes, Incoming},
     server::conn::http1,
 };
 use hyper_util::rt::TokioIo;
 use motore::layer::Layer;
+=======
+    body::{Bytes, Incoming},
+    server::conn::http1,
+};
+use hyper_util::rt::TokioIo;
+>>>>>>> init
 use tokio::net::TcpListener;
 
 use crate::{
@@ -17,11 +24,24 @@ use crate::{
 
 pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response<RespBody>, DynError>;
 
+<<<<<<< HEAD
 #[derive(Clone, Default)]
+=======
+#[derive(Clone)]
+>>>>>>> init
 pub struct Router {
     inner: matchit::Router<DynService>,
 }
 
+<<<<<<< HEAD
+=======
+impl Router {
+    pub fn build() -> RouterBuilder {
+        Default::default()
+    }
+}
+
+>>>>>>> init
 impl motore::Service<(), (HttpContextInner, Incoming)> for Router {
     type Response = Response<RespBody>;
 
@@ -63,7 +83,16 @@ impl motore::Service<(), (HttpContextInner, Incoming)> for Router {
     }
 }
 
+<<<<<<< HEAD
 impl Router {
+=======
+#[derive(Default)]
+pub struct RouterBuilder {
+    routes: matchit::Router<DynService>,
+}
+
+impl RouterBuilder {
+>>>>>>> init
     pub fn new() -> Self {
         Default::default()
     }
@@ -77,11 +106,16 @@ impl Router {
             + Clone
             + 'static,
     {
+<<<<<<< HEAD
         if let Err(e) = self.inner.insert(uri, motore::BoxCloneService::new(route)) {
+=======
+        if let Err(e) = self.routes.insert(uri, motore::BoxCloneService::new(route)) {
+>>>>>>> init
             panic!("routing error: {e}");
         }
         self
     }
+<<<<<<< HEAD
 }
 
 pub trait ServiceLayerExt: Sized {
@@ -121,6 +155,15 @@ where
         let service = self;
         loop {
             let s = service.clone();
+=======
+
+    pub async fn serve(self, addr: SocketAddr) -> Result<(), DynError> {
+        let listener = TcpListener::bind(addr).await?;
+        let router = Router { inner: self.routes };
+
+        loop {
+            let s = router.clone();
+>>>>>>> init
             let (stream, peer) = listener.accept().await?;
 
             let io = TokioIo::new(stream);
