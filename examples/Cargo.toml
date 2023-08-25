@@ -62,6 +62,10 @@ path = "src/unknown/thrift_server.rs"
 name = "unknown-thrift-client"
 path = "src/unknown/thrift_client.rs"
 
+[[bin]]
+name = "http"
+path = "src/http/http.rs"
+
 
 [dependencies]
 anyhow.workspace = true
@@ -78,5 +82,11 @@ pilota.workspace = true
 volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc" }
 volo-thrift = { path = "../volo-thrift" }
+volo-http = { path = "../volo-http" }
 
 volo-gen = { path = "./volo-gen" }
+bytes.workspace = true
+http.workspace = true
+hyper = { version = "1.0.0-rc.4", features = ["server", "http1", "http2"] }
+motore.workspace = true
+serde.workspace = true
