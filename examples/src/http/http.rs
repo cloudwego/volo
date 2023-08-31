@@ -52,10 +52,14 @@ async fn json(
     Ok(Response::new(()))
 }
 
-async fn test(u: Uri, m: Method) -> &'static str {
+async fn test(u: Uri, m: Method) -> Result<&'static str, &'static str> {
     println!("{u:?}");
     println!("{m:?}");
-    "test"
+    if u.to_string().ends_with("a") {
+        Ok("a") // http://localhost:3000/test?a=a
+    } else {
+        Err("b") // http://localhost:3000/test?a=bb
+    }
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -66,7 +70,10 @@ async fn main() {
         .route("/user", Route::builder().post(service_fn(json)).build())
         .route(
             "/test",
-            Route::builder().get(HandlerService::new(test)).build(),
+            Route::builder()
+                .get(HandlerService::new(test))
+                .post(HandlerService::new(test))
+                .build(),
         )
         .serve(SocketAddr::from(([127, 0, 0, 1], 3000)))
         .await

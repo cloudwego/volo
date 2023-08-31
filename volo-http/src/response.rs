@@ -104,3 +104,16 @@ where
             .unwrap()
     }
 }
+
+impl<R, E> IntoResponse for Result<R, E>
+where
+    R: IntoResponse,
+    E: IntoResponse,
+{
+    fn into_response(self) -> Response<RespBody> {
+        match self {
+            Ok(value) => value.into_response(),
+            Err(err) => err.into_response(),
+        }
+    }
+}
