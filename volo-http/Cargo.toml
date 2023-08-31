@@ -28,6 +28,7 @@ serde_json = "1"
 thiserror.workspace = true
 mime = "0.3"
 serde = "1"
+async-trait.workspace = true
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }

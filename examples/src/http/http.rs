@@ -1,11 +1,12 @@
 use std::{convert::Infallible, net::SocketAddr};
 
 use bytes::Bytes;
-use http::{Response, StatusCode};
+use http::{Method, Response, StatusCode, Uri};
 use hyper::body::Incoming;
 use motore::service::service_fn;
 use serde::{Deserialize, Serialize};
 use volo_http::{
+    handler::HandlerService,
     request::Json,
     route::{Route, Router},
     HttpContext,
@@ -51,12 +52,22 @@ async fn json(
     Ok(Response::new(()))
 }
 
+async fn test(u: Uri, m: Method) -> &'static str {
+    println!("{u:?}");
+    println!("{m:?}");
+    "test"
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     Router::build()
         .route("/", Route::builder().get(service_fn(hello)).build())
         .route("/:echo", Route::builder().get(service_fn(echo)).build())
         .route("/user", Route::builder().post(service_fn(json)).build())
+        .route(
+            "/test",
+            Route::builder().get(HandlerService::new(test)).build(),
+        )
         .serve(SocketAddr::from(([127, 0, 0, 1], 3000)))
         .await
         .unwrap();
