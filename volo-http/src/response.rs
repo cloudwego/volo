@@ -4,6 +4,7 @@ use std::{
 };
 
 use futures_util::{ready, stream};
+use http::{Response, StatusCode};
 use http_body_util::{Full, StreamBody};
 use hyper::body::{Body, Bytes, Frame};
 use pin_project_lite::pin_project;
@@ -75,5 +76,31 @@ impl From<()> for RespBody {
         Self::Full {
             inner: Full::new(Bytes::new()),
         }
+    }
+}
+
+pub trait IntoResponse {
+    fn into_response(self) -> Response<RespBody>;
+}
+
+impl<T> IntoResponse for Response<T>
+where
+    T: Into<RespBody>,
+{
+    fn into_response(self) -> Response<RespBody> {
+        let (parts, body) = self.into_parts();
+        Response::from_parts(parts, body.into())
+    }
+}
+
+impl<T> IntoResponse for T
+where
+    T: Into<RespBody>,
+{
+    fn into_response(self) -> Response<RespBody> {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body(self.into())
+            .unwrap()
     }
 }

@@ -1,9 +1,10 @@
-use http::{Method, Uri};
+use http::{Method, Response, Uri};
 
-use crate::{response::RespBody, HttpContext};
+use crate::{response::IntoResponse, HttpContext};
+
 #[async_trait::async_trait]
 pub trait FromContext: Sized {
-    type Rejection: Into<RespBody>;
+    type Rejection: IntoResponse;
     async fn from_context(context: &mut HttpContext) -> Result<Self, Self::Rejection>;
 }
 #[async_trait::async_trait]
@@ -11,7 +12,7 @@ impl<T> FromContext for Option<T>
 where
     T: FromContext,
 {
-    type Rejection = &'static str;
+    type Rejection = Response<()>; // Infallible
 
     async fn from_context(context: &mut HttpContext) -> Result<Self, Self::Rejection> {
         Ok(T::from_context(context).await.ok())
@@ -20,7 +21,7 @@ where
 
 #[async_trait::async_trait]
 impl FromContext for Uri {
-    type Rejection = String;
+    type Rejection = Response<()>; // Infallible
 
     async fn from_context(context: &mut HttpContext) -> Result<Uri, Self::Rejection> {
         Ok(context.uri.clone())
@@ -29,7 +30,7 @@ impl FromContext for Uri {
 
 #[async_trait::async_trait]
 impl FromContext for Method {
-    type Rejection = String;
+    type Rejection = Response<()>;
 
     async fn from_context(context: &mut HttpContext) -> Result<Method, Self::Rejection> {
         Ok(context.method.clone())

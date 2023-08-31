@@ -1,9 +1,13 @@
 use std::{future::Future, marker::PhantomData};
 
-use http::{Response, StatusCode};
+use http::Response;
 use hyper::body::Incoming;
 
-use crate::{extract::FromContext, response::RespBody, HttpContext};
+use crate::{
+    extract::FromContext,
+    response::{IntoResponse, RespBody},
+    HttpContext,
+};
 
 impl<H, T> Clone for HandlerService<H, T>
 where
@@ -17,7 +21,7 @@ where
     }
 }
 pub trait Handler<'r, T> {
-    type Future: Future<Output = RespBody> + Send + 'r;
+    type Future: Future<Output = Response<RespBody>> + Send + 'r;
     fn call(self, context: &'r mut HttpContext) -> Self::Future;
 }
 
@@ -26,17 +30,17 @@ where
     F: FnOnce(T1) -> Fut + Clone + Send + 'r,
     Fut: Future<Output = Res> + Send + 'r,
     T1: FromContext + Send + 'r,
-    Res: Into<RespBody>,
+    Res: IntoResponse,
 {
-    type Future = impl Future<Output = RespBody> + Send + 'r;
+    type Future = impl Future<Output = Response<RespBody>> + Send + 'r;
 
     fn call(self, context: &'r mut HttpContext) -> Self::Future {
         async move {
             let t1 = match T1::from_context(context).await {
                 Ok(value) => value,
-                Err(rejection) => return rejection.into(),
+                Err(rejection) => return rejection.into_response(),
             };
-            self(t1).await.into()
+            self(t1).await.into_response()
         }
     }
 }
@@ -47,21 +51,21 @@ where
     Fut: Future<Output = Res> + Send,
     T1: FromContext + Send + 'r,
     T2: FromContext + Send + 'r,
-    Res: Into<RespBody>,
+    Res: IntoResponse,
 {
-    type Future = impl Future<Output = RespBody> + Send + 'r;
+    type Future = impl Future<Output = Response<RespBody>> + Send + 'r;
 
     fn call(self, context: &'r mut HttpContext) -> Self::Future {
         async move {
             let t1 = match T1::from_context(context).await {
                 Ok(value) => value,
-                Err(rejection) => return rejection.into(),
+                Err(rejection) => return rejection.into_response(),
             };
             let t2 = match T2::from_context(context).await {
                 Ok(value) => value,
-                Err(rejection) => return rejection.into(),
+                Err(rejection) => return rejection.into_response(),
             };
-            self(t1, t2).await.into()
+            self(t1, t2).await.into_response()
         }
     }
 }
@@ -94,9 +98,6 @@ where
     where
         's: 'cx,
     {
-        async move {
-            let resp = self.h.clone().call(cx).await;
-            Response::builder().status(StatusCode::OK).body(resp)
-        }
+        async move { Ok(self.h.clone().call(cx).await) }
     }
 }
