@@ -134,6 +134,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         cx.stats_mut().set_write_size(real_size);
 
         let write_result = (|| async {
+            self.linked_bytes.reset();
             // then we reserve the size of the message in the linked bytes
             self.linked_bytes.reserve(malloc_size);
             // after that, we encode the message into the linked bytes
@@ -160,8 +161,6 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         // put write end here so we can also record the time of encode error
         cx.stats_mut().record_write_end_at();
 
-        // finally, don't forget to reset the linked bytes
-        self.linked_bytes.reset();
         match write_result {
             Ok(()) => Ok(()),
             Err(mut e) => {
