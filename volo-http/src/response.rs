@@ -117,3 +117,23 @@ where
         }
     }
 }
+
+impl<T> IntoResponse for (StatusCode, T)
+where
+    T: IntoResponse,
+{
+    fn into_response(self) -> Response<RespBody> {
+        let mut resp = self.1.into_response();
+        *resp.status_mut() = self.0;
+        resp
+    }
+}
+
+impl IntoResponse for StatusCode {
+    fn into_response(self) -> Response<RespBody> {
+        Response::builder()
+            .status(self)
+            .body(String::new().into())
+            .unwrap()
+    }
+}
