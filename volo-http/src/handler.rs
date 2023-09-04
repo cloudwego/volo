@@ -5,6 +5,7 @@ use hyper::body::Incoming;
 
 use crate::{
     extract::FromContext,
+    request::FromRequest,
     response::{IntoResponse, RespBody},
     HttpContext,
 };
@@ -29,15 +30,15 @@ pub trait Handler<T> {
 
 macro_rules! impl_handler {
     (
-        [$($ty:ident),*], /* $last:ident */
+        [$($ty:ident),*], $last:ident
     ) => {
         #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<F, Fut, $($ty,)* /* $last, */ Res> Handler<($($ty,)* /* $last, */)> for F
+        impl<F, Fut, $($ty,)* $last, Res> Handler<($($ty,)* $last,)> for F
         where
-            F: FnOnce($($ty,)*) -> Fut + Clone + Send,
+            F: FnOnce($($ty,)* $last) -> Fut + Clone + Send,
             Fut: Future<Output = Res> + Send,
             $( for<'r> $ty: FromContext + Send + 'r, )*
-            // for<'r> $last: FromRequest + Send + 'r,
+            for<'r> $last: FromRequest + Send + 'r,
             Res: IntoResponse,
         {
             type Future<'r> = impl Future<Output=Response<RespBody>> + Send + 'r
@@ -51,45 +52,42 @@ macro_rules! impl_handler {
                             Err(rejection) => return rejection.into_response(),
                         };
                     )*
-                    // let $last = match $last::from(context, req).await {
-                    //     Ok(value) => value,
-                    //     Err(rejection) => return rejection,
-                    // };
-                    self($($ty,)*).await.into_response()
+                    let $last = match $last::from(context, req).await {
+                        Ok(value) => value,
+                        Err(rejection) => return rejection,
+                    };
+                    self($($ty,)* $last).await.into_response()
                 }
             }
         }
     };
 }
 
-impl_handler!([],);
-impl_handler!([T1],);
-impl_handler!([T1, T2],);
-// impl_handler!([], T1);
-// impl_handler!([T1], T2);
-// impl_handler!([T1, T2], T3);
-// impl_handler!([T1, T2, T3], T4);
-// impl_handler!([T1, T2, T3, T4], T5);
-// impl_handler!([T1, T2, T3, T4, T5], T6);
-// impl_handler!([T1, T2, T3, T4, T5, T6], T7);
-// impl_handler!([T1, T2, T3, T4, T5, T6, Y7], T8);
-// impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8], T9);
-// impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9], T10);
-// impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10], T11);
-// impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11], T12);
-// impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12], T13);
-// impl_handler!(
-//     [T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12, T13],
-//     T14
-// );
-// impl_handler!(
-//     [T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12, T13, T14],
-//     T15
-// );
-// impl_handler!(
-//     [T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12, T13, T14, T15],
-//     T16
-// );
+impl_handler!([], T1);
+impl_handler!([T1], T2);
+impl_handler!([T1, T2], T3);
+impl_handler!([T1, T2, T3], T4);
+impl_handler!([T1, T2, T3, T4], T5);
+impl_handler!([T1, T2, T3, T4, T5], T6);
+impl_handler!([T1, T2, T3, T4, T5, T6], T7);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7], T8);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8], T9);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9], T10);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10], T11);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11], T12);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12], T13);
+impl_handler!(
+    [T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12, T13],
+    T14
+);
+impl_handler!(
+    [T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12, T13, T14],
+    T15
+);
+impl_handler!(
+    [T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12, T13, T14, T15],
+    T16
+);
 
 pub struct HandlerService<H, T> {
     h: H,

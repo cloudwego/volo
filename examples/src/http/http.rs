@@ -52,9 +52,14 @@ async fn json(
     Ok(Response::new(()))
 }
 
-async fn test(u: Uri, m: Method) -> Result<&'static str, (StatusCode, &'static str)> {
+async fn test(
+    u: Uri,
+    m: Method,
+    Json(request): Json<Person>,
+) -> Result<&'static str, (StatusCode, &'static str)> {
     println!("{u:?}");
     println!("{m:?}");
+    println!("{request:?}");
     if u.to_string().ends_with("a") {
         Ok("a") // http://localhost:3000/test?a=a
     } else {

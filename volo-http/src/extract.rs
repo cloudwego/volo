@@ -5,7 +5,7 @@ use crate::{response::IntoResponse, HttpContext};
 #[async_trait::async_trait]
 pub trait FromContext: Sized {
     type Rejection: IntoResponse;
-    async fn from_context(context: &mut HttpContext) -> Result<Self, Self::Rejection>;
+    async fn from_context(context: &HttpContext) -> Result<Self, Self::Rejection>;
 }
 #[async_trait::async_trait]
 impl<T> FromContext for Option<T>
@@ -14,7 +14,7 @@ where
 {
     type Rejection = Response<()>; // Infallible
 
-    async fn from_context(context: &mut HttpContext) -> Result<Self, Self::Rejection> {
+    async fn from_context(context: &HttpContext) -> Result<Self, Self::Rejection> {
         Ok(T::from_context(context).await.ok())
     }
 }
@@ -23,7 +23,7 @@ where
 impl FromContext for Uri {
     type Rejection = Response<()>; // Infallible
 
-    async fn from_context(context: &mut HttpContext) -> Result<Uri, Self::Rejection> {
+    async fn from_context(context: &HttpContext) -> Result<Uri, Self::Rejection> {
         Ok(context.uri.clone())
     }
 }
@@ -32,7 +32,7 @@ impl FromContext for Uri {
 impl FromContext for Method {
     type Rejection = Response<()>;
 
-    async fn from_context(context: &mut HttpContext) -> Result<Method, Self::Rejection> {
+    async fn from_context(context: &HttpContext) -> Result<Method, Self::Rejection> {
         Ok(context.method.clone())
     }
 }
