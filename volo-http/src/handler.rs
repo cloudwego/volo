@@ -22,53 +22,54 @@ where
 }
 pub trait Handler<'r, T> {
     type Future: Future<Output = Response<RespBody>> + Send + 'r;
-    fn call(self, context: &'r mut HttpContext) -> Self::Future;
+    fn call(self, context: &'r mut HttpContext, req: Incoming) -> Self::Future;
 }
 
-impl<'r, F, Fut, T1, Res> Handler<'r, T1> for F
-where
-    F: FnOnce(T1) -> Fut + Clone + Send + 'r,
-    Fut: Future<Output = Res> + Send + 'r,
-    T1: FromContext + Send + 'r,
-    Res: IntoResponse,
-{
-    type Future = impl Future<Output = Response<RespBody>> + Send + 'r;
+macro_rules! impl_handler {
+    (
+        [$($ty:ident),*],
+    ) => {
+        #[allow(non_snake_case, unused_mut)]
+        impl<'r, F, Fut, $($ty,)* Res> Handler<'r, ($($ty,)*)> for F
+        where
+            F: FnOnce($($ty,)*) -> Fut + Clone + Send + 'r,
+            Fut: Future<Output = Res> + Send,
+            $( $ty: FromContext + Send + 'r, )*
+            Res: IntoResponse,
+        {
+            type Future = impl Future<Output = Response<RespBody>> + Send + 'r;
 
-    fn call(self, context: &'r mut HttpContext) -> Self::Future {
-        async move {
-            let t1 = match T1::from_context(context).await {
-                Ok(value) => value,
-                Err(rejection) => return rejection.into_response(),
-            };
-            self(t1).await.into_response()
+            fn call(self, context: &'r mut HttpContext, _req: Incoming) -> Self::Future {
+                async move {
+                    $(
+                        let $ty = match $ty::from_context(context).await {
+                            Ok(value) => value,
+                            Err(rejection) => return rejection.into_response(),
+                        };
+                    )*
+                    self($($ty,)*).await.into_response()
+                }
+            }
         }
-    }
+    };
 }
 
-impl<'r, F, Fut, T1, T2, Res> Handler<'r, (T1, T2)> for F
-where
-    F: FnOnce(T1, T2) -> Fut + Clone + Send + 'r,
-    Fut: Future<Output = Res> + Send,
-    T1: FromContext + Send + 'r,
-    T2: FromContext + Send + 'r,
-    Res: IntoResponse,
-{
-    type Future = impl Future<Output = Response<RespBody>> + Send + 'r;
+impl_handler!([T1],);
+impl_handler!([T1, T2],);
+impl_handler!([T1, T2, T3],);
+impl_handler!([T1, T2, T3, T4],);
+impl_handler!([T1, T2, T3, T4, T5],);
+impl_handler!([T1, T2, T3, T4, T5, T6],);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7],);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8],);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9],);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10],);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11],);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12],);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12, T13],);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12, T13, T14],);
+impl_handler!([T1, T2, T3, T4, T5, T6, Y7, T8, T9, T10, T11, T12, T13, T14, T15],);
 
-    fn call(self, context: &'r mut HttpContext) -> Self::Future {
-        async move {
-            let t1 = match T1::from_context(context).await {
-                Ok(value) => value,
-                Err(rejection) => return rejection.into_response(),
-            };
-            let t2 = match T2::from_context(context).await {
-                Ok(value) => value,
-                Err(rejection) => return rejection.into_response(),
-            };
-            self(t1, t2).await.into_response()
-        }
-    }
-}
 pub struct HandlerService<H, T> {
     h: H,
     _mark: PhantomData<fn(T)>,
@@ -94,10 +95,10 @@ where
             HttpContext: 'cx,
             Self: 'cx;
 
-    fn call<'cx, 's>(&'s self, cx: &'cx mut HttpContext, _req: Incoming) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut HttpContext, req: Incoming) -> Self::Future<'cx>
     where
         's: 'cx,
     {
-        async move { Ok(self.h.clone().call(cx).await) }
+        async move { Ok(self.h.clone().call(cx, req).await) }
     }
 }
