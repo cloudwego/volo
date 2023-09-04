@@ -29,7 +29,7 @@ macro_rules! impl_handler {
     (
         [$($ty:ident),*],
     ) => {
-        #[allow(non_snake_case, unused_mut)]
+        #[allow(non_snake_case, unused_mut, unused_variables)]
         impl<'r, F, Fut, $($ty,)* Res> Handler<'r, ($($ty,)*)> for F
         where
             F: FnOnce($($ty,)*) -> Fut + Clone + Send + 'r,
