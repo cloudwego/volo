@@ -54,6 +54,7 @@ macro_rules! impl_handler {
     };
 }
 
+impl_handler!([],);
 impl_handler!([T1],);
 impl_handler!([T1, T2],);
 impl_handler!([T1, T2, T3],);
