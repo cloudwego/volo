@@ -4,6 +4,7 @@ use std::{
 };
 
 use futures_util::{ready, stream};
+use http::{Response, StatusCode};
 use http_body_util::{Full, StreamBody};
 use hyper::body::{Body, Bytes, Frame};
 use pin_project_lite::pin_project;
@@ -75,5 +76,64 @@ impl From<()> for RespBody {
         Self::Full {
             inner: Full::new(Bytes::new()),
         }
+    }
+}
+
+pub trait IntoResponse {
+    fn into_response(self) -> Response<RespBody>;
+}
+
+impl<T> IntoResponse for Response<T>
+where
+    T: Into<RespBody>,
+{
+    fn into_response(self) -> Response<RespBody> {
+        let (parts, body) = self.into_parts();
+        Response::from_parts(parts, body.into())
+    }
+}
+
+impl<T> IntoResponse for T
+where
+    T: Into<RespBody>,
+{
+    fn into_response(self) -> Response<RespBody> {
+        Response::builder()
+            .status(StatusCode::OK)
+            .body(self.into())
+            .unwrap()
+    }
+}
+
+impl<R, E> IntoResponse for Result<R, E>
+where
+    R: IntoResponse,
+    E: IntoResponse,
+{
+    fn into_response(self) -> Response<RespBody> {
+        match self {
+            Ok(value) => value.into_response(),
+            Err(err) => err.into_response(),
+        }
+    }
+}
+
+impl<T> IntoResponse for (StatusCode, T)
+where
+    T: IntoResponse,
+{
+    fn into_response(self) -> Response<RespBody> {
+        let mut resp = self.1.into_response();
+        *resp.status_mut() = self.0;
+        resp
+    }
+}
+
+impl IntoResponse for StatusCode {
+    fn into_response(self) -> Response<RespBody> {
+        Response::builder()
+            .status(self)
+            .body(String::new().into())
+            .unwrap()
     }
 }
