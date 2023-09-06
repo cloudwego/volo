@@ -5,7 +5,11 @@ use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use serde::de::DeserializeOwned;
 
-use crate::{response::RespBody, HttpContext};
+use crate::{
+    extract::FromContext,
+    response::{IntoResponse, RespBody},
+    HttpContext,
+};
 
 pub trait FromRequest: Sized {
     type FromFut<'cx>: Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
@@ -13,6 +17,24 @@ pub trait FromRequest: Sized {
         Self: 'cx;
 
     fn from(cx: &HttpContext, body: Incoming) -> Self::FromFut<'_>;
+}
+
+impl<T> FromRequest for T
+where
+    T: FromContext,
+{
+    type FromFut<'cx> = impl Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
+        where
+            Self: 'cx;
+
+    fn from(cx: &HttpContext, _body: Incoming) -> Self::FromFut<'_> {
+        async move {
+            match T::from_context(cx).await {
+                Ok(value) => Ok(value),
+                Err(rejection) => Err(rejection.into_response()),
+            }
+        }
+    }
 }
 
 impl FromRequest for Incoming {
