@@ -2712,9 +2712,13 @@ name = "volo-http"
 version = "0.0.0"
 dependencies = [
 <<<<<<< HEAD
+<<<<<<< HEAD
  "async-trait",
 =======
 >>>>>>> init
+=======
+ "async-trait",
+>>>>>>> handler, extractor (#221)
  "bytes",
  "futures-util",
  "http",

@@ -29,9 +29,13 @@ thiserror.workspace = true
 mime = "0.3"
 serde = "1"
 <<<<<<< HEAD
+<<<<<<< HEAD
 async-trait.workspace = true
 =======
 >>>>>>> init
+=======
+async-trait.workspace = true
+>>>>>>> handler, extractor (#221)
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }

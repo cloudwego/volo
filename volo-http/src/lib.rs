@@ -2,10 +2,15 @@
 
 pub(crate) mod dispatch;
 <<<<<<< HEAD
+<<<<<<< HEAD
 pub mod extract;
 pub mod handler;
 =======
 >>>>>>> init
+=======
+pub mod extract;
+pub mod handler;
+>>>>>>> handler, extractor (#221)
 pub mod layer;
 pub mod param;
 pub mod request;

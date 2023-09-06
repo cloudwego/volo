@@ -6,14 +6,20 @@ use hyper::body::Incoming;
 use serde::de::DeserializeOwned;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> handler, extractor (#221)
 use crate::{
     extract::FromContext,
     response::{IntoResponse, RespBody},
     HttpContext,
 };
+<<<<<<< HEAD
 =======
 use crate::{response::RespBody, HttpContext};
 >>>>>>> init
+=======
+>>>>>>> handler, extractor (#221)
 
 pub trait FromRequest: Sized {
     type FromFut<'cx>: Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
@@ -24,6 +30,9 @@ pub trait FromRequest: Sized {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> handler, extractor (#221)
 impl<T> FromRequest for T
 where
     T: FromContext,
@@ -42,8 +51,11 @@ where
     }
 }
 
+<<<<<<< HEAD
 =======
 >>>>>>> init
+=======
+>>>>>>> handler, extractor (#221)
 impl FromRequest for Incoming {
     type FromFut<'cx> = impl Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
     where
