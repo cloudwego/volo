@@ -1,6 +1,8 @@
 #![feature(impl_trait_in_assoc_type)]
 
 pub(crate) mod dispatch;
+pub mod extract;
+pub mod handler;
 pub mod layer;
 pub mod param;
 pub mod request;
