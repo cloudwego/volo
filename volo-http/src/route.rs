@@ -3,10 +3,11 @@ use std::{future::Future, net::SocketAddr};
 use http::{Method, Response, StatusCode};
 use http_body_util::Full;
 use hyper::{
-    body::{Bytes, Incoming},
+    body::{Body, Bytes, Incoming},
     server::conn::http1,
 };
 use hyper_util::rt::TokioIo;
+use motore::layer::Layer;
 use tokio::net::TcpListener;
 
 use crate::{
@@ -16,15 +17,9 @@ use crate::{
 
 pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response<RespBody>, DynError>;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Router {
     inner: matchit::Router<DynService>,
-}
-
-impl Router {
-    pub fn build() -> RouterBuilder {
-        Default::default()
-    }
 }
 
 impl motore::Service<(), (HttpContextInner, Incoming)> for Router {
@@ -68,12 +63,7 @@ impl motore::Service<(), (HttpContextInner, Incoming)> for Router {
     }
 }
 
-#[derive(Default)]
-pub struct RouterBuilder {
-    routes: matchit::Router<DynService>,
-}
-
-impl RouterBuilder {
+impl Router {
     pub fn new() -> Self {
         Default::default()
     }
@@ -87,18 +77,50 @@ impl RouterBuilder {
             + Clone
             + 'static,
     {
-        if let Err(e) = self.routes.insert(uri, motore::BoxCloneService::new(route)) {
+        if let Err(e) = self.inner.insert(uri, motore::BoxCloneService::new(route)) {
             panic!("routing error: {e}");
         }
         self
     }
+}
 
-    pub async fn serve(self, addr: SocketAddr) -> Result<(), DynError> {
+pub trait ServiceLayerExt: Sized {
+    fn layer<L>(self, l: L) -> L::Service
+    where
+        L: Layer<Self>;
+}
+
+impl<S> ServiceLayerExt for S {
+    fn layer<L>(self, l: L) -> L::Service
+    where
+        L: Layer<Self>,
+    {
+        Layer::layer(l, self)
+    }
+}
+
+#[async_trait::async_trait]
+pub trait Server {
+    async fn serve(self, addr: SocketAddr) -> Result<(), DynError>;
+}
+#[async_trait::async_trait]
+impl<S, OB> Server for S
+where
+    S: motore::Service<(), (HttpContextInner, Incoming), Response = Response<OB>>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    OB: Body<Error = DynError> + Send + 'static,
+    <OB as Body>::Data: Send,
+    <S as motore::Service<(), (HttpContextInner, Incoming)>>::Error: Into<DynError>,
+{
+    async fn serve(self, addr: SocketAddr) -> Result<(), DynError> {
         let listener = TcpListener::bind(addr).await?;
-        let router = Router { inner: self.routes };
 
+        let service = self;
         loop {
-            let s = router.clone();
+            let s = service.clone();
             let (stream, peer) = listener.accept().await?;
 
             let io = TokioIo::new(stream);
