@@ -6,6 +6,7 @@ use bytes::Bytes;
 use http::{Method, Response, StatusCode, Uri};
 use hyper::body::Incoming;
 use motore::{service::service_fn, timeout::TimeoutLayer};
+<<<<<<< HEAD
 use serde::{Deserialize, Serialize};
 use volo_http::{
     handler::HandlerService,
@@ -18,12 +19,18 @@ use http::{Method, Response, StatusCode, Uri};
 >>>>>>> handler, extractor (#221)
 use hyper::body::Incoming;
 use motore::service::service_fn;
+=======
+>>>>>>> layer (#224)
 use serde::{Deserialize, Serialize};
 use volo_http::{
     handler::HandlerService,
     request::Json,
+<<<<<<< HEAD
     route::{Route, Router},
 >>>>>>> init
+=======
+    route::{Route, Router, Server, ServiceLayerExt},
+>>>>>>> layer (#224)
     HttpContext,
 };
 
@@ -112,8 +119,14 @@ async fn main() {
 >>>>>>> handler, extractor (#221)
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    Router::build()
-        .route("/", Route::builder().get(service_fn(hello)).build())
+    Router::new()
+        .route(
+            "/",
+            Route::builder()
+                .get(service_fn(hello))
+                .build()
+                .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1)))),
+        )
         .route("/:echo", Route::builder().get(service_fn(echo)).build())
         .route("/user", Route::builder().post(service_fn(json)).build())
 <<<<<<< HEAD
@@ -126,7 +139,11 @@ async fn main() {
                 .post(HandlerService::new(test))
                 .build(),
         )
+<<<<<<< HEAD
 >>>>>>> handler, extractor (#221)
+=======
+        .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1))))
+>>>>>>> layer (#224)
         .serve(SocketAddr::from(([127, 0, 0, 1], 3000)))
         .await
         .unwrap();

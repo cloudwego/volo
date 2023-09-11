@@ -4,6 +4,7 @@ use http::{Method, Response, StatusCode};
 use http_body_util::Full;
 use hyper::{
 <<<<<<< HEAD
+<<<<<<< HEAD
     body::{Body, Bytes, Incoming},
     server::conn::http1,
 };
@@ -15,6 +16,13 @@ use motore::layer::Layer;
 };
 use hyper_util::rt::TokioIo;
 >>>>>>> init
+=======
+    body::{Body, Bytes, Incoming},
+    server::conn::http1,
+};
+use hyper_util::rt::TokioIo;
+use motore::layer::Layer;
+>>>>>>> layer (#224)
 use tokio::net::TcpListener;
 
 use crate::{
@@ -25,14 +33,19 @@ use crate::{
 pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response<RespBody>, DynError>;
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 #[derive(Clone, Default)]
 =======
 #[derive(Clone)]
 >>>>>>> init
+=======
+#[derive(Clone, Default)]
+>>>>>>> layer (#224)
 pub struct Router {
     inner: matchit::Router<DynService>,
 }
 
+<<<<<<< HEAD
 <<<<<<< HEAD
 =======
 impl Router {
@@ -42,6 +55,8 @@ impl Router {
 }
 
 >>>>>>> init
+=======
+>>>>>>> layer (#224)
 impl motore::Service<(), (HttpContextInner, Incoming)> for Router {
     type Response = Response<RespBody>;
 
@@ -84,6 +99,7 @@ impl motore::Service<(), (HttpContextInner, Incoming)> for Router {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
 impl Router {
 =======
 #[derive(Default)]
@@ -93,6 +109,9 @@ pub struct RouterBuilder {
 
 impl RouterBuilder {
 >>>>>>> init
+=======
+impl Router {
+>>>>>>> layer (#224)
     pub fn new() -> Self {
         Default::default()
     }
@@ -107,15 +126,22 @@ impl RouterBuilder {
             + 'static,
     {
 <<<<<<< HEAD
+<<<<<<< HEAD
         if let Err(e) = self.inner.insert(uri, motore::BoxCloneService::new(route)) {
 =======
         if let Err(e) = self.routes.insert(uri, motore::BoxCloneService::new(route)) {
 >>>>>>> init
+=======
+        if let Err(e) = self.inner.insert(uri, motore::BoxCloneService::new(route)) {
+>>>>>>> layer (#224)
             panic!("routing error: {e}");
         }
         self
     }
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+>>>>>>> layer (#224)
 }
 
 pub trait ServiceLayerExt: Sized {
@@ -132,6 +158,7 @@ impl<S> ServiceLayerExt for S {
         Layer::layer(l, self)
     }
 }
+<<<<<<< HEAD
 
 #[async_trait::async_trait]
 pub trait Server {
@@ -156,14 +183,36 @@ where
         loop {
             let s = service.clone();
 =======
+=======
+>>>>>>> layer (#224)
 
-    pub async fn serve(self, addr: SocketAddr) -> Result<(), DynError> {
+#[async_trait::async_trait]
+pub trait Server {
+    async fn serve(self, addr: SocketAddr) -> Result<(), DynError>;
+}
+#[async_trait::async_trait]
+impl<S, OB> Server for S
+where
+    S: motore::Service<(), (HttpContextInner, Incoming), Response = Response<OB>>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    OB: Body<Error = DynError> + Send + 'static,
+    <OB as Body>::Data: Send,
+    <S as motore::Service<(), (HttpContextInner, Incoming)>>::Error: Into<DynError>,
+{
+    async fn serve(self, addr: SocketAddr) -> Result<(), DynError> {
         let listener = TcpListener::bind(addr).await?;
-        let router = Router { inner: self.routes };
 
+        let service = self;
         loop {
+<<<<<<< HEAD
             let s = router.clone();
 >>>>>>> init
+=======
+            let s = service.clone();
+>>>>>>> layer (#224)
             let (stream, peer) = listener.accept().await?;
 
             let io = TokioIo::new(stream);
