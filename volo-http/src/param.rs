@@ -3,7 +3,7 @@ use std::slice::Iter;
 use bytes::{BufMut, Bytes, BytesMut};
 
 pub struct Params {
-    inner: Vec<(Bytes, Bytes)>,
+    pub(crate) inner: Vec<(Bytes, Bytes)>,
 }
 
 impl From<matchit::Params<'_, '_>> for Params {

@@ -6,13 +6,12 @@ use hyper::{
     body::{Body, Bytes, Incoming},
     server::conn::http1,
 };
-use hyper_util::rt::TokioIo;
 use motore::layer::Layer;
 use tokio::net::TcpListener;
 
 use crate::{
     dispatch::DispatchService, request::FromRequest, response::RespBody, DynError, HttpContext,
-    HttpContextInner, MotoreService,
+    MotoreService,
 };
 
 pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response<RespBody>, DynError>;
@@ -22,37 +21,24 @@ pub struct Router {
     inner: matchit::Router<DynService>,
 }
 
-impl motore::Service<(), (HttpContextInner, Incoming)> for Router {
+impl motore::Service<HttpContext, Incoming> for Router {
     type Response = Response<RespBody>;
 
     type Error = DynError;
 
     type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
     where
-        HttpContextInner: 'cx,
+        HttpContext: 'cx,
         Self: 'cx;
 
-    fn call<'cx, 's>(
-        &'s self,
-        _cx: &'cx mut (),
-        cxreq: (HttpContextInner, Incoming),
-    ) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut HttpContext, req: Incoming) -> Self::Future<'cx>
     where
         's: 'cx,
     {
         async move {
-            let (cx, req) = cxreq;
             if let Ok(matched) = self.inner.at(cx.uri.path()) {
-                let mut context = HttpContext {
-                    peer: cx.peer,
-                    method: cx.method,
-                    uri: cx.uri.clone(),
-                    version: cx.version,
-                    headers: cx.headers,
-                    extensions: cx.extensions,
-                    params: matched.params.into(),
-                };
-                matched.value.call(&mut context, req).await
+                cx.params = matched.params.into();
+                matched.value.call(cx, req).await
             } else {
                 Ok(Response::builder()
                     .status(StatusCode::NOT_FOUND)
@@ -106,14 +92,14 @@ pub trait Server {
 #[async_trait::async_trait]
 impl<S, OB> Server for S
 where
-    S: motore::Service<(), (HttpContextInner, Incoming), Response = Response<OB>>
+    S: motore::Service<HttpContext, Incoming, Response = Response<OB>>
         + Clone
         + Send
         + Sync
         + 'static,
     OB: Body<Error = DynError> + Send + 'static,
     <OB as Body>::Data: Send,
-    <S as motore::Service<(), (HttpContextInner, Incoming)>>::Error: Into<DynError>,
+    <S as motore::Service<HttpContext, Incoming>>::Error: Into<DynError>,
 {
     async fn serve(self, addr: SocketAddr) -> Result<(), DynError> {
         let listener = TcpListener::bind(addr).await?;
@@ -123,11 +109,15 @@ where
             let s = service.clone();
             let (stream, peer) = listener.accept().await?;
 
-            let io = TokioIo::new(stream);
-
             tokio::task::spawn(async move {
                 if let Err(err) = http1::Builder::new()
-                    .serve_connection(io, MotoreService { peer, inner: s })
+                    .serve_connection(
+                        stream,
+                        MotoreService {
+                            peer: peer.into(),
+                            inner: s,
+                        },
+                    )
                     .await
                 {
                     tracing::warn!("error serving connection: {:?}", err);
