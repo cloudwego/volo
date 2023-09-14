@@ -519,11 +519,15 @@ dependencies = [
  "async-trait",
  "bytes",
  "http",
+<<<<<<< HEAD
  "hyper 1.0.0-rc.4",
 <<<<<<< HEAD
 >>>>>>> init
 =======
 >>>>>>> init
+=======
+ "hyper 1.0.0-rc.3",
+>>>>>>> downgrade hyper version
  "lazy_static",
  "metainfo",
  "motore",
@@ -533,7 +537,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
- "volo",
+ "volo 0.5.4",
  "volo-gen",
  "volo-grpc",
  "volo-http",
@@ -813,9 +817,9 @@ dependencies = [
 
 [[package]]
 name = "http-body-util"
-version = "0.1.0-rc.3"
+version = "0.1.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08ef12f041acdd397010e5fb6433270c147d3b8b2d0a840cd7fff8e531dca5c8"
+checksum = "92445bc9cc14bfa0a3ce56817dc3b5bcc227a168781a356b702410789cec0d10"
 dependencies = [
  "bytes",
  "futures-util",
@@ -868,12 +872,13 @@ dependencies = [
 
 [[package]]
 name = "hyper"
-version = "1.0.0-rc.4"
+version = "1.0.0-rc.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d280a71f348bcc670fc55b02b63c53a04ac0bf2daff2980795aeaf53edae10e6"
+checksum = "7b75264b2003a3913f118d35c586e535293b3e22e41f074930762929d071e092"
 dependencies = [
  "bytes",
  "futures-channel",
+ "futures-core",
  "futures-util",
  "h2",
  "http",
@@ -911,24 +916,6 @@ dependencies = [
  "pin-project-lite",
  "tokio",
  "tokio-io-timeout",
-]
-
-[[package]]
-name = "hyper-util"
-version = "0.0.0"
-source = "git+https://github.com/hyperium/hyper-util.git#f898015fc9eca9f459ddac521db278d904099e89"
-dependencies = [
- "futures-channel",
- "futures-util",
- "http",
- "hyper 1.0.0-rc.4",
- "once_cell",
- "pin-project-lite",
- "socket2 0.4.9",
- "tokio",
- "tower",
- "tower-service",
- "tracing",
 ]
 
 [[package]]
@@ -2612,6 +2599,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "volo"
+version = "0.5.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d4fcea6f3ec3afaf72af11044f85dc4f21fd8d75b80aa37ec7200bbd793dd16"
+dependencies = [
+ "async-broadcast",
+ "async-trait",
+ "dashmap",
+ "faststr",
+ "futures",
+ "lazy_static",
+ "libc",
+ "metainfo",
+ "motore",
+ "mur3",
+ "nix",
+ "once_cell",
+ "pin-project",
+ "rand",
+ "socket2 0.5.4",
+>>>>>>> downgrade hyper version
+ "thiserror",
+ "tokio",
+ "tokio-stream",
+ "tower",
+ "tracing",
+]
+
+[[package]]
 name = "volo-build"
 version = "0.8.0"
 dependencies = [
@@ -2633,7 +2649,7 @@ dependencies = [
  "syn 1.0.109",
  "tempfile",
  "url_path",
- "volo",
+ "volo 0.5.4",
  "walkdir",
 ]
 
@@ -2668,7 +2684,7 @@ dependencies = [
  "futures",
  "pilota",
  "tokio",
- "volo",
+ "volo 0.5.4",
  "volo-build",
  "volo-grpc",
  "volo-thrift",
@@ -2704,7 +2720,7 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber",
- "volo",
+ "volo 0.5.4",
 ]
 
 [[package]]
@@ -2723,8 +2739,7 @@ dependencies = [
  "futures-util",
  "http",
  "http-body-util",
- "hyper 1.0.0-rc.4",
- "hyper-util",
+ "hyper 1.0.0-rc.3",
  "matchit",
  "mime",
  "motore",
@@ -2734,6 +2749,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "volo 0.5.5",
 ]
 
 [[package]]
@@ -2762,7 +2778,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "volo",
+ "volo 0.5.4",
 ]
 
 [[package]]
