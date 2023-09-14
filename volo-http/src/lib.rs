@@ -9,7 +9,7 @@ pub mod request;
 pub mod response;
 pub mod route;
 
-use std::{future::Future, net::SocketAddr};
+use std::future::Future;
 
 use http::{Extensions, HeaderMap, HeaderValue, Method, Uri, Version};
 use hyper::{
@@ -17,21 +17,12 @@ use hyper::{
     Request, Response,
 };
 use param::Params;
+use volo::net::Address;
 
 pub type DynError = Box<dyn std::error::Error + Send + Sync>;
 
-pub struct HttpContextInner {
-    pub(crate) peer: SocketAddr,
-
-    pub(crate) method: Method,
-    pub(crate) uri: Uri,
-    pub(crate) version: Version,
-    pub(crate) headers: HeaderMap<HeaderValue>,
-    pub(crate) extensions: Extensions,
-}
-
 pub struct HttpContext {
-    pub peer: SocketAddr,
+    pub peer: Address,
     pub method: Method,
     pub uri: Uri,
     pub version: Version,
@@ -43,14 +34,14 @@ pub struct HttpContext {
 
 #[derive(Clone)]
 pub struct MotoreService<S> {
-    peer: SocketAddr,
-    inner: S,
+    pub peer: Address,
+    pub inner: S,
 }
 
 impl<OB, S> hyper::service::Service<Request<Incoming>> for MotoreService<S>
 where
     OB: Body<Error = DynError>,
-    S: motore::Service<(), (HttpContextInner, Incoming), Response = Response<OB>> + Clone,
+    S: motore::Service<HttpContext, Incoming, Response = Response<OB>> + Clone,
     S::Error: Into<DynError>,
 {
     type Response = S::Response;
@@ -59,20 +50,21 @@ where
 
     type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
 
-    fn call(&self, req: Request<Incoming>) -> Self::Future {
+    fn call(&mut self, req: Request<Incoming>) -> Self::Future {
         let s = self.inner.clone();
-        let peer = self.peer;
+        let peer = self.peer.clone();
         async move {
             let (parts, req) = req.into_parts();
-            let cx = HttpContextInner {
+            let mut cx = HttpContext {
                 peer,
                 method: parts.method,
                 uri: parts.uri,
                 version: parts.version,
                 headers: parts.headers,
                 extensions: parts.extensions,
+                params: Params { inner: Vec::with_capacity(0) },
             };
-            s.call(&mut (), (cx, req)).await
+            s.call(&mut cx, req).await
         }
     }
 }
