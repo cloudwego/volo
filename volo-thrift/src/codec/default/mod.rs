@@ -165,7 +165,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
             Ok(()) => Ok(()),
             Err(mut e) => {
                 let msg = format!(
-                    ", rpcinfo: {:?}, encode real size: {}, malloc size: {}",
+                    ", cx: {:?}, encode real size: {}, malloc size: {}",
                     cx.rpc_info(),
                     real_size,
                     malloc_size

@@ -158,8 +158,8 @@ where
                     return Err(Error::Transport(pilota::thrift::TransportError::new(
                         TransportErrorKind::EndOfFile,
                         format!(
-                            "an unexpected end of file from server, rpcinfo: {:?}",
-                            cx.rpc_info
+                            "an unexpected end of file from server, cx: {:?}",
+                            cx
                         ),
                     )));
                 }
