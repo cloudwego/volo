@@ -5,7 +5,7 @@ mod probe;
 
 use std::{borrow::Cow, fmt, net::Ipv6Addr, path::Path};
 
-pub use incoming::{Incoming, MakeIncoming};
+pub use incoming::{DefaultIncoming, MakeIncoming};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Address {
@@ -36,11 +36,11 @@ fn should_favor_ipv6() -> bool {
 }
 
 impl fmt::Display for Address {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Address::Ip(addr) => write!(f, "{}", addr),
+            Address::Ip(addr) => write!(f, "{addr}"),
             #[cfg(target_family = "unix")]
-            Address::Unix(_) => write!(f, "-"),
+            Address::Unix(path) => write!(f, "{}", path.display()),
         }
     }
 }

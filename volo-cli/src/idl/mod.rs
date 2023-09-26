@@ -10,11 +10,11 @@ use crate::{command::CliCommand, context::Context};
 define_commands!(IdlCommands { Update, Add });
 
 #[derive(Parser, Debug)]
-#[clap(about = "manage your idl", arg_required_else_help = true)]
+#[command(about = "manage your idl", arg_required_else_help = true)]
 pub struct Idl {
-    #[clap(subcommand)]
+    #[command(subcommand)]
     subcmd: IdlCommands,
-    #[clap(
+    #[arg(
         short = 'n',
         long = "entry-name",
         help = "The entry name, defaults to 'default'.",

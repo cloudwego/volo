@@ -58,7 +58,7 @@ where
             service,
         };
 
-        if let Some(mut channel) = service.discover.watch() {
+        if let Some(mut channel) = service.discover.watch(None) {
             tokio::spawn(async move {
                 loop {
                     match channel.recv().await {
@@ -74,11 +74,12 @@ where
 
 impl<Cx, T, D, LB, S> Service<Cx, Request<T>> for LoadBalanceService<D, LB, S>
 where
-    <Cx as Context>::Config: std::marker::Sync,
+    <Cx as Context>::Config: Sync,
     Cx: 'static + Context + Send + Sync,
     D: Discover,
     LB: LoadBalance<D>,
-    S: Service<Cx, Request<T>> + 'static + Send,
+    S: Service<Cx, Request<T>> + 'static + Send + Sync,
+    for<'cx> S::Future<'cx>: Send,
     LoadBalanceError: Into<S::Error>,
     S::Error: Debug,
     T: Send + 'static,
@@ -91,7 +92,7 @@ where
     where
         Self: 'cx;
 
-    fn call<'cx, 's>(&'s mut self, cx: &'cx mut Cx, req: Request<T>) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, req: Request<T>) -> Self::Future<'cx>
     where
         's: 'cx,
     {
@@ -118,16 +119,15 @@ where
                     callee.address = Some(addr.clone())
                 }
 
-                match self.service.call(cx, req).await {
-                    Ok(resp) => {
-                        return Ok(resp);
-                    }
+                return match self.service.call(cx, req).await {
+                    Ok(resp) => Ok(resp),
                     Err(err) => {
-                        tracing::warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
+                        warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
+                        Err(err)
                     }
-                }
+                };
             } else {
-                tracing::warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
+                warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
             }
             Err(LoadBalanceError::Retry).map_err(|err| err.into())?
         }

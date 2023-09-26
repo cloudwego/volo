@@ -3,13 +3,14 @@
 //! This module contains the generic `Encoder` and `Decoder` traits as well as
 //! the 'DefaultEncoder' and 'DefaultDecoder' implementations based on prost.
 
+pub mod compression;
 pub mod decode;
 pub mod encode;
 
 use std::{io, marker::PhantomData, mem::size_of};
 
 use bytes::BytesMut;
-use prost::Message;
+use pilota::prost::Message;
 
 use crate::{status::Code::Internal, Status};
 
@@ -70,7 +71,7 @@ impl<T: Message + Default> Decoder for DefaultDecoder<T> {
 
     fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
         Message::decode(src)
-            .map(Option::Some)
+            .map(Some)
             .map_err(|e| Status::new(Internal, e.to_string()))
     }
 }

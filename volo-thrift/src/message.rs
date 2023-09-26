@@ -1,32 +1,26 @@
 use std::sync::Arc;
 
 pub use pilota::thrift::Message;
-use pilota::{
-    thrift::{
-        TAsyncBinaryProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier, TOutputProtocol,
-    },
-    AsyncRead,
+use pilota::thrift::{
+    DecodeError, EncodeError, TAsyncInputProtocol, TInputProtocol, TLengthProtocol,
+    TMessageIdentifier, TOutputProtocol,
 };
-
-use crate::Error;
 
 #[async_trait::async_trait]
 pub trait EntryMessage: Sized + Send {
-    fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), Error>;
+    fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError>;
 
     fn decode<T: TInputProtocol>(
         protocol: &mut T,
         msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, Error>;
+    ) -> Result<Self, DecodeError>;
 
-    async fn decode_async<R>(
-        protocol: &mut TAsyncBinaryProtocol<R>,
+    async fn decode_async<T: TAsyncInputProtocol>(
+        protocol: &mut T,
         msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, Error>
-    where
-        R: AsyncRead + Unpin + Send;
+    ) -> Result<Self, DecodeError>;
 
-    fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize;
+    fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize;
 }
 
 #[async_trait::async_trait]
@@ -34,30 +28,31 @@ impl<Message> EntryMessage for Arc<Message>
 where
     Message: EntryMessage + Sync,
 {
-    fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), Error> {
+    #[inline]
+    fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError> {
         (**self).encode(protocol)
     }
 
+    #[inline]
     fn decode<T: TInputProtocol>(
         protocol: &mut T,
         msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, DecodeError> {
         Message::decode(protocol, msg_ident).map(Arc::new)
     }
 
-    async fn decode_async<R>(
-        protocol: &mut TAsyncBinaryProtocol<R>,
+    #[inline]
+    async fn decode_async<T: TAsyncInputProtocol>(
+        protocol: &mut T,
         msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, Error>
-    where
-        R: AsyncRead + Unpin + Send,
-    {
+    ) -> Result<Self, DecodeError> {
         Message::decode_async(protocol, msg_ident)
             .await
             .map(Arc::new)
     }
 
-    fn size<T: TLengthProtocol>(&self, protocol: &T) -> usize {
+    #[inline]
+    fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
         (**self).size(protocol)
     }
 }

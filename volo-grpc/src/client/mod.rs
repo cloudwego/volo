@@ -6,47 +6,46 @@
 //! For users need to specify some options at call time, they may use ['callopt'][callopt].
 
 mod callopt;
+mod meta;
 
 use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
 
 pub use callopt::CallOpt;
+use futures::Future;
+pub use meta::MetaService;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{BoxCloneService, Service},
     ServiceExt,
 };
 use volo::{
+    client::{MkClient, WithOptService},
     context::{Endpoint, Role, RpcInfo},
     discovery::{Discover, DummyDiscover},
     loadbalance::{random::WeightedRandomBalance, MkLbLayer},
     net::Address,
+    FastStr,
 };
 
 use crate::{
+    codec::compression::CompressionEncoding,
     context::{ClientContext, Config},
     layer::loadbalance::LbConfig,
     transport::ClientTransport,
     Request, Response, Status,
 };
 
-/// Only used by framework generated code.
-/// Do not use directly.
-#[doc(hidden)]
-pub trait SetClient<T, U> {
-    fn set_client(self, client: Client<T, U>) -> Self;
-}
-
 /// [`ClientBuilder`] provides a [builder-like interface][builder] to construct a [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     http2_config: Http2Config,
     rpc_config: Config,
-    callee_name: smol_str::SmolStr,
-    caller_name: smol_str::SmolStr,
+    callee_name: FastStr,
+    caller_name: FastStr,
     // Maybe address use Arc avoid memory alloc.
     target: Option<Address>,
     inner_layer: IL,
     outer_layer: OL,
-    service_client: C,
+    mk_client: C,
     mk_lb: LB,
     _marker: PhantomData<fn(T, U)>,
 }
@@ -61,38 +60,24 @@ impl<C, T, U>
         U,
     >
 {
-    #[allow(clippy::type_complexity)]
     /// Creates a new [`ClientBuilder`].
-    pub fn new(
-        service_client: C,
-        service_name: impl AsRef<str>,
-    ) -> ClientBuilder<
-        Identity,
-        Identity,
-        C,
-        LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>,
-        T,
-        U,
-    > {
-        ClientBuilder {
+    pub fn new(service_client: C, service_name: impl AsRef<str>) -> Self {
+        Self {
             http2_config: Default::default(),
             rpc_config: Default::default(),
-            callee_name: service_name.into(),
+            callee_name: FastStr::new(service_name),
             caller_name: "".into(),
             target: None,
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
-            service_client,
+            mk_client: service_client,
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
         }
     }
 }
 
-impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, U>
-where
-    C: SetClient<T, U>,
-{
+impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, U> {
     pub fn load_balance<NLB>(
         self,
         load_balance: NLB,
@@ -105,7 +90,7 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb.load_balance(load_balance),
             _marker: PhantomData,
         }
@@ -123,17 +108,14 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb.discover(discover),
             _marker: PhantomData,
         }
     }
 }
 
-impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U>
-where
-    C: SetClient<T, U>,
-{
+impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
     /// stream-level flow control.
     ///
@@ -212,6 +194,16 @@ where
         self
     }
 
+    /// Set the maximum write buffer size for each HTTP/2 stream.
+    ///
+    /// Default is currently 1MB, but may change.
+    ///
+    /// The value must be no larger than `u32::MAX`.
+    pub fn http2_max_send_buf_size(mut self, max: impl Into<usize>) -> Self {
+        self.http2_config.max_send_buf_size = max.into();
+        self
+    }
+
     /// Sets whether to retry requests that get disrupted before ever starting
     /// to write.
     ///
@@ -226,24 +218,6 @@ where
     /// Default is `false`.
     pub fn accept_http1(mut self, accept_http1: bool) -> Self {
         self.http2_config.accept_http1 = accept_http1;
-        self
-    }
-
-    /// Sets that all sockets have `SO_KEEPALIVE` set with the supplied duration.
-    ///
-    /// If `None`, the option will not be set.
-    ///
-    /// Default is `None`.
-    pub fn tcp_keepalive(mut self, dur: impl Into<Option<Duration>>) -> Self {
-        self.http2_config.tcp_keepalive = dur.into();
-        self
-    }
-
-    /// Sets that all sockets have `SO_NODELAY` set to the supplied value `nodelay`.
-    ///
-    /// Default is `true`.
-    pub fn tcp_nodelay(mut self, nodelay: bool) -> Self {
-        self.http2_config.tcp_nodelay = nodelay;
         self
     }
 
@@ -275,7 +249,25 @@ where
     ///
     /// Default is the empty string.
     pub fn caller_name(mut self, name: impl AsRef<str>) -> Self {
-        self.caller_name = name.into();
+        self.caller_name = FastStr::new(name);
+        self
+    }
+
+    /// Sets the send compression encodings for the request, and will self-adaptive with config of
+    /// the server.
+    ///
+    /// Default is disable the send compression.
+    pub fn send_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
+        self.rpc_config.send_compressions = Some(config);
+        self
+    }
+
+    /// Sets the accept compression encodings for the request, and will self-adaptive with config of
+    /// the server.
+    ///
+    /// Default is disable the accept decompression.
+    pub fn accept_compressions(mut self, config: Vec<CompressionEncoding>) -> Self {
+        self.rpc_config.accept_compressions = Some(config);
         self
     }
 
@@ -288,7 +280,7 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: mk_load_balance,
             _marker: PhantomData,
         }
@@ -306,7 +298,7 @@ where
 
     /// Adds a new layer to the client.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -329,7 +321,7 @@ where
             target: self.target,
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
         }
@@ -337,7 +329,7 @@ where
 
     /// Adds a new outer layer to the client.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -360,7 +352,7 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
         }
@@ -368,7 +360,7 @@ where
 
     /// Adds a new outer layer to the client.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -391,7 +383,7 @@ where
             target: self.target,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
-            service_client: self.service_client,
+            mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
         }
@@ -400,17 +392,20 @@ where
 
 impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U>
 where
-    C: SetClient<T, U>,
+    C: MkClient<Client<BoxCloneService<ClientContext, Request<T>, Response<U>, Status>>>,
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service:
-        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
+        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Error:
         Into<Status>,
-    IL: Layer<ClientTransport<U>>,
+    for<'cx> <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Future<'cx>:
+        Send,
+    IL: Layer<MetaService<ClientTransport<U>>>,
     IL::Service:
-        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
+        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <IL::Service as Service<ClientContext, Request<T>>>::Error: Into<Status>,
+    for<'cx> <IL::Service as Service<ClientContext, Request<T>>>::Future<'cx>: Send,
     OL:
         Layer<
             BoxCloneService<
@@ -424,13 +419,15 @@ where
             >,
         >,
     OL::Service:
-        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone,
+        Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <OL::Service as Service<ClientContext, Request<T>>>::Error: Send + Into<Status>,
+    for<'cx> <OL::Service as Service<ClientContext, Request<T>>>::Future<'cx>: Send,
     T: 'static + Send,
 {
     /// Builds a new [`Client`].
-    pub fn build(self) -> C {
-        let transport = ClientTransport::new(&self.http2_config, &self.rpc_config);
+    pub fn build(self) -> C::Target {
+        let transport =
+            MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config));
         let transport = self.outer_layer.layer(BoxCloneService::new(
             self.mk_lb.make().layer(self.inner_layer.layer(transport)),
         ));
@@ -438,14 +435,13 @@ where
         let transport = transport.map_err(|err| err.into());
         let transport = BoxCloneService::new(transport);
 
-        self.service_client.set_client(Client {
+        self.mk_client.mk_client(Client {
             inner: Arc::new(ClientInner {
                 callee_name: self.callee_name,
                 caller_name: self.caller_name,
                 rpc_config: self.rpc_config,
                 target: self.target,
             }),
-            callopt: None,
             transport,
         })
     }
@@ -453,8 +449,8 @@ where
 
 /// A struct indicating the rpc configuration of the client.
 struct ClientInner {
-    callee_name: smol_str::SmolStr,
-    caller_name: smol_str::SmolStr,
+    callee_name: FastStr,
+    caller_name: FastStr,
     rpc_config: Config,
     target: Option<Address>,
 }
@@ -464,74 +460,116 @@ struct ClientInner {
 /// `Client` is designed to "clone and use", so it's cheap to clone it.
 /// One important thing is that the `CallOpt` will not be cloned, because
 /// it's designed to be per-request.
-pub struct Client<T, U> {
+#[derive(Clone)]
+pub struct Client<S> {
+    transport: S,
     inner: Arc<ClientInner>,
-    callopt: Option<CallOpt>,
-    transport: BoxCloneService<ClientContext, Request<T>, Response<U>, Status>,
 }
 
-/// # Safety
-///
-/// `Client` doesn't have non-atomic interior mutability.
-unsafe impl<T, U> Sync for Client<T, U> {}
-
-impl<T, U> Clone for Client<T, U> {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-            callopt: None,
-            transport: self.transport.clone(),
-        }
-    }
-}
-
-impl<T, U> Client<T, U> {
-    pub async fn call(
-        &mut self,
-        path: &'static str,
-        req: Request<T>,
-    ) -> Result<Response<U>, Status> {
-        let mut cx = ClientContext::new(self.make_rpc_info(path));
-        let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
-
-        let mk_call = async { self.transport.call(&mut cx, req).await };
-
-        if has_metainfo {
-            mk_call.await
-        } else {
-            metainfo::METAINFO
-                .scope(RefCell::new(metainfo::MetaInfo::default()), mk_call)
-                .await
-        }
+impl<S> Client<S> {
+    pub fn make_cx(&self, path: &'static str) -> ClientContext {
+        ClientContext::new(self.make_rpc_info(path))
     }
 
-    #[inline]
-    pub fn set_callopt(&mut self, callopt: CallOpt) {
-        self.callopt = Some(callopt);
-    }
-
-    fn make_rpc_info(&mut self, method: &'static str) -> RpcInfo<Config> {
-        let mut caller = Endpoint::new(self.inner.caller_name.clone());
+    fn make_rpc_info(&self, method: &'static str) -> RpcInfo<Config> {
+        let caller = Endpoint::new(self.inner.caller_name.clone());
         let mut callee = Endpoint::new(self.inner.callee_name.clone());
         if let Some(target) = &self.inner.target {
             callee.set_address(target.clone());
         }
-        let mut rpc_config = self.inner.rpc_config;
-        if let Some(co) = self.callopt.take() {
-            caller.tags.extend(co.caller_tags);
-            callee.tags.extend(co.callee_tags);
-            if let Some(addr) = co.address {
-                callee.set_address(addr);
-            }
-            rpc_config.merge(co.config);
+        RpcInfo::new(
+            Role::Client,
+            method.into(),
+            caller,
+            callee,
+            self.inner.rpc_config.clone(),
+        )
+    }
+
+    pub fn with_opt<Opt>(self, opt: Opt) -> Client<WithOptService<S, Opt>> {
+        Client {
+            transport: WithOptService::new(self.transport, opt),
+            inner: self.inner,
         }
-        RpcInfo::new(Role::Client, method.into(), caller, callee, rpc_config)
     }
 }
+
+macro_rules! impl_client {
+    (($self: ident, &mut $cx:ident, $req: ident) => async move $e: tt ) => {
+        impl<S, Req: Send + 'static>
+            volo::service::Service<crate::context::ClientContext, Req> for Client<S>
+        where
+            S: volo::service::Service<
+                    crate::context::ClientContext,
+                    Req,
+                    Error = crate::Status,
+                > + Sync
+                + Send
+                + 'static,
+        {
+            type Response = S::Response;
+            type Error = S::Error;
+            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
+
+            fn call<'cx, 's>(
+                &'s $self,
+                $cx: &'cx mut crate::context::ClientContext,
+                $req: Req,
+            ) -> Self::Future<'cx>
+            where
+                's: 'cx,
+            {
+                async move { $e }
+            }
+        }
+
+        impl<S, Req: Send + 'static>
+            volo::client::OneShotService<crate::context::ClientContext, Req> for Client<S>
+        where
+            S: volo::client::OneShotService<
+                    crate::context::ClientContext,
+                    Req,
+                    Error = crate::Status,
+                > + Sync
+                + Send
+                + 'static,
+        {
+            type Response = S::Response;
+            type Error = S::Error;
+            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
+
+            fn call<'cx>(
+                $self,
+                $cx: &'cx mut crate::context::ClientContext,
+                $req: Req,
+            ) -> Self::Future<'cx>
+            where
+                Self: 'cx,
+            {
+                async move { $e }
+            }
+        }
+    };
+}
+
+impl_client!((self, &mut cx, req) => async move {
+    let has_metainfo = metainfo::METAINFO.try_with(|_| {}).is_ok();
+
+    let mk_call = async { self.transport.call(cx, req).await };
+
+    if has_metainfo {
+        mk_call.await
+    } else {
+        metainfo::METAINFO
+            .scope(RefCell::new(metainfo::MetaInfo::default()), mk_call)
+            .await
+    }
+});
 
 const DEFAULT_STREAM_WINDOW_SIZE: u32 = 1024 * 1024 * 2; // 2MB
 const DEFAULT_CONN_WINDOW_SIZE: u32 = 1024 * 1024 * 5; // 5MB
 const DEFAULT_MAX_FRAME_SIZE: u32 = 1024 * 16; // 16KB
+const DEFAULT_MAX_SEND_BUF_SIZE: usize = 1024 * 1024; // 1MB
 const DEFAULT_KEEPALIVE_TIMEOUT_SECS: Duration = Duration::from_secs(20); // 20s
 const DEFAULT_MAX_CONCURRENT_RESET_STREAMS: usize = 10;
 
@@ -547,9 +585,8 @@ pub struct Http2Config {
     pub(crate) http2_keepalive_while_idle: bool,
     pub(crate) max_concurrent_reset_streams: usize,
     pub(crate) retry_canceled_requests: bool,
+    pub(crate) max_send_buf_size: usize,
     pub(crate) accept_http1: bool,
-    pub(crate) tcp_keepalive: Option<Duration>,
-    pub(crate) tcp_nodelay: bool,
 }
 
 impl Default for Http2Config {
@@ -563,10 +600,9 @@ impl Default for Http2Config {
             http2_keepalive_timeout: DEFAULT_KEEPALIVE_TIMEOUT_SECS,
             http2_keepalive_while_idle: false,
             max_concurrent_reset_streams: DEFAULT_MAX_CONCURRENT_RESET_STREAMS,
+            max_send_buf_size: DEFAULT_MAX_SEND_BUF_SIZE,
             retry_canceled_requests: true,
             accept_http1: false,
-            tcp_keepalive: None,
-            tcp_nodelay: true,
         }
     }
 }

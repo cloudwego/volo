@@ -12,16 +12,22 @@ use hyper::client::connect::{Connected, Connection};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use volo::net::{
     conn::Conn,
-    dial::{Config, MakeConnection},
+    dial::{Config, DefaultMakeTransport, MakeTransport},
     Address,
 };
 
 #[derive(Clone, Debug)]
-pub struct Connector(MakeConnection);
+pub struct Connector(DefaultMakeTransport);
 
 impl Connector {
     pub fn new(cfg: Option<Config>) -> Self {
-        Self(MakeConnection::new(cfg))
+        let mut mt = DefaultMakeTransport::default();
+        if let Some(cfg) = cfg {
+            mt.set_connect_timeout(cfg.connect_timeout);
+            mt.set_read_timeout(cfg.read_timeout);
+            mt.set_write_timeout(cfg.write_timeout);
+        }
+        Self(mt)
     }
 }
 
@@ -34,16 +40,16 @@ impl Default for Connector {
 impl tower::Service<hyper::Uri> for Connector {
     type Response = ConnectionWrapper;
 
-    type Error = std::io::Error;
+    type Error = io::Error;
 
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn poll_ready(&mut self, _cx: &mut std::task::Context<'_>) -> Poll<Result<(), Self::Error>> {
+    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
         Poll::Ready(Ok(()))
     }
 
     fn call(&mut self, uri: hyper::Uri) -> Self::Future {
-        let mk_conn = self.0.clone();
+        let mk_conn = self.0;
         Box::pin(async move {
             let authority = uri.authority().expect("authority required").as_str();
             let target: Address = match uri.scheme_str() {

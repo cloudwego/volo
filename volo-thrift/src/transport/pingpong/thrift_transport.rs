@@ -1,13 +1,10 @@
 use std::sync::atomic::AtomicUsize;
 
 use pin_project::pin_project;
-use volo::{
-    net::conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
-    util::buf_reader::BufReader,
-};
+use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
-    codec::{Decoder, Encoder, DEFAULT_BUFFER_SIZE},
+    codec::{Decoder, Encoder, MakeCodec},
     context::{ClientContext, ThriftContext},
     transport::pool::Poolable,
     ApplicationError, ApplicationErrorKind, EntryMessage, Error, ThriftMessage,
@@ -18,24 +15,34 @@ lazy_static::lazy_static! {
 }
 
 #[pin_project]
-pub struct ThriftTransport<E, D> {
-    read_half: ReadHalf<D>,
+pub struct ThriftTransport<E: Encoder, D: Decoder> {
     write_half: WriteHalf<E>,
+    read_half: ReadHalf<D>,
 }
 
-impl<E, D> ThriftTransport<E, D> {
-    pub fn new(conn: Conn, encoder: E, decoder: D) -> Self {
-        let (rh, wh) = conn.stream.into_split();
+impl<E, D> ThriftTransport<E, D>
+where
+    E: Encoder,
+    D: Decoder,
+{
+    pub fn new<
+        R: AsyncRead + Send + Sync + Unpin + 'static,
+        W: AsyncWrite + Send + Sync + Unpin + 'static,
+        MkC: MakeCodec<R, W, Decoder = D, Encoder = E>,
+    >(
+        read_half: R,
+        write_half: W,
+        make_codec: MkC,
+    ) -> Self {
         let id = TRANSPORT_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let (encoder, decoder) = make_codec.make_codec(read_half, write_half);
         Self {
             read_half: ReadHalf {
-                read_half: BufReader::with_capacity(DEFAULT_BUFFER_SIZE, rh),
                 decoder,
                 id,
                 reusable: true,
             },
             write_half: WriteHalf {
-                write_half: wh,
                 encoder,
                 id,
                 reusable: true,
@@ -69,7 +76,6 @@ where
 }
 
 pub struct ReadHalf<D> {
-    read_half: BufReader<OwnedReadHalf>,
     decoder: D,
     reusable: bool,
     id: usize,
@@ -83,26 +89,25 @@ where
         &mut self,
         cx: &mut ClientContext,
     ) -> Result<Option<ThriftMessage<T>>, Error> {
-        let thrift_msg = self
-            .decoder
-            .decode(cx, &mut self.read_half)
-            .await
-            .map_err(|e| {
-                tracing::error!("[VOLO] transport[{}] decode error: {}", self.id, e);
-                e
-            })?;
+        let thrift_msg = self.decoder.decode(cx).await.map_err(|e| {
+            let mut e = e;
+            e.append_msg(&format!(", cx: {:?}", cx));
+            tracing::error!("[VOLO] transport[{}] decode error: {}", self.id, e);
+            e
+        })?;
 
         if let Some(ThriftMessage { meta, .. }) = &thrift_msg {
             if meta.seq_id != cx.seq_id {
                 tracing::error!(
-                    "[VOLO] transport[{}] seq_id not match: {} != {}",
+                    "[VOLO] transport[{}] seq_id not match: {} != {}, cx: {:?}",
                     self.id,
                     meta.seq_id,
                     cx.seq_id,
+                    cx,
                 );
                 return Err(Error::Application(ApplicationError::new(
-                    ApplicationErrorKind::BadSequenceId,
-                    "seq_id not match",
+                    ApplicationErrorKind::BAD_SEQUENCE_ID,
+                    format!("seq_id not match, cx: {:?}", cx),
                 )));
             }
         };
@@ -111,7 +116,6 @@ where
 }
 
 pub struct WriteHalf<E> {
-    write_half: OwnedWriteHalf,
     encoder: E,
     reusable: bool,
     id: usize,
@@ -126,19 +130,21 @@ where
         cx: &mut impl ThriftContext,
         msg: ThriftMessage<T>,
     ) -> Result<(), Error> {
-        self.encoder
-            .encode(cx, &mut self.write_half, msg)
-            .await
-            .map_err(|e| {
-                tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
-                e
-            })?;
+        self.encoder.encode(cx, msg).await.map_err(|mut e| {
+            e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
+            tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
+            e
+        })?;
 
         Ok(())
     }
 }
 
-impl<TTEncoder, TTDecoder> Poolable for ThriftTransport<TTEncoder, TTDecoder> {
+impl<E, D> Poolable for ThriftTransport<E, D>
+where
+    E: Encoder,
+    D: Decoder,
+{
     fn reusable(&self) -> bool {
         self.read_half.reusable && self.write_half.reusable
     }

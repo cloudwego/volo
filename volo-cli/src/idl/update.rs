@@ -1,15 +1,12 @@
 use std::collections::HashSet;
 
 use clap::Parser;
-use volo_build::{
-    model::{GitSource, Source},
-    util::get_repo_latest_commit_id,
-};
+use volo_build::model::{GitSource, Source};
 
 use crate::{command::CliCommand, context::Context};
 
 #[derive(Parser, Debug)]
-#[clap(about = "update your idl by git repo, split by ','")]
+#[command(about = "update your idl by git repo, split by ','")]
 pub struct Update {
     git: Vec<String>,
 }
@@ -34,7 +31,7 @@ impl CliCommand for Update {
             // check if the git exists in the config
             self.git.iter().for_each(|g| {
                 if !exists.contains(g) {
-                    eprintln!("git repo {} not exists in config", g);
+                    eprintln!("git repo {g} not exists in config");
                     std::process::exit(1);
                 }
             });
@@ -69,25 +66,9 @@ impl CliCommand for Update {
                 }
             };
 
-            should_update_gits.into_iter().try_for_each(|git_source| {
-                let commit_id = unsafe {
-                    get_repo_latest_commit_id(
-                        &git_source.as_ref().unwrap().repo,
-                        git_source
-                            .as_ref()
-                            .unwrap()
-                            .r#ref
-                            .as_deref()
-                            .unwrap_or("HEAD"),
-                    )
-                }?;
-
-                unsafe {
-                    let _ = git_source.as_mut().unwrap().lock.insert(commit_id);
-                }
-
-                Ok::<(), anyhow::Error>(())
-            })?;
+            should_update_gits
+                .into_iter()
+                .try_for_each(|git_source| unsafe { git_source.as_mut().unwrap().update() })?;
 
             Ok(())
         })

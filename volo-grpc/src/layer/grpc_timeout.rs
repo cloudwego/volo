@@ -98,11 +98,7 @@ where
             Self: 'cx,
             Cx: 'cx;
 
-    fn call<'cx, 's>(
-        &'s mut self,
-        cx: &'cx mut Cx,
-        req: hyper::Request<ReqBody>,
-    ) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, req: hyper::Request<ReqBody>) -> Self::Future<'cx>
     where
         's: 'cx,
     {
@@ -178,7 +174,7 @@ mod tests {
     use crate::metadata::GRPC_TIMEOUT_HEADER;
 
     // init config in testing
-    fn try_set_up(val: Option<&str>) -> std::result::Result<Option<Duration>, HeaderValue> {
+    fn try_set_up(val: Option<&str>) -> Result<Option<Duration>, HeaderValue> {
         let mut hm = HeaderMap::new();
         if let Some(v) = val {
             let hv = HeaderValue::from_str(v).unwrap();

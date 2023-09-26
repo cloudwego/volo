@@ -35,12 +35,12 @@ pub trait Discover: Send + Sync + 'static {
     type DiscFut<'future>: Future<Output = Result<Vec<Arc<Instance>>, Self::Error>> + Send + 'future;
 
     /// `discover` allows to request an endpoint and return a discover future.
-    fn discover(&self, endpoint: &Endpoint) -> Self::DiscFut<'_>;
+    fn discover<'s>(&'s self, endpoint: &'s Endpoint) -> Self::DiscFut<'s>;
     /// `key` should return a key suitable for cache.
     fn key(&self, endpoint: &Endpoint) -> Self::Key;
     /// `watch` should return a [`async_broadcast::Receiver`] which can be used to subscribe
     /// [`Change`].
-    fn watch(&self) -> Option<Receiver<Change<Self::Key>>>;
+    fn watch(&self, keys: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>>;
 }
 
 /// Change indicates the change of the service discover.
@@ -158,7 +158,7 @@ impl Discover for StaticDiscover {
 
     fn key(&self, _: &Endpoint) -> Self::Key {}
 
-    fn watch(&self) -> Option<Receiver<Change<Self::Key>>> {
+    fn watch(&self, _keys: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {
         None
     }
 }
@@ -180,7 +180,7 @@ impl Discover for DummyDiscover {
 
     fn key(&self, _: &Endpoint) {}
 
-    fn watch(&self) -> Option<Receiver<Change<Self::Key>>> {
+    fn watch(&self, _keys: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {
         None
     }
 }
@@ -200,11 +200,7 @@ mod tests {
 
     #[test]
     fn test_static_discover() {
-        let empty = Endpoint {
-            service_name: smol_str::SmolStr::new(""),
-            address: None,
-            tags: Default::default(),
-        };
+        let empty = Endpoint::new("".into());
         let discover = StaticDiscover::from(vec![
             "127.0.0.1:8000".parse().unwrap(),
             "127.0.0.2:9000".parse().unwrap(),

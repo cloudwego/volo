@@ -9,9 +9,11 @@
 [actions-badge]: https://github.com/cloudwego/volo/actions/workflows/ci.yaml/badge.svg
 [actions-url]: https://github.com/cloudwego/volo/actions
 
+English | [中文](README-zh_cn.md)
+
 Volo is a **high-performance** and **strong-extensibility** Rust RPC framework that helps developers build microservices.
 
-Volo uses [`Motore`][Motore] as its middleware abstraction, which is powered by GAT.
+Volo uses [`Motore`][motore] as its middleware abstraction, which is powered by GAT.
 
 ## Overview
 
@@ -30,7 +32,7 @@ Volo mainly consists of six crates:
 
 #### Powered by GAT
 
-Volo uses [`Motore`][Motore] as its middleware abstraction, which is powered by GAT.
+Volo uses [`Motore`][motore] as its middleware abstraction, which is powered by GAT.
 
 Through GAT, we can avoid many unnecessary `Box` memory allocations, improve ease of use, and provide users with a more friendly programming interface and a more ergonomic programming paradigm.
 
@@ -58,7 +60,7 @@ Benefiting from Rust's powerful expression and abstraction capabilities, through
 
 For example, service governance functions such as service discovery and load balancing can be implemented in the form of services without the need to implement Trait independently.
 
-We have also created an organization [`Volo-rs`][Volo-rs], any contributions are welcome.
+We have also created an organization [`Volo-rs`][volo-rs], any contributions are welcome.
 
 For more information, you may refer to [our guide](https://www.cloudwego.io/zh/docs/volo/guide/).
 
@@ -68,12 +70,16 @@ Volo-Thrift: https://www.cloudwego.io/zh/docs/volo/volo-thrift/getting-started/
 
 Volo-gRPC: https://www.cloudwego.io/zh/docs/volo/volo-grpc/getting-started/
 
+## Examples
+
+See [Examples][examples].
+
 ## Related Projects
 
-- [Volo-rs][Volo-rs]: The volo ecosystem which contains a lot of useful components.
-- [Motore][Motore]: Middleware abstraction layer powered by GAT.
-- [Pilota][Pilota]: A thrift and protobuf implementation in pure rust with high performance and extensibility.
-- [Metainfo][Metainfo]: Transmissing metainfo across components.
+- [Volo-rs][volo-rs]: The volo ecosystem which contains a lot of useful components.
+- [Motore][motore]: Middleware abstraction layer powered by GAT.
+- [Pilota][pilota]: A thrift and protobuf implementation in pure rust with high performance and extensibility.
+- [Metainfo][metainfo]: Transmissing metainfo across components.
 
 ## RoadMap
 
@@ -104,13 +110,14 @@ For the full list, you may refer to the [CREDITS.md](https://github.com/cloudweg
 
   <img src="https://github.com/cloudwego/volo/raw/main/.github/assets/volo-feishu-user-group.png" alt="Volo user group" width="50%" height="50%" />
 
-[Volo-rs]: https://github.com/volo-rs
-[Motore]: https://github.com/cloudwego/motore
-[Pilota]: https://github.com/cloudwego/pilota
-[Metainfo]: https://github.com/cloudwego/metainfo
+[volo-rs]: https://github.com/volo-rs
+[motore]: https://github.com/cloudwego/motore
+[pilota]: https://github.com/cloudwego/pilota
+[metainfo]: https://github.com/cloudwego/metainfo
 [volo]: https://docs.rs/volo
 [volo-thrift]: https://docs.rs/volo-thrift
 [volo-grpc]: https://docs.rs/volo-grpc
 [volo-build]: https://docs.rs/volo-build
 [volo-cli]: https://crates.io/crates/volo-cli
 [volo-macros]: https://docs.rs/volo-macros
+[examples]: https://github.com/cloudwego/volo/tree/main/examples

@@ -8,40 +8,43 @@ use metainfo::MetaInfo;
 use motore::service::Service;
 use tokio::sync::{futures::Notified, mpsc};
 use tracing::*;
-use volo::volo_unreachable;
+use volo::{context::Endpoint, net::Address, volo_unreachable};
 
 use crate::{
-    codec::{framed::Framed, Decoder, Encoder},
+    codec::{Decoder, Encoder},
     context::ServerContext,
     protocol::TMessageType,
-    DummyMessage, EntryMessage, Error, Size, ThriftMessage,
+    DummyMessage, EntryMessage, Error, ThriftMessage,
 };
 
 const CHANNEL_SIZE: usize = 1024;
 
 pub async fn serve<Svc, Req, Resp, E, D>(
-    framed: Framed<E, D>,
+    mut encoder: E,
+    mut decoder: D,
     notified: Notified<'_>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     service: Svc,
+    stat_tracer: Arc<[crate::server::TraceFn]>,
+    peer_addr: Option<Address>,
 ) where
-    Svc: Service<ServerContext, Req, Response = Resp> + Send + Clone + 'static,
-    Svc::Error: Into<crate::Error> + Send,
+    Svc: Service<ServerContext, Req, Response = Resp> + Send + Clone + 'static + Sync,
+    Svc::Error: Into<Error> + Send,
     Req: EntryMessage + 'static,
-    Resp: EntryMessage + Size + 'static,
-    E: Encoder + Send + 'static,
-    D: Decoder + Send + 'static,
+    Resp: EntryMessage + 'static,
+    E: Encoder,
+    D: Decoder,
 {
     tokio::pin!(notified);
-
-    let (mut read_half, mut write_half) = framed.into_split();
 
     // mpsc channel used to send responses to the loop
     let (send_tx, mut send_rx) = mpsc::channel(CHANNEL_SIZE);
     let (error_send_tx, mut error_send_rx) = mpsc::channel(1);
 
-    tokio::spawn(async move {
-        metainfo::METAINFO
+    tokio::spawn({
+        let peer_addr = peer_addr.clone();
+        async move {
+            metainfo::METAINFO
             .scope(RefCell::new(MetaInfo::default()), async {
                 loop {
                     tokio::select! {
@@ -49,15 +52,17 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         msg = send_rx.recv() => {
                             match msg {
                                 Some((mi, mut cx, msg)) => {
-                                    if let Err(e) = metainfo::METAINFO.scope(RefCell::new(mi), write_half.send(&mut cx, msg)).await {
+                                    if let Err(e) = metainfo::METAINFO.scope(RefCell::new(mi), encoder.encode::<Resp, ServerContext>(&mut cx, msg)).await {
                                         // log it
-                                        error!("[VOLO] server send response error: {:?}", e,);
+                                        error!("[VOLO] server send response error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
+                                        stat_tracer.iter().for_each(|f| f(&cx));
                                         return;
                                     }
+                                    stat_tracer.iter().for_each(|f| f(&cx));
                                 }
                                 None => {
                                     // log it
-                                    info!("[VOLO] server send channel closed");
+                                    trace!("[VOLO] server send channel closed, peer_addr: {:?}", peer_addr);
                                     return;
                                 }
                             }
@@ -66,15 +71,16 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         error_msg = error_send_rx.recv() => {
                             match error_msg {
                                 Some((mut cx, msg)) => {
-                                    if let Err(e) = write_half.send(&mut cx, msg).await {
+                                    if let Err(e) = encoder.encode::<DummyMessage, ServerContext>(&mut cx, msg).await {
                                         // log it
-                                        error!("[VOLO] server send error error: {:?}", e,);
+                                        error!("[VOLO] server send error error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                                     }
+                                    stat_tracer.iter().for_each(|f| f(&cx));
                                     return;
                                 }
                                 None => {
                                     // log it
-                                    info!("[VOLO] server send error channel closed");
+                                    trace!("[VOLO] server send error channel closed, peer_addr: {:?}", peer_addr);
                                     return;
                                 }
                             }
@@ -83,6 +89,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                 }
             })
             .await;
+        }
     });
 
     metainfo::METAINFO
@@ -90,28 +97,37 @@ pub async fn serve<Svc, Req, Resp, E, D>(
             loop {
                 // new context
                 let mut cx = ServerContext::default();
+                if let Some(peer_addr) = &peer_addr {
+                    let mut caller = Endpoint::new("-".into());
+                    caller.set_address(peer_addr.clone());
+                    cx.rpc_info.caller = Some(caller);
+                }
 
                 tokio::select! {
                     _ = &mut notified => {
-                        tracing::trace!("[VOLO] close conn by notified");
+                        tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
                         return
                     },
                     // receives a message
-                    msg = read_half.next(&mut cx) => {
+                    msg = decoder.decode(&mut cx) => {
                         tracing::debug!(
-                            "[VOLO] received message: {:?}",
-                            msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta))
+                            "[VOLO] received message: {:?}, cx: {:?}, peer_addr: {:?}",
+                            msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta)),
+                            cx,
+                            peer_addr
                         );
                         match msg {
                             Ok(Some(ThriftMessage { data: Ok(req), .. })) => {
                                 // if it's ok, then we need to spawn this msg to a new task
-                                let mut svc = service.clone();
+                                let svc = service.clone();
                                 let exit_mark = exit_mark.clone();
                                 let send_tx = send_tx.clone();
                                 let mi = metainfo::METAINFO.with(|m| m.take());
-                                tokio::spawn(async move {
+                                tokio::spawn(async  {
                                     metainfo::METAINFO.scope(RefCell::new(mi), async move {
+                                        cx.stats.record_process_start_at();
                                         let resp = svc.call(&mut cx, req).await;
+                                        cx.stats.record_process_end_at();
 
                                         if exit_mark.load(Ordering::Relaxed) {
                                             cx.transport.set_conn_reset(true);
@@ -134,13 +150,13 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 volo_unreachable!();
                             }
                             Ok(None) => {
-                                trace!("[VOLO] reach eof, connection has been closed by client");
+                                trace!("[VOLO] reach eof, connection has been closed by client, peer_addr: {:?}", peer_addr);
                                 return;
                             }
                             Err(e) => {
-                                error!("{:?}", e);
+                                error!("[VOLO] multiplex server decode error {:?}, peer_addr: {:?}", e, peer_addr);
                                 cx.msg_type = Some(TMessageType::Exception);
-                                if !matches!(e, Error::Pilota(pilota::thrift::error::Error::Transport(_))) {
+                                if !matches!(e, Error::Transport(_)) {
                                     let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e))
                                         .unwrap();
                                     error_send_tx.send((cx, msg)).await;
@@ -149,7 +165,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             }
                         }
                     }
-                };
+                }
             }
         })
         .await;

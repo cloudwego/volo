@@ -2,62 +2,65 @@
 //!
 //! This module contains the low level component to build a gRPC server.
 
-use std::{
-    cell::RefCell, marker::PhantomData, net::SocketAddr, str::FromStr, sync::Arc, time::Duration,
-};
+mod meta;
+mod router;
+mod service;
 
-use futures::{Future, TryStreamExt};
-use http::{HeaderMap, HeaderValue};
-use hyper::server::conn::Http;
-use metainfo::{Backward, Forward};
+use std::{fmt, io, time::Duration};
+
 use motore::{
-    builder::ServiceBuilder,
     layer::{Identity, Layer, Stack},
-    service::Service,
-    BoxError, ServiceExt,
+    service::{Service, TowerAdapter},
+    BoxError,
 };
-use tower::Layer as TowerLayer;
-use volo::{
-    context::{Context, Endpoint},
-    net::Address,
-    spawn,
-};
+pub use service::ServiceBuilder;
+use volo::{net::incoming::Incoming, spawn};
 
+pub use self::router::Router;
 use crate::{
-    body::Body,
-    codec::decode::Kind,
-    context::ServerContext,
-    message::{RecvEntryMessage, SendEntryMessage},
-    metadata::{
-        MetadataKey, MetadataMap, DESTINATION_SERVICE, HEADER_TRANS_REMOTE_ADDR, SOURCE_SERVICE,
-    },
-    Request, Response, Status,
+    body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status,
 };
 
-/// A server for a gRPC service.
-pub struct Server<S, L> {
-    service: S,
-    layer: L,
-    http2_config: Http2Config,
+/// A trait to provide a static reference to the service's
+/// name. This is used for routing service's within the router.
+pub trait NamedService {
+    /// The `Service-Name` as described [here].
+    ///
+    /// [here]: https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
+    const NAME: &'static str;
 }
 
-impl<S> Server<S, Identity> {
+/// A server for a gRPC service.
+#[derive(Clone)]
+pub struct Server<L> {
+    layer: L,
+    http2_config: Http2Config,
+    router: Router,
+}
+
+impl Default for Server<Identity> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Server<Identity> {
     /// Creates a new [`Server`].
-    pub fn new(service: S) -> Self {
+    pub fn new() -> Self {
         Self {
-            service,
             layer: Identity::new(),
             http2_config: Http2Config::default(),
+            router: Router::new(),
         }
     }
 }
 
-impl<S, L> Server<S, L> {
+impl<L> Server<L> {
     /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
     /// stream-level flow control.
     ///
     /// Default is `1MB`.
-    pub fn http2_init_stream_window_size(&mut self, sz: impl Into<u32>) -> &mut Self {
+    pub fn http2_init_stream_window_size(mut self, sz: impl Into<u32>) -> Self {
         self.http2_config.init_stream_window_size = sz.into();
         self
     }
@@ -65,7 +68,7 @@ impl<S, L> Server<S, L> {
     /// Sets the max connection-level flow control for HTTP2.
     ///
     /// Default is `1MB`.
-    pub fn http2_init_connection_window_size(&mut self, sz: impl Into<u32>) -> &mut Self {
+    pub fn http2_init_connection_window_size(mut self, sz: impl Into<u32>) -> Self {
         self.http2_config.init_connection_window_size = sz.into();
         self
     }
@@ -85,7 +88,7 @@ impl<S, L> Server<S, L> {
     /// Sets the [`SETTINGS_MAX_CONCURRENT_STREAMS`] option for HTTP2 connections.
     ///
     /// Default is no limit (`None`).
-    pub fn http2_max_concurrent_streams(&mut self, max: impl Into<Option<u32>>) -> &mut Self {
+    pub fn http2_max_concurrent_streams(mut self, max: impl Into<Option<u32>>) -> Self {
         self.http2_config.max_concurrent_streams = max.into();
         self
     }
@@ -98,7 +101,7 @@ impl<S, L> Server<S, L> {
     /// can be set with [`Server::http2_keepalive_timeout`].
     ///
     /// Default is no HTTP2 keepalive (`None`).
-    pub fn http2_keepalive_interval(&mut self, interval: impl Into<Option<Duration>>) -> &mut Self {
+    pub fn http2_keepalive_interval(mut self, interval: impl Into<Option<Duration>>) -> Self {
         self.http2_config.http2_keepalive_interval = interval.into();
         self
     }
@@ -109,7 +112,7 @@ impl<S, L> Server<S, L> {
     /// Does nothing if http2_keepalive_interval is disabled.
     ///
     /// Default is 20 seconds.
-    pub fn http2_keepalive_timeout(&mut self, timeout: Duration) -> &mut Self {
+    pub fn http2_keepalive_timeout(mut self, timeout: Duration) -> Self {
         self.http2_config.http2_keepalive_timeout = timeout;
         self
     }
@@ -119,8 +122,26 @@ impl<S, L> Server<S, L> {
     /// Passing `None` will do nothing.
     ///
     /// If not set, will default from underlying transport.
-    pub fn http2_max_frame_size(&mut self, sz: impl Into<Option<u32>>) -> &mut Self {
+    pub fn http2_max_frame_size(mut self, sz: impl Into<Option<u32>>) -> Self {
         self.http2_config.max_frame_size = sz.into();
+        self
+    }
+
+    /// Set the maximum write buffer size for each HTTP/2 stream.
+    ///
+    /// Default is currently ~400KB, but may change.
+    ///
+    /// The value must be no larger than `u32::MAX`.
+    pub fn http2_max_send_buf_size(mut self, max: impl Into<usize>) -> Self {
+        self.http2_config.max_send_buf_size = max.into();
+        self
+    }
+
+    /// Sets the max size of received header frames.
+    ///
+    /// Default is currently ~16MB, but may change.
+    pub fn http2_max_header_list_size(mut self, max: impl Into<u32>) -> Self {
+        self.http2_config.max_header_list_size = max.into();
         self
     }
 
@@ -132,14 +153,14 @@ impl<S, L> Server<S, L> {
     /// return confusing (but correct) protocol errors.
     ///
     /// Default is `false`.
-    pub fn accept_http1(&mut self, accept_http1: bool) -> &mut Self {
+    pub fn accept_http1(mut self, accept_http1: bool) -> Self {
         self.http2_config.accept_http1 = accept_http1;
         self
     }
 
     /// Adds a new inner layer to the server.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -148,17 +169,17 @@ impl<S, L> Server<S, L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<O>(self, layer: O) -> Server<S, Stack<O, L>> {
+    pub fn layer<O>(self, layer: O) -> Server<Stack<O, L>> {
         Server {
             layer: Stack::new(layer, self.layer),
-            service: self.service,
             http2_config: self.http2_config,
+            router: self.router,
         }
     }
 
     /// Adds a new front layer to the server.
     ///
-    /// The layer's `Service` should be `Send + Clone + 'static`.
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -167,248 +188,151 @@ impl<S, L> Server<S, L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>> {
+    pub fn layer_front<Front>(self, layer: Front) -> Server<Stack<L, Front>> {
         Server {
             layer: Stack::new(self.layer, layer),
-            service: self.service,
             http2_config: self.http2_config,
+            router: self.router,
+        }
+    }
+
+    /// Adds a new service to the router.
+    pub fn add_service<S>(self, s: S) -> Self
+    where
+        S: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>, Error = Status>
+            + NamedService
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        Self {
+            layer: self.layer,
+            http2_config: self.http2_config,
+            router: self.router.add_service(s),
         }
     }
 
     /// The main entry point for the server.
-    pub async fn run<A: volo::net::MakeIncoming, T, U>(self, incoming: A) -> Result<(), BoxError>
+    /// Runs server with a stop signal to control graceful shutdown.
+    pub async fn run_with_shutdown<
+        A: volo::net::MakeIncoming,
+        F: std::future::Future<Output = io::Result<()>>,
+    >(
+        self,
+        incoming: A,
+        signal: F,
+    ) -> Result<(), BoxError>
     where
-        L: Layer<S>,
-        L::Service:
-            Service<ServerContext, Request<T>, Response = Response<U>> + Clone + Send + 'static,
-        <L::Service as Service<ServerContext, Request<T>>>::Error: Into<Status> + Send,
-        S: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>
-            + Send
+        L: Layer<Router>,
+        L::Service: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>>
             + Clone
+            + Send
+            + Sync
             + 'static,
-        T: Send + 'static + RecvEntryMessage,
-        U: Send + 'static + SendEntryMessage,
+        <L::Service as Service<ServerContext, Request<hyper::Body>>>::Error: Into<Status> + Send,
     {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
 
-        let service = ServiceBuilder::new()
+        let service = motore::builder::ServiceBuilder::new()
             .layer(self.layer)
-            .service(self.service);
-        let service = service.map_err(|err| err.into());
+            .service(self.router);
 
-        while let Some(conn) = incoming.try_next().await? {
-            tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
-            let peer_addr = conn.info.peer_addr.clone();
+        tokio::pin!(signal);
+        let (tx, rx) = tokio::sync::watch::channel(());
 
-            let service = HyperAdaptorLayer::new(peer_addr).layer(service.clone());
-            // init server
-            let server = Self::create_http_server(&self.http2_config);
-            spawn(async move {
-                let result = server.serve_connection(conn, service).await;
-                if let Err(err) = result {
-                    tracing::warn!("[VOLO] http server fail to serve: {:?}", err);
-                }
-            });
-        }
-        Ok(())
-    }
+        loop {
+            tokio::select! {
+                _ = &mut signal => {
+                    drop(rx);
+                    tracing::info!("[VOLO] graceful shutdown");
+                    let _ = tx.send(());
+                    // Waits for receivers to drop.
+                    tx.closed().await;
+                    return Ok(());
+                },
+                conn = incoming.accept() => {
+                    let conn = match conn? {
+                        Some(c) => c,
+                        None => return Ok(()),
+                    };
+                    tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
+                    let peer_addr = conn.info.peer_addr.clone();
 
-    fn create_http_server(http2_config: &Http2Config) -> Http {
-        let mut server = Http::new();
-        server
-            .http2_only(!http2_config.accept_http1)
-            .http2_initial_stream_window_size(http2_config.init_stream_window_size)
-            .http2_initial_connection_window_size(http2_config.init_connection_window_size)
-            .http2_adaptive_window(http2_config.adaptive_window)
-            .http2_max_concurrent_streams(http2_config.max_concurrent_streams)
-            .http2_keep_alive_interval(http2_config.http2_keepalive_interval)
-            .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
-            .http2_max_frame_size(http2_config.max_frame_size);
-        server
-    }
-}
+                    let service = MetaService::new(service.clone(), peer_addr)
+                        .tower(|req| (ServerContext::default(), req));
 
-macro_rules! status_to_http {
-    ($result:expr) => {
-        match $result {
-            Ok(value) => value,
-            Err(status) => return Ok(status.to_http()),
-        }
-    };
-}
+                    // init server
+                    let mut server = hyper::server::conn::Http::new();
+                    server
+                        .http2_only(!self.http2_config.accept_http1)
+                        .http2_initial_stream_window_size(self.http2_config.init_stream_window_size)
+                        .http2_initial_connection_window_size(self.http2_config.init_connection_window_size)
+                        .http2_adaptive_window(self.http2_config.adaptive_window)
+                        .http2_max_concurrent_streams(self.http2_config.max_concurrent_streams)
+                        .http2_keep_alive_interval(self.http2_config.http2_keepalive_interval)
+                        .http2_keep_alive_timeout(self.http2_config.http2_keepalive_timeout)
+                        .http2_max_frame_size(self.http2_config.max_frame_size)
+                        .http2_max_send_buf_size(self.http2_config.max_send_buf_size)
+                        .http2_max_header_list_size(self.http2_config.max_header_list_size);
 
-/// A layer that adapts a `motore::Service` to `tower::Service`.
-pub struct HyperAdaptorLayer<T, U> {
-    peer_addr: Option<Address>,
-    _marker: PhantomData<(T, U)>,
-}
-
-impl<T, U> HyperAdaptorLayer<T, U> {
-    pub fn new(peer_addr: Option<Address>) -> Self {
-        Self {
-            peer_addr,
-            _marker: PhantomData,
-        }
-    }
-}
-
-impl<S, T, U> tower::Layer<S> for HyperAdaptorLayer<T, U> {
-    type Service = HyperAdaptorService<S, T, U>;
-
-    fn layer(&self, inner: S) -> Self::Service {
-        HyperAdaptorService {
-            inner,
-            peer_addr: self.peer_addr.clone(),
-            _marker: self._marker,
-        }
-    }
-}
-
-/// A service that implements `tower::Service` for service transition between hyper's
-/// `tower::Service` and our's `motore::Service`. For more details, A incoming
-/// request will first come to hyper's `tower::Service`, then `HyperAdaptorService`,
-/// finally our's `motore::Service`.
-#[derive(Clone)]
-pub struct HyperAdaptorService<S, T, U> {
-    inner: S,
-    peer_addr: Option<Address>,
-    _marker: PhantomData<(T, U)>,
-}
-
-impl<S, T, U> tower::Service<hyper::Request<hyper::Body>> for HyperAdaptorService<S, T, U>
-where
-    S: Service<ServerContext, Request<T>, Response = Response<U>> + Clone + Send + 'static,
-    S::Error: Into<Status>,
-    T: RecvEntryMessage,
-    U: SendEntryMessage,
-{
-    type Response = hyper::Response<Body>;
-    type Error = Status;
-    type Future = impl Future<Output = Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(
-        &mut self,
-        _: &mut ::core::task::Context<'_>,
-    ) -> ::core::task::Poll<Result<(), Self::Error>> {
-        ::core::task::Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, req: hyper::Request<hyper::Body>) -> Self::Future {
-        let mut inner = self.inner.clone();
-        let peer_addr = self.peer_addr.clone();
-
-        metainfo::METAINFO.scope(RefCell::new(metainfo::MetaInfo::default()), async move {
-            let mut cx = ServerContext::default();
-            cx.rpc_info.method = Some(req.uri().path().into());
-
-            let (mut parts, body) = req.into_parts();
-
-            status_to_http!(extract_metadata(&mut parts.headers, &mut cx, peer_addr));
-
-            let message = status_to_http!(T::from_body(
-                cx.rpc_info.method.as_deref(),
-                body,
-                Kind::Request
-            ));
-
-            let volo_req = Request::from_http_parts(parts, message);
-
-            let volo_resp = match inner.call(&mut cx, volo_req).await {
-                Ok(resp) => resp,
-                Err(err) => {
-                    return Ok(err.into().to_http());
-                }
-            };
-
-            let (mut metadata, extensions, message) = volo_resp.into_parts();
-
-            status_to_http!(insert_metadata(&mut metadata));
-
-            let mut resp = hyper::Response::new(Body::new(message.into_body()));
-            *resp.headers_mut() = metadata.into_headers();
-            *resp.extensions_mut() = extensions;
-            resp.headers_mut().insert(
-                http::header::CONTENT_TYPE,
-                http::header::HeaderValue::from_static("application/grpc"),
-            );
-
-            Ok(resp)
-        })
-    }
-}
-
-fn extract_metadata(
-    headers: &mut HeaderMap<HeaderValue>,
-    cx: &mut ServerContext,
-    peer_addr: Option<Address>,
-) -> Result<(), Status> {
-    metainfo::METAINFO.with(|metainfo| {
-        let mut metainfo = metainfo.borrow_mut();
-
-        // caller
-        if let Some(source_service) = headers.remove(SOURCE_SERVICE) {
-            let source_service = Arc::<str>::from(source_service.to_str()?);
-            let mut caller = Endpoint::new(source_service.into());
-            if let Some(ad) = headers.remove(HEADER_TRANS_REMOTE_ADDR) {
-                let addr = ad.to_str()?.parse::<SocketAddr>();
-                if let Ok(addr) = addr {
-                    caller.set_address(volo::net::Address::from(addr));
-                }
-            }
-            if caller.address.is_none() {
-                caller.address = peer_addr;
-            }
-            cx.rpc_info_mut().caller = Some(caller);
-        }
-
-        // callee
-        if let Some(destination_service) = headers.remove(DESTINATION_SERVICE) {
-            let destination_service = Arc::<str>::from(destination_service.to_str()?);
-            let callee = Endpoint::new(destination_service.into());
-            cx.rpc_info_mut().callee = Some(callee);
-        }
-
-        // persistent and transient
-        let mut vec = Vec::with_capacity(headers.len());
-        for (k, v) in headers.into_iter() {
-            let k = k.as_str();
-            let v = v.to_str()?;
-            if k.starts_with(metainfo::HTTP_PREFIX_PERSISTENT) {
-                vec.push(k.to_owned());
-                metainfo.strip_http_prefix_and_set_persistent(k.to_owned(), v.to_owned());
-            } else if k.starts_with(metainfo::HTTP_PREFIX_TRANSIENT) {
-                vec.push(k.to_owned());
-                metainfo.strip_http_prefix_and_set_upstream(k.to_owned(), v.to_owned());
+                    let mut watch = rx.clone();
+                    spawn(async move {
+                        let mut http_conn = server.serve_connection(conn, service);
+                        tokio::select! {
+                            _ = watch.changed() => {
+                                tracing::trace!("[VOLO] closing a pending connection");
+                                // Graceful shutdown.
+                                hyper::server::conn::Connection::graceful_shutdown(Pin::new(&mut http_conn));
+                                // Continue to poll this connection until shutdown can finish.
+                                let result = http_conn.await;
+                                if let Err(err) = result {
+                                    tracing::debug!("[VOLO] connection error: {:?}", err);
+                                }
+                            },
+                            result = &mut http_conn => {
+                                if let Err(err) = result {
+                                    tracing::debug!("[VOLO] connection error: {:?}", err);
+                                }
+                            },
+                        }
+                    });
+                },
             }
         }
-        for k in vec {
-            headers.remove(k);
-        }
+    }
 
-        Ok::<(), Status>(())
-    })
+    /// The main entry point for the server.
+    pub async fn run<A: volo::net::MakeIncoming>(self, incoming: A) -> Result<(), BoxError>
+    where
+        L: Layer<Router>,
+        L::Service: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        <L::Service as Service<ServerContext, Request<hyper::Body>>>::Error: Into<Status> + Send,
+    {
+        self.run_with_shutdown(incoming, tokio::signal::ctrl_c())
+            .await
+    }
 }
 
-fn insert_metadata(metadata: &mut MetadataMap) -> Result<(), Status> {
-    metainfo::METAINFO.with(|metainfo| {
-        let metainfo = metainfo.borrow_mut();
-
-        // backward
-        if let Some(at) = metainfo.get_all_backward_transients() {
-            for (key, value) in at {
-                let key = metainfo::HTTP_PREFIX_BACKWARD.to_owned() + key;
-                metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
-            }
-        }
-
-        Ok::<(), Status>(())
-    })
+impl<L> fmt::Debug for Server<L> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Server")
+            .field("http2_config", &self.http2_config)
+            .field("router", &self.router)
+            .finish()
+    }
 }
 
 const DEFAULT_KEEPALIVE_TIMEOUT_SECS: Duration = Duration::from_secs(20);
 const DEFAULT_CONN_WINDOW_SIZE: u32 = 1024 * 1024; // 1MB
 const DEFAULT_STREAM_WINDOW_SIZE: u32 = 1024 * 1024; // 1MB
+const DEFAULT_MAX_SEND_BUF_SIZE: usize = 1024 * 400; // 400kb
+const DEFAULT_SETTINGS_MAX_HEADER_LIST_SIZE: u32 = 16 << 20; // 16 MB "sane default" taken from golang http2
 
 /// Configuration for the underlying h2 connection.
 #[derive(Debug, Clone, Copy)]
@@ -420,6 +344,8 @@ pub struct Http2Config {
     pub(crate) http2_keepalive_interval: Option<Duration>,
     pub(crate) http2_keepalive_timeout: Duration,
     pub(crate) max_frame_size: Option<u32>,
+    pub(crate) max_send_buf_size: usize,
+    pub(crate) max_header_list_size: u32,
     pub(crate) accept_http1: bool,
 }
 
@@ -433,6 +359,8 @@ impl Default for Http2Config {
             http2_keepalive_interval: None,
             http2_keepalive_timeout: DEFAULT_KEEPALIVE_TIMEOUT_SECS,
             max_frame_size: None,
+            max_send_buf_size: DEFAULT_MAX_SEND_BUF_SIZE,
+            max_header_list_size: DEFAULT_SETTINGS_MAX_HEADER_LIST_SIZE,
             accept_http1: false,
         }
     }

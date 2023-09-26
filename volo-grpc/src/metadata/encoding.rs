@@ -45,7 +45,7 @@ mod value_encoding {
     }
 }
 
-pub trait ValueEncoding: Clone + Eq + PartialEq + Hash + self::value_encoding::Sealed {
+pub trait ValueEncoding: Clone + Eq + PartialEq + Hash + value_encoding::Sealed {
     fn is_valid_key(key: &str) -> bool;
 }
 
@@ -56,7 +56,7 @@ pub enum Ascii {}
 #[doc(hidden)]
 pub enum Binary {}
 
-impl self::value_encoding::Sealed for Ascii {
+impl value_encoding::Sealed for Ascii {
     fn is_empty(value: &[u8]) -> bool {
         value.is_empty()
     }
@@ -96,7 +96,7 @@ impl ValueEncoding for Ascii {
     }
 }
 
-impl self::value_encoding::Sealed for Binary {
+impl value_encoding::Sealed for Binary {
     fn is_empty(value: &[u8]) -> bool {
         for c in value {
             if *c != b'=' {
@@ -118,7 +118,7 @@ impl self::value_encoding::Sealed for Binary {
 
     fn from_static(value: &'static str) -> HeaderValue {
         if base64::decode(value).is_err() {
-            panic!("Invalid base64 passed to from_static: {}", value);
+            panic!("Invalid base64 passed to from_static: {value}");
         }
         // SAFETY: we have checked the bytes with base64
         unsafe { HeaderValue::from_maybe_shared_unchecked(Bytes::from_static(value.as_ref())) }
@@ -148,9 +148,9 @@ impl self::value_encoding::Sealed for Binary {
 
     fn fmt(value: &HeaderValue, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if let Ok(decoded) = Self::decode(value.as_bytes()) {
-            write!(f, "{:?}", decoded)
+            write!(f, "{decoded:?}")
         } else {
-            write!(f, "b[invalid]{:?}", value)
+            write!(f, "b[invalid]{value:?}")
         }
     }
 }
@@ -163,7 +163,7 @@ impl ValueEncoding for Binary {
 
 impl InvalidMetadataValue {
     pub(crate) fn new() -> Self {
-        InvalidMetadataValue { _priv: () }
+        Self { _priv: () }
     }
 }
 
@@ -180,7 +180,7 @@ pub struct InvalidMetadataValueBytes(InvalidMetadataValue);
 
 impl InvalidMetadataValueBytes {
     pub(crate) fn new() -> Self {
-        InvalidMetadataValueBytes(InvalidMetadataValue::new())
+        Self(InvalidMetadataValue::new())
     }
 }
 

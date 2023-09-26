@@ -201,35 +201,22 @@ where
         Pool { inner }
     }
 
-    pub async fn get<MT>(&self, key: Key, mut mt: MT) -> Result<Pooled<Key, T>, BoxError>
+    pub async fn get<MT>(&self, key: Key, mt: MT) -> Result<Pooled<Key, T>, BoxError>
     where
-        MT: UnaryService<Key, Response = T> + Send + 'static,
+        MT: UnaryService<Key, Response = T> + Send + 'static + Sync,
         MT::Error: Into<BoxError>,
     {
         let (rx, _waiter_token) = {
             let mut inner = self.inner.lock().volo_unwrap();
             // 1. check the idle and opened connections
             let expiration = Expiration::new(Some(inner.timeout));
-            let maybe_entry = inner.idle.get_mut(&key).and_then(|list| {
+            let entry = inner.idle.get_mut(&key).and_then(|list| {
                 tracing::trace!("[VOLO] take? {:?}: expiration = {:?}", key, expiration.0);
                 {
                     let popper = IdlePopper { key: &key, list };
                     popper.pop(&expiration)
                 }
-                .map(|e| (e, list.is_empty()))
             });
-
-            let (entry, empty) = if let Some((e, empty)) = maybe_entry {
-                (Some(e), empty)
-            } else {
-                // No entry found means nuke the list for sure.
-                (None, true)
-            };
-
-            if empty {
-                // TODO: This could be done with the HashMap::entry API instead.
-                inner.idle.remove(&key);
-            }
 
             if let Some(t) = entry {
                 tracing::debug!("[VOLO] reuse connection from cache for {:?}", key);

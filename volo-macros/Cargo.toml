@@ -1,16 +1,16 @@
 [package]
 name = "volo-macros"
-version = "0.1.0"
-edition = "2021"
+version = "0.3.0"
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
 description = """
 Volo's proc macros.
 """
 documentation = "https://docs.rs/volo-macros"
 readme = "README.md"
-homepage = "https://www.cloudwego.io/docs/volo/"
-repository = "https://github.com/cloudwego/volo"
-license = "MIT OR Apache-2.0"
-authors = ["Volo Team <volo@cloudwego.io>"]
 categories = ["asynchronous"]
 keywords = ["volo", "macro"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

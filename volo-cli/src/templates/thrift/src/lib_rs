@@ -1,7 +1,8 @@
-#![feature(generic_associated_types)]
-#![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 
 pub struct S;
 
 #[volo::async_trait]
-impl volo_gen::{namespace}::{service_name} for S {{}}
+impl volo_gen::{service_global_name} for S {{
+	{methods}
+}}

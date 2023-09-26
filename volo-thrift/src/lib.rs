@@ -1,5 +1,4 @@
-#![feature(type_alias_impl_trait)]
-#![feature(generic_associated_types)]
+#![feature(impl_trait_in_assoc_type)]
 #![doc(
     html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
 )]
@@ -9,6 +8,7 @@ pub mod error;
 mod message;
 mod message_wrapper;
 mod protocol;
+pub mod tracing;
 pub mod transport;
 
 pub mod client;
@@ -16,7 +16,6 @@ pub use client::Client;
 pub mod codec;
 pub mod context;
 pub mod server;
-pub mod tags;
 pub use anyhow::Error as AnyhowError;
 pub use error::*;
 pub use message::{EntryMessage, Message};

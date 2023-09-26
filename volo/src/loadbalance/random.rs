@@ -115,16 +115,21 @@ impl<D> LoadBalance<D> for WeightedRandomBalance<D::Key>
 where
     D: Discover,
 {
-    type InstanceIter<'iter> = InstancePicker;
+    type InstanceIter = InstancePicker;
 
-    type GetFut<'future, 'iter> =
-        impl Future<Output = Result<Self::InstanceIter<'iter>, LoadBalanceError>> + Send;
+    type GetFut<'future> =
+        impl Future<Output = Result<Self::InstanceIter, LoadBalanceError>> + Send + 'future
+        where
+            Self: 'future;
 
-    fn get_picker<'future, 'iter>(
-        &'iter self,
+    fn get_picker<'future>(
+        &'future self,
         endpoint: &'future Endpoint,
         discover: &'future D,
-    ) -> Self::GetFut<'future, 'iter> {
+    ) -> Self::GetFut<'future>
+    where
+        Self: 'future,
+    {
         async {
             let key = discover.key(endpoint);
             let weighted_list = match self.router.entry(key) {
@@ -163,11 +168,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_weighted_random() {
-        let empty = Endpoint {
-            service_name: smol_str::SmolStr::new_inline(""),
-            address: None,
-            tags: Default::default(),
-        };
+        let empty = Endpoint::new("".into());
         let discover = StaticDiscover::from(vec![
             "127.0.0.1:8000".parse().unwrap(),
             "127.0.0.2:9000".parse().unwrap(),

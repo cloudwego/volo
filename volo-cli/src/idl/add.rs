@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::Parser;
+use clap::{value_parser, Parser};
 use volo_build::{
     model::{Entry, GitSource, Idl, Source},
     util::get_repo_latest_commit_id,
@@ -9,25 +9,24 @@ use volo_build::{
 use crate::{command::CliCommand, context::Context};
 
 #[derive(Debug, Parser)]
-#[clap(arg_required_else_help = true)]
+#[command(arg_required_else_help = true)]
 pub struct Add {
-    #[clap(
+    #[arg(
         short = 'g',
         long = "git",
         help = "Specify the git repo for idl.\nShould be in the format of \
                 \"git@domain:path/repo.git\".\nExample: git@github.com:cloudwego/volo.git"
     )]
     pub git: Option<String>,
-    #[clap(
+    #[arg(
         short = 'r',
         long = "ref",
         requires = "git",
-        help = "Specify the git repo ref(commit/branch) for idl.\nExample: main / $TAG / \
-                $COMMIT_HASH"
+        help = "Specify the git repo ref(branch) for idl.\nExample: main / $TAG"
     )]
     pub r#ref: Option<String>,
 
-    #[clap(
+    #[arg(
         short = 'i',
         long = "includes",
         help = "Specify the include dirs for idl.\nIf -g or --git is specified, then this should \
@@ -35,7 +34,7 @@ pub struct Add {
     )]
     pub includes: Option<Vec<PathBuf>>,
 
-    #[clap(
+    #[arg(
         short = 'f',
         long = "filename",
         help = "Specify the output filename, defaults to 'volo_gen.rs'.",
@@ -43,8 +42,8 @@ pub struct Add {
     )]
     pub filename: String,
 
-    #[clap(
-        parse(from_os_str),
+    #[arg(
+        value_parser = value_parser!(PathBuf),
         help = "Specify the path for idl.\nIf -g or --git is specified, then this should be the \
                 path in the specified git repo.\nExample: \t-g not \
                 specified:\t./idl/client.thrift\n\t\t-g specified:\t\t/path/to/idl/client.thrift"
@@ -69,14 +68,18 @@ impl CliCommand for Add {
                             r#ref: self.r#ref.clone(),
                             lock: Some(lock),
                         }),
+                        touch: vec![],
                         path: self.idl.clone(),
                         includes: self.includes.clone(),
+                        keep_unknown_fields: false,
                     }
                 } else {
                     Idl {
                         source: Source::Local,
+                        touch: vec![],
                         path: self.idl.clone(),
                         includes: self.includes.clone(),
+                        keep_unknown_fields: false,
                     }
                 }
             };

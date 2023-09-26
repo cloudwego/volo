@@ -8,18 +8,20 @@ use std::{
 
 use metainfo::MetaInfo;
 use pin_project::pin_project;
-use tokio::sync::{oneshot, Mutex};
+use tokio::{
+    io::{AsyncRead, AsyncWrite},
+    sync::{oneshot, Mutex},
+};
 use volo::{
     context::{Role, RpcInfo},
-    net::conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
-    util::buf_reader::BufReader,
+    net::Address,
 };
 
 use crate::{
-    codec::{Decoder, Encoder, DEFAULT_BUFFER_SIZE},
+    codec::{Decoder, Encoder, MakeCodec},
     context::{ClientContext, ThriftContext},
     transport::pool::{Poolable, Reservation},
-    ApplicationError, ApplicationErrorKind, EntryMessage, Error, Size, ThriftMessage,
+    ApplicationError, ApplicationErrorKind, EntryMessage, Error, ThriftMessage,
 };
 
 lazy_static::lazy_static! {
@@ -30,6 +32,7 @@ lazy_static::lazy_static! {
 #[pin_project]
 pub struct ThriftTransport<E, Resp> {
     write_half: Arc<Mutex<WriteHalf<E>>>,
+    #[allow(clippy::type_complexity)]
     tx_map: Arc<
         Mutex<
             fxhash::FxHashMap<
@@ -61,25 +64,30 @@ impl<E, Resp> Clone for ThriftTransport<E, Resp> {
 
 impl<E, Resp> ThriftTransport<E, Resp>
 where
-    E: Encoder + Send + 'static,
+    E: Encoder,
 {
-    pub fn new<D: Decoder + Send + 'static>(conn: Conn, encoder: E, decoder: D) -> Self
+    pub fn new<
+        R: AsyncRead + Send + Sync + Unpin + 'static,
+        W: AsyncWrite + Send + Sync + Unpin + 'static,
+        MkC: MakeCodec<R, W, Encoder = E>,
+    >(
+        read_half: R,
+        write_half: W,
+        make_codec: MkC,
+        target: Address,
+    ) -> Self
     where
         Resp: EntryMessage + Send + 'static,
     {
-        tracing::trace!("[VOLO] creating multiplex thrift transport");
-        let (rh, wh) = conn.stream.into_split();
+        tracing::trace!(
+            "[VOLO] creating multiplex thrift transport, target: {}",
+            target
+        );
         let id = TRANSPORT_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let mut read_half = ReadHalf {
-            read_half: BufReader::with_capacity(DEFAULT_BUFFER_SIZE, rh),
-            decoder,
-            id,
-        };
-        let write_half = WriteHalf {
-            write_half: wh,
-            encoder,
-            id,
-        };
+        let (encoder, decoder) = make_codec.make_codec(read_half, write_half);
+        let mut read_half = ReadHalf { decoder, id };
+        let write_half = WriteHalf { encoder, id };
+        #[allow(clippy::type_complexity)]
         let tx_map: Arc<
             Mutex<
                 fxhash::FxHashMap<
@@ -102,7 +110,10 @@ where
                 .scope(RefCell::new(Default::default()), async move {
                     loop {
                         if inner_write_error.load(std::sync::atomic::Ordering::Relaxed) {
-                            tracing::trace!("[VOLO] multiplex write error, break read loop now");
+                            tracing::trace!(
+                                "[VOLO] multiplex write error, break read loop now, target: {}",
+                                target
+                            );
                             break;
                         }
                         // fake context
@@ -111,17 +122,20 @@ where
                             RpcInfo::with_role(Role::Client),
                             pilota::thrift::TMessageType::Call,
                         );
-                        let res = read_half.try_next::<Resp>(&mut cx).await;
+                        let res = read_half.try_next::<Resp>(&mut cx, target.clone()).await;
                         if let Err(e) = res {
-                            tracing::error!("[VOLO] multiplex connection read error: {}", e);
+                            tracing::error!(
+                                "[VOLO] multiplex connection read error: {}, target: {}",
+                                e,
+                                target
+                            );
                             let mut tx_map = inner_tx_map.lock().await;
                             inner_read_error.store(true, std::sync::atomic::Ordering::Relaxed);
                             for (_, tx) in tx_map.drain() {
-                                let _ =
-                                    tx.send(Err(crate::Error::Application(ApplicationError::new(
-                                        ApplicationErrorKind::Unknown,
-                                        format!("multiplex connection error: {}", e.to_string()),
-                                    ))));
+                                let _ = tx.send(Err(Error::Application(ApplicationError::new(
+                                    ApplicationErrorKind::UNKNOWN,
+                                    format!("multiplex connection error: {e}, target: {target}"),
+                                ))));
                             }
                             return;
                         }
@@ -150,9 +164,10 @@ where
                             });
                         } else {
                             tracing::error!(
-                                "[VOLO] multiplex connection receive unexpected response, \
-                                 seq_id:{}",
-                                seq_id
+                                "[VOLO] multiplex connection receive unexpected response, seq_id: \
+                                 {}, target: {}",
+                                seq_id,
+                                target
                             );
                         }
                     }
@@ -174,8 +189,8 @@ where
     E: Encoder,
     Resp: EntryMessage,
 {
-    pub async fn send<Req: EntryMessage + Size>(
-        &mut self,
+    pub async fn send<Req: EntryMessage>(
+        &self,
         cx: &mut ClientContext,
         msg: ThriftMessage<Req>,
         oneway: bool,
@@ -185,13 +200,13 @@ where
         // check error and closed
         if self.read_error.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(Error::Application(ApplicationError::new(
-                ApplicationErrorKind::Unknown,
+                ApplicationErrorKind::UNKNOWN,
                 "multiplex connection error".to_string(),
             )));
         }
         if self.read_closed.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(Error::Application(ApplicationError::new(
-                ApplicationErrorKind::Unknown,
+                ApplicationErrorKind::UNKNOWN,
                 "multiplex connection closed".to_string(),
             )));
         }
@@ -216,21 +231,36 @@ where
             Ok(res) => match res {
                 Ok(opt) => match opt {
                     None => Ok(None),
-                    Some((mi, cx, msg)) => {
+                    Some((mi, new_cx, msg)) => {
                         metainfo::METAINFO.with(|m| {
                             m.borrow_mut().extend(mi);
                         });
                         // TODO: cx extend
+                        if let Some(t) = new_cx.common_stats.decode_start_at() {
+                            cx.common_stats.set_decode_start_at(t);
+                        }
+                        if let Some(t) = new_cx.common_stats.decode_end_at() {
+                            cx.common_stats.set_decode_end_at(t);
+                        }
+                        if let Some(t) = new_cx.common_stats.read_start_at() {
+                            cx.common_stats.set_read_start_at(t);
+                        }
+                        if let Some(t) = new_cx.common_stats.read_end_at() {
+                            cx.common_stats.set_read_end_at(t);
+                        }
+                        if let Some(s) = new_cx.common_stats.read_size() {
+                            cx.common_stats.set_read_size(s);
+                        }
                         Ok(Some(msg))
                     }
                 },
                 Err(e) => Err(e),
             },
             Err(e) => {
-                tracing::error!("[VOLO] multiplex connection oneshot recv error: {}", e);
+                tracing::error!("[VOLO] multiplex connection oneshot recv error: {e}");
                 Err(Error::Application(ApplicationError::new(
-                    ApplicationErrorKind::Unknown,
-                    format!("multiplex connection oneshot recv error: {}", e),
+                    ApplicationErrorKind::UNKNOWN,
+                    format!("multiplex connection oneshot recv error: {e}"),
                 )))
             }
         }
@@ -238,7 +268,6 @@ where
 }
 
 pub struct ReadHalf<D> {
-    read_half: BufReader<OwnedReadHalf>,
     decoder: D,
     id: usize,
 }
@@ -250,15 +279,17 @@ where
     pub async fn try_next<T: EntryMessage>(
         &mut self,
         cx: &mut ClientContext,
+        target: Address,
     ) -> Result<Option<ThriftMessage<T>>, Error> {
-        let thrift_msg = self
-            .decoder
-            .decode(cx, &mut self.read_half)
-            .await
-            .map_err(|e| {
-                tracing::error!("[VOLO] transport[{}] decode error: {}", self.id, e);
-                e
-            })?;
+        let thrift_msg = self.decoder.decode(cx).await.map_err(|e| {
+            tracing::error!(
+                "[VOLO] transport[{}] decode error: {}, target: {}",
+                self.id,
+                e,
+                target
+            );
+            e
+        })?;
 
         // TODO: move this to recv
         // if let Some(ThriftMessage { meta, .. }) = &thrift_msg {
@@ -280,7 +311,6 @@ where
 }
 
 pub struct WriteHalf<E> {
-    write_half: OwnedWriteHalf,
     encoder: E,
     id: usize,
 }
@@ -289,18 +319,16 @@ impl<E> WriteHalf<E>
 where
     E: Encoder,
 {
-    pub async fn send<T: EntryMessage + Size>(
+    pub async fn send<T: EntryMessage>(
         &mut self,
         cx: &mut impl ThriftContext,
         msg: ThriftMessage<T>,
     ) -> Result<(), Error> {
-        self.encoder
-            .encode(cx, &mut self.write_half, msg)
-            .await
-            .map_err(|e| {
-                tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
-                e
-            })?;
+        self.encoder.encode(cx, msg).await.map_err(|mut e| {
+            e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
+            tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
+            e
+        })?;
 
         Ok(())
     }

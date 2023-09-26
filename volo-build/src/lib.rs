@@ -9,13 +9,15 @@ use std::{
 };
 
 use anyhow::anyhow;
-use pilota_build::parser::Parser;
+use itertools::Itertools;
+use pilota_build::{parser::Parser, IdlService};
 
 pub mod config_builder;
 pub mod grpc_backend;
 pub mod model;
 pub mod thrift_backend;
 pub mod util;
+pub mod workspace;
 
 pub use config_builder::ConfigBuilder;
 pub use pilota_build::{
@@ -30,26 +32,26 @@ pub struct Builder<MkB, P> {
     config_file_path: PathBuf,
 }
 
-impl Builder<thrift_backend::MkThriftBackend, pilota_build::parser::ThriftParser> {
+impl Builder<thrift_backend::MkThriftBackend, parser::ThriftParser> {
     pub fn thrift() -> Self {
         Builder {
             pilota_builder: pilota_build::Builder::thrift()
                 .with_backend(thrift_backend::MkThriftBackend),
             out_dir: Default::default(),
-            filename: "volo_gen".into(),
+            filename: "volo_gen.rs".into(),
             idls: Default::default(),
             config_file_path: "volo.yml".into(),
         }
     }
 }
 
-impl Builder<grpc_backend::MkGrpcBackend, pilota_build::parser::ProtobufParser> {
+impl Builder<grpc_backend::MkGrpcBackend, parser::ProtobufParser> {
     pub fn protobuf() -> Self {
         Builder {
             pilota_builder: pilota_build::Builder::protobuf()
                 .with_backend(grpc_backend::MkGrpcBackend),
             out_dir: Default::default(),
-            filename: "volo_gen".into(),
+            filename: "volo_gen.rs".into(),
             idls: Default::default(),
             config_file_path: "volo.yml".into(),
         }
@@ -66,7 +68,7 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
-    pub fn plugin<P: pilota_build::Plugin + 'static>(mut self, p: P) -> Self {
+    pub fn plugin<P: Plugin + 'static>(mut self, p: P) -> Self {
         self.pilota_builder = self.pilota_builder.plugin(p);
 
         self
@@ -88,11 +90,24 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
-    pub fn must_gen_items(
+    pub fn ignore_unused(mut self, ignore_unused: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.ignore_unused(ignore_unused);
+        self
+    }
+
+    pub fn touch(
         mut self,
         items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>,
     ) -> Self {
-        self.pilota_builder = self.pilota_builder.must_gen_items(items);
+        self.pilota_builder = self.pilota_builder.touch(items);
+        self
+    }
+
+    pub fn keep_unknown_fields(
+        mut self,
+        keep_unknown_fields: impl IntoIterator<Item = PathBuf>,
+    ) -> Self {
+        self.pilota_builder = self.pilota_builder.keep_unknown_fields(keep_unknown_fields);
         self
     }
 
@@ -110,7 +125,8 @@ impl<MkB, Parser> Builder<MkB, Parser> {
 
 impl<MkB, P> Builder<MkB, P>
 where
-    MkB: MakeBackend,
+    MkB: MakeBackend + Send,
+    MkB::Target: Send,
     P: Parser,
 {
     pub fn include_dirs(mut self, include_dirs: Vec<PathBuf>) -> Self {
@@ -129,8 +145,35 @@ where
             return Ok(());
         }
 
-        self.pilota_builder
-            .compile(&self.idls, &out_dir.join(self.filename));
+        self.pilota_builder.compile_with_config(
+            self.idls
+                .into_iter()
+                .map(IdlService::from_path)
+                .collect_vec(),
+            pilota_build::Output::File(out_dir.join(self.filename)),
+        );
         Ok(())
     }
+
+    pub fn init_service(self) -> anyhow::Result<(String, String)> {
+        assert_eq!(self.idls.len(), 1);
+        self.pilota_builder.init_service(
+            self.idls
+                .into_iter()
+                .map(IdlService::from_path)
+                .next()
+                .unwrap(),
+        )
+    }
 }
+
+macro_rules! join_multi_strs {
+    ($sep: tt, |$($s: tt),*| ->  $f: tt) => {
+        {
+            #[allow(unused_parens)]
+            itertools::izip!($(&$s),*).map(|($($s),*)| format!($f)).join($sep)
+        }
+    };
+}
+
+pub(crate) use join_multi_strs;

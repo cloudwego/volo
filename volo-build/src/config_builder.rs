@@ -1,23 +1,23 @@
 use std::path::{Path, PathBuf};
 
 use anyhow::Ok;
-use itertools::Itertools;
 use pilota_build::BoxClonePlugin;
 
 use crate::{
-    model::{GitSource, Source},
+    model::Entry,
     util::{
-        download_files_from_git, get_git_path, open_config_file, read_config_from_file, Task,
+        get_or_download_idl, open_config_file, read_config_from_file, LocalIdl,
         DEFAULT_CONFIG_FILE, DEFAULT_DIR,
     },
 };
 
 pub struct ConfigBuilder {
     filename: PathBuf,
-    plugins: Vec<pilota_build::BoxClonePlugin>,
+    plugins: Vec<BoxClonePlugin>,
 }
 
-enum InnerBuilder {
+#[allow(clippy::large_enum_variant)]
+pub enum InnerBuilder {
     Protobuf(
         crate::Builder<crate::grpc_backend::MkGrpcBackend, pilota_build::parser::ProtobufParser>,
     ),
@@ -49,6 +49,13 @@ impl InnerBuilder {
         }
     }
 
+    fn init_service(self) -> anyhow::Result<(String, String)> {
+        match self {
+            InnerBuilder::Protobuf(inner) => inner.init_service(),
+            InnerBuilder::Thrift(inner) => inner.init_service(),
+        }
+    }
+
     fn filename(self, filename: PathBuf) -> Self {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.filename(filename)),
@@ -72,6 +79,22 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.add_service(path)),
         }
     }
+
+    pub fn touch(self, items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.touch(items)),
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.touch(items)),
+        }
+    }
+
+    pub fn keep_unknown_fields(self, keep: impl IntoIterator<Item = PathBuf>) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.keep_unknown_fields(keep))
+            }
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.keep_unknown_fields(keep)),
+        }
+    }
 }
 
 impl ConfigBuilder {
@@ -89,6 +112,7 @@ impl ConfigBuilder {
     }
 
     pub fn write(self) -> anyhow::Result<()> {
+        println!("cargo:rerun-if-changed={}", self.filename.display());
         let f = open_config_file(self.filename)?;
         let config = read_config_from_file(&f)?;
 
@@ -104,38 +128,20 @@ impl ConfigBuilder {
             }
 
             for idl in entry.idls {
-                let (path, includes) = if let Source::Git(GitSource {
-                    ref repo, ref lock, ..
-                }) = idl.source
-                {
-                    let lock = lock.as_ref().ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "please exec 'volo idl update' or specify the lock for {}",
-                            repo
-                        )
-                    })?;
-                    let dir = DEFAULT_DIR.join(get_git_path(repo.as_str())?).join(lock);
-                    let task = Task::new(
-                        vec![idl.path.to_string_lossy().to_string()],
-                        dir.clone(),
-                        repo.clone(),
-                        lock.to_string(),
-                    );
-                    download_files_from_git(task)?;
+                let LocalIdl {
+                    path,
+                    includes,
+                    touch,
+                    keep_unknown_fields,
+                } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
 
-                    (
-                        dir.join(&idl.path),
-                        idl.includes
-                            .unwrap_or_default()
-                            .into_iter()
-                            .map(|v| dir.join(v))
-                            .collect_vec(),
-                    )
-                } else {
-                    (idl.path.to_path_buf(), idl.includes.unwrap_or_default())
-                };
-
-                builder = builder.add_service(path).includes(includes);
+                builder = builder
+                    .add_service(path.clone())
+                    .includes(includes)
+                    .touch([(path.clone(), touch)]);
+                if keep_unknown_fields {
+                    builder = builder.keep_unknown_fields([path])
+                }
             }
 
             builder.write()?;
@@ -149,5 +155,42 @@ impl ConfigBuilder {
 impl Default for ConfigBuilder {
     fn default() -> Self {
         ConfigBuilder::new(PathBuf::from(DEFAULT_CONFIG_FILE))
+    }
+}
+
+pub struct InitBuilder {
+    entry: Entry,
+}
+
+impl InitBuilder {
+    pub fn new(entry: Entry) -> Self {
+        InitBuilder { entry }
+    }
+
+    pub fn init(self) -> anyhow::Result<(String, String)> {
+        let mut builder = match self.entry.protocol {
+            crate::model::IdlProtocol::Thrift => InnerBuilder::thrift(),
+            crate::model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
+        }
+        .filename(self.entry.filename);
+
+        for idl in self.entry.idls {
+            let LocalIdl {
+                path,
+                includes,
+                touch,
+                keep_unknown_fields,
+            } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
+
+            builder = builder
+                .add_service(path.clone())
+                .includes(includes)
+                .touch([(path.clone(), touch)]);
+            if keep_unknown_fields {
+                builder = builder.keep_unknown_fields([path])
+            }
+        }
+
+        builder.init_service()
     }
 }

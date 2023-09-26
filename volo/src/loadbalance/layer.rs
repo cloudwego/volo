@@ -29,12 +29,12 @@ where
             retry,
         };
 
-        if let Some(mut channel) = service.discover.watch() {
+        if let Some(mut channel) = service.discover.watch(None) {
             tokio::spawn(async move {
                 loop {
                     match channel.recv().await {
                         Ok(recv) => lb.rebalance(recv),
-                        Err(err) => warn!("[VOLO] discovering subscription error {:?}", err),
+                        Err(err) => warn!("[VOLO] discovering subscription error: {:?}", err),
                     }
                 }
             });
@@ -45,14 +45,14 @@ where
 
 impl<Cx, Req, D, LB, S> Service<Cx, Req> for LoadBalanceService<D, LB, S>
 where
-    <Cx as Context>::Config: std::marker::Sync,
     Cx: 'static + Context + Send + Sync,
     D: Discover,
     LB: LoadBalance<D>,
-    S: Service<Cx, Req> + 'static + Send,
+    S: Service<Cx, Req> + 'static + Send + Sync,
     LoadBalanceError: Into<S::Error>,
     S::Error: Debug + Retryable,
     Req: Clone + Send + Sync + 'static,
+    for<'cx> S::Future<'cx>: Send,
 {
     type Response = S::Response;
 
@@ -62,7 +62,7 @@ where
     where
         Self: 'cx;
 
-    fn call<'cx, 's>(&'s mut self, cx: &'cx mut Cx, req: Req) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, req: Req) -> Self::Future<'cx>
     where
         's: 'cx,
     {
@@ -95,7 +95,7 @@ where
                         return Ok(resp);
                     }
                     Err(err) => {
-                        tracing::warn!("[VOLO] call endpoint: {:?} error: {:?}", addr, err);
+                        warn!("[VOLO] call rpcinfo: {:?}, error: {:?}", cx.rpc_info(), err);
                         if !err.retryable() {
                             return Err(err);
                         }
@@ -103,7 +103,7 @@ where
                 }
             }
             if call_count == 0 {
-                tracing::warn!("[VOLO] zero call count, call info: {:?}", cx.rpc_info());
+                warn!("[VOLO] zero call count, call rpcinfo: {:?}", cx.rpc_info());
             }
             Err(LoadBalanceError::Retry.into())
         }
@@ -166,7 +166,7 @@ mod tests {
     struct MotoreContext;
 
     async fn handle(cx: &mut MotoreContext, request: String) -> Result<String, Infallible> {
-        println!("{:?}, {:?}", cx, request);
+        println!("{cx:?}, {request:?}");
         Ok::<_, Infallible>(request.to_uppercase())
     }
 

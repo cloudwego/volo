@@ -1,6 +1,4 @@
-#![feature(generic_associated_types)]
-#![feature(type_alias_impl_trait)]
-#![feature(once_cell)]
+#![feature(impl_trait_in_assoc_type)]
 #![doc(
     html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
 )]
@@ -16,10 +14,14 @@ pub mod loadbalance;
 pub mod net;
 pub mod util;
 pub use hack::Unwrap;
+#[cfg(target_family = "unix")]
+pub mod hotrestart;
 
+pub mod client;
 mod hack;
 mod macros;
 
+pub use faststr::FastStr;
 pub use metainfo::METAINFO;
 
 /// volo::spawn will spawn a task and derive the metainfo

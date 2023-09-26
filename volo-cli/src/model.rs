@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use volo_build::model::DEFAULT_ENTRY_NAME;
 
 use crate::{command::CliCommand, context::Context, idl::Idl, init::Init};
@@ -7,7 +7,7 @@ use crate::{command::CliCommand, context::Context, idl::Idl, init::Init};
 define_commands!(Subcommand { Init, Idl });
 
 #[derive(Parser, Debug)]
-#[clap(
+#[command(
     name = "volo",
     author,
     version,
@@ -17,16 +17,16 @@ define_commands!(Subcommand { Init, Idl });
     propagate_version = true
 )]
 pub struct RootCommand {
-    #[clap(
+    #[arg(
         short = 'v',
         long = "verbose",
         help = "Turn on the verbose mode.",
         global = true,
-        parse(from_occurrences)
+        action = ArgAction::Count
     )]
-    pub verbose: u16,
+    pub verbose: u8,
 
-    #[clap(
+    #[arg(
         short = 'n',
         long = "entry-name",
         help = "The entry name, defaults to 'default'.",
@@ -34,7 +34,7 @@ pub struct RootCommand {
     )]
     pub entry_name: String,
 
-    #[clap(subcommand)]
+    #[command(subcommand)]
     subcmd: Subcommand,
 }
 

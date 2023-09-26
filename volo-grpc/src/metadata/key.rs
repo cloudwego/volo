@@ -18,7 +18,7 @@ use super::encoding::{Ascii, Binary, ValueEncoding};
 pub struct MetadataKey<VE: ValueEncoding> {
     // Note: There are unsafe transmutes that assume that the memory layout
     // of MetadataValue is identical to HeaderName
-    pub(crate) inner: http::header::HeaderName,
+    pub(crate) inner: HeaderName,
     phantom: PhantomData<VE>,
 }
 
@@ -44,7 +44,7 @@ impl<VE: ValueEncoding> MetadataKey<VE> {
                     panic!("invalid metadata key")
                 }
 
-                Ok(MetadataKey {
+                Ok(Self {
                     inner: name,
                     phantom: PhantomData,
                 })
@@ -179,8 +179,8 @@ impl<VE: ValueEncoding> fmt::Display for MetadataKey<VE> {
 
 impl InvalidMetadataKey {
     #[doc(hidden)]
-    pub fn new() -> InvalidMetadataKey {
-        InvalidMetadataKey { _priv: () }
+    pub fn new() -> Self {
+        Self { _priv: () }
     }
 }
 

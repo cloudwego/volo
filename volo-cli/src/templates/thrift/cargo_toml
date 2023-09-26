@@ -1,20 +1,20 @@
 [package]
 name = "{name}"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-anyhow = "1"
-async-trait = "0.1"
-tokio = {{ version = "1", features = ["full"] }}
-
-pilota = "*"      # we recommend to use the latest framework version for new features and bug fixes
-volo = "*"        # we recommend to use the latest framework version for new features and bug fixes
-volo-thrift = "*" # we recommend to use the latest framework version for new features and bug fixes
-
 volo-gen = {{ path = "./volo-gen" }}
+
+volo.workspace = true
+volo-thrift.workspace = true
+pilota.workspace = true
+
+anyhow.workspace = true
+async-trait.workspace = true
+tokio = {{ workspace = true, features = ["full"] }}
 
 [profile.release]
 opt-level = 3
@@ -30,3 +30,17 @@ rpath = false
 [workspace]
 members = ["volo-gen"]
 resolver = "2"
+
+[workspace.package]
+edition = "2021"
+
+[workspace.dependencies]
+# we recommend to use the latest framework version for new features and bug fixes
+volo = "*"
+volo-build = "*"
+volo-thrift = "*"
+pilota = "*"
+
+anyhow = "1"
+async-trait = "0.1"
+tokio = "1"

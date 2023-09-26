@@ -1,6 +1,6 @@
 //! These codes are copied from `tonic/src/status.rs` and may be modified by us.
 
-use std::{borrow::Cow, error::Error, fmt};
+use std::{borrow::Cow, error::Error, fmt, sync::Arc};
 
 use bytes::Bytes;
 use http::header::{HeaderMap, HeaderValue};
@@ -11,7 +11,7 @@ use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
 use crate::{body::Body, metadata::MetadataMap};
 
-pub type BoxBody = http_body::combinators::BoxBody<bytes::Bytes, Status>;
+pub type BoxBody = http_body::combinators::BoxBody<Bytes, Status>;
 
 const ENCODING_SET: &AsciiSet = &CONTROLS
     .add(b' ')
@@ -40,6 +40,7 @@ const GRPC_STATUS_DETAILS_HEADER: &str = "grpc-status-details-bin";
 /// assert_eq!(status1.code(), Code::InvalidArgument);
 /// assert_eq!(status1.code(), status2.code());
 /// ```
+#[derive(Clone)]
 pub struct Status {
     /// The gRPC status code, found in the `grpc-status` header.
     code: Code,
@@ -52,19 +53,7 @@ pub struct Status {
     /// or by `Status` fields above, they will be ignored.
     metadata: MetadataMap,
     /// Optional underlying error.
-    source: Option<Box<dyn Error + Send + Sync + 'static>>,
-}
-
-impl Clone for Status {
-    fn clone(&self) -> Self {
-        Self {
-            code: self.code,
-            message: self.message.clone(),
-            details: self.details.clone(),
-            metadata: self.metadata.clone(),
-            source: None,
-        }
-    }
+    source: Option<Arc<dyn Error + Send + Sync + 'static>>,
 }
 
 /// gRPC status codes used by `Status`.
@@ -169,8 +158,8 @@ impl Code {
     }
 }
 
-impl std::fmt::Display for Code {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Code {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         std::fmt::Display::fmt(self.description(), f)
     }
 }
@@ -334,7 +323,11 @@ impl Status {
     // ==== transform between Error and HeaderMap ====
 
     pub fn from_error(err: BoxError) -> Self {
-        Self::try_from_error(err).unwrap_or_else(|err| Self::new(Code::Unknown, err.to_string()))
+        Self::try_from_error(err).unwrap_or_else(|err| {
+            let mut status = Self::new(Code::Unknown, err.to_string());
+            status.source = Some(err.into());
+            status
+        })
     }
 
     pub fn try_from_error(err: BoxError) -> Result<Self, BoxError> {
@@ -362,7 +355,16 @@ impl Status {
     // transform between http2 and grpc error code.
     // refer to https://github.com/grpc/grpc/blob/master/doc/statuscodes.md.
     pub fn from_h2_error(err: Box<h2::Error>) -> Self {
-        let code = match err.reason() {
+        let code = Self::code_from_h2(&err);
+
+        let mut status = Self::new(code, format!("h2 protocol error: {err}"));
+        status.source = Some(Arc::new(*err));
+        status
+    }
+
+    fn code_from_h2(err: &h2::Error) -> Code {
+        // See https://github.com/grpc/grpc/blob/3977c30/doc/PROTOCOL-HTTP2.md#errors
+        match err.reason() {
             Some(h2::Reason::NO_ERROR)
             | Some(h2::Reason::PROTOCOL_ERROR)
             | Some(h2::Reason::INTERNAL_ERROR)
@@ -376,11 +378,7 @@ impl Status {
             Some(h2::Reason::INADEQUATE_SECURITY) => Code::PermissionDenied,
 
             _ => Code::Unknown,
-        };
-
-        let mut status = Self::new(code, format!("h2 protocol error: {}", err));
-        status.source = Some(err);
-        status
+        }
     }
 
     pub fn to_h2_error(&self) -> h2::Error {
@@ -412,6 +410,12 @@ impl Status {
         // > can be corrected if retried with a backoff.
         if err.is_timeout() || err.is_connect() {
             return Some(Self::unavailable(err.to_string()));
+        }
+        if let Some(h2_err) = err.source().and_then(|e| e.downcast_ref::<h2::Error>()) {
+            let code = Self::code_from_h2(h2_err);
+            let status = Self::new(code, format!("h2 protocol error: {}", err));
+
+            return Some(status);
         }
         None
     }
@@ -468,7 +472,7 @@ impl Status {
                     warn!("[VOLO] Error deserializing status message header: {}", err);
                     Self {
                         code: Code::Unknown,
-                        message: format!("Error deserializing status message header: {}", err),
+                        message: format!("Error deserializing status message header: {err}"),
                         details,
                         metadata: MetadataMap::from_headers(other_headers),
                         source: None,
@@ -617,12 +621,15 @@ impl Status {
 
         parts.headers.insert(
             http::header::CONTENT_TYPE,
-            http::header::HeaderValue::from_static("application/grpc"),
+            HeaderValue::from_static("application/grpc"),
         );
 
         self.add_header(&mut parts.headers).unwrap();
 
-        http::Response::from_parts(parts, Body::new(Box::pin(futures::stream::empty())))
+        http::Response::from_parts(
+            parts,
+            Body::new(Box::pin(futures::stream::empty())).end_stream(true),
+        )
     }
 }
 
@@ -761,12 +768,18 @@ impl From<LoadBalanceError> for Status {
     }
 }
 
+impl From<anyhow::Error> for Status {
+    fn from(err: anyhow::Error) -> Self {
+        Self::from_error(err.into())
+    }
+}
+
 impl Retryable for Status {
     fn retryable(&self) -> bool {
-        match self.code {
-            Code::Internal | Code::Unavailable | Code::Cancelled | Code::ResourceExhausted => true,
-            _ => false,
-        }
+        matches!(
+            self.code,
+            Code::Internal | Code::Unavailable | Code::Cancelled | Code::ResourceExhausted
+        )
     }
 }
 
@@ -1016,7 +1029,7 @@ mod tests {
 
         let b64_details = base64::encode_config(DETAILS, base64::STANDARD_NO_PAD);
 
-        assert_eq!(header_map[super::GRPC_STATUS_DETAILS_HEADER], b64_details);
+        assert_eq!(header_map[GRPC_STATUS_DETAILS_HEADER], b64_details);
 
         let status = Status::from_header_map(&header_map).unwrap();
 

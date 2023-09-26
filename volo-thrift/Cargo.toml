@@ -1,14 +1,14 @@
 [package]
 name = "volo-thrift"
-version = "0.1.0"
-edition = "2021"
+version = "0.7.3"
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
 description = "Thrift RPC framework implementation of volo."
 documentation = "https://docs.rs/volo-thrift"
 readme = "README.md"
-homepage = "https://www.cloudwego.io/docs/volo/"
-repository = "https://github.com/cloudwego/volo"
-license = "MIT OR Apache-2.0"
-authors = ["Volo Team <volo@cloudwego.io>"]
 categories = ["asynchronous", "network-programming", "web-programming"]
 keywords = ["async", "rpc", "thrift"]
 
@@ -18,32 +18,37 @@ keywords = ["async", "rpc", "thrift"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.1", path = "../volo" }
-pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" }
-motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
-metainfo = "0.6"
+volo = { version = "0.5", path = "../volo" }
+pilota.workspace = true
+motore.workspace = true
+metainfo.workspace = true
 
-tokio = { version = "1", features = [
+anyhow.workspace = true
+async-trait.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+futures.workspace = true
+fxhash.workspace = true
+lazy_static.workspace = true
+linkedbytes.workspace = true
+linked-hash-map.workspace = true
+num_enum.workspace = true
+parking_lot.workspace = true
+paste.workspace = true
+pin-project.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = [
     "time",
     "macros",
     "rt",
     "signal",
     "parking_lot",
 ] }
-parking_lot = "0.12"
-async-trait = "0.1"
-bytes = "1"
-tracing = "0.1"
-futures = "0.3"
-pin-project = "1"
-linked-hash-map = "0.5"
-lazy_static = "1"
-smol_str = "0.1"
-num_enum = "0.5"
-anyhow = "1"
-thiserror = "1"
-fxhash = "0.2"
+tracing.workspace = true
 
 [features]
 # multiplex is unstable and we don't provide backward compatibility
 multiplex = []
+# unsafe-codec can achieve better performance for thrift binary protocol, but may cause undefined behavior
+# if the thrift message is malformed.
+unsafe-codec = []

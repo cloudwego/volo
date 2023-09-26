@@ -4,22 +4,38 @@ use socket2::{Domain, Protocol, Socket, Type};
 #[cfg(target_family = "unix")]
 use tokio::net::UnixStream;
 use tokio::{
-    net::{TcpSocket, TcpStream},
+    io::{AsyncRead, AsyncWrite},
+    net::TcpSocket,
     time::{timeout, Duration},
 };
 
-use super::{conn::Conn, Address};
+use super::{
+    conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
+    Address,
+};
 
-#[derive(Default, Debug, Clone)]
-pub struct MakeConnection {
-    cfg: Option<Config>,
+/// [`MakeTransport`] creates an [`AsyncRead`] and an [`AsyncWrite`] for the given [`Address`].
+#[async_trait::async_trait]
+pub trait MakeTransport: Clone + Send + Sync + 'static {
+    type ReadHalf: AsyncRead + Send + Sync + Unpin + 'static;
+    type WriteHalf: AsyncWrite + Send + Sync + Unpin + 'static;
+
+    async fn make_transport(&self, addr: Address) -> io::Result<(Self::ReadHalf, Self::WriteHalf)>;
+    fn set_connect_timeout(&mut self, timeout: Option<Duration>);
+    fn set_read_timeout(&mut self, timeout: Option<Duration>);
+    fn set_write_timeout(&mut self, timeout: Option<Duration>);
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+pub struct DefaultMakeTransport {
+    cfg: Config,
 }
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct Config {
-    connect_timeout: Option<Duration>,
-    read_timeout: Option<Duration>,
-    write_timeout: Option<Duration>,
+    pub connect_timeout: Option<Duration>,
+    pub read_timeout: Option<Duration>,
+    pub write_timeout: Option<Duration>,
 }
 
 impl Config {
@@ -34,24 +50,64 @@ impl Config {
             write_timeout,
         }
     }
-}
 
-impl MakeConnection {
-    pub fn new(cfg: Option<Config>) -> Self {
-        Self { cfg }
+    pub fn with_connect_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.connect_timeout = timeout;
+        self
+    }
+
+    pub fn with_read_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.read_timeout = timeout;
+        self
+    }
+
+    pub fn with_write_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.write_timeout = timeout;
+        self
     }
 }
 
-impl MakeConnection {
+impl DefaultMakeTransport {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[async_trait::async_trait]
+impl MakeTransport for DefaultMakeTransport {
+    type ReadHalf = OwnedReadHalf;
+
+    type WriteHalf = OwnedWriteHalf;
+
+    async fn make_transport(&self, addr: Address) -> io::Result<(Self::ReadHalf, Self::WriteHalf)> {
+        let conn = self.make_connection(addr).await?;
+        let (read, write) = conn.stream.into_split();
+        Ok((read, write))
+    }
+
+    fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
+        self.cfg = self.cfg.with_connect_timeout(timeout);
+    }
+
+    fn set_read_timeout(&mut self, timeout: Option<Duration>) {
+        self.cfg = self.cfg.with_read_timeout(timeout);
+    }
+
+    fn set_write_timeout(&mut self, timeout: Option<Duration>) {
+        self.cfg = self.cfg.with_write_timeout(timeout);
+    }
+}
+
+impl DefaultMakeTransport {
     pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
         match addr {
             Address::Ip(addr) => {
-                let stream = if let Some(cfg) = self.cfg {
+                let stream = {
                     let domain = Domain::for_address(addr);
                     let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
                     socket.set_nonblocking(true)?;
-                    socket.set_read_timeout(cfg.read_timeout)?;
-                    socket.set_write_timeout(cfg.write_timeout)?;
+                    socket.set_read_timeout(self.cfg.read_timeout)?;
+                    socket.set_write_timeout(self.cfg.write_timeout)?;
 
                     #[cfg(unix)]
                     let socket = unsafe {
@@ -66,13 +122,11 @@ impl MakeConnection {
 
                     let connect = socket.connect(addr);
 
-                    if let Some(conn_timeout) = cfg.connect_timeout {
+                    if let Some(conn_timeout) = self.cfg.connect_timeout {
                         timeout(conn_timeout, connect).await??
                     } else {
                         connect.await?
                     }
-                } else {
-                    TcpStream::connect(addr).await?
                 };
                 stream.set_nodelay(true)?;
                 Ok(Conn::from(stream))

@@ -1,14 +1,15 @@
 use std::{
     fs::{create_dir_all, File, OpenOptions},
-    io::{Seek, SeekFrom},
+    io::Seek,
     path::{Path, PathBuf},
     process::Command,
 };
 
 use anyhow::{bail, Context};
+use itertools::Itertools;
 use lazy_static::lazy_static;
 
-use crate::model::Config;
+use crate::model::{Config, GitSource, Idl, Source};
 
 lazy_static! {
     pub static ref DEFAULT_DIR: PathBuf = std::path::Path::new(
@@ -48,51 +49,109 @@ pub fn ensure_file(filename: &Path) -> std::io::Result<File> {
         .open(filename)
 }
 
+const PILOTA_CREATED_FILE_NAME: &str = "pilota_crated";
+
 /// Pull the minimal, expected .thrift files from a git repository.
 pub fn download_files_from_git(task: Task) -> anyhow::Result<()> {
     ensure_path(&task.dir)?;
+    if task.dir.join(PILOTA_CREATED_FILE_NAME).exists() {
+        return Ok(());
+    }
 
     git_archive(&task.repo, &task.lock, &task.dir)?;
 
     Ok(())
 }
 
+pub struct LocalIdl {
+    pub path: PathBuf,
+    pub includes: Vec<PathBuf>,
+    pub touch: Vec<String>,
+    pub keep_unknown_fields: bool,
+}
+
+pub fn get_or_download_idl(idl: Idl, target_dir: impl AsRef<Path>) -> anyhow::Result<LocalIdl> {
+    let (path, includes) = if let Source::Git(GitSource {
+        ref repo, ref lock, ..
+    }) = idl.source
+    {
+        let lock = lock.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "please exec 'volo idl update' or specify the lock for {}",
+                repo
+            )
+        })?;
+        let dir = target_dir
+            .as_ref()
+            .join(get_git_path(repo.as_str())?)
+            .join(lock);
+        let task = Task::new(
+            vec![idl.path.to_string_lossy().to_string()],
+            dir.clone(),
+            repo.clone(),
+            lock.to_string(),
+        );
+        download_files_from_git(task).with_context(|| format!("download repo {repo}"))?;
+
+        (
+            dir.join(&idl.path),
+            idl.includes
+                .unwrap_or_default()
+                .into_iter()
+                .map(|v| dir.join(v))
+                .collect_vec(),
+        )
+    } else {
+        (idl.path.to_path_buf(), idl.includes.unwrap_or_default())
+    };
+
+    Ok(LocalIdl {
+        path,
+        includes,
+        touch: idl.touch,
+        keep_unknown_fields: idl.keep_unknown_fields,
+    })
+}
+
+fn run_command(command: &mut Command) -> anyhow::Result<()> {
+    command.status().map_err(anyhow::Error::from).and_then(|s| {
+        if s.success() {
+            Ok(())
+        } else {
+            bail!("run {:?} failed, exit status: {:?}", command, s)
+        }
+    })
+}
+
 pub fn git_archive(repo: &str, revision: &str, dir: &Path) -> anyhow::Result<()> {
-    Command::new("git")
-        .arg("init")
-        .current_dir(dir)
-        .spawn()
-        .expect("failed to spawn git archive")
-        .wait()?;
+    run_command(Command::new("git").arg("init").current_dir(dir))?;
+    run_command(
+        Command::new("git")
+            .arg("remote")
+            .arg("add")
+            .arg("origin")
+            .arg(repo)
+            .current_dir(dir),
+    )?;
 
-    Command::new("git")
-        .arg("remote")
-        .arg("add")
-        .arg("origin")
-        .arg(repo)
-        .current_dir(dir)
-        .spawn()
-        .expect("failed to set remote")
-        .wait()?;
+    run_command(
+        Command::new("git")
+            .arg("fetch")
+            .arg("origin")
+            .arg(revision)
+            .arg("--depth=1")
+            .current_dir(dir),
+    )?;
 
-    Command::new("git")
-        .arg("fetch")
-        .arg("origin")
-        .arg(revision)
-        .arg("--depth=1")
-        .current_dir(dir)
-        .spawn()
-        .expect("failed to fetch origin")
-        .wait()?;
+    run_command(
+        Command::new("git")
+            .arg("reset")
+            .arg("--hard")
+            .arg(revision)
+            .current_dir(dir),
+    )?;
 
-    Command::new("git")
-        .arg("reset")
-        .arg("--hard")
-        .arg(revision)
-        .current_dir(dir)
-        .spawn()
-        .expect("failed to reset git revision")
-        .wait()?;
+    std::fs::write(dir.join(PILOTA_CREATED_FILE_NAME), "")?;
 
     Ok(())
 }
@@ -206,9 +265,9 @@ where
     let r = func(&mut config)?;
 
     // write back to config file
-    f.seek(SeekFrom::Start(0))?;
+    f.rewind()?;
     serde_yaml::to_writer(&mut f, &config).context("write back config file")?;
-    let len = f.seek(SeekFrom::Current(0))?;
+    let len = f.stream_position()?;
     f.set_len(len)?;
 
     Ok(r)

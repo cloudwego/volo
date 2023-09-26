@@ -52,6 +52,7 @@ macro_rules! new_type {
         $v struct $type($inner_v $inner);
 
         impl<T> From<T> for $type where T: Into<$inner> {
+            #[inline]
             fn from(t: T) -> Self {
                 $type(t.into())
             }
@@ -60,6 +61,7 @@ macro_rules! new_type {
         impl ::std::ops::Deref for $type {
             type Target = $inner;
 
+            #[inline]
             fn deref(&self) -> &Self::Target {
                 &self.0
             }

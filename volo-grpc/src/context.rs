@@ -3,11 +3,13 @@ use std::time::Duration;
 pub use volo::context::*;
 use volo::newtype_impl_context;
 
+use crate::codec::compression::CompressionEncoding;
+
 pub struct ClientCxInner;
 
 /// A context for client to pass information such as `RpcInfo` and `Config` between middleware
 /// during the rpc call lifecycle.
-pub struct ClientContext(pub(crate) volo::context::RpcCx<ClientCxInner, Config>);
+pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 newtype_impl_context!(ClientContext, Config, 0);
 
@@ -24,7 +26,7 @@ impl Default for ClientContext {
 }
 
 impl std::ops::Deref for ClientContext {
-    type Target = volo::context::RpcCx<ClientCxInner, Config>;
+    type Target = RpcCx<ClientCxInner, Config>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -41,7 +43,7 @@ pub struct ServerCxInner;
 
 /// A context for server to pass information such as `RpcInfo` and `Config` between middleware
 /// during the rpc call lifecycle.
-pub struct ServerContext(pub(crate) volo::context::RpcCx<ServerCxInner, Config>);
+pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 newtype_impl_context!(ServerContext, Config, 0);
 
@@ -52,7 +54,7 @@ impl Default for ServerContext {
 }
 
 impl std::ops::Deref for ServerContext {
-    type Target = volo::context::RpcCx<ServerCxInner, Config>;
+    type Target = RpcCx<ServerCxInner, Config>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -65,7 +67,7 @@ impl std::ops::DerefMut for ServerContext {
     }
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone)]
 pub struct Config {
     /// Amount of time to wait connecting.
     pub(crate) connect_timeout: Option<Duration>,
@@ -73,6 +75,9 @@ pub struct Config {
     pub(crate) read_timeout: Option<Duration>,
     /// Amount of time to wait reading response.
     pub(crate) write_timeout: Option<Duration>,
+
+    pub(crate) accept_compressions: Option<Vec<CompressionEncoding>>,
+    pub(crate) send_compressions: Option<Vec<CompressionEncoding>>,
 }
 
 impl Config {
@@ -85,6 +90,12 @@ impl Config {
         }
         if let Some(t) = other.write_timeout {
             self.write_timeout = Some(t);
+        }
+        if let Some(e) = other.accept_compressions {
+            self.accept_compressions = Some(e);
+        }
+        if let Some(e) = other.send_compressions {
+            self.send_compressions = Some(e);
         }
     }
 }

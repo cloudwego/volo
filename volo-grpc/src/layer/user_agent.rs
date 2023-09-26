@@ -39,7 +39,7 @@ where
         Self: 'cx,
         Cx: 'cx;
 
-    fn call<'cx, 's>(&'s mut self, cx: &'cx mut Cx, mut req: Request<ReqBody>) -> Self::Future<'cx>
+    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, mut req: Request<ReqBody>) -> Self::Future<'cx>
     where
         's: 'cx,
     {
@@ -68,7 +68,7 @@ mod tests {
     fn prepends_custom_user_agent_to_default() {
         assert_eq!(
             UserAgent::new(Svc, Some(HeaderValue::from_static("Greeter 1.1"))).user_agent,
-            HeaderValue::from_str(&format!("Greeter 1.1 {}", VOLO_USER_AGENT)).unwrap()
+            HeaderValue::from_str(&format!("Greeter 1.1 {VOLO_USER_AGENT}")).unwrap()
         )
     }
 }

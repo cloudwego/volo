@@ -1,16 +1,18 @@
-#![feature(generic_associated_types)]
-#![feature(type_alias_impl_trait)]
+#![feature(impl_trait_in_assoc_type)]
 
 use std::net::SocketAddr;
 
-use {name}::{{S}};
+use volo_grpc::server::{{Server, ServiceBuilder}};
+
+use {name}::S;
 
 #[volo::main]
 async fn main() {{
     let addr: SocketAddr = "[::]:8080".parse().unwrap();
     let addr = volo::net::Address::from(addr);
 
-    volo_gen::{namespace}::{service_name}Server::new(S)
+    Server::new()
+        .add_service(ServiceBuilder::new(volo_gen::{service_global_name}Server::new(S)).build())
         .run(addr)
         .await
         .unwrap();

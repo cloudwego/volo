@@ -1,25 +1,23 @@
-use std::{marker::PhantomData, net::SocketAddr, str::FromStr};
+use std::{io, marker::PhantomData};
 
 use futures::Future;
 use http::{
     header::{CONTENT_TYPE, TE},
-    HeaderMap, HeaderValue,
+    HeaderValue,
 };
 use hyper::Client as HyperClient;
-use metainfo::{Backward, Forward};
 use motore::Service;
 use tower::{util::ServiceExt, Service as TowerService};
-use volo::{context::Context, net::Address, Unwrap};
+use volo::{net::Address, Unwrap};
 
 use super::connect::Connector;
 use crate::{
     client::Http2Config,
-    codec::decode::Kind,
-    context::{ClientContext, Config},
-    metadata::{
-        MetadataKey, MetadataMap, DESTINATION_ADDR, DESTINATION_METHOD, DESTINATION_SERVICE,
-        HEADER_TRANS_REMOTE_ADDR, SOURCE_SERVICE,
+    codec::{
+        compression::{CompressionEncoding, ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
+        decode::Kind,
     },
+    context::{ClientContext, Config},
     Code, Request, Response, Status,
 };
 
@@ -58,6 +56,7 @@ impl<U> ClientTransport<U> {
             .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
             .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
             .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
+            .http2_max_send_buf_size(http2_config.max_send_buf_size)
             .retry_canceled_requests(http2_config.retry_canceled_requests)
             .build(Connector::new(Some(config)));
 
@@ -77,10 +76,10 @@ where
 
     type Error = Status;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>>;
+    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
     fn call<'cx, 's>(
-        &'s mut self,
+        &'s self,
         cx: &'cx mut ClientContext,
         volo_req: Request<T>,
     ) -> Self::Future<'cx>
@@ -97,15 +96,22 @@ where
                 .volo_unwrap()
                 .address()
                 .ok_or_else(|| {
-                    std::io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
+                    io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
                 })?;
 
-            let (mut metadata, extensions, message) = volo_req.into_parts();
-
-            insert_metadata(&mut metadata, cx)?;
-
+            let (metadata, extensions, message) = volo_req.into_parts();
             let path = cx.rpc_info.method().volo_unwrap();
-            let body = hyper::Body::wrap_stream(message.into_body());
+            let rpc_config = cx.rpc_info.config().volo_unwrap();
+            let accept_compressions = &rpc_config.accept_compressions;
+
+            // select the compression algorithm with the highest priority by user's config
+            let send_compression = rpc_config
+                .send_compressions
+                .as_ref()
+                .map(|config| config[0]);
+
+            let body = hyper::Body::wrap_stream(message.into_body(send_compression));
+
             let mut req = hyper::Request::new(body);
             *req.version_mut() = http::Version::HTTP_2;
             *req.method_mut() = http::Method::POST;
@@ -117,6 +123,22 @@ where
             req.headers_mut()
                 .insert(CONTENT_TYPE, HeaderValue::from_static("application/grpc"));
 
+            // insert compression headers
+            if let Some(send_compression) = send_compression {
+                req.headers_mut()
+                    .insert(ENCODING_HEADER, send_compression.into_header_value());
+            }
+            if let Some(accept_compressions) = accept_compressions {
+                if !accept_compressions.is_empty() {
+                    if let Some(header_value) = accept_compressions[0]
+                        .into_accept_encoding_header_value(accept_compressions)
+                    {
+                        req.headers_mut()
+                            .insert(ACCEPT_ENCODING_HEADER, header_value);
+                    }
+                }
+            }
+
             // call the service through hyper client
             let resp = http_client
                 .ready()
@@ -127,17 +149,28 @@ where
                 .map_err(|err| Status::from_error(err.into()))?;
 
             let status_code = resp.status();
-            if let Some(status) = Status::from_header_map(resp.headers()) {
+            let headers = resp.headers();
+
+            if let Some(status) = Status::from_header_map(headers) {
                 if status.code() != Code::Ok {
                     return Err(status);
                 }
             }
-            let (mut parts, body) = resp.into_parts();
-            let body = U::from_body(Some(path), body, Kind::Response(status_code))?;
-            extract_metadata(&mut parts.headers, cx)?;
 
+            let accept_compression = CompressionEncoding::from_encoding_header(
+                headers,
+                &rpc_config.accept_compressions,
+            )?;
+
+            let (parts, body) = resp.into_parts();
+
+            let body = U::from_body(
+                Some(path),
+                body,
+                Kind::Response(status_code),
+                accept_compression,
+            )?;
             let resp = hyper::Response::from_parts(parts, body);
-
             Ok(Response::from_http(resp))
         }
     }
@@ -159,79 +192,6 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
             .build()
             .expect("fail to build unix uri"),
     }
-}
-
-fn insert_metadata(metadata: &mut MetadataMap, cx: &mut ClientContext) -> Result<(), Status> {
-    metainfo::METAINFO.with(|metainfo| {
-        let metainfo = metainfo.borrow_mut();
-
-        // persistents for multi-hops
-        if let Some(ap) = metainfo.get_all_persistents() {
-            for (key, value) in ap {
-                let key = metainfo::HTTP_PREFIX_PERSISTENT.to_owned() + key;
-                metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
-            }
-        }
-
-        // transients for one-hop
-        if let Some(at) = metainfo.get_all_transients() {
-            for (key, value) in at {
-                let key = metainfo::HTTP_PREFIX_TRANSIENT.to_owned() + key;
-                metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
-            }
-        }
-
-        // caller
-        if let Some(caller) = cx.rpc_info.caller.as_ref() {
-            metadata.insert(SOURCE_SERVICE, caller.service_name().parse()?);
-        }
-
-        // callee
-        if let Some(callee) = cx.rpc_info.callee.as_ref() {
-            metadata.insert(DESTINATION_SERVICE, callee.service_name().parse()?);
-            if let Some(method) = cx.rpc_info.method() {
-                metadata.insert(DESTINATION_METHOD, method.parse()?);
-            }
-            if let Some(addr) = callee.address() {
-                metadata.insert(DESTINATION_ADDR, addr.to_string().parse()?);
-            }
-        }
-
-        Ok::<(), Status>(())
-    })
-}
-
-fn extract_metadata(
-    headers: &mut HeaderMap<HeaderValue>,
-    cx: &mut ClientContext,
-) -> Result<(), Status> {
-    metainfo::METAINFO.with(|metainfo| {
-        let mut metainfo = metainfo.borrow_mut();
-
-        // callee
-        if let Some(ad) = headers.remove(HEADER_TRANS_REMOTE_ADDR) {
-            let maybe_addr = ad.to_str()?.parse::<SocketAddr>();
-            if let (Some(callee), Ok(addr)) = (cx.rpc_info_mut().callee.as_mut(), maybe_addr) {
-                callee.set_address(volo::net::Address::from(addr));
-            }
-        }
-
-        // backward
-        let mut vec = Vec::with_capacity(headers.len());
-        for (k, v) in headers.into_iter() {
-            let k = k.as_str();
-            let v = v.to_str()?;
-            if k.starts_with(metainfo::HTTP_PREFIX_BACKWARD) {
-                vec.push(k.to_owned());
-                metainfo.strip_http_prefix_and_set_backward_downstream(k.to_owned(), v.to_owned());
-            }
-        }
-        for k in vec {
-            headers.remove(k);
-        }
-
-        Ok::<(), Status>(())
-    })
 }
 
 #[cfg(test)]

@@ -1,0 +1,28 @@
+entries:
+  proto:
+    protocol: protobuf
+    filename: proto_gen.rs
+    idls:
+      - source: local
+        path: ../proto/hello.proto
+        includes:
+          - ../proto
+      - source: local
+        path: ../proto/echo.proto
+        includes:
+          - ../proto
+      - source: local
+        path: ../proto/streaming.proto
+        includes:
+          - ../proto
+  thrift:
+    protocol: thrift
+    filename: thrift_gen.rs
+    idls:
+      - source: local
+        path: ../thrift_idl/hello.thrift
+      - source: local
+        path: ../thrift_idl/echo.thrift
+      - source: local
+        path: ../thrift_idl/echo_unknown.thrift
+        keep_unknown_fields: true
