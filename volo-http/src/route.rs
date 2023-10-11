@@ -1,17 +1,12 @@
-use std::{future::Future, net::SocketAddr};
+use std::future::Future;
 
 use http::{Method, Response, StatusCode};
 use http_body_util::Full;
-use hyper::{
-    body::{Body, Bytes, Incoming},
-    server::conn::http1,
-};
+use hyper::body::{Bytes, Incoming};
 use motore::layer::Layer;
-use tokio::net::TcpListener;
 
 use crate::{
     dispatch::DispatchService, request::FromRequest, response::RespBody, DynError, HttpContext,
-    MotoreService,
 };
 
 pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response<RespBody>, DynError>;
@@ -82,48 +77,6 @@ impl<S> ServiceLayerExt for S {
         L: Layer<Self>,
     {
         Layer::layer(l, self)
-    }
-}
-
-#[async_trait::async_trait]
-pub trait Server {
-    async fn serve(self, addr: SocketAddr) -> Result<(), DynError>;
-}
-#[async_trait::async_trait]
-impl<S, OB> Server for S
-where
-    S: motore::Service<HttpContext, Incoming, Response = Response<OB>>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    OB: Body<Error = DynError> + Send + 'static,
-    <OB as Body>::Data: Send,
-    <S as motore::Service<HttpContext, Incoming>>::Error: Into<DynError>,
-{
-    async fn serve(self, addr: SocketAddr) -> Result<(), DynError> {
-        let listener = TcpListener::bind(addr).await?;
-
-        let service = self;
-        loop {
-            let s = service.clone();
-            let (stream, peer) = listener.accept().await?;
-
-            tokio::task::spawn(async move {
-                if let Err(err) = http1::Builder::new()
-                    .serve_connection(
-                        stream,
-                        MotoreService {
-                            peer: peer.into(),
-                            inner: s,
-                        },
-                    )
-                    .await
-                {
-                    tracing::warn!("error serving connection: {:?}", err);
-                }
-            });
-        }
     }
 }
 
