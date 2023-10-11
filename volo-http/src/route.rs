@@ -1,7 +1,8 @@
-use std::{future::Future, net::SocketAddr};
+use std::future::Future;
 
 use http::{Method, Response, StatusCode};
 use http_body_util::Full;
+<<<<<<< HEAD
 use hyper::{
 <<<<<<< HEAD
 <<<<<<< HEAD
@@ -23,10 +24,13 @@ use hyper_util::rt::TokioIo;
 use motore::layer::Layer;
 >>>>>>> layer (#224)
 use tokio::net::TcpListener;
+=======
+use hyper::body::{Bytes, Incoming};
+use motore::layer::Layer;
+>>>>>>> add graceful shutdown
 
 use crate::{
     dispatch::DispatchService, request::FromRequest, response::RespBody, DynError, HttpContext,
-    MotoreService,
 };
 
 pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response<RespBody>, DynError>;
@@ -176,6 +180,7 @@ where
 =======
 >>>>>>> layer (#224)
 
+<<<<<<< HEAD
 #[async_trait::async_trait]
 pub trait Server {
     async fn serve(self, addr: SocketAddr) -> Result<(), DynError>;
@@ -223,6 +228,8 @@ where
     }
 }
 
+=======
+>>>>>>> add graceful shutdown
 #[derive(Default, Clone)]
 pub struct Route {
     options: Option<DynService>,

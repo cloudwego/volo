@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use volo_http::{
     handler::HandlerService,
     request::Json,
+<<<<<<< HEAD
     route::{Route, Router, Server, ServiceLayerExt},
 =======
 use http::{Response, StatusCode};
@@ -31,6 +32,10 @@ use volo_http::{
 =======
     route::{Route, Router, Server, ServiceLayerExt},
 >>>>>>> layer (#224)
+=======
+    route::{Route, Router, ServiceLayerExt},
+    server::Server,
+>>>>>>> add graceful shutdown
     HttpContext,
 };
 
@@ -119,7 +124,7 @@ async fn main() {
 >>>>>>> handler, extractor (#221)
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    Router::new()
+    let app = Router::new()
         .route(
             "/",
             Route::builder()
@@ -140,6 +145,7 @@ async fn main() {
                 .build(),
         )
 <<<<<<< HEAD
+<<<<<<< HEAD
 >>>>>>> handler, extractor (#221)
 =======
         .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1))))
@@ -147,4 +153,12 @@ async fn main() {
         .serve(SocketAddr::from(([127, 0, 0, 1], 3000)))
         .await
         .unwrap();
+=======
+        .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1))));
+
+    let addr: SocketAddr = "[::]:9091".parse().unwrap();
+    let addr = volo::net::Address::from(addr);
+
+    Server::new(app).run(addr).await.unwrap();
+>>>>>>> add graceful shutdown
 }

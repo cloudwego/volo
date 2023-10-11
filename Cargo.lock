@@ -317,6 +317,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "concurrent-queue"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -326,6 +327,8 @@ dependencies = [
 ]
 
 [[package]]
+=======
+>>>>>>> add graceful shutdown
 name = "core-foundation"
 version = "0.9.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -390,7 +393,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "978747c1d849a7d2ee5e8adc0159961c48fb7e5db2f06af6723b80123bb53856"
 dependencies = [
  "cfg-if",
+<<<<<<< HEAD
  "hashbrown 0.14.2",
+=======
+ "hashbrown 0.14.1",
+>>>>>>> add graceful shutdown
  "lock_api",
  "once_cell",
  "parking_lot_core 0.9.9",
@@ -489,6 +496,7 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
+<<<<<<< HEAD
 version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "29e56284f00d94c1bc7fd3c77027b4623c88c1f53d8d2394c6199f2921dea325"
@@ -501,6 +509,9 @@ dependencies = [
 [[package]]
 name = "event-listener-strategy"
 version = "0.1.0"
+=======
+version = "2.5.3"
+>>>>>>> add graceful shutdown
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "15c97b4e30ea7e4b7e7b429d6e2d8510433ba8cee4e70dfb3243794e539d29fd"
 dependencies = [
@@ -537,7 +548,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
- "volo 0.5.4",
+ "volo",
  "volo-gen",
  "volo-grpc",
  "volo-http",
@@ -743,9 +754,15 @@ checksum = "8a9ee70c43aaf417c914396645a0fa852624801b24ebb7ae78fe8272889ac888"
 
 [[package]]
 name = "hashbrown"
+<<<<<<< HEAD
 version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f93e7192158dbcda357bdec5fb5788eebf8bbac027f3f33e719d29135ae84156"
+=======
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7dfda62a12f55daeae5015f81b0baea145391cb4520f86c248fc615d72640d12"
+>>>>>>> add graceful shutdown
 
 [[package]]
 name = "heck"
@@ -968,7 +985,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8adf3ddd720272c6ea8bf59463c04e0f93d0bbf7c5439b691bca2987e0270897"
 dependencies = [
  "equivalent",
+<<<<<<< HEAD
  "hashbrown 0.14.2",
+=======
+ "hashbrown 0.14.1",
+>>>>>>> add graceful shutdown
 ]
 
 [[package]]
@@ -1108,6 +1129,18 @@ name = "memchr"
 version = "2.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f665ee40bc4a3c5590afb1e9677db74a508659dfd71e126420da8274909a0167"
+<<<<<<< HEAD
+=======
+
+[[package]]
+name = "memoffset"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5de893c32cde5f383baa4c04c5d6dbdd735cfd4a794b0debdb2bb1b421da5ff4"
+dependencies = [
+ "autocfg",
+]
+>>>>>>> add graceful shutdown
 
 [[package]]
 name = "memoffset"
@@ -1455,9 +1488,15 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
+<<<<<<< HEAD
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "db92e95e898bc2793893d613b15afd72d6db9fa08874a15a439ae1e7d4f73d51"
+=======
+version = "0.8.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6c58d5b9c1797d6d37ce6dea975dfbf2ec3d12137a43451a0394600055932b8f"
+>>>>>>> add graceful shutdown
 dependencies = [
  "anyhow",
  "dashmap",
@@ -1570,7 +1609,11 @@ checksum = "7c003ac8c77cb07bb74f5f198bce836a689bcd5a42574612bf14d17bfd08c20e"
 dependencies = [
  "bit-set",
  "bit-vec",
+<<<<<<< HEAD
  "bitflags 2.4.1",
+=======
+ "bitflags 2.4.0",
+>>>>>>> add graceful shutdown
  "lazy_static",
  "num-traits",
  "rand",
@@ -1732,6 +1775,7 @@ dependencies = [
 
 [[package]]
 name = "regex"
+<<<<<<< HEAD
 version = "1.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "380b951a9c5e80ddfd6136919eef32310721aa4aacd4889a8d39124b026ab343"
@@ -1740,6 +1784,16 @@ dependencies = [
  "memchr",
  "regex-automata 0.4.3",
  "regex-syntax 0.8.2",
+=======
+version = "1.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d119d7c7ca818f8a53c300863d4f87566aac09943aef5b355bb83969dae75d87"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-automata 0.4.1",
+ "regex-syntax 0.8.0",
+>>>>>>> add graceful shutdown
 ]
 
 [[package]]
@@ -1753,6 +1807,7 @@ dependencies = [
 
 [[package]]
 name = "regex-automata"
+<<<<<<< HEAD
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5f804c7828047e88b2d32e2d7fe5a105da8ee3264f01902f796c8e067dc2483f"
@@ -1760,6 +1815,15 @@ dependencies = [
  "aho-corasick",
  "memchr",
  "regex-syntax 0.8.2",
+=======
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "465c6fc0621e4abc4187a2bda0937bfd4f722c2730b29562e19689ea796c9a4b"
+dependencies = [
+ "aho-corasick",
+ "memchr",
+ "regex-syntax 0.8.0",
+>>>>>>> add graceful shutdown
 ]
 
 [[package]]
@@ -1776,9 +1840,15 @@ checksum = "dbb5fb1acd8a1a18b3dd5be62d25485eb770e05afb408a9627d14d451bae12da"
 
 [[package]]
 name = "regex-syntax"
+<<<<<<< HEAD
 version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c08c74e62047bb2de4ff487b251e4a92e24f48745648451635cec7d591162d9f"
+=======
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3cbb081b9784b07cceb8824c8583f86db4814d172ab043f3c23f7dc600bf83d"
+>>>>>>> add graceful shutdown
 
 [[package]]
 name = "reqwest"
@@ -1858,9 +1928,15 @@ checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
 name = "rustix"
+<<<<<<< HEAD
 version = "0.38.20"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67ce50cb2e16c2903e30d1cbccfd8387a74b9d4c938b6a4c5ec6cc7556f7a8a0"
+=======
+version = "0.38.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5a74ee2d7c2581cd139b42447d7d9389b889bdaad3a73f1ebb16f2a3237bb19c"
+>>>>>>> add graceful shutdown
 dependencies = [
  "bitflags 2.4.1",
  "errno",
@@ -2203,18 +2279,30 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
+<<<<<<< HEAD
 version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f9a7210f5c9a7156bb50aa36aed4c95afb51df0df00713949448cf9e97d382d2"
+=======
+version = "1.0.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1177e8c6d7ede7afde3585fd2513e611227efd6481bd78d2e82ba1ce16557ed4"
+>>>>>>> add graceful shutdown
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
+<<<<<<< HEAD
 version = "1.0.50"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "266b2e40bc00e5a6c09c3584011e08b06f123c00362c92b975ba9843aaaa14b8"
+=======
+version = "1.0.49"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "10712f02019e9288794769fba95cd6847df9874d49d871d062172f9dd41bc4cc"
+>>>>>>> add graceful shutdown
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2350,6 +2438,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
 dependencies = [
  "indexmap 2.0.2",
+<<<<<<< HEAD
  "toml_datetime",
  "winnow",
 ]
@@ -2361,6 +2450,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "396e4d48bbb2b7554c944bde63101b5ae446cff6ec4a24227428f15eb72ef338"
 dependencies = [
  "indexmap 2.0.2",
+=======
+>>>>>>> add graceful shutdown
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -2599,6 +2690,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "volo"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2619,7 +2711,6 @@ dependencies = [
  "pin-project",
  "rand",
  "socket2 0.5.4",
->>>>>>> downgrade hyper version
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -2649,7 +2740,7 @@ dependencies = [
  "syn 1.0.109",
  "tempfile",
  "url_path",
- "volo 0.5.4",
+ "volo",
  "walkdir",
 ]
 
@@ -2684,7 +2775,7 @@ dependencies = [
  "futures",
  "pilota",
  "tokio",
- "volo 0.5.4",
+ "volo",
  "volo-build",
  "volo-grpc",
  "volo-thrift",
@@ -2720,7 +2811,7 @@ dependencies = [
  "tower",
  "tracing",
  "tracing-subscriber",
- "volo 0.5.4",
+ "volo",
 ]
 
 [[package]]
@@ -2743,13 +2834,14 @@ dependencies = [
  "matchit",
  "mime",
  "motore",
+ "parking_lot 0.12.1",
  "pin-project-lite",
  "serde",
  "serde_json",
  "thiserror",
  "tokio",
  "tracing",
- "volo 0.5.5",
+ "volo",
 ]
 
 [[package]]
@@ -2778,7 +2870,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "volo 0.5.4",
+ "volo",
 ]
 
 [[package]]
@@ -3017,9 +3109,15 @@ checksum = "ed94fce61571a4006852b7389a063ab983c02eb1bb37b47f8272ce92d06d9538"
 
 [[package]]
 name = "winnow"
+<<<<<<< HEAD
 version = "0.5.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3b801d0e0a6726477cc207f60162da452f3a95adb368399bef20a946e06f65c"
+=======
+version = "0.5.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "037711d82167854aff2018dfd193aa0fef5370f456732f0d5a0c59b0f1b4b907"
+>>>>>>> add graceful shutdown
 dependencies = [
  "memchr",
 ]
