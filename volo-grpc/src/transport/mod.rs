@@ -2,5 +2,8 @@
 
 mod client;
 mod connect;
+mod tls;
 
 pub use client::ClientTransport;
+
+pub(crate) use tls::TlsAcceptorConfig;

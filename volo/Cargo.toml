@@ -41,3 +41,13 @@ tokio = { workspace = true, features = ["net", "time", "sync", "io-util"] }
 tokio-stream = { workspace = true, features = ["net"] }
 tower.workspace = true
 tracing.workspace = true
+
+# Optional dependencies
+tokio-rustls = { version = "0.24", optional = true }
+tokio-native-tls = { version = "0.3", optional = true }
+
+[features]
+default = ["rustls", "native-tls"]
+
+rustls = ["tokio-rustls"]
+native-tls = ["tokio-native-tls"]

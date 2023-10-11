@@ -54,5 +54,15 @@ tower = { workspace = true, features = [
 ] }
 tracing.workspace = true
 
+# Optional dependencies
+tokio-rustls = { version = "0.24", optional = true }
+tokio-native-tls = { version = "0.3", optional = true }
+
 [dev-dependencies]
 tracing-subscriber.workspace = true
+
+[features]
+default = ["rustls", "native-tls"]
+
+rustls = ["tokio-rustls"]
+native-tls = ["tokio-native-tls"]

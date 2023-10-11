@@ -18,7 +18,7 @@ use volo::{net::incoming::Incoming, spawn};
 
 pub use self::router::Router;
 use crate::{
-    body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status,
+    body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status, transport::TlsAcceptorConfig,
 };
 
 /// A trait to provide a static reference to the service's
@@ -36,6 +36,8 @@ pub struct Server<L> {
     layer: L,
     http2_config: Http2Config,
     router: Router,
+
+    tls: TlsAcceptorConfig,
 }
 
 impl Default for Server<Identity> {
@@ -51,11 +53,17 @@ impl Server<Identity> {
             layer: Identity::new(),
             http2_config: Http2Config::default(),
             router: Router::new(),
+            tls: TlsAcceptorConfig::None,
         }
     }
 }
 
 impl<L> Server<L> {
+    pub fn tls_config(mut self, value: impl Into<TlsAcceptorConfig>) -> Self {
+        self.tls = value.into();
+        self
+    }
+
     /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
     /// stream-level flow control.
     ///
@@ -174,6 +182,7 @@ impl<L> Server<L> {
             layer: Stack::new(layer, self.layer),
             http2_config: self.http2_config,
             router: self.router,
+            tls: self.tls,
         }
     }
 
@@ -193,6 +202,7 @@ impl<L> Server<L> {
             layer: Stack::new(self.layer, layer),
             http2_config: self.http2_config,
             router: self.router,
+            tls: self.tls
         }
     }
 
@@ -210,6 +220,7 @@ impl<L> Server<L> {
             layer: self.layer,
             http2_config: self.http2_config,
             router: self.router.add_service(s),
+            tls: self.tls
         }
     }
 
@@ -277,9 +288,18 @@ impl<L> Server<L> {
                         .http2_max_send_buf_size(self.http2_config.max_send_buf_size)
                         .http2_max_header_list_size(self.http2_config.max_header_list_size);
 
-                    let mut watch = rx.clone();
+                    let mut watch = rx.clone(); 
+                    let tls_config = self.tls.clone();
                     spawn(async move {
-                        let mut http_conn = server.serve_connection(conn, service);
+                        // let mut http_conn = server.serve_connection(conn, service);
+                        let mut http_conn = match tls_config {
+                            TlsAcceptorConfig::None => server.serve_connection(conn, service),
+                            TlsAcceptorConfig::Rustls(tls_acceptor) => match tls_acceptor.accept(conn).await {
+                                Ok(tls_stream) => server.serve_connection(tls_stream, service),
+                                Err(_) => todo!(),
+                            },
+                            TlsAcceptorConfig::NativeTls(_) => todo!(),
+                        };
                         tokio::select! {
                             _ = watch.changed() => {
                                 tracing::trace!("[VOLO] closing a pending connection");
