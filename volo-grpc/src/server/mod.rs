@@ -14,7 +14,7 @@ use motore::{
     BoxError,
 };
 pub use service::ServiceBuilder;
-use volo::{net::incoming::Incoming, spawn};
+use volo::{net::{incoming::Incoming, conn::{Conn, ConnStream}}, spawn};
 
 pub use self::router::Router;
 use crate::{
@@ -37,7 +37,7 @@ pub struct Server<L> {
     http2_config: Http2Config,
     router: Router,
 
-    tls: TlsAcceptorConfig,
+    tls_config: TlsAcceptorConfig,
 }
 
 impl Default for Server<Identity> {
@@ -53,14 +53,14 @@ impl Server<Identity> {
             layer: Identity::new(),
             http2_config: Http2Config::default(),
             router: Router::new(),
-            tls: TlsAcceptorConfig::None,
+            tls_config: TlsAcceptorConfig::None,
         }
     }
 }
 
 impl<L> Server<L> {
     pub fn tls_config(mut self, value: impl Into<TlsAcceptorConfig>) -> Self {
-        self.tls = value.into();
+        self.tls_config = value.into();
         self
     }
 
@@ -182,7 +182,7 @@ impl<L> Server<L> {
             layer: Stack::new(layer, self.layer),
             http2_config: self.http2_config,
             router: self.router,
-            tls: self.tls,
+            tls_config: self.tls_config,
         }
     }
 
@@ -202,7 +202,7 @@ impl<L> Server<L> {
             layer: Stack::new(self.layer, layer),
             http2_config: self.http2_config,
             router: self.router,
-            tls: self.tls
+            tls_config: self.tls_config
         }
     }
 
@@ -220,7 +220,7 @@ impl<L> Server<L> {
             layer: self.layer,
             http2_config: self.http2_config,
             router: self.router.add_service(s),
-            tls: self.tls
+            tls_config: self.tls_config
         }
     }
 
@@ -252,7 +252,7 @@ impl<L> Server<L> {
 
         tokio::pin!(signal);
         let (tx, rx) = tokio::sync::watch::channel(());
-
+        
         loop {
             tokio::select! {
                 _ = &mut signal => {
@@ -264,10 +264,33 @@ impl<L> Server<L> {
                     return Ok(());
                 },
                 conn = incoming.accept() => {
-                    let conn = match conn? {
+                    let conn: Conn = match conn? {
                         Some(c) => c,
                         None => return Ok(()),
                     };
+                    let info = conn.info;
+                    // Only perform TLS handshake if either rustls or native-tls is configured
+                    let conn: Conn = match (conn.stream, &self.tls_config) {
+                        (volo::net::conn::ConnStream::Tcp(tcp), TlsAcceptorConfig::Rustls(tls_acceptor)) => {
+                            let stream = tls_acceptor.accept(tcp).await?;
+                            Conn {
+                                stream: ConnStream::Rustls(tokio_rustls::TlsStream::Server(stream)),
+                                info
+                            }
+                        },
+                        (volo::net::conn::ConnStream::Tcp(tcp), TlsAcceptorConfig::NativeTls(tls_acceptor)) => {
+                            let stream = tls_acceptor.accept(tcp).await?;
+                            Conn {
+                                stream: ConnStream::NativeTls(stream),
+                                info,
+                            }
+                        },
+                        (stream, _) => Conn {
+                            stream,
+                            info
+                        },
+                    };
+
                     tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
                     let peer_addr = conn.info.peer_addr.clone();
 
@@ -288,18 +311,9 @@ impl<L> Server<L> {
                         .http2_max_send_buf_size(self.http2_config.max_send_buf_size)
                         .http2_max_header_list_size(self.http2_config.max_header_list_size);
 
-                    let mut watch = rx.clone(); 
-                    let tls_config = self.tls.clone();
+                    let mut watch = rx.clone();
                     spawn(async move {
-                        // let mut http_conn = server.serve_connection(conn, service);
-                        let mut http_conn = match tls_config {
-                            TlsAcceptorConfig::None => server.serve_connection(conn, service),
-                            TlsAcceptorConfig::Rustls(tls_acceptor) => match tls_acceptor.accept(conn).await {
-                                Ok(tls_stream) => server.serve_connection(tls_stream, service),
-                                Err(_) => todo!(),
-                            },
-                            TlsAcceptorConfig::NativeTls(_) => todo!(),
-                        };
+                        let mut http_conn = server.serve_connection(conn, service);
                         tokio::select! {
                             _ = watch.changed() => {
                                 tracing::trace!("[VOLO] closing a pending connection");
