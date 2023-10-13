@@ -2554,35 +2554,6 @@ dependencies = [
 ]
 
 [[package]]
-<<<<<<< HEAD
-name = "volo"
-version = "0.5.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d4fcea6f3ec3afaf72af11044f85dc4f21fd8d75b80aa37ec7200bbd793dd16"
-dependencies = [
- "async-broadcast",
- "async-trait",
- "dashmap",
- "faststr",
- "futures",
- "lazy_static",
- "libc",
- "metainfo",
- "motore",
- "mur3",
- "nix",
- "once_cell",
- "pin-project",
- "rand",
- "socket2 0.5.4",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tower",
- "tracing",
-]
-
-[[package]]
 name = "volo-build"
 version = "0.6.2"
 dependencies = [
