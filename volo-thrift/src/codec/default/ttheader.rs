@@ -70,7 +70,6 @@ impl<D: ZeroCopyDecoder> TTHeaderDecoder<D> {
 /// https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/
 pub const HEADER_DETECT_LENGTH: usize = 6;
 
-#[async_trait::async_trait]
 impl<D> ZeroCopyDecoder for TTHeaderDecoder<D>
 where
     D: ZeroCopyDecoder,
