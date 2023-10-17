@@ -1,3 +1,5 @@
+use std::future::Future;
+
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
@@ -12,24 +14,22 @@ pub use default::DefaultMakeCodec;
 /// Returning an Ok(None) indicates the EOF has been reached.
 ///
 /// Note: [`Decoder`] should be designed to be ready for reuse.
-#[async_trait::async_trait]
 pub trait Decoder: Send + 'static {
-    async fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
+    fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-    ) -> Result<Option<ThriftMessage<Msg>>, crate::Error>;
+    ) -> impl Future<Output = Result<Option<ThriftMessage<Msg>>, crate::Error>> + Send;
 }
 
 /// [`Encoder`] writes a [`ThriftMessage`] to an [`AsyncWrite`] and flushes the data.
 ///
 /// Note: [`Encoder`] should be designed to be ready for reuse.
-#[async_trait::async_trait]
 pub trait Encoder: Send + 'static {
-    async fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
+    fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
-    ) -> Result<(), crate::Error>;
+    ) -> impl Future<Output = Result<(), crate::Error>> + Send;
 }
 
 /// [`MakeCodec`] receives an [`AsyncRead`] and an [`AsyncWrite`] and returns a
