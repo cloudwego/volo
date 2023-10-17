@@ -54,7 +54,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 Some((mi, mut cx, msg)) => {
                                     if let Err(e) = metainfo::METAINFO.scope(RefCell::new(mi), encoder.encode::<Resp, ServerContext>(&mut cx, msg)).await {
                                         // log it
-                                        error!("[VOLO] server send response error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
+                                        error!("[VOLO] server send response error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                                         stat_tracer.iter().for_each(|f| f(&cx));
                                         return;
                                     }
@@ -73,7 +73,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 Some((mut cx, msg)) => {
                                     if let Err(e) = encoder.encode::<DummyMessage, ServerContext>(&mut cx, msg).await {
                                         // log it
-                                        error!("[VOLO] server send error error: {:?}, rpcinfo: {:?}, peer_addr: {:?}", e, cx.rpc_info, peer_addr);
+                                        error!("[VOLO] server send error error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                                     }
                                     stat_tracer.iter().for_each(|f| f(&cx));
                                     return;
@@ -111,9 +111,9 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                     // receives a message
                     msg = decoder.decode(&mut cx) => {
                         tracing::debug!(
-                            "[VOLO] received message: {:?}, rpcinfo: {:?}, peer_addr: {:?}",
+                            "[VOLO] received message: {:?}, cx: {:?}, peer_addr: {:?}",
                             msg.as_ref().map(|msg| msg.as_ref().map(|msg| &msg.meta)),
-                            cx.rpc_info,
+                            cx,
                             peer_addr
                         );
                         match msg {

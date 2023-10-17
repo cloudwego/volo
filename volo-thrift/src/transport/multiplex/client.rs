@@ -157,10 +157,7 @@ where
                 if !oneway {
                     return Err(Error::Transport(pilota::thrift::TransportError::new(
                         TransportErrorKind::EndOfFile,
-                        format!(
-                            "an unexpected end of file from server, rpcinfo: {:?}",
-                            cx.rpc_info
-                        ),
+                        format!("an unexpected end of file from server, cx: {:?}", cx),
                     )));
                 }
             }

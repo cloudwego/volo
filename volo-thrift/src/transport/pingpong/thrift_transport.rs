@@ -2,7 +2,6 @@ use std::sync::atomic::AtomicUsize;
 
 use pin_project::pin_project;
 use tokio::io::{AsyncRead, AsyncWrite};
-use volo::context::Context;
 
 use crate::{
     codec::{Decoder, Encoder, MakeCodec},
@@ -92,7 +91,7 @@ where
     ) -> Result<Option<ThriftMessage<T>>, Error> {
         let thrift_msg = self.decoder.decode(cx).await.map_err(|e| {
             let mut e = e;
-            e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
+            e.append_msg(&format!(", cx: {:?}", cx));
             tracing::error!("[VOLO] transport[{}] decode error: {}", self.id, e);
             e
         })?;
@@ -100,15 +99,15 @@ where
         if let Some(ThriftMessage { meta, .. }) = &thrift_msg {
             if meta.seq_id != cx.seq_id {
                 tracing::error!(
-                    "[VOLO] transport[{}] seq_id not match: {} != {}, rpcinfo: {:?}",
+                    "[VOLO] transport[{}] seq_id not match: {} != {}, cx: {:?}",
                     self.id,
                     meta.seq_id,
                     cx.seq_id,
-                    cx.rpc_info(),
+                    cx,
                 );
                 return Err(Error::Application(ApplicationError::new(
                     ApplicationErrorKind::BAD_SEQUENCE_ID,
-                    format!("seq_id not match, rpcinfo: {:?}", cx.rpc_info()),
+                    format!("seq_id not match, cx: {:?}", cx),
                 )));
             }
         };
