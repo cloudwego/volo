@@ -3,3 +3,4 @@
 .vscode/
 target/
 *.code-workspace
+Cargo.lock
