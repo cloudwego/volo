@@ -614,7 +614,7 @@ impl CodegenBackend for VoloGrpcBackend {
                 let ty = self.trait_input_ty(a.ty.clone(), client_streaming, true);
 
                 let ident = &a.name;
-                // args are unsed, add _ to avoid unused variable warning
+                // args are unused, add _ to avoid unused variable warning
                 format!("_{ident}: {ty}")
             })
             .join(",");
