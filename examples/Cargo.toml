@@ -87,6 +87,6 @@ volo-http = { path = "../volo-http" }
 volo-gen = { path = "./volo-gen" }
 bytes.workspace = true
 http.workspace = true
-hyper = { version = "1.0.0-rc.4", features = ["server", "http1", "http2"] }
+hyper = { version = "1.0.0-rc.3", features = ["server", "http1", "http2"] }
 motore.workspace = true
 serde.workspace = true

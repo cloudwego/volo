@@ -37,13 +37,14 @@ macro_rules! newtype_impl_context {
 
 const DEFAULT_MAP_CAPACITY: usize = 10;
 
+#[derive(Debug)]
 pub struct RpcCx<I, Config> {
     pub rpc_info: RpcInfo<Config>,
     pub inner: I,
     pub extensions: Extensions,
 }
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Extensions(TypeMap);
 
 impl std::ops::Deref for Extensions {

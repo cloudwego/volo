@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 use volo_http::{
     handler::HandlerService,
     request::Json,
-    route::{Route, Router, Server, ServiceLayerExt},
+    route::{Route, Router, ServiceLayerExt},
+    server::Server,
     HttpContext,
 };
 
@@ -69,7 +70,7 @@ async fn test(
 
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
-    Router::new()
+    let app = Router::new()
         .route(
             "/",
             Route::builder()
@@ -86,8 +87,10 @@ async fn main() {
                 .post(HandlerService::new(test))
                 .build(),
         )
-        .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1))))
-        .serve(SocketAddr::from(([127, 0, 0, 1], 3000)))
-        .await
-        .unwrap();
+        .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1))));
+
+    let addr: SocketAddr = "[::]:9091".parse().unwrap();
+    let addr = volo::net::Address::from(addr);
+
+    Server::new(app).run(addr).await.unwrap();
 }
