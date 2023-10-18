@@ -12,6 +12,7 @@ use crate::command::CliCommand;
 #[derive(Parser, Debug)]
 #[command(about = "init your project")]
 pub struct Init {
+    #[arg(help = "The name of project")]
     pub name: String,
     #[arg(
         short = 'g',
