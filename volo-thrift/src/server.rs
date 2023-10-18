@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use futures::future::BoxFuture;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::Service,
@@ -42,6 +43,7 @@ pub struct Server<S, L, Req, MkC, SP> {
     #[cfg(feature = "multiplex")]
     multiplex: bool,
     span_provider: SP,
+    shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()>>>,
     _marker: PhantomData<Req>,
 }
 
@@ -66,12 +68,25 @@ impl<S, Req>
             #[cfg(feature = "multiplex")]
             multiplex: false,
             span_provider: DefaultProvider {},
+            shutdown_hooks: Vec::new(),
             _marker: PhantomData,
         }
     }
 }
 
 impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
+    /// Register shutdown hook.
+    ///
+    /// Hook functions will be called just before volo's own gracefull existing code starts,
+    /// in reverse order of registration.
+    pub fn register_shutdown_hook(
+        mut self,
+        hook: impl FnOnce() -> BoxFuture<'static, ()> + 'static,
+    ) -> Self {
+        self.shutdown_hooks.push(Box::new(hook));
+        self
+    }
+
     /// Adds a new inner layer to the server.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
@@ -92,6 +107,7 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
             span_provider: self.span_provider,
+            shutdown_hooks: self.shutdown_hooks,
             _marker: PhantomData,
         }
     }
@@ -116,6 +132,7 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
             span_provider: self.span_provider,
+            shutdown_hooks: self.shutdown_hooks,
             _marker: PhantomData,
         }
     }
@@ -144,6 +161,7 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
             span_provider: self.span_provider,
+            shutdown_hooks: self.shutdown_hooks,
             _marker: PhantomData,
         }
     }
@@ -291,6 +309,14 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
             }
         }
 
+        if !self.shutdown_hooks.is_empty() {
+            info!("[VOLO] call shutdown hooks");
+
+            for hook in self.shutdown_hooks {
+                (hook)().await;
+            }
+        }
+
         // received signal, graceful shutdown now
         info!("[VOLO] received signal, gracefully exiting now");
         *exit_flag.write() = true;
@@ -330,6 +356,7 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
             stat_tracer: self.stat_tracer,
             multiplex,
             span_provider: self.span_provider,
+            shutdown_hooks: self.shutdown_hooks,
             _marker: PhantomData,
         }
     }
@@ -343,6 +370,7 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
             span_provider: provider,
+            shutdown_hooks: self.shutdown_hooks,
             _marker: PhantomData,
         }
     }

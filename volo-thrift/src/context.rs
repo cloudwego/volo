@@ -187,6 +187,7 @@ pub struct ServerCxInner {
     pub common_stats: CommonStats,
 }
 
+#[derive(Debug)]
 pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 newtype_impl_context!(ClientContext, Config, 0);
@@ -243,6 +244,7 @@ thread_local! {
     pub(crate) static SERVER_CONTEXT_CACHE: std::cell::RefCell<Vec<ServerContext>> = std::cell::RefCell::new(Vec::with_capacity(128));
 }
 
+#[derive(Debug)]
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 impl Default for ServerContext {
