@@ -31,7 +31,13 @@ lazy_static.workspace = true
 libc.workspace = true
 metainfo.workspace = true
 mur3.workspace = true
-nix.workspace = true
+nix = { workspace = true, features = [
+    "uio",
+    "socket",
+    "process",
+    "signal",
+    "feature",
+] }
 once_cell.workspace = true
 pin-project.workspace = true
 rand.workspace = true

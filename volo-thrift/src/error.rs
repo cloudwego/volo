@@ -33,7 +33,6 @@ pub enum Error {
 #[derive(Debug, Clone, Copy)]
 pub struct DummyError;
 
-#[async_trait::async_trait]
 impl Message for DummyError {
     fn encode<T: TOutputProtocol>(&self, _protocol: &mut T) -> Result<(), EncodeError> {
         panic!()
@@ -210,7 +209,6 @@ impl Display for ApplicationError {
     }
 }
 
-#[async_trait::async_trait]
 impl Message for ApplicationError {
     /// Convert an `ApplicationError` into its wire representation and write
     /// it to the remote.
