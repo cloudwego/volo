@@ -588,13 +588,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 type Response = {res_send_name};
                 type Error = ::anyhow::Error;
 
-                type Future<'cx> = impl ::std::future::Future<Output = ::std::result::Result<Self::Response, Self::Error>> + 'cx;
-
-                fn call<'cx, 's>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> Self::Future<'cx> where 's:'cx {{
-                    async move {{
-                        match req {{
-                           {handler}
-                        }}
+                async fn call<'s, 'cx>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> ::std::result::Result<Self::Response, Self::Error> {{
+                    match req {{
+                        {handler}
                     }}
                 }}
             }}"#

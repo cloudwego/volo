@@ -88,20 +88,18 @@ fn try_parse_client_timeout(
 
 impl<Cx, S, ReqBody> Service<Cx, hyper::Request<ReqBody>> for GrpcTimeout<S>
 where
-    S: Service<Cx, hyper::Request<ReqBody>, Error = Status>,
-    ReqBody: 'static,
+    Cx: Send,
+    S: Service<Cx, hyper::Request<ReqBody>, Error = Status> + Send + Sync,
+    ReqBody: 'static + Send,
 {
     type Response = S::Response;
     type Error = Status;
-    type Future<'cx> = ResponseFuture<impl Future<Output = Result<Self::Response, Self::Error>> + 'cx>
-        where
-            Self: 'cx,
-            Cx: 'cx;
 
-    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, req: hyper::Request<ReqBody>) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut Cx,
+        req: hyper::Request<ReqBody>,
+    ) -> Result<Self::Response, Self::Error> {
         // parse the client_timeout
         let client_timeout = try_parse_client_timeout(req.headers()).unwrap_or_else(|_| {
             tracing::trace!("[VOLO] error parsing grpc-timeout header");
@@ -126,6 +124,7 @@ where
             inner: self.inner.call(cx, req),
             sleep: pined_sleep,
         }
+        .await
     }
 }
 

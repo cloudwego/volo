@@ -176,7 +176,6 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
         MkC: MakeCodec<OwnedReadHalf, OwnedWriteHalf>,
         L::Service: Service<ServerContext, Req, Response = S::Response> + Send + 'static + Sync,
         <L::Service as Service<ServerContext, Req>>::Error: Into<crate::Error> + Send,
-        for<'cx> <L::Service as Service<ServerContext, Req>>::Future<'cx>: Send,
         S: Service<ServerContext, Req> + Send + 'static,
         S::Error: Into<crate::Error> + Send,
         Req: EntryMessage + Send + 'static,

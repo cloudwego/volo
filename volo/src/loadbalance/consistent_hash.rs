@@ -1,4 +1,4 @@
-use std::{cmp::min, collections::HashSet, future::Future, hash::Hash, sync::Arc};
+use std::{cmp::min, collections::HashSet, hash::Hash, sync::Arc};
 
 use dashmap::{mapref::entry::Entry, DashMap};
 
@@ -249,51 +249,40 @@ where
     D: Discover,
 {
     type InstanceIter = InstancePicker;
-
-    type GetFut<'future> =
-        impl Future<Output = Result<Self::InstanceIter, LoadBalanceError>> + Send + 'future
-        where
-            Self: 'future;
-
-    fn get_picker<'future>(
+    async fn get_picker<'future>(
         &'future self,
         endpoint: &'future Endpoint,
         discover: &'future D,
-    ) -> Self::GetFut<'future>
-    where
-        Self: 'future,
-    {
-        async move {
-            let request_hash = metainfo::METAINFO
-                .try_with(|m| m.borrow().get::<RequestHash>().copied())
-                .map_err(|_| LoadBalanceError::MissRequestHash)?;
-            if request_hash.is_none() {
-                return Err(LoadBalanceError::MissRequestHash);
-            }
-            let request_hash = request_hash.unwrap();
-            let key = discover.key(endpoint);
-            let weighted_list = match self.router.entry(key) {
-                Entry::Occupied(e) => e.get().clone(),
-                Entry::Vacant(e) => {
-                    let instances = Arc::new(
-                        self.build_weighted_instances(
-                            discover
-                                .discover(endpoint)
-                                .await
-                                .map_err(|err| err.into())?,
-                        ),
-                    );
-                    e.insert(instances).value().clone()
-                }
-            };
-            Ok(InstancePicker {
-                shared_instances: weighted_list,
-                request_hash,
-                last_pick: None,
-                used: HashSet::new(),
-                replicas: self.option.replicas,
-            })
+    ) -> Result<Self::InstanceIter, LoadBalanceError> {
+        let request_hash = metainfo::METAINFO
+            .try_with(|m| m.borrow().get::<RequestHash>().copied())
+            .map_err(|_| LoadBalanceError::MissRequestHash)?;
+        if request_hash.is_none() {
+            return Err(LoadBalanceError::MissRequestHash);
         }
+        let request_hash = request_hash.unwrap();
+        let key = discover.key(endpoint);
+        let weighted_list = match self.router.entry(key) {
+            Entry::Occupied(e) => e.get().clone(),
+            Entry::Vacant(e) => {
+                let instances = Arc::new(
+                    self.build_weighted_instances(
+                        discover
+                            .discover(endpoint)
+                            .await
+                            .map_err(|err| err.into())?,
+                    ),
+                );
+                e.insert(instances).value().clone()
+            }
+        };
+        Ok(InstancePicker {
+            shared_instances: weighted_list,
+            request_hash,
+            last_pick: None,
+            used: HashSet::new(),
+            replicas: self.option.replicas,
+        })
     }
 
     fn rebalance(&self, changes: Change<<D as Discover>::Key>) {

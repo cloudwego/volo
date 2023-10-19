@@ -1,4 +1,3 @@
-use futures::Future;
 use http::{header::USER_AGENT, HeaderValue, Request};
 use motore::Service;
 
@@ -29,24 +28,22 @@ impl<T> UserAgent<T> {
 
 impl<T, ReqBody, Cx> Service<Cx, Request<ReqBody>> for UserAgent<T>
 where
-    T: Service<Cx, Request<ReqBody>>,
-    ReqBody: 'static,
+    T: Service<Cx, Request<ReqBody>> + Send + Sync,
+    ReqBody: Send + 'static,
+    Cx: Send,
 {
     type Response = T::Response;
     type Error = T::Error;
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx
-    where
-        Self: 'cx,
-        Cx: 'cx;
 
-    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, mut req: Request<ReqBody>) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut Cx,
+        mut req: Request<ReqBody>,
+    ) -> Result<Self::Response, Self::Error> {
         req.headers_mut()
             .insert(USER_AGENT, self.user_agent.clone());
 
-        self.inner.call(cx, req)
+        self.inner.call(cx, req).await
     }
 }
 
