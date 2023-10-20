@@ -2,7 +2,6 @@
 
 use std::{fmt::Debug, hash::Hash};
 
-use futures::Future;
 use motore::{service::UnaryService, BoxError};
 
 use super::{Pool, Poolable, Pooled};
@@ -55,10 +54,8 @@ where
 
     type Error = BoxError;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
-
-    fn call(&self, key: Key) -> Self::Future<'_> {
+    async fn call(&self, key: Key) -> Result<Self::Response, Self::Error> {
         let mt = self.inner.clone();
-        async move { self.pool.get(key, mt).await }
+        self.pool.get(key, mt).await
     }
 }

@@ -13,7 +13,7 @@ English | [中文](README-zh_cn.md)
 
 Volo is a **high-performance** and **strong-extensibility** Rust RPC framework that helps developers build microservices.
 
-Volo uses [`Motore`][motore] as its middleware abstraction, which is powered by GAT.
+Volo uses [`Motore`][motore] as its middleware abstraction, which is powered by AFIT and RPITIT.
 
 ## Overview
 
@@ -30,11 +30,11 @@ Volo mainly consists of six crates:
 
 ### Features
 
-#### Powered by GAT
+#### Powered by AFIT and RPITIT
 
-Volo uses [`Motore`][motore] as its middleware abstraction, which is powered by GAT.
+Volo uses [`Motore`][motore] as its middleware abstraction, which is powered by AFIT and RPITIT.
 
-Through GAT, we can avoid many unnecessary `Box` memory allocations, improve ease of use, and provide users with a more friendly programming interface and a more ergonomic programming paradigm.
+Through RPITIT, we can avoid many unnecessary `Box` memory allocations, improve ease of use, and provide users with a more friendly programming interface and a more ergonomic programming paradigm.
 
 #### High Performance
 
@@ -77,7 +77,7 @@ See [Examples][examples].
 ## Related Projects
 
 - [Volo-rs][volo-rs]: The volo ecosystem which contains a lot of useful components.
-- [Motore][motore]: Middleware abstraction layer powered by GAT.
+- [Motore][motore]: Middleware abstraction layer powered by AFIT and RPITIT.
 - [Pilota][pilota]: A thrift and protobuf implementation in pure rust with high performance and extensibility.
 - [Metainfo][metainfo]: Transmissing metainfo across components.
 

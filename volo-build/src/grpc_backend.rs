@@ -547,20 +547,14 @@ impl CodegenBackend for VoloGrpcBackend {
             {{
                 type Response = ::volo_grpc::Response<{resp_enum_name_send}>;
                 type Error = ::volo_grpc::status::Status;
-                type Future<'cx> = impl ::std::future::Future<Output = ::std::result::Result<Self::Response, Self::Error>> + 'cx;
 
-                fn call<'cx, 's>(&'s self, cx: &'cx mut ::volo_grpc::context::ServerContext, req: ::volo_grpc::Request<{req_enum_name_recv}>) -> Self::Future<'cx>
-                where
-                    's: 'cx,
-                {{
+                async fn call<'s, 'cx>(&'s self, cx: &'cx mut ::volo_grpc::context::ServerContext, req: ::volo_grpc::Request<{req_enum_name_recv}>) -> ::std::result::Result<Self::Response, Self::Error> {{
                     let inner = self.inner.clone();
-                    async move {{
-                        match cx.rpc_info.method().unwrap().as_str() {{
-                            {req_matches}
-                            path => {{
-                                let path = path.to_string();
-                                Err(::volo_grpc::Status::unimplemented(::std::format!("Unimplemented http path: {{}}", path)))
-                            }}
+                    match cx.rpc_info.method().unwrap().as_str() {{
+                        {req_matches}
+                        path => {{
+                            let path = path.to_string();
+                            Err(::volo_grpc::Status::unimplemented(::std::format!("Unimplemented http path: {{}}", path)))
                         }}
                     }}
                 }}

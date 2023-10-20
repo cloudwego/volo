@@ -11,7 +11,6 @@ use std::{
     sync::{atomic::AtomicI32, Arc},
 };
 
-use futures::Future;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{BoxCloneService, Service},
@@ -474,21 +473,18 @@ where
 
     type Error = Error;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx + Send where Self:'cx;
-
-    fn call<'cx, 's>(&'s self, cx: &'cx mut ClientContext, req: Req) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            let msg = ThriftMessage::mk_client_msg(cx, Ok(req))?;
-            let resp = self.inner.call(cx, msg).await;
-            match resp {
-                Ok(Some(ThriftMessage { data: Ok(data), .. })) => Ok(Some(data)),
-                Ok(Some(ThriftMessage { data: Err(e), .. })) => Err(e),
-                Err(e) => Err(e),
-                Ok(None) => Ok(None),
-            }
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut ClientContext,
+        req: Req,
+    ) -> Result<Self::Response, Self::Error> {
+        let msg = ThriftMessage::mk_client_msg(cx, Ok(req))?;
+        let resp = self.inner.call(cx, msg).await;
+        match resp {
+            Ok(Some(ThriftMessage { data: Ok(data), .. })) => Ok(Some(data)),
+            Ok(Some(ThriftMessage { data: Err(e), .. })) => Err(e),
+            Err(e) => Err(e),
+            Ok(None) => Ok(None),
         }
     }
 }
@@ -512,21 +508,17 @@ where
         + Send
         + Clone
         + Sync,
-    for<'cx> <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Req>>::Future<'cx>:
-        Send,
     Req: EntryMessage + Send + 'static + Sync + Clone,
     Resp: EntryMessage + Send + 'static,
     IL: Layer<MessageService<Resp, MkT, MkC>>,
     IL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + Sync + Clone + Send + 'static,
     <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<Error>,
-    for<'cx> <IL::Service as Service<ClientContext, Req>>::Future<'cx>: Send,
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
     OL: Layer<BoxCloneService<ClientContext, Req, Option<Resp>, Error>>,
     OL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone + Sync,
-    for<'cx> <OL::Service as Service<ClientContext, Req>>::Future<'cx>: Send,
     <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<Error>,
 {
     /// Build volo client.
@@ -692,17 +684,13 @@ macro_rules! impl_client {
         {
             type Response = S::Response;
             type Error = S::Error;
-            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
-            fn call<'cx, 's>(
+            async fn call<'s, 'cx>(
                 &'s $self,
                 $cx: &'cx mut crate::context::ClientContext,
                 $req: Req,
-            ) -> Self::Future<'cx>
-            where
-                's: 'cx,
-            {
-                async move { $e }
+            ) -> Result<Self::Response, Self::Error> {
+                $e
             }
         }
 
@@ -720,17 +708,13 @@ macro_rules! impl_client {
         {
             type Response = S::Response;
             type Error = S::Error;
-            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
-            fn call<'cx>(
+            async fn call<'cx>(
                 $self,
                 $cx: &'cx mut crate::context::ClientContext,
                 $req: Req,
-            ) -> Self::Future<'cx>
-            where
-                Self: 'cx,
-            {
-                async move { $e }
+            ) -> Result<Self::Response, Self::Error> {
+                $e
             }
         }
     };
