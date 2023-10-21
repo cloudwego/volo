@@ -627,7 +627,10 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             "::volo_thrift::AnyhowError".into()
         };
 
-        format!("async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, {exception}>;")
+        format!(
+            "fn {name}(&self, {args}) -> impl ::std::future::Future<Output = \
+             ::core::result::Result<{ret_ty}, {exception}>> + Send;"
+        )
     }
 
     fn codegen_service_method_with_global_path(

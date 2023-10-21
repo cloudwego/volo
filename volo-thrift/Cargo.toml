@@ -24,7 +24,6 @@ motore.workspace = true
 metainfo.workspace = true
 
 anyhow.workspace = true
-async-trait.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 futures.workspace = true

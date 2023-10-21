@@ -3,7 +3,6 @@
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 
-pub use async_trait::async_trait;
 pub use motore::{layer, layer::Layer, service, Service};
 pub use tokio::main;
 

@@ -23,7 +23,6 @@ maintenance = { status = "actively-developed" }
 motore.workspace = true
 
 async-broadcast.workspace = true
-async-trait.workspace = true
 dashmap.workspace = true
 faststr.workspace = true
 futures.workspace = true

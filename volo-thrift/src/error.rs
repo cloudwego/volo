@@ -120,6 +120,7 @@ impl From<DecodeError> for Error {
                 pilota::thrift::ProtocolErrorKind::Unknown,
                 value.to_string(),
             )),
+            pilota::thrift::DecodeErrorKind::Unknown => protocol_err!(Unknown),
         }
     }
 }
