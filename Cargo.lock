@@ -1103,7 +1103,8 @@ dependencies = [
 [[package]]
 name = "motore"
 version = "0.4.0"
-source = "git+https://github.com/cloudwego/motore?branch=main#f840541d077130b2b7d1e61250575d28363b234e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e790641256fb4f7acb5d99ddbe60ccf7d64bc5e0bd3c042d3dc0376b67405a9"
 dependencies = [
  "futures",
  "motore-macros",
@@ -1115,7 +1116,8 @@ dependencies = [
 [[package]]
 name = "motore-macros"
 version = "0.4.0"
-source = "git+https://github.com/cloudwego/motore?branch=main#f840541d077130b2b7d1e61250575d28363b234e"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f3adf53252648efda75998b7198317fab6859ea726eded77a07ddd2940d5d2f"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1370,7 +1372,8 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.9.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#b9fff2cad3e0dcff755a181720eaa651b23bab69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "682b3db6679a97ec07efc81fe5b5d0ad090cf698c9728f6b0969ca66515b9c28"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -1391,7 +1394,8 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.9.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#b9fff2cad3e0dcff755a181720eaa651b23bab69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "db92e95e898bc2793893d613b15afd72d6db9fa08874a15a439ae1e7d4f73d51"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -1423,7 +1427,8 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.9.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#b9fff2cad3e0dcff755a181720eaa651b23bab69"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4781d3302b216e3285cfc2411add31d2e1c11c0c55f4616423433da3623c978b"
 dependencies = [
  "nom",
 ]
