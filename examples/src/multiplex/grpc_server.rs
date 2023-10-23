@@ -4,7 +4,6 @@ use volo_grpc::server::{Server, ServiceBuilder};
 
 pub struct G;
 
-#[volo::async_trait]
 impl volo_gen::proto_gen::hello::Greeter for G {
     async fn say_hello(
         &self,
@@ -20,7 +19,6 @@ impl volo_gen::proto_gen::hello::Greeter for G {
 
 pub struct E;
 
-#[volo::async_trait]
 impl volo_gen::proto_gen::echo::Echo for E {
     async fn echo(
         &self,

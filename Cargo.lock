@@ -514,7 +514,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "async-stream",
- "async-trait",
  "lazy_static",
  "metainfo",
  "pilota",
@@ -824,7 +823,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.9",
+ "socket2 0.4.10",
  "tokio",
  "tower-service",
  "tracing",
@@ -921,9 +920,9 @@ dependencies = [
 
 [[package]]
 name = "integer-encoding"
-version = "3.0.4"
+version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bb03732005da905c88227371639bf1ad885cc712789c011c31c5fb3ab3ccf02"
+checksum = "924df4f0e24e2e7f9cdd90babb0b96f93b20f3ecfa949ea9e6613756b8c8e1bf"
 dependencies = [
  "async-trait",
  "tokio",
@@ -931,9 +930,9 @@ dependencies = [
 
 [[package]]
 name = "ipnet"
-version = "2.8.0"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "28b29a3cd74f0f4598934efe3aeba42bae0eb4680554128851ebbecb02af14e6"
+checksum = "8f518f335dce6725a761382244631d86cf0ccb2863413590b31338feb467f9c3"
 
 [[package]]
 name = "is-terminal"
@@ -948,9 +947,9 @@ dependencies = [
 
 [[package]]
 name = "itertools"
-version = "0.10.5"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+checksum = "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57"
 dependencies = [
  "either",
 ]
@@ -1370,12 +1369,11 @@ dependencies = [
 
 [[package]]
 name = "pilota"
-version = "0.8.1"
-source = "git+https://github.com/cloudwego/pilota?branch=main#d6693254e00af826ada7d6ff4364fd0462a99044"
+version = "0.9.0"
+source = "git+https://github.com/cloudwego/pilota?branch=main#b9fff2cad3e0dcff755a181720eaa651b23bab69"
 dependencies = [
  "anyhow",
  "async-recursion",
- "async-trait",
  "bytes",
  "derivative",
  "faststr",
@@ -1392,8 +1390,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.8.6"
-source = "git+https://github.com/cloudwego/pilota?branch=main#d6693254e00af826ada7d6ff4364fd0462a99044"
+version = "0.9.0"
+source = "git+https://github.com/cloudwego/pilota?branch=main#b9fff2cad3e0dcff755a181720eaa651b23bab69"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -1424,8 +1422,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-thrift-parser"
-version = "0.4.2"
-source = "git+https://github.com/cloudwego/pilota?branch=main#d6693254e00af826ada7d6ff4364fd0462a99044"
+version = "0.9.0"
+source = "git+https://github.com/cloudwego/pilota?branch=main#b9fff2cad3e0dcff755a181720eaa651b23bab69"
 dependencies = [
  "nom",
 ]
@@ -1485,7 +1483,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7f4c021e1093a56626774e81216a4ce732a735e5bad4868a03f3ed65ca0c3919"
 dependencies = [
  "once_cell",
- "toml_edit",
+ "toml_edit 0.19.15",
 ]
 
 [[package]]
@@ -2025,9 +2023,9 @@ checksum = "942b4a808e05215192e39f4ab80813e599068285906cc91aa64f923db842bd5a"
 
 [[package]]
 name = "socket2"
-version = "0.4.9"
+version = "0.4.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "64a4a911eed85daf18834cfaa86a79b7d266ff93ff5ba14005426219480ed662"
+checksum = "9f7916fc008ca5542385b89a3d3ce689953c143e9304a9bf8beec1de48994c0d"
 dependencies = [
  "libc",
  "winapi",
@@ -2035,9 +2033,9 @@ dependencies = [
 
 [[package]]
 name = "socket2"
-version = "0.5.4"
+version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4031e820eb552adee9295814c0ced9e5cf38ddf1e8b7d566d6de8e2538ea989e"
+checksum = "7b5fac59a5cb5dd637972e5fca70daf0523c9067fcdc4842f053dae04a18f8e9"
 dependencies = [
  "libc",
  "windows-sys",
@@ -2189,7 +2187,7 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project-lite",
  "signal-hook-registry",
- "socket2 0.5.4",
+ "socket2 0.5.5",
  "tokio-macros",
  "windows-sys",
 ]
@@ -2253,14 +2251,14 @@ dependencies = [
 
 [[package]]
 name = "toml"
-version = "0.7.8"
+version = "0.8.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd79e69d3b627db300ff956027cc6c3798cef26d22526befdfcd12feeb6d2257"
+checksum = "185d8ab0dfbb35cf1399a6344d8484209c088f75f8f68230da55d48d95d43e3d"
 dependencies = [
  "serde",
  "serde_spanned",
  "toml_datetime",
- "toml_edit",
+ "toml_edit 0.20.2",
 ]
 
 [[package]]
@@ -2277,6 +2275,17 @@ name = "toml_edit"
 version = "0.19.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1b5bb770da30e5cbfde35a2d7b9b8a2c4b8ef89548a7a6aeab5c9a576e3e7421"
+dependencies = [
+ "indexmap 2.0.2",
+ "toml_datetime",
+ "winnow",
+]
+
+[[package]]
+name = "toml_edit"
+version = "0.20.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "396e4d48bbb2b7554c944bde63101b5ae446cff6ec4a24227428f15eb72ef338"
 dependencies = [
  "indexmap 2.0.2",
  "serde",
@@ -2496,7 +2505,6 @@ name = "volo"
 version = "0.8.0"
 dependencies = [
  "async-broadcast",
- "async-trait",
  "dashmap",
  "faststr",
  "futures",
@@ -2509,7 +2517,7 @@ dependencies = [
  "once_cell",
  "pin-project",
  "rand",
- "socket2 0.5.4",
+ "socket2 0.5.5",
  "thiserror",
  "tokio",
  "tokio-stream",
@@ -2522,7 +2530,6 @@ name = "volo-build"
 version = "0.8.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "dirs",
  "heck 0.4.1",
  "itertools",
@@ -2572,7 +2579,6 @@ name = "volo-gen"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "futures",
  "pilota",
  "tokio",
@@ -2588,7 +2594,6 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-stream",
- "async-trait",
  "base64 0.13.1",
  "bytes",
  "flate2",
@@ -2629,7 +2634,6 @@ name = "volo-thrift"
 version = "0.8.0"
 dependencies = [
  "anyhow",
- "async-trait",
  "bytes",
  "chrono",
  "futures",

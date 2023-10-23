@@ -590,7 +590,10 @@ impl CodegenBackend for VoloGrpcBackend {
 
         let name = self.cx().rust_name(method.def_id);
 
-        format!("async fn {name}(&self, {args}) -> ::std::result::Result<{ret_ty}>;")
+        format!(
+            "fn {name}(&self, {args}) -> impl ::std::future::Future<Output = \
+             ::std::result::Result<{ret_ty}>> + Send;"
+        )
     }
 
     fn codegen_service_method_with_global_path(

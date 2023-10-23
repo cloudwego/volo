@@ -10,7 +10,6 @@ use volo_grpc::{
 
 pub struct S;
 
-#[volo::async_trait]
 impl volo_gen::proto_gen::hello::Greeter for S {
     async fn say_hello(
         &self,
