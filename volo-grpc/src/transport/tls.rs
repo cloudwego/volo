@@ -1,6 +1,6 @@
 #[derive(Clone)]
 pub struct ServerTlsConfig {
-    pub acceptor: Option<TlsAcceptor>,
+    pub acceptor: TlsAcceptor,
 }
 
 #[derive(Clone)]
@@ -15,7 +15,7 @@ pub enum TlsAcceptor {
 impl From<tokio_rustls::TlsAcceptor> for ServerTlsConfig {
     fn from(value: tokio_rustls::TlsAcceptor) -> Self {
         Self {
-            acceptor: Some(TlsAcceptor::Rustls(value)),
+            acceptor: TlsAcceptor::Rustls(value),
         }
     }
 }
@@ -23,7 +23,7 @@ impl From<tokio_rustls::TlsAcceptor> for ServerTlsConfig {
 impl From<tokio_native_tls::TlsAcceptor> for ServerTlsConfig {
     fn from(value: tokio_native_tls::TlsAcceptor) -> Self {
         Self {
-            acceptor: Some(TlsAcceptor::NativeTls(value)),
+            acceptor: TlsAcceptor::NativeTls(value),
         }
     }
 }

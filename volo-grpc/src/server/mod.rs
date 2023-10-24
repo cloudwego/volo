@@ -37,7 +37,7 @@ pub struct Server<L> {
     http2_config: Http2Config,
     router: Router,
 
-    tls_config: ServerTlsConfig,
+    tls_config: Option<ServerTlsConfig>,
 }
 
 impl Default for Server<Identity> {
@@ -53,16 +53,14 @@ impl Server<Identity> {
             layer: Identity::new(),
             http2_config: Http2Config::default(),
             router: Router::new(),
-            tls_config: ServerTlsConfig {
-                acceptor: None,
-            },
+            tls_config: None,
         }
     }
 }
 
 impl<L> Server<L> {
     pub fn tls_config(mut self, value: impl Into<ServerTlsConfig>) -> Self {
-        self.tls_config = value.into();
+        self.tls_config = Some(value.into());
         self
     }
 
@@ -272,7 +270,7 @@ impl<L> Server<L> {
                     };
                     let info = conn.info;
                     // Only perform TLS handshake if either rustls or native-tls is configured
-                    let conn: Conn = match (conn.stream, &self.tls_config.acceptor) {
+                    let conn: Conn = match (conn.stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
                         (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::Rustls(tls_acceptor))) => {
                             let stream = tls_acceptor.accept(tcp).await?;
                             Conn {
