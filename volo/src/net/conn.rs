@@ -199,6 +199,22 @@ impl From<UnixStream> for ConnStream {
     }
 }
 
+#[cfg(feature = "rustls")]
+impl From<tokio_rustls::TlsStream<TcpStream>> for ConnStream {
+    #[inline]
+    fn from(s: tokio_rustls::TlsStream<TcpStream>) -> Self {
+        Self::Rustls(s)
+    }
+}
+
+#[cfg(feature = "native-tls")]
+impl From<tokio_native_tls::TlsStream<TcpStream>> for ConnStream {
+    #[inline]
+    fn from(s: tokio_native_tls::TlsStream<TcpStream>) -> Self {
+        Self::NativeTls(s)
+    }
+}
+
 impl AsyncRead for ConnStream {
     #[inline]
     fn poll_read(

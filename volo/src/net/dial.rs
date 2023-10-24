@@ -141,17 +141,23 @@ impl DefaultMakeTransport {
 }
 
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
+pub struct ClientTlsConfig<C> {
+    domain: String,
+    connector: C,
+}
+
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
 pub struct DefaultTlsMakeTransport<C> {
     cfg: Config,
-    tls_connector: C,
+    tls_config: ClientTlsConfig<C>,
 }
 
 #[cfg(feature = "rustls")]
 impl DefaultTlsMakeTransport<tokio_rustls::TlsConnector> {
-    pub fn new(tls_connector: tokio_rustls::TlsConnector) -> Self {
+    pub fn new(tls_config: ClientTlsConfig<tokio_rustls::TlsConnector>) -> Self {
         Self {
             cfg: Config::default(),
-            tls_connector,
+            tls_config,
         }
     }
 
@@ -159,7 +165,11 @@ impl DefaultTlsMakeTransport<tokio_rustls::TlsConnector> {
         match addr {
             Address::Ip(addr) => {
                 let tcp = make_tcp_connection(&self.cfg, addr).await?;
-                
+                let domain = librustls::ServerName::try_from(&self.tls_config.domain[..])
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+                self.tls_config.connector.connect(domain, tcp).await
+                    .map(tokio_rustls::TlsStream::Client)
+                    .map(Conn::from)
             },
             #[cfg(target_family = "unix")]
             Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
@@ -169,10 +179,23 @@ impl DefaultTlsMakeTransport<tokio_rustls::TlsConnector> {
 
 #[cfg(feature = "native-tls")]
 impl DefaultTlsMakeTransport<tokio_native_tls::TlsConnector> {
-    pub fn new(tls_connector: tokio_native_tls::TlsConnector) -> Self {
+    pub fn new(tls_config: ClientTlsConfig<tokio_native_tls::TlsConnector>) -> Self {
         Self {
             cfg: Config::default(),
-            tls_connector,
+            tls_config
+        }
+    }
+
+    pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
+        match addr {
+            Address::Ip(addr) => {
+                let tcp = make_tcp_connection(&self.cfg, addr).await?;
+                self.tls_config.connector.connect(&self.tls_config.domain[..], tcp).await
+                    .map(Conn::from)
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+            },
+            #[cfg(target_family = "unix")]
+            Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
         }
     }
 }
