@@ -1,7 +1,9 @@
-#[derive(Clone)]
-pub enum TlsAcceptorConfig {
-    None,
+pub struct ServerTlsConfig {
+    acceptor: Option<TlsAcceptor>,
+}
 
+#[derive(Clone)]
+pub enum TlsAcceptor {
     #[cfg(feature = "rustls")]
     Rustls(tokio_rustls::TlsAcceptor),
     
@@ -10,7 +12,7 @@ pub enum TlsAcceptorConfig {
 }
 
 impl From<()> for TlsAcceptorConfig {
-    fn from(value: ()) -> Self {
+    fn from(_value: ()) -> Self {
         Self::None
     }
 }

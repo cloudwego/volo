@@ -1,11 +1,11 @@
-use std::io;
+use std::{io, net::SocketAddr};
 
 use socket2::{Domain, Protocol, Socket, Type};
 #[cfg(target_family = "unix")]
 use tokio::net::UnixStream;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    net::TcpSocket,
+    net::{TcpSocket, TcpStream},
     time::{timeout, Duration},
 };
 
@@ -25,6 +25,7 @@ pub trait MakeTransport: Clone + Send + Sync + 'static {
     fn set_read_timeout(&mut self, timeout: Option<Duration>);
     fn set_write_timeout(&mut self, timeout: Option<Duration>);
 }
+
 
 #[derive(Default, Debug, Clone, Copy)]
 pub struct DefaultMakeTransport {
@@ -98,41 +99,80 @@ impl MakeTransport for DefaultMakeTransport {
     }
 }
 
+async fn make_tcp_connection(cfg: &Config, addr: SocketAddr) -> Result<TcpStream, io::Error> {
+    let domain = Domain::for_address(addr);
+    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
+    socket.set_nonblocking(true)?;
+    socket.set_read_timeout(cfg.read_timeout)?;
+    socket.set_write_timeout(cfg.write_timeout)?;
+
+    #[cfg(unix)]
+    let socket = unsafe {
+        use std::os::unix::io::{FromRawFd, IntoRawFd};
+        TcpSocket::from_raw_fd(socket.into_raw_fd())
+    };
+    #[cfg(windows)]
+    let socket = unsafe {
+        use std::os::windows::io::{FromRawSocket, IntoRawSocket};
+        TcpSocket::from_raw_socket(socket.into_raw_socket())
+    };
+
+    let connect = socket.connect(addr);
+
+    if let Some(conn_timeout) = cfg.connect_timeout {
+        timeout(conn_timeout, connect).await?
+    } else {
+        connect.await
+    }
+}
+
 impl DefaultMakeTransport {
     pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
         match addr {
             Address::Ip(addr) => {
-                let stream = {
-                    let domain = Domain::for_address(addr);
-                    let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
-                    socket.set_nonblocking(true)?;
-                    socket.set_read_timeout(self.cfg.read_timeout)?;
-                    socket.set_write_timeout(self.cfg.write_timeout)?;
-
-                    #[cfg(unix)]
-                    let socket = unsafe {
-                        use std::os::unix::io::{FromRawFd, IntoRawFd};
-                        TcpSocket::from_raw_fd(socket.into_raw_fd())
-                    };
-                    #[cfg(windows)]
-                    let socket = unsafe {
-                        use std::os::windows::io::{FromRawSocket, IntoRawSocket};
-                        TcpSocket::from_raw_socket(socket.into_raw_socket())
-                    };
-
-                    let connect = socket.connect(addr);
-
-                    if let Some(conn_timeout) = self.cfg.connect_timeout {
-                        timeout(conn_timeout, connect).await??
-                    } else {
-                        connect.await?
-                    }
-                };
+                let stream = make_tcp_connection(&self.cfg, addr).await?;
                 stream.set_nodelay(true)?;
                 Ok(Conn::from(stream))
             }
             #[cfg(target_family = "unix")]
             Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
+        }
+    }
+}
+
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+pub struct DefaultTlsMakeTransport<C> {
+    cfg: Config,
+    tls_connector: C,
+}
+
+#[cfg(feature = "rustls")]
+impl DefaultTlsMakeTransport<tokio_rustls::TlsConnector> {
+    pub fn new(tls_connector: tokio_rustls::TlsConnector) -> Self {
+        Self {
+            cfg: Config::default(),
+            tls_connector,
+        }
+    }
+
+    pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
+        match addr {
+            Address::Ip(addr) => {
+                let tcp = make_tcp_connection(&self.cfg, addr).await?;
+                
+            },
+            #[cfg(target_family = "unix")]
+            Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
+        }
+    }
+}
+
+#[cfg(feature = "native-tls")]
+impl DefaultTlsMakeTransport<tokio_native_tls::TlsConnector> {
+    pub fn new(tls_connector: tokio_native_tls::TlsConnector) -> Self {
+        Self {
+            cfg: Config::default(),
+            tls_connector,
         }
     }
 }
