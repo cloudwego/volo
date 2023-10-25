@@ -15,7 +15,7 @@ pub enum TlsAcceptor {
     #[doc(cfg(feature = "rustls"))]
     #[cfg(feature = "rustls")]
     Rustls(tokio_rustls::TlsAcceptor),
-    
+
     /// This takes an `Arc` because it does not internally use `Arc`
     #[doc(cfg(feature = "native-tls"))]
     #[cfg(feature = "native-tls")]

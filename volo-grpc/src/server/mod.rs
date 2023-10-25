@@ -14,11 +14,21 @@ use motore::{
     BoxError,
 };
 pub use service::ServiceBuilder;
-use volo::{net::{incoming::Incoming, conn::{Conn, ConnStream}}, spawn};
+use volo::{
+    net::{
+        conn::{Conn, ConnStream},
+        incoming::Incoming,
+    },
+    spawn,
+};
 
 pub use self::router::Router;
 use crate::{
-    body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status, transport::tls::{ServerTlsConfig, TlsAcceptor},
+    body::Body,
+    context::ServerContext,
+    server::meta::MetaService,
+    transport::tls::{ServerTlsConfig, TlsAcceptor},
+    Request, Response, Status,
 };
 
 /// A trait to provide a static reference to the service's
@@ -61,7 +71,7 @@ impl Server<Identity> {
 
 impl<L> Server<L> {
     /// Sets the TLS configuration for the server.
-    /// 
+    ///
     /// If not set, the server will not use TLS.
     #[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
@@ -208,7 +218,7 @@ impl<L> Server<L> {
             layer: Stack::new(self.layer, layer),
             http2_config: self.http2_config,
             router: self.router,
-            tls_config: self.tls_config
+            tls_config: self.tls_config,
         }
     }
 
@@ -226,7 +236,7 @@ impl<L> Server<L> {
             layer: self.layer,
             http2_config: self.http2_config,
             router: self.router.add_service(s),
-            tls_config: self.tls_config
+            tls_config: self.tls_config,
         }
     }
 
@@ -258,7 +268,7 @@ impl<L> Server<L> {
 
         tokio::pin!(signal);
         let (tx, rx) = tokio::sync::watch::channel(());
-        
+
         loop {
             tokio::select! {
                 _ = &mut signal => {

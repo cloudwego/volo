@@ -409,7 +409,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             _marker: self._marker,
 
             #[cfg(any(feature = "rustls", feature = "native-tls"))]
-            tls_config: self.tls_config, 
+            tls_config: self.tls_config,
         }
     }
 

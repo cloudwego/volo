@@ -26,7 +26,6 @@ pub trait MakeTransport: Clone + Send + Sync + 'static {
     fn set_write_timeout(&mut self, timeout: Option<Duration>);
 }
 
-
 #[derive(Default, Debug, Clone, Copy)]
 pub struct DefaultMakeTransport {
     cfg: Config,
@@ -186,23 +185,27 @@ impl DefaultTlsMakeTransport {
         match addr {
             Address::Ip(addr) => {
                 let tcp = make_tcp_connection(&self.cfg, addr).await?;
-                
+
                 match &self.tls_config.connector {
                     TlsConnector::Rustls(connector) => {
                         let domain = librustls::ServerName::try_from(&self.tls_config.domain[..])
                             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-                        connector.connect(domain, tcp).await
+                        connector
+                            .connect(domain, tcp)
+                            .await
                             .map(tokio_rustls::TlsStream::Client)
                             .map(Conn::from)
-                    },
+                    }
                     TlsConnector::NativeTls(connector) => {
                         let tcp = make_tcp_connection(&self.cfg, addr).await?;
-                        connector.connect(&self.tls_config.domain[..], tcp).await
+                        connector
+                            .connect(&self.tls_config.domain[..], tcp)
+                            .await
                             .map(Conn::from)
                             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
                     }
                 }
-            },
+            }
             #[cfg(target_family = "unix")]
             Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
         }

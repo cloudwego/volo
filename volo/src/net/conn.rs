@@ -173,12 +173,12 @@ impl ConnStream {
             Self::Rustls(stream) => {
                 let (rh, wh) = tokio::io::split(stream);
                 (OwnedReadHalf::Rustls(rh), OwnedWriteHalf::Rustls(wh))
-            },
+            }
             #[cfg(feature = "native-tls")]
             Self::NativeTls(stream) => {
                 let (rh, wh) = tokio::io::split(stream);
                 (OwnedReadHalf::NativeTls(rh), OwnedWriteHalf::NativeTls(wh))
-            },
+            }
         }
     }
 }
@@ -319,7 +319,13 @@ impl ConnStream {
             #[cfg(feature = "rustls")]
             Self::Rustls(s) => s.get_ref().0.peer_addr().map(Address::from).ok(),
             #[cfg(feature = "native-tls")]
-            Self::NativeTls(s) => s.get_ref().get_ref().get_ref().peer_addr().map(Address::from).ok(),
+            Self::NativeTls(s) => s
+                .get_ref()
+                .get_ref()
+                .get_ref()
+                .peer_addr()
+                .map(Address::from)
+                .ok(),
         }
     }
 }
