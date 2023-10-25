@@ -140,21 +140,30 @@ impl DefaultMakeTransport {
     }
 }
 
+/// A wrapper around [`tokio_rustls::TlsConnector`] and [`tokio_native_tls::TlsConnector`].
+pub enum TlsConnector {
+    #[cfg(feature = "rustls")]
+    Rustls(tokio_rustls::TlsConnector),
+    #[cfg(feature = "native-tls")]
+    NativeTls(tokio_native_tls::TlsConnector),
+}
+
+/// TLS config for client
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
-pub struct ClientTlsConfig<C> {
+pub struct ClientTlsConfig {
     domain: String,
-    connector: C,
+    connector: TlsConnector,
 }
 
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
-pub struct DefaultTlsMakeTransport<C> {
+pub struct DefaultTlsMakeTransport {
     cfg: Config,
-    tls_config: ClientTlsConfig<C>,
+    tls_config: ClientTlsConfig,
 }
 
-#[cfg(feature = "rustls")]
-impl DefaultTlsMakeTransport<tokio_rustls::TlsConnector> {
-    pub fn new(tls_config: ClientTlsConfig<tokio_rustls::TlsConnector>) -> Self {
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+impl DefaultTlsMakeTransport {
+    pub fn new(tls_config: ClientTlsConfig) -> Self {
         Self {
             cfg: Config::default(),
             tls_config,
@@ -165,34 +174,22 @@ impl DefaultTlsMakeTransport<tokio_rustls::TlsConnector> {
         match addr {
             Address::Ip(addr) => {
                 let tcp = make_tcp_connection(&self.cfg, addr).await?;
-                let domain = librustls::ServerName::try_from(&self.tls_config.domain[..])
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-                self.tls_config.connector.connect(domain, tcp).await
-                    .map(tokio_rustls::TlsStream::Client)
-                    .map(Conn::from)
-            },
-            #[cfg(target_family = "unix")]
-            Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
-        }
-    }
-}
-
-#[cfg(feature = "native-tls")]
-impl DefaultTlsMakeTransport<tokio_native_tls::TlsConnector> {
-    pub fn new(tls_config: ClientTlsConfig<tokio_native_tls::TlsConnector>) -> Self {
-        Self {
-            cfg: Config::default(),
-            tls_config
-        }
-    }
-
-    pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
-        match addr {
-            Address::Ip(addr) => {
-                let tcp = make_tcp_connection(&self.cfg, addr).await?;
-                self.tls_config.connector.connect(&self.tls_config.domain[..], tcp).await
-                    .map(Conn::from)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+                
+                match &self.tls_config.connector {
+                    TlsConnector::Rustls(connector) => {
+                        let domain = librustls::ServerName::try_from(&self.tls_config.domain[..])
+                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+                        connector.connect(domain, tcp).await
+                            .map(tokio_rustls::TlsStream::Client)
+                            .map(Conn::from)
+                    },
+                    TlsConnector::NativeTls(connector) => {
+                        let tcp = make_tcp_connection(&self.cfg, addr).await?;
+                        connector.connect(&self.tls_config.domain[..], tcp).await
+                            .map(Conn::from)
+                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+                    }
+                }
             },
             #[cfg(target_family = "unix")]
             Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),

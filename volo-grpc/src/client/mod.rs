@@ -49,11 +49,8 @@ pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     mk_lb: LB,
     _marker: PhantomData<fn(T, U)>,
 
-    #[cfg(all(feature = "rustls", not(feature = "native-tls")))]
-    tls_config: Option<volo::net::dial::ClientTlsConfig<tokio_rustls::TlsConnector>>,
-
-    #[cfg(all(feature = "native-tls", not(feature = "rustls")))]
-    tls_config: Option<volo::net::dial::ClientTlsConfig<tokio_native_tls::TlsConnector>>,
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    tls_config: Option<volo::net::dial::ClientTlsConfig>,
 }
 
 impl<C, T, U>
@@ -79,6 +76,9 @@ impl<C, T, U>
             mk_client: service_client,
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: None,
         }
     }
 }
@@ -99,6 +99,9 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
             mk_client: self.mk_client,
             mk_lb: self.mk_lb.load_balance(load_balance),
             _marker: PhantomData,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -117,6 +120,9 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
             mk_client: self.mk_client,
             mk_lb: self.mk_lb.discover(discover),
             _marker: PhantomData,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 }
@@ -289,6 +295,9 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_client: self.mk_client,
             mk_lb: mk_load_balance,
             _marker: PhantomData,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -330,6 +339,9 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -361,6 +373,9 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -392,17 +407,15 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config, 
         }
     }
 
-    #[cfg(all(feature = "rustls", not(feature = "native-tls")))]
-    pub fn tls_config(mut self, tls_config: volo::net::dial::ClientTlsConfig<tokio_rustls::TlsConnector>) -> Self {
-        self.tls_config = Some(tls_config);
-        self
-    }
-
-    #[cfg(all(feature = "native-tls", not(feature = "rustls")))]
-    pub fn tls_config(mut self, tls_config: volo::net::dial::ClientTlsConfig<tokio_native_tls::TlsConnector>) -> Self {
+    /// Sets the [`ClientTlsConfig`] for the client.
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    pub fn tls_config(mut self, tls_config: volo::net::dial::ClientTlsConfig) -> Self {
         self.tls_config = Some(tls_config);
         self
     }
