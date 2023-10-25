@@ -1,16 +1,8 @@
 #![feature(impl_trait_in_assoc_type)]
 
 pub(crate) mod dispatch;
-<<<<<<< HEAD
-<<<<<<< HEAD
 pub mod extract;
 pub mod handler;
-=======
->>>>>>> init
-=======
-pub mod extract;
-pub mod handler;
->>>>>>> handler, extractor (#221)
 pub mod layer;
 pub mod param;
 pub mod request;
@@ -71,7 +63,9 @@ where
                 version: parts.version,
                 headers: parts.headers,
                 extensions: parts.extensions,
-                params: Params { inner: Vec::with_capacity(0) },
+                params: Params {
+                    inner: Vec::with_capacity(0),
+                },
             };
             s.call(&mut cx, req).await
         }

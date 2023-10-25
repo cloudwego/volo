@@ -5,43 +5,27 @@ use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use serde::de::DeserializeOwned;
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> handler, extractor (#221)
 use crate::{
     extract::FromContext,
     response::{IntoResponse, RespBody},
     HttpContext,
 };
-<<<<<<< HEAD
-=======
-use crate::{response::RespBody, HttpContext};
->>>>>>> init
-=======
->>>>>>> handler, extractor (#221)
 
 pub trait FromRequest: Sized {
-    type FromFut<'cx>: Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
-    where
-        Self: 'cx;
-
-    fn from(cx: &HttpContext, body: Incoming) -> Self::FromFut<'_>;
+    fn from(
+        cx: &HttpContext,
+        body: Incoming,
+    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send;
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
->>>>>>> handler, extractor (#221)
 impl<T> FromRequest for T
 where
     T: FromContext,
 {
-    type FromFut<'cx> = impl Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
-        where
-            Self: 'cx;
-
-    fn from(cx: &HttpContext, _body: Incoming) -> Self::FromFut<'_> {
+    fn from(
+        cx: &HttpContext,
+        _body: Incoming,
+    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
         async move {
             match T::from_context(cx).await {
                 Ok(value) => Ok(value),
@@ -51,17 +35,11 @@ where
     }
 }
 
-<<<<<<< HEAD
-=======
->>>>>>> init
-=======
->>>>>>> handler, extractor (#221)
 impl FromRequest for Incoming {
-    type FromFut<'cx> = impl Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
-    where
-        Self: 'cx;
-
-    fn from(_cx: &HttpContext, body: Incoming) -> Self::FromFut<'_> {
+    fn from(
+        _cx: &HttpContext,
+        body: Incoming,
+    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
         async { Ok(body) }
     }
 }
@@ -69,11 +47,10 @@ impl FromRequest for Incoming {
 pub struct Json<T>(pub T);
 
 impl<T: DeserializeOwned> FromRequest for Json<T> {
-    type FromFut<'cx> = impl Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
-    where
-        Self: 'cx;
-
-    fn from(cx: &HttpContext, body: Incoming) -> Self::FromFut<'_> {
+    fn from(
+        cx: &HttpContext,
+        body: Incoming,
+    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
         async move {
             if !json_content_type(&cx.headers) {
                 return Err(Response::builder()
