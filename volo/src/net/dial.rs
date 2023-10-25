@@ -156,8 +156,8 @@ cfg_rustls_or_native_tls! {
     /// TLS config for client
     #[derive(Clone)]
     pub struct ClientTlsConfig {
-        domain: String,
-        connector: TlsConnector,
+        pub domain: String,
+        pub connector: TlsConnector,
     }
     
     #[derive(Clone)]
