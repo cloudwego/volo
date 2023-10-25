@@ -63,7 +63,9 @@ where
                 version: parts.version,
                 headers: parts.headers,
                 extensions: parts.extensions,
-                params: Params { inner: Vec::with_capacity(0) },
+                params: Params {
+                    inner: Vec::with_capacity(0),
+                },
             };
             s.call(&mut cx, req).await
         }

@@ -12,22 +12,20 @@ use crate::{
 };
 
 pub trait FromRequest: Sized {
-    type FromFut<'cx>: Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
-    where
-        Self: 'cx;
-
-    fn from(cx: &HttpContext, body: Incoming) -> Self::FromFut<'_>;
+    fn from(
+        cx: &HttpContext,
+        body: Incoming,
+    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send;
 }
 
 impl<T> FromRequest for T
 where
     T: FromContext,
 {
-    type FromFut<'cx> = impl Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
-        where
-            Self: 'cx;
-
-    fn from(cx: &HttpContext, _body: Incoming) -> Self::FromFut<'_> {
+    fn from(
+        cx: &HttpContext,
+        _body: Incoming,
+    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
         async move {
             match T::from_context(cx).await {
                 Ok(value) => Ok(value),
@@ -38,11 +36,10 @@ where
 }
 
 impl FromRequest for Incoming {
-    type FromFut<'cx> = impl Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
-    where
-        Self: 'cx;
-
-    fn from(_cx: &HttpContext, body: Incoming) -> Self::FromFut<'_> {
+    fn from(
+        _cx: &HttpContext,
+        body: Incoming,
+    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
         async { Ok(body) }
     }
 }
@@ -50,11 +47,10 @@ impl FromRequest for Incoming {
 pub struct Json<T>(pub T);
 
 impl<T: DeserializeOwned> FromRequest for Json<T> {
-    type FromFut<'cx> = impl Future<Output = Result<Self, Response<RespBody>>> + Send + 'cx
-    where
-        Self: 'cx;
-
-    fn from(cx: &HttpContext, body: Incoming) -> Self::FromFut<'_> {
+    fn from(
+        cx: &HttpContext,
+        body: Incoming,
+    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
         async move {
             if !json_content_type(&cx.headers) {
                 return Err(Response::builder()

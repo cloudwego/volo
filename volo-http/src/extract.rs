@@ -1,34 +1,38 @@
+use futures_util::Future;
 use http::{Method, Response, Uri};
 
 use crate::{response::IntoResponse, HttpContext};
 
-#[async_trait::async_trait]
 pub trait FromContext: Sized {
     type Rejection: IntoResponse;
-    async fn from_context(context: &HttpContext) -> Result<Self, Self::Rejection>;
+    fn from_context(
+        context: &HttpContext,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
-#[async_trait::async_trait]
+
 impl<T> FromContext for Option<T>
 where
     T: FromContext,
 {
     type Rejection = Response<()>; // Infallible
 
-    async fn from_context(context: &HttpContext) -> Result<Self, Self::Rejection> {
-        Ok(T::from_context(context).await.ok())
+    fn from_context(
+        context: &HttpContext,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send {
+        async move { Ok(T::from_context(context).await.ok()) }
     }
 }
 
-#[async_trait::async_trait]
 impl FromContext for Uri {
     type Rejection = Response<()>; // Infallible
 
-    async fn from_context(context: &HttpContext) -> Result<Uri, Self::Rejection> {
-        Ok(context.uri.clone())
+    fn from_context(
+        context: &HttpContext,
+    ) -> impl Future<Output = Result<Uri, Self::Rejection>> + Send {
+        async move { Ok(context.uri.clone()) }
     }
 }
 
-#[async_trait::async_trait]
 impl FromContext for Method {
     type Rejection = Response<()>;
 

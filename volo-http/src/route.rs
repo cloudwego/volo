@@ -1,18 +1,7 @@
-use std::future::Future;
-
 use http::{Method, Response, StatusCode};
 use http_body_util::Full;
-<<<<<<< HEAD
-use hyper::{
-    body::{Body, Bytes, Incoming},
-    server::conn::http1,
-};
-use motore::layer::Layer;
-use tokio::net::TcpListener;
-=======
 use hyper::body::{Bytes, Incoming};
 use motore::layer::Layer;
->>>>>>> add graceful shutdown
 
 use crate::{
     dispatch::DispatchService, request::FromRequest, response::RespBody, DynError, HttpContext,
@@ -25,49 +14,24 @@ pub struct Router {
     inner: matchit::Router<DynService>,
 }
 
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-impl Router {
-    pub fn build() -> RouterBuilder {
-        Default::default()
-    }
-}
-
->>>>>>> init
-=======
->>>>>>> layer (#224)
->>>>>>> 9636f60... downgrade hyper version
-impl motore::Service<(), (HttpContextInner, Incoming)> for Router {
-=======
 impl motore::Service<HttpContext, Incoming> for Router {
->>>>>>> downgrade hyper version
     type Response = Response<RespBody>;
 
     type Error = DynError;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
-    where
-        HttpContext: 'cx,
-        Self: 'cx;
-
-    fn call<'cx, 's>(&'s self, cx: &'cx mut HttpContext, req: Incoming) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            if let Ok(matched) = self.inner.at(cx.uri.path()) {
-                cx.params = matched.params.into();
-                matched.value.call(cx, req).await
-            } else {
-                Ok(Response::builder()
-                    .status(StatusCode::NOT_FOUND)
-                    .body(Full::new(Bytes::new()).into())
-                    .unwrap())
-            }
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut HttpContext,
+        req: Incoming,
+    ) -> Result<Self::Response, Self::Error> {
+        if let Ok(matched) = self.inner.at(cx.uri.path()) {
+            cx.params = matched.params.into();
+            matched.value.call(cx, req).await
+        } else {
+            Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body(Full::new(Bytes::new()).into())
+                .unwrap())
         }
     }
 }
@@ -108,51 +72,6 @@ impl<S> ServiceLayerExt for S {
     }
 }
 
-<<<<<<< HEAD
-#[async_trait::async_trait]
-pub trait Server {
-    async fn serve(self, addr: SocketAddr) -> Result<(), DynError>;
-}
-#[async_trait::async_trait]
-impl<S, OB> Server for S
-where
-    S: motore::Service<HttpContext, Incoming, Response = Response<OB>>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
-    OB: Body<Error = DynError> + Send + 'static,
-    <OB as Body>::Data: Send,
-    <S as motore::Service<HttpContext, Incoming>>::Error: Into<DynError>,
-{
-    async fn serve(self, addr: SocketAddr) -> Result<(), DynError> {
-        let listener = TcpListener::bind(addr).await?;
-
-        let service = self;
-        loop {
-            let s = service.clone();
-            let (stream, peer) = listener.accept().await?;
-
-            tokio::task::spawn(async move {
-                if let Err(err) = http1::Builder::new()
-                    .serve_connection(
-                        stream,
-                        MotoreService {
-                            peer: peer.into(),
-                            inner: s,
-                        },
-                    )
-                    .await
-                {
-                    tracing::warn!("error serving connection: {:?}", err);
-                }
-            });
-        }
-    }
-}
-
-=======
->>>>>>> add graceful shutdown
 #[derive(Default, Clone)]
 pub struct Route {
     options: Option<DynService>,
@@ -181,112 +100,106 @@ impl motore::Service<HttpContext, Incoming> for Route {
 
     type Error = DynError;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
-    where
-        HttpContext: 'cx,
-        Self: 'cx;
-
-    fn call<'cx, 's>(&'s self, cx: &'cx mut HttpContext, req: Incoming) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            match cx.method {
-                Method::GET => {
-                    if let Some(service) = &self.get {
-                        service.call(cx, req).await
-                    } else {
-                        Ok(Response::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body("".into())
-                            .unwrap())
-                    }
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut HttpContext,
+        req: Incoming,
+    ) -> Result<Self::Response, Self::Error> {
+        match cx.method {
+            Method::GET => {
+                if let Some(service) = &self.get {
+                    service.call(cx, req).await
+                } else {
+                    Ok(Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body("".into())
+                        .unwrap())
                 }
-                Method::POST => {
-                    if let Some(service) = &self.post {
-                        service.call(cx, req).await
-                    } else {
-                        Ok(Response::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body("".into())
-                            .unwrap())
-                    }
-                }
-                Method::PUT => {
-                    if let Some(service) = &self.put {
-                        service.call(cx, req).await
-                    } else {
-                        Ok(Response::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body("".into())
-                            .unwrap())
-                    }
-                }
-                Method::DELETE => {
-                    if let Some(service) = &self.delete {
-                        service.call(cx, req).await
-                    } else {
-                        Ok(Response::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body("".into())
-                            .unwrap())
-                    }
-                }
-                Method::HEAD => {
-                    if let Some(service) = &self.head {
-                        service.call(cx, req).await
-                    } else {
-                        Ok(Response::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body("".into())
-                            .unwrap())
-                    }
-                }
-                Method::OPTIONS => {
-                    if let Some(service) = &self.options {
-                        service.call(cx, req).await
-                    } else {
-                        Ok(Response::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body("".into())
-                            .unwrap())
-                    }
-                }
-                Method::CONNECT => {
-                    if let Some(service) = &self.connect {
-                        service.call(cx, req).await
-                    } else {
-                        Ok(Response::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body("".into())
-                            .unwrap())
-                    }
-                }
-                Method::PATCH => {
-                    if let Some(service) = &self.patch {
-                        service.call(cx, req).await
-                    } else {
-                        Ok(Response::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body("".into())
-                            .unwrap())
-                    }
-                }
-                Method::TRACE => {
-                    if let Some(service) = &self.trace {
-                        service.call(cx, req).await
-                    } else {
-                        Ok(Response::builder()
-                            .status(StatusCode::NOT_FOUND)
-                            .body("".into())
-                            .unwrap())
-                    }
-                }
-                _ => Ok(Response::builder()
-                    .status(StatusCode::METHOD_NOT_ALLOWED)
-                    .body("".into())
-                    .unwrap()),
             }
+            Method::POST => {
+                if let Some(service) = &self.post {
+                    service.call(cx, req).await
+                } else {
+                    Ok(Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body("".into())
+                        .unwrap())
+                }
+            }
+            Method::PUT => {
+                if let Some(service) = &self.put {
+                    service.call(cx, req).await
+                } else {
+                    Ok(Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body("".into())
+                        .unwrap())
+                }
+            }
+            Method::DELETE => {
+                if let Some(service) = &self.delete {
+                    service.call(cx, req).await
+                } else {
+                    Ok(Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body("".into())
+                        .unwrap())
+                }
+            }
+            Method::HEAD => {
+                if let Some(service) = &self.head {
+                    service.call(cx, req).await
+                } else {
+                    Ok(Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body("".into())
+                        .unwrap())
+                }
+            }
+            Method::OPTIONS => {
+                if let Some(service) = &self.options {
+                    service.call(cx, req).await
+                } else {
+                    Ok(Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body("".into())
+                        .unwrap())
+                }
+            }
+            Method::CONNECT => {
+                if let Some(service) = &self.connect {
+                    service.call(cx, req).await
+                } else {
+                    Ok(Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body("".into())
+                        .unwrap())
+                }
+            }
+            Method::PATCH => {
+                if let Some(service) = &self.patch {
+                    service.call(cx, req).await
+                } else {
+                    Ok(Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body("".into())
+                        .unwrap())
+                }
+            }
+            Method::TRACE => {
+                if let Some(service) = &self.trace {
+                    service.call(cx, req).await
+                } else {
+                    Ok(Response::builder()
+                        .status(StatusCode::NOT_FOUND)
+                        .body("".into())
+                        .unwrap())
+                }
+            }
+            _ => Ok(Response::builder()
+                .status(StatusCode::METHOD_NOT_ALLOWED)
+                .body("".into())
+                .unwrap()),
         }
     }
 }
