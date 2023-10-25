@@ -139,6 +139,8 @@ impl DefaultMakeTransport {
     }
 }
 
+
+
 cfg_rustls_or_native_tls! {
     /// A wrapper around [`tokio_rustls::TlsConnector`] and [`tokio_native_tls::TlsConnector`].
     #[derive(Clone)]
@@ -153,8 +155,20 @@ cfg_rustls_or_native_tls! {
         NativeTls(std::sync::Arc<tokio_native_tls::TlsConnector>),
     }
 
+    impl std::fmt::Debug for TlsConnector {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                #[cfg(feature = "rustls")]
+                Self::Rustls(_) => f.debug_tuple("Rustls").finish(),
+
+                #[cfg(feature = "native-tls")]
+                Self::NativeTls(_) => f.debug_tuple("NativeTls").finish(),
+            }
+        }
+    }
+
     /// TLS config for client
-    #[derive(Clone)]
+    #[derive(Debug, Clone)]
     pub struct ClientTlsConfig {
         pub domain: String,
         pub connector: TlsConnector,
@@ -169,16 +183,16 @@ cfg_rustls_or_native_tls! {
         }
     }
     
-    #[derive(Clone)]
-    pub struct DefaultTlsMakeTransport {
+    #[derive(Debug, Clone)]
+    pub struct TlsMakeTransport {
         cfg: Config,
         tls_config: ClientTlsConfig,
     }
     
-    impl DefaultTlsMakeTransport {
-        pub fn new(tls_config: ClientTlsConfig) -> Self {
+    impl TlsMakeTransport {
+        pub fn new(cfg: Config, tls_config: ClientTlsConfig) -> Self {
             Self {
-                cfg: Config::default(),
+                cfg,
                 tls_config,
             }
         }
@@ -217,7 +231,7 @@ cfg_rustls_or_native_tls! {
     }
     
     #[async_trait::async_trait]
-    impl MakeTransport for DefaultTlsMakeTransport {
+    impl MakeTransport for TlsMakeTransport {
         type ReadHalf = OwnedReadHalf;
     
         type WriteHalf = OwnedWriteHalf;

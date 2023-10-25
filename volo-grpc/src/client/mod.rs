@@ -457,8 +457,19 @@ where
 {
     /// Builds a new [`Client`].
     pub fn build(self) -> C::Target {
+        #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
         let transport =
             MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config));
+        #[cfg(any(feature = "rustls", feature = "native-tls"))]
+        let transport = match self.tls_config {
+            Some(tls_config) => MetaService::new(ClientTransport::new_with_tls(
+                &self.http2_config,
+                &self.rpc_config,
+                tls_config,
+            )),
+            None => MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config)),
+        };
+
         let transport = self.outer_layer.layer(BoxCloneService::new(
             self.mk_lb.make().layer(self.inner_layer.layer(transport)),
         ));

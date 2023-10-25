@@ -12,12 +12,16 @@ use hyper::client::connect::{Connected, Connection};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use volo::net::{
     conn::Conn,
-    dial::{Config, DefaultMakeTransport, MakeTransport},
+    dial::{Config, DefaultMakeTransport, MakeTransport, TlsMakeTransport, ClientTlsConfig},
     Address,
 };
 
 #[derive(Clone, Debug)]
-pub struct Connector(DefaultMakeTransport);
+pub enum Connector {
+    Default(DefaultMakeTransport),
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    Tls(TlsMakeTransport),
+}
 
 impl Connector {
     pub fn new(cfg: Option<Config>) -> Self {
@@ -27,7 +31,18 @@ impl Connector {
             mt.set_read_timeout(cfg.read_timeout);
             mt.set_write_timeout(cfg.write_timeout);
         }
-        Self(mt)
+        Self::Default(mt)
+    }
+
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    pub fn new_with_tls(cfg: Option<Config>, tls_config: ClientTlsConfig) -> Self {
+        let mut mt = TlsMakeTransport::new(cfg.unwrap_or_default(), tls_config);
+        if let Some(cfg) = cfg {
+            mt.set_connect_timeout(cfg.connect_timeout);
+            mt.set_read_timeout(cfg.read_timeout);
+            mt.set_write_timeout(cfg.write_timeout);
+        }
+        Self::Tls(mt)
     }
 }
 
@@ -49,40 +64,55 @@ impl tower::Service<hyper::Uri> for Connector {
     }
 
     fn call(&mut self, uri: hyper::Uri) -> Self::Future {
-        let mk_conn = self.0;
-        Box::pin(async move {
-            let authority = uri.authority().expect("authority required").as_str();
-            let target: Address = match uri.scheme_str() {
-                Some("http") => Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "authority must be valid SocketAddr",
-                    )
-                })?),
-                #[cfg(target_family = "unix")]
-                Some("http+unix") => {
-                    let bytes = Vec::from_hex(authority).map_err(|_| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            "authority must be hex-encoded path",
-                        )
-                    })?;
-                    Address::Unix(Cow::Owned(
-                        String::from_utf8(bytes)
-                            .map_err(|_| {
+        macro_rules! box_pin_call {
+            ($mk_conn:ident) => {
+                Box::pin(async move {
+                    let authority = uri.authority().expect("authority required").as_str();
+                    let target: Address = match uri.scheme_str() {
+                        Some("http") => Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "authority must be valid SocketAddr",
+                            )
+                        })?),
+                        #[cfg(target_family = "unix")]
+                        Some("http+unix") => {
+                            let bytes = Vec::from_hex(authority).map_err(|_| {
                                 io::Error::new(
                                     io::ErrorKind::InvalidInput,
-                                    "authority must be valid UTF-8",
+                                    "authority must be hex-encoded path",
                                 )
-                            })?
-                            .into(),
-                    ))
-                }
-                _ => unimplemented!(),
+                            })?;
+                            Address::Unix(Cow::Owned(
+                                String::from_utf8(bytes)
+                                    .map_err(|_| {
+                                        io::Error::new(
+                                            io::ErrorKind::InvalidInput,
+                                            "authority must be valid UTF-8",
+                                        )
+                                    })?
+                                    .into(),
+                            ))
+                        }
+                        _ => unimplemented!(),
+                    };
+        
+                    Ok(ConnectionWrapper($mk_conn.make_connection(target).await?))
+                })
             };
-
-            Ok(ConnectionWrapper(mk_conn.make_connection(target).await?))
-        })
+        }
+        
+        match self {
+            Self::Default(mk_conn) => {
+                let mk_conn = mk_conn.clone();
+                box_pin_call!(mk_conn)
+            },
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            Self::Tls(mk_conn) => {
+                let mk_conn = mk_conn.clone();
+                box_pin_call!(mk_conn)
+            },
+        }
     }
 }
 

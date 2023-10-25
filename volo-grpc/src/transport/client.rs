@@ -65,6 +65,37 @@ impl<U> ClientTransport<U> {
             _marker: PhantomData,
         }
     }
+
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    pub fn new_with_tls(
+        http2_config: &Http2Config,
+        rpc_config: &Config,
+        tls_config: volo::net::dial::ClientTlsConfig,
+    ) -> Self {
+        let config = volo::net::dial::Config::new(
+            rpc_config.connect_timeout,
+            rpc_config.read_timeout,
+            rpc_config.write_timeout,
+        );
+        let http = HyperClient::builder()
+            .http2_only(!http2_config.accept_http1)
+            .http2_initial_stream_window_size(http2_config.init_stream_window_size)
+            .http2_initial_connection_window_size(http2_config.init_connection_window_size)
+            .http2_max_frame_size(http2_config.max_frame_size)
+            .http2_adaptive_window(http2_config.adaptive_window)
+            .http2_keep_alive_interval(http2_config.http2_keepalive_interval)
+            .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
+            .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
+            .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
+            .http2_max_send_buf_size(http2_config.max_send_buf_size)
+            .retry_canceled_requests(http2_config.retry_canceled_requests)
+            .build(Connector::new_with_tls(Some(config), tls_config));
+
+        ClientTransport {
+            http_client: http,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<T, U> Service<ClientContext, Request<T>> for ClientTransport<U>
