@@ -13,13 +13,13 @@ categories = ["asynchronous", "network-programming", "web-programming"]
 keywords = ["async", "http"]
 
 [dependencies]
-volo = { version = "0.5", path = "../volo" }
+volo = { version = "0.8", path = "../volo" }
 hyper = { version = "=1.0.0-rc.3", features = ["server", "http1", "http2"] }
 tokio = { version = "1", features = ["full"] }
 http-body-util = "=0.1.0-rc.2"
 http = { version = "0.2" }
 matchit = { version = "0.7" }
-motore = { version = "0.3" }
+motore.workspace = true
 tracing.workspace = true
 futures-util.workspace = true
 pin-project-lite = "0.2"
@@ -28,18 +28,7 @@ serde_json = "1"
 thiserror.workspace = true
 mime = "0.3"
 serde = "1"
-<<<<<<< HEAD
-<<<<<<< HEAD
-async-trait.workspace = true
-<<<<<<< HEAD
-=======
->>>>>>> init
-=======
-async-trait.workspace = true
->>>>>>> handler, extractor (#221)
-=======
 parking_lot.workspace = true
->>>>>>> add graceful shutdown
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }

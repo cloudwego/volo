@@ -9,8 +9,7 @@ use hyper::{
     server::conn::http1,
 };
 use motore::BoxError;
-use tokio::sync::Notify;
-use tracing::{info, trace, warn};
+use tracing::{info, trace};
 use volo::net::{incoming::Incoming, MakeIncoming};
 
 use crate::{DynError, HttpContext, MotoreService};
@@ -138,7 +137,7 @@ where
         exit_mark.store(true, Ordering::Relaxed);
         drop(rx);
         let _ = tx.send(());
-        tx.closed().await;
+        let _ = tokio::time::timeout(Duration::from_secs(5), tx.closed()).await;
         Ok(())
     }
 }

@@ -22,10 +22,7 @@ where
     }
 }
 pub trait Handler<T> {
-    type Future<'r>: Future<Output = Response<RespBody>> + Send + 'r
-    where
-        Self: 'r;
-    fn call(self, context: &mut HttpContext, req: Incoming) -> Self::Future<'_>;
+    fn call(self, context: &mut HttpContext, req: Incoming) -> impl Future<Output = Response<RespBody>> + Send;
 }
 
 macro_rules! impl_handler {
@@ -41,23 +38,18 @@ macro_rules! impl_handler {
             for<'r> $last: FromRequest + Send + 'r,
             Res: IntoResponse,
         {
-            type Future<'r> = impl Future<Output=Response<RespBody>> + Send + 'r
-                where Self: 'r;
-
-            fn call(self, context: &mut HttpContext, req: Incoming) -> Self::Future<'_> {
-                async move {
-                    $(
-                        let $ty = match $ty::from_context(context).await {
-                            Ok(value) => value,
-                            Err(rejection) => return rejection.into_response(),
-                        };
-                    )*
-                    let $last = match $last::from(context, req).await {
+            async fn call(self, context: &mut HttpContext, req: Incoming) -> Response<RespBody> {
+                $(
+                    let $ty = match $ty::from_context(context).await {
                         Ok(value) => value,
-                        Err(rejection) => return rejection,
+                        Err(rejection) => return rejection.into_response(),
                     };
-                    self($($ty,)* $last).await.into_response()
-                }
+                )*
+                let $last = match $last::from(context, req).await {
+                    Ok(value) => value,
+                    Err(rejection) => return rejection,
+                };
+                self($($ty,)* $last).await.into_response()
             }
         }
     };
@@ -109,15 +101,12 @@ where
 {
     type Response = Response<RespBody>;
     type Error = http::Error;
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
-        where
-            HttpContext: 'cx,
-            Self: 'cx;
 
-    fn call<'cx, 's>(&'s self, cx: &'cx mut HttpContext, req: Incoming) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move { Ok(self.h.clone().call(cx, req).await) }
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut HttpContext,
+        req: Incoming,
+    ) -> Result<Self::Response, Self::Error> {
+        Ok(self.h.clone().call(cx, req).await)
     }
 }

@@ -1,4 +1,4 @@
-use std::{future::Future, marker::PhantomData};
+use std::marker::PhantomData;
 
 use http::Response;
 use hyper::body::Incoming;
@@ -41,34 +41,27 @@ where
     S::Error: std::error::Error + Send + Sync + 'static,
     OB: Into<RespBody>,
     IB: FromRequest + Send,
-    for<'cx> <IB as FromRequest>::FromFut<'cx>: std::marker::Send,
 {
     type Response = Response<RespBody>;
 
     type Error = DynError;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
-    where
-        HttpContext: 'cx,
-        Self: 'cx;
-
-    fn call<'cx, 's>(&'s self, cx: &'cx mut HttpContext, req: Incoming) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            match IB::from(&*cx, req).await {
-                Ok(body) => self
-                    .inner
-                    .call(cx, body)
-                    .await
-                    .map(|resp| {
-                        let (parts, body) = resp.into_parts();
-                        Response::from_parts(parts, body.into())
-                    })
-                    .map_err(|e| Box::new(e) as DynError),
-                Err(response) => Ok(response),
-            }
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut HttpContext,
+        req: Incoming,
+    ) -> Result<Self::Response, Self::Error> {
+        match IB::from(&*cx, req).await {
+            Ok(body) => self
+                .inner
+                .call(cx, body)
+                .await
+                .map(|resp| {
+                    let (parts, body) = resp.into_parts();
+                    Response::from_parts(parts, body.into())
+                })
+                .map_err(|e| Box::new(e) as DynError),
+            Err(response) => Ok(response),
         }
     }
 }
