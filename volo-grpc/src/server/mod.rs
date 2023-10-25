@@ -37,6 +37,7 @@ pub struct Server<L> {
     http2_config: Http2Config,
     router: Router,
 
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
     tls_config: Option<ServerTlsConfig>,
 }
 
@@ -59,6 +60,11 @@ impl Server<Identity> {
 }
 
 impl<L> Server<L> {
+    /// Sets the TLS configuration for the server.
+    /// 
+    /// If not set, the server will not use TLS.
+    #[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
     pub fn tls_config(mut self, value: impl Into<ServerTlsConfig>) -> Self {
         self.tls_config = Some(value.into());
         self

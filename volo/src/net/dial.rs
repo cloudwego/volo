@@ -141,26 +141,38 @@ impl DefaultMakeTransport {
 }
 
 /// A wrapper around [`tokio_rustls::TlsConnector`] and [`tokio_native_tls::TlsConnector`].
+#[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
+#[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[derive(Clone)]
 pub enum TlsConnector {
+    #[doc(cfg(feature = "rustls"))]
     #[cfg(feature = "rustls")]
     Rustls(tokio_rustls::TlsConnector),
+
+    /// This takes an `Arc` because `tokio_native_tls::TlsConnector` does not internally use `Arc`
+    #[doc(cfg(feature = "native-tls"))]
     #[cfg(feature = "native-tls")]
-    NativeTls(tokio_native_tls::TlsConnector),
+    NativeTls(std::sync::Arc<tokio_native_tls::TlsConnector>),
 }
 
 /// TLS config for client
+#[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[derive(Clone)]
 pub struct ClientTlsConfig {
     domain: String,
     connector: TlsConnector,
 }
 
+#[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
+#[derive(Clone)]
 pub struct DefaultTlsMakeTransport {
     cfg: Config,
     tls_config: ClientTlsConfig,
 }
 
+#[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
 #[cfg(any(feature = "rustls", feature = "native-tls"))]
 impl DefaultTlsMakeTransport {
     pub fn new(tls_config: ClientTlsConfig) -> Self {
@@ -194,5 +206,30 @@ impl DefaultTlsMakeTransport {
             #[cfg(target_family = "unix")]
             Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl MakeTransport for DefaultTlsMakeTransport {
+    type ReadHalf = OwnedReadHalf;
+
+    type WriteHalf = OwnedWriteHalf;
+
+    async fn make_transport(&self, addr: Address) -> io::Result<(Self::ReadHalf, Self::WriteHalf)> {
+        let conn = self.make_connection(addr).await?;
+        let (read, write) = conn.stream.into_split();
+        Ok((read, write))
+    }
+
+    fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
+        self.cfg = self.cfg.with_connect_timeout(timeout);
+    }
+
+    fn set_read_timeout(&mut self, timeout: Option<Duration>) {
+        self.cfg = self.cfg.with_read_timeout(timeout);
+    }
+
+    fn set_write_timeout(&mut self, timeout: Option<Duration>) {
+        self.cfg = self.cfg.with_write_timeout(timeout);
     }
 }
