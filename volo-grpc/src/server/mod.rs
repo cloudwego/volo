@@ -16,7 +16,7 @@ use motore::{
 pub use service::ServiceBuilder;
 use volo::{
     net::{
-        conn::{Conn, ConnStream},
+        conn::Conn,
         incoming::Incoming,
     },
     spawn,
@@ -27,9 +27,14 @@ use crate::{
     body::Body,
     context::ServerContext,
     server::meta::MetaService,
-    transport::tls::{ServerTlsConfig, TlsAcceptor},
     Request, Response, Status,
 };
+
+cfg_rustls_or_native_tls! {
+    use volo::net::conn::ConnStream;
+
+    use crate::transport::{ServerTlsConfig, TlsAcceptor};
+}
 
 /// A trait to provide a static reference to the service's
 /// name. This is used for routing service's within the router.
@@ -289,27 +294,32 @@ impl<L> Server<L> {
                         Some(c) => c,
                         None => return Ok(()),
                     };
-                    let info = conn.info;
-                    // Only perform TLS handshake if either rustls or native-tls is configured
-                    let conn: Conn = match (conn.stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
-                        (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::Rustls(tls_acceptor))) => {
-                            let stream = tls_acceptor.accept(tcp).await?;
-                            Conn {
-                                stream: ConnStream::Rustls(tokio_rustls::TlsStream::Server(stream)),
+                    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+                    let conn: Conn = {
+                        let info = conn.info;
+                        // Only perform TLS handshake if either rustls or native-tls is configured
+                        match (conn.stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
+                            #[cfg(feature = "rustls")]
+                            (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::Rustls(tls_acceptor))) => {
+                                let stream = tls_acceptor.accept(tcp).await?;
+                                Conn {
+                                    stream: ConnStream::Rustls(tokio_rustls::TlsStream::Server(stream)),
+                                    info
+                                }
+                            },
+                            #[cfg(feature = "native-tls")]
+                            (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::NativeTls(tls_acceptor))) => {
+                                let stream = tls_acceptor.accept(tcp).await?;
+                                Conn {
+                                    stream: ConnStream::NativeTls(stream),
+                                    info,
+                                }
+                            },
+                            (stream, _) => Conn {
+                                stream,
                                 info
-                            }
-                        },
-                        (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::NativeTls(tls_acceptor))) => {
-                            let stream = tls_acceptor.accept(tcp).await?;
-                            Conn {
-                                stream: ConnStream::NativeTls(stream),
-                                info,
-                            }
-                        },
-                        (stream, _) => Conn {
-                            stream,
-                            info
-                        },
+                            },
+                        }
                     };
 
                     tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);

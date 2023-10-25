@@ -180,6 +180,7 @@ cfg_rustls_or_native_tls! {
                     let tcp = make_tcp_connection(&self.cfg, addr).await?;
     
                     match &self.tls_config.connector {
+                        #[cfg(feature = "rustls")]
                         TlsConnector::Rustls(connector) => {
                             let domain = librustls::ServerName::try_from(&self.tls_config.domain[..])
                                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
@@ -189,6 +190,7 @@ cfg_rustls_or_native_tls! {
                                 .map(tokio_rustls::TlsStream::Client)
                                 .map(Conn::from)
                         }
+                        #[cfg(feature = "native-tls")]
                         TlsConnector::NativeTls(connector) => {
                             let tcp = make_tcp_connection(&self.cfg, addr).await?;
                             connector
