@@ -116,9 +116,12 @@ impl Stream for DefaultIncoming {
 #[cfg(target_family = "unix")]
 mod unix_helper {
 
+    #[cfg(target_os = "linux")]
     use std::{
         fs::File,
         io::{BufRead, BufReader},
+    };
+    use std::{
         net::{SocketAddr, TcpListener},
         os::{
             fd::{AsRawFd, FromRawFd, IntoRawFd},
@@ -169,6 +172,7 @@ mod unix_helper {
         (values[0], values[1])
     }
 
+    #[cfg(target_os = "linux")]
     pub fn split_at_bytes(s: &str, t: &str) -> Vec<String> {
         let mut result = Vec::new();
         let mut last = 0;
@@ -186,6 +190,7 @@ mod unix_helper {
         result
     }
 
+    #[cfg(target_os = "linux")]
     pub fn get_fields(s: &str) -> Vec<String> {
         split_at_bytes(s, " \r\t\n")
     }
