@@ -85,8 +85,8 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 pilota.workspace = true
-volo = { path = "../volo", features = ["rustls"] } # feature "rustls" is only needed for the tls example
-volo-grpc = { path = "../volo-grpc", features = ["rustls"] } # feature "rustls" is only needed for the tls example
+volo = { path = "../volo" }
+volo-grpc = { path = "../volo-grpc" }
 volo-thrift = { path = "../volo-thrift" }
 
 volo-gen = { path = "./volo-gen" }
@@ -97,4 +97,4 @@ rustls-pemfile = { version = "1", optional = true }
 tokio-rustls = { version = "0.24", optional = true }
 
 [features]
-tls = ["rustls", "rustls-pemfile", "tokio-rustls"]
+tls = ["rustls", "rustls-pemfile", "tokio-rustls", "volo/rustls", "volo-grpc/rustls"]
