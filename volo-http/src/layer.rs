@@ -1,5 +1,3 @@
-use std::future::Future;
-
 use http::{Method, Request, Response, StatusCode};
 use http_body_util::Full;
 use hyper::body::{Bytes, Incoming};
@@ -79,27 +77,17 @@ where
 
     type Error = S::Error;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
-    where
-        HttpContext: 'cx,
-        Self: 'cx;
-
-    fn call<'cx, 's>(
+    async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut HttpContext,
         req: Request<Incoming>,
-    ) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            if let Err(status) = (self.f)(cx, &req) {
-                return Ok(Response::builder()
-                    .status(status)
-                    .body(Full::new(Bytes::new()))
-                    .unwrap());
-            }
-            self.service.call(cx, req).await
+    ) -> Result<Self::Response, Self::Error> {
+        if let Err(status) = (self.f)(cx, &req) {
+            return Ok(Response::builder()
+                .status(status)
+                .body(Full::new(Bytes::new()))
+                .unwrap());
         }
+        self.service.call(cx, req).await
     }
 }

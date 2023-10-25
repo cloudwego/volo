@@ -8,34 +8,8 @@ use serde::{Deserialize, Serialize};
 use volo_http::{
     handler::HandlerService,
     request::Json,
-<<<<<<< HEAD
-    route::{Route, Router, Server, ServiceLayerExt},
-<<<<<<< HEAD
-=======
-=======
-use http::{Response, StatusCode};
-=======
-use http::{Method, Response, StatusCode, Uri};
->>>>>>> handler, extractor (#221)
-use hyper::body::Incoming;
-use motore::service::service_fn;
-=======
->>>>>>> layer (#224)
-use serde::{Deserialize, Serialize};
-use volo_http::{
-    handler::HandlerService,
-    request::Json,
-<<<<<<< HEAD
-    route::{Route, Router},
->>>>>>> init
-=======
-    route::{Route, Router, Server, ServiceLayerExt},
->>>>>>> layer (#224)
-=======
     route::{Route, Router, ServiceLayerExt},
     server::Server,
->>>>>>> add graceful shutdown
->>>>>>> de495fd... add graceful shutdown
     HttpContext,
 };
 
@@ -113,23 +87,10 @@ async fn main() {
                 .post(HandlerService::new(test))
                 .build(),
         )
-<<<<<<< HEAD
-=======
-<<<<<<< HEAD
-<<<<<<< HEAD
->>>>>>> handler, extractor (#221)
-=======
->>>>>>> de495fd... add graceful shutdown
-        .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1))))
-        .serve(SocketAddr::from(([127, 0, 0, 1], 3000)))
-        .await
-        .unwrap();
-=======
         .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1))));
 
     let addr: SocketAddr = "[::]:9091".parse().unwrap();
     let addr = volo::net::Address::from(addr);
 
     Server::new(app).run(addr).await.unwrap();
->>>>>>> add graceful shutdown
 }
