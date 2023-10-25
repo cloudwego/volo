@@ -62,7 +62,7 @@ tokio-native-tls = { version = "0.3", optional = true }
 tracing-subscriber.workspace = true
 
 [features]
-default = ["rustls", "native-tls"]
+default = []
 
 rustls = ["tokio-rustls"]
 native-tls = ["tokio-native-tls"]

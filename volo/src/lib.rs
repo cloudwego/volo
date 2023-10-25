@@ -5,6 +5,9 @@
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 #![feature(doc_cfg)]
 
+#[macro_use]
+mod cfg;
+
 pub use async_trait::async_trait;
 pub use motore::{layer, layer::Layer, service, Service};
 pub use tokio::main;

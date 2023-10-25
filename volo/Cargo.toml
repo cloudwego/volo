@@ -48,7 +48,7 @@ tokio-rustls = { version = "0.24", optional = true }
 tokio-native-tls = { version = "0.3", optional = true }
 
 [features]
-default = ["rustls", "native-tls"]
+default = []
 
 rustls = ["tokio-rustls", "librustls"]
 native-tls = ["tokio-native-tls"]

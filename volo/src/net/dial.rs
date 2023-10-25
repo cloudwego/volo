@@ -139,100 +139,94 @@ impl DefaultMakeTransport {
     }
 }
 
-/// A wrapper around [`tokio_rustls::TlsConnector`] and [`tokio_native_tls::TlsConnector`].
-#[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
-#[derive(Clone)]
-pub enum TlsConnector {
-    #[doc(cfg(feature = "rustls"))]
-    #[cfg(feature = "rustls")]
-    Rustls(tokio_rustls::TlsConnector),
-
-    /// This takes an `Arc` because `tokio_native_tls::TlsConnector` does not internally use `Arc`
-    #[doc(cfg(feature = "native-tls"))]
-    #[cfg(feature = "native-tls")]
-    NativeTls(std::sync::Arc<tokio_native_tls::TlsConnector>),
-}
-
-/// TLS config for client
-#[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
-#[derive(Clone)]
-pub struct ClientTlsConfig {
-    domain: String,
-    connector: TlsConnector,
-}
-
-#[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
-#[derive(Clone)]
-pub struct DefaultTlsMakeTransport {
-    cfg: Config,
-    tls_config: ClientTlsConfig,
-}
-
-#[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
-#[cfg(any(feature = "rustls", feature = "native-tls"))]
-impl DefaultTlsMakeTransport {
-    pub fn new(tls_config: ClientTlsConfig) -> Self {
-        Self {
-            cfg: Config::default(),
-            tls_config,
-        }
+cfg_rustls_or_native_tls! {
+    /// A wrapper around [`tokio_rustls::TlsConnector`] and [`tokio_native_tls::TlsConnector`].
+    #[derive(Clone)]
+    pub enum TlsConnector {
+        #[doc(cfg(feature = "rustls"))]
+        #[cfg(feature = "rustls")]
+        Rustls(tokio_rustls::TlsConnector),
+    
+        /// This takes an `Arc` because `tokio_native_tls::TlsConnector` does not internally use `Arc`
+        #[doc(cfg(feature = "native-tls"))]
+        #[cfg(feature = "native-tls")]
+        NativeTls(std::sync::Arc<tokio_native_tls::TlsConnector>),
     }
 
-    pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
-        match addr {
-            Address::Ip(addr) => {
-                let tcp = make_tcp_connection(&self.cfg, addr).await?;
-
-                match &self.tls_config.connector {
-                    TlsConnector::Rustls(connector) => {
-                        let domain = librustls::ServerName::try_from(&self.tls_config.domain[..])
-                            .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
-                        connector
-                            .connect(domain, tcp)
-                            .await
-                            .map(tokio_rustls::TlsStream::Client)
-                            .map(Conn::from)
-                    }
-                    TlsConnector::NativeTls(connector) => {
-                        let tcp = make_tcp_connection(&self.cfg, addr).await?;
-                        connector
-                            .connect(&self.tls_config.domain[..], tcp)
-                            .await
-                            .map(Conn::from)
-                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+    /// TLS config for client
+    #[derive(Clone)]
+    pub struct ClientTlsConfig {
+        domain: String,
+        connector: TlsConnector,
+    }
+    
+    #[derive(Clone)]
+    pub struct DefaultTlsMakeTransport {
+        cfg: Config,
+        tls_config: ClientTlsConfig,
+    }
+    
+    impl DefaultTlsMakeTransport {
+        pub fn new(tls_config: ClientTlsConfig) -> Self {
+            Self {
+                cfg: Config::default(),
+                tls_config,
+            }
+        }
+    
+        pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
+            match addr {
+                Address::Ip(addr) => {
+                    let tcp = make_tcp_connection(&self.cfg, addr).await?;
+    
+                    match &self.tls_config.connector {
+                        TlsConnector::Rustls(connector) => {
+                            let domain = librustls::ServerName::try_from(&self.tls_config.domain[..])
+                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+                            connector
+                                .connect(domain, tcp)
+                                .await
+                                .map(tokio_rustls::TlsStream::Client)
+                                .map(Conn::from)
+                        }
+                        TlsConnector::NativeTls(connector) => {
+                            let tcp = make_tcp_connection(&self.cfg, addr).await?;
+                            connector
+                                .connect(&self.tls_config.domain[..], tcp)
+                                .await
+                                .map(Conn::from)
+                                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+                        }
                     }
                 }
+                #[cfg(target_family = "unix")]
+                Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
             }
-            #[cfg(target_family = "unix")]
-            Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
         }
     }
-}
-
-#[async_trait::async_trait]
-impl MakeTransport for DefaultTlsMakeTransport {
-    type ReadHalf = OwnedReadHalf;
-
-    type WriteHalf = OwnedWriteHalf;
-
-    async fn make_transport(&self, addr: Address) -> io::Result<(Self::ReadHalf, Self::WriteHalf)> {
-        let conn = self.make_connection(addr).await?;
-        let (read, write) = conn.stream.into_split();
-        Ok((read, write))
-    }
-
-    fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
-        self.cfg = self.cfg.with_connect_timeout(timeout);
-    }
-
-    fn set_read_timeout(&mut self, timeout: Option<Duration>) {
-        self.cfg = self.cfg.with_read_timeout(timeout);
-    }
-
-    fn set_write_timeout(&mut self, timeout: Option<Duration>) {
-        self.cfg = self.cfg.with_write_timeout(timeout);
+    
+    #[async_trait::async_trait]
+    impl MakeTransport for DefaultTlsMakeTransport {
+        type ReadHalf = OwnedReadHalf;
+    
+        type WriteHalf = OwnedWriteHalf;
+    
+        async fn make_transport(&self, addr: Address) -> io::Result<(Self::ReadHalf, Self::WriteHalf)> {
+            let conn = self.make_connection(addr).await?;
+            let (read, write) = conn.stream.into_split();
+            Ok((read, write))
+        }
+    
+        fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
+            self.cfg = self.cfg.with_connect_timeout(timeout);
+        }
+    
+        fn set_read_timeout(&mut self, timeout: Option<Duration>) {
+            self.cfg = self.cfg.with_read_timeout(timeout);
+        }
+    
+        fn set_write_timeout(&mut self, timeout: Option<Duration>) {
+            self.cfg = self.cfg.with_write_timeout(timeout);
+        }
     }
 }

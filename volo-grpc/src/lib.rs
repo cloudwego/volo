@@ -5,6 +5,9 @@
 #![feature(impl_trait_in_assoc_type)]
 #![feature(doc_cfg)]
 
+#[macro_use]
+mod cfg;
+
 pub mod body;
 pub mod client;
 pub mod codec;

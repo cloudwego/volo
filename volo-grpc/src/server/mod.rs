@@ -64,20 +64,22 @@ impl Server<Identity> {
             layer: Identity::new(),
             http2_config: Http2Config::default(),
             router: Router::new(),
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
             tls_config: None,
         }
     }
 }
 
 impl<L> Server<L> {
-    /// Sets the TLS configuration for the server.
-    ///
-    /// If not set, the server will not use TLS.
-    #[doc(cfg(any(feature = "rustls", feature = "native-tls")))]
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
-    pub fn tls_config(mut self, value: impl Into<ServerTlsConfig>) -> Self {
-        self.tls_config = Some(value.into());
-        self
+    cfg_rustls_or_native_tls! {
+        /// Sets the TLS configuration for the server.
+        ///
+        /// If not set, the server will not use TLS.
+        pub fn tls_config(mut self, value: impl Into<ServerTlsConfig>) -> Self {
+            self.tls_config = Some(value.into());
+            self
+        }
     }
 
     /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
@@ -198,6 +200,7 @@ impl<L> Server<L> {
             layer: Stack::new(layer, self.layer),
             http2_config: self.http2_config,
             router: self.router,
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
             tls_config: self.tls_config,
         }
     }
@@ -218,6 +221,7 @@ impl<L> Server<L> {
             layer: Stack::new(self.layer, layer),
             http2_config: self.http2_config,
             router: self.router,
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
             tls_config: self.tls_config,
         }
     }
@@ -236,6 +240,7 @@ impl<L> Server<L> {
             layer: self.layer,
             http2_config: self.http2_config,
             router: self.router.add_service(s),
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
             tls_config: self.tls_config,
         }
     }
