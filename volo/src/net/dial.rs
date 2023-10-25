@@ -159,6 +159,15 @@ cfg_rustls_or_native_tls! {
         pub domain: String,
         pub connector: TlsConnector,
     }
+
+    impl ClientTlsConfig {
+        pub fn new(domain: impl Into<String>, connector: impl Into<TlsConnector>) -> Self {
+            Self {
+                domain: domain.into(),
+                connector: connector.into(),
+            }
+        }
+    }
     
     #[derive(Clone)]
     pub struct DefaultTlsMakeTransport {
@@ -229,6 +238,28 @@ cfg_rustls_or_native_tls! {
     
         fn set_write_timeout(&mut self, timeout: Option<Duration>) {
             self.cfg = self.cfg.with_write_timeout(timeout);
+        }
+    }
+}
+
+cfg_rustls! {
+    impl From<tokio_rustls::TlsConnector> for TlsConnector {
+        fn from(value: tokio_rustls::TlsConnector) -> Self {
+            Self::Rustls(value)
+        }
+    }
+}
+
+cfg_native_tls! {
+    impl From<std::sync::Arc<tokio_native_tls::TlsConnector>> for TlsConnector {
+        fn from(value: std::sync::Arc<tokio_native_tls::TlsConnector>) -> Self {
+            Self::NativeTls(value)
+        }
+    }
+    
+    impl From<tokio_native_tls::TlsConnector> for TlsConnector {
+        fn from(value: tokio_native_tls::TlsConnector) -> Self {
+            Self::NativeTls(std::sync::Arc::new(value))
         }
     }
 }
