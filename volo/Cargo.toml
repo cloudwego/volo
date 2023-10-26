@@ -48,9 +48,9 @@ tower.workspace = true
 tracing.workspace = true
 
 # Optional dependencies
-librustls = { package = "rustls", version = "0.21", optional = true }
-tokio-rustls = { version = "0.24", optional = true }
-tokio-native-tls = { version = "0.3", optional = true }
+librustls = { workspace = true, optional = true }
+tokio-rustls = { workspace = true, optional = true }
+tokio-native-tls = { workspace = true, optional = true }
 
 [features]
 default = []

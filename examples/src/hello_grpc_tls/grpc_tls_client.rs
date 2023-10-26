@@ -3,7 +3,7 @@
 use std::{net::SocketAddr, path::Path, sync::Arc};
 
 use pilota::FastStr;
-use rustls::{Certificate, RootCertStore};
+use librustls::{Certificate, RootCertStore};
 use rustls_pemfile::certs;
 use volo::net::dial::ClientTlsConfig;
 

@@ -91,9 +91,9 @@ volo-thrift = { path = "../volo-thrift" }
 volo-gen = { path = "./volo-gen" }
 
 # TLS dependencies
-rustls = { workspace = true, optional = true}
+librustls = { workspace = true, optional = true}
 rustls-pemfile = { workspace = true, optional = true }
 tokio-rustls = { workspace = true, optional = true }
 
 [features]
-tls = ["rustls", "rustls-pemfile", "tokio-rustls", "volo/rustls", "volo-grpc/rustls"]
+tls = ["librustls", "rustls-pemfile", "tokio-rustls", "volo/rustls", "volo-grpc/rustls"]

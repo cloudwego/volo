@@ -101,7 +101,7 @@ url_path = "0.1"
 walkdir = "2"
 
 # Optional dependencies
-rustls = "0.21"
+librustls = { package = "rustls", version = "0.21" }
 rustls-pemfile = "1"
 tokio-rustls = "0.24"
 tokio-native-tls = "0.3"
