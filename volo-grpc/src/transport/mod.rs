@@ -2,7 +2,10 @@
 
 mod client;
 mod connect;
-mod tls;
+
+cfg_rustls_or_native_tls! {
+    mod tls;
+    pub use tls::{ServerTlsConfig, TlsAcceptor};
+}
 
 pub use client::ClientTransport;
-pub use tls::{ServerTlsConfig, TlsAcceptor};
