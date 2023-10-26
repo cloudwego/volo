@@ -79,6 +79,8 @@ impl tower::Service<hyper::Uri> for Connector {
                         })?),
                         #[cfg(target_family = "unix")]
                         Some("http+unix") => {
+                            use hex::FromHex;
+
                             let bytes = Vec::from_hex(authority).map_err(|_| {
                                 io::Error::new(
                                     io::ErrorKind::InvalidInput,
