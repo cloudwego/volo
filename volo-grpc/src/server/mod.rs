@@ -15,19 +15,13 @@ use motore::{
 };
 pub use service::ServiceBuilder;
 use volo::{
-    net::{
-        conn::Conn,
-        incoming::Incoming,
-    },
+    net::{conn::Conn, incoming::Incoming},
     spawn,
 };
 
 pub use self::router::Router;
 use crate::{
-    body::Body,
-    context::ServerContext,
-    server::meta::MetaService,
-    Request, Response, Status,
+    body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status,
 };
 
 cfg_rustls_or_native_tls! {

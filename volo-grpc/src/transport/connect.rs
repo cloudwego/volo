@@ -71,12 +71,14 @@ impl tower::Service<hyper::Uri> for Connector {
                 Box::pin(async move {
                     let authority = uri.authority().expect("authority required").as_str();
                     let target: Address = match uri.scheme_str() {
-                        Some("http") => Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidInput,
-                                "authority must be valid SocketAddr",
-                            )
-                        })?),
+                        Some("http") => {
+                            Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
+                                io::Error::new(
+                                    io::ErrorKind::InvalidInput,
+                                    "authority must be valid SocketAddr",
+                                )
+                            })?)
+                        }
                         #[cfg(target_family = "unix")]
                         Some("http+unix") => {
                             use hex::FromHex;
@@ -100,22 +102,22 @@ impl tower::Service<hyper::Uri> for Connector {
                         }
                         _ => unimplemented!(),
                     };
-        
+
                     Ok(ConnectionWrapper($mk_conn.make_connection(target).await?))
                 })
             };
         }
-        
+
         match self {
             Self::Default(mk_conn) => {
                 let mk_conn = mk_conn.clone();
                 box_pin_call!(mk_conn)
-            },
+            }
             #[cfg(any(feature = "rustls", feature = "native-tls"))]
             Self::Tls(mk_conn) => {
                 let mk_conn = mk_conn.clone();
                 box_pin_call!(mk_conn)
-            },
+            }
         }
     }
 }
