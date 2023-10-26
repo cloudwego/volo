@@ -11,7 +11,6 @@ mod meta;
 use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
 
 pub use callopt::CallOpt;
-use futures::Future;
 pub use meta::MetaService;
 use motore::{
     layer::{Identity, Layer, Stack},
@@ -430,13 +429,10 @@ where
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Error:
         Into<Status>,
-    for<'cx> <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Future<'cx>:
-        Send,
     IL: Layer<MetaService<ClientTransport<U>>>,
     IL::Service:
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <IL::Service as Service<ClientContext, Request<T>>>::Error: Into<Status>,
-    for<'cx> <IL::Service as Service<ClientContext, Request<T>>>::Future<'cx>: Send,
     OL:
         Layer<
             BoxCloneService<
@@ -452,7 +448,6 @@ where
     OL::Service:
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <OL::Service as Service<ClientContext, Request<T>>>::Error: Send + Into<Status>,
-    for<'cx> <OL::Service as Service<ClientContext, Request<T>>>::Future<'cx>: Send,
     T: 'static + Send,
 {
     /// Builds a new [`Client`].
@@ -551,17 +546,13 @@ macro_rules! impl_client {
         {
             type Response = S::Response;
             type Error = S::Error;
-            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
-            fn call<'cx, 's>(
+            async fn call<'s, 'cx>(
                 &'s $self,
                 $cx: &'cx mut crate::context::ClientContext,
                 $req: Req,
-            ) -> Self::Future<'cx>
-            where
-                's: 'cx,
-            {
-                async move { $e }
+            ) -> Result<Self::Response, Self::Error> {
+                $e
             }
         }
 
@@ -578,17 +569,13 @@ macro_rules! impl_client {
         {
             type Response = S::Response;
             type Error = S::Error;
-            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
-            fn call<'cx>(
+            async fn call<'cx>(
                 $self,
                 $cx: &'cx mut crate::context::ClientContext,
                 $req: Req,
-            ) -> Self::Future<'cx>
-            where
-                Self: 'cx,
-            {
-                async move { $e }
+            ) -> Result<Self::Response, Self::Error> {
+                $e
             }
         }
     };

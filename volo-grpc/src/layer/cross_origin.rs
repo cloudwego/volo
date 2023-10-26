@@ -1,4 +1,3 @@
-use futures::Future;
 use http::{Request, Uri};
 use motore::Service;
 
@@ -18,20 +17,18 @@ impl<T> AddOrigin<T> {
 
 impl<T, ReqBody, Cx> Service<Cx, Request<ReqBody>> for AddOrigin<T>
 where
-    T: Service<Cx, Request<ReqBody>>,
-    ReqBody: 'static,
+    T: Service<Cx, Request<ReqBody>> + Send + Sync,
+    ReqBody: Send + 'static,
+    Cx: Send,
 {
     type Response = T::Response;
     type Error = T::Error;
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx
-    where
-        Self: 'cx,
-        Cx: 'cx;
 
-    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, req: Request<ReqBody>) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut Cx,
+        req: Request<ReqBody>,
+    ) -> Result<Self::Response, Self::Error> {
         // split the header and body
         let (mut head, body) = req.into_parts();
 
@@ -49,6 +46,6 @@ where
         let request = Request::from_parts(head, body);
 
         // call inner Service
-        self.inner.call(cx, request)
+        self.inner.call(cx, request).await
     }
 }

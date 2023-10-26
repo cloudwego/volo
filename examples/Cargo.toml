@@ -76,7 +76,6 @@ path = "src/unknown/thrift_client.rs"
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
-async-trait.workspace = true
 lazy_static.workspace = true
 metainfo.workspace = true
 tokio = { workspace = true, features = ["full"] }

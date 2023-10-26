@@ -1,6 +1,6 @@
 [package]
 name = "volo-grpc"
-version = "0.6.0"
+version = "0.8.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -19,13 +19,12 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 pilota.workspace = true
-volo = { version = "0.5", path = "../volo" }
+volo = { version = "0.8", path = "../volo" }
 motore = { workspace = true, features = ["tower"] }
 metainfo.workspace = true
 
 anyhow.workspace = true
 async-stream.workspace = true
-async-trait.workspace = true
 base64.workspace = true
 bytes.workspace = true
 fxhash.workspace = true

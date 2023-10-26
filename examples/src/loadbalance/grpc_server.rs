@@ -1,5 +1,3 @@
-#![feature(impl_trait_in_assoc_type)]
-
 use std::net::SocketAddr;
 
 use tokio::task;
@@ -16,7 +14,6 @@ impl S {
     }
 }
 
-#[volo::async_trait]
 impl volo_gen::proto_gen::hello::Greeter for S {
     async fn say_hello(
         &self,

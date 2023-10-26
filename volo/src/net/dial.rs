@@ -1,4 +1,4 @@
-use std::{io, net::SocketAddr};
+use std::{io, net::SocketAddr, future::Future};
 
 use socket2::{Domain, Protocol, Socket, Type};
 #[cfg(target_family = "unix")]
@@ -15,12 +15,14 @@ use super::{
 };
 
 /// [`MakeTransport`] creates an [`AsyncRead`] and an [`AsyncWrite`] for the given [`Address`].
-#[async_trait::async_trait]
 pub trait MakeTransport: Clone + Send + Sync + 'static {
     type ReadHalf: AsyncRead + Send + Sync + Unpin + 'static;
     type WriteHalf: AsyncWrite + Send + Sync + Unpin + 'static;
 
-    async fn make_transport(&self, addr: Address) -> io::Result<(Self::ReadHalf, Self::WriteHalf)>;
+    fn make_transport(
+        &self,
+        addr: Address,
+    ) -> impl Future<Output = io::Result<(Self::ReadHalf, Self::WriteHalf)>> + Send;
     fn set_connect_timeout(&mut self, timeout: Option<Duration>);
     fn set_read_timeout(&mut self, timeout: Option<Duration>);
     fn set_write_timeout(&mut self, timeout: Option<Duration>);
@@ -73,7 +75,6 @@ impl DefaultMakeTransport {
     }
 }
 
-#[async_trait::async_trait]
 impl MakeTransport for DefaultMakeTransport {
     type ReadHalf = OwnedReadHalf;
 
@@ -230,7 +231,6 @@ cfg_rustls_or_native_tls! {
         }
     }
     
-    #[async_trait::async_trait]
     impl MakeTransport for TlsMakeTransport {
         type ReadHalf = OwnedReadHalf;
     

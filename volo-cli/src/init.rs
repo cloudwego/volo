@@ -12,6 +12,7 @@ use crate::command::CliCommand;
 #[derive(Parser, Debug)]
 #[command(about = "init your project")]
 pub struct Init {
+    #[arg(help = "The name of project")]
     pub name: String,
     #[arg(
         short = 'g',
@@ -182,24 +183,21 @@ impl CliCommand for Init {
     fn run(&self, cx: crate::context::Context) -> anyhow::Result<()> {
         volo_build::util::with_config(|config| {
             let mut lock = None;
-
-            if self.git.is_some() {
-                let r#ref = self.r#ref.as_deref().unwrap_or("HEAD");
-                let lock_value = get_repo_latest_commit_id(self.git.as_ref().unwrap(), r#ref)?;
-                let _ = lock.insert(lock_value);
-            }
             let mut idl = Idl::new();
             idl.includes = self.includes.clone();
+
+            // Handling Git-Based Template Creation
             if let Some(git) = self.git.as_ref() {
+                let r#ref = self.r#ref.as_deref().unwrap_or("HEAD");
+                let lock_value = get_repo_latest_commit_id(git, r#ref)?;
+                let _ = lock.insert(lock_value);
                 idl.source = Source::Git(GitSource {
                     repo: git.clone(),
                     r#ref: None,
                     lock,
                 });
-                idl.path = self.idl.clone();
-            } else {
-                idl.path = self.idl.clone();
             }
+            idl.path = self.idl.clone();
 
             let mut entry = Entry {
                 protocol: idl.protocol(),
@@ -212,8 +210,7 @@ impl CliCommand for Init {
                 self.copy_thrift_template(entry.clone())?;
             }
 
-            if self.git.as_ref().is_some() {
-            } else {
+            if self.git.as_ref().is_none() {
                 // we will move volo.yml to volo-gen, so we need to add .. to includes and idl path
                 let idl = entry.idls.get_mut(0).unwrap();
                 if let Some(includes) = &mut idl.includes {
