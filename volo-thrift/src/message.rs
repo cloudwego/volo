@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{future::Future, sync::Arc};
 
 pub use pilota::thrift::Message;
 use pilota::thrift::{
@@ -6,7 +6,6 @@ use pilota::thrift::{
     TMessageIdentifier, TOutputProtocol,
 };
 
-#[async_trait::async_trait]
 pub trait EntryMessage: Sized + Send {
     fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError>;
 
@@ -15,15 +14,14 @@ pub trait EntryMessage: Sized + Send {
         msg_ident: &TMessageIdentifier,
     ) -> Result<Self, DecodeError>;
 
-    async fn decode_async<T: TAsyncInputProtocol>(
+    fn decode_async<T: TAsyncInputProtocol>(
         protocol: &mut T,
         msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, DecodeError>;
+    ) -> impl Future<Output = Result<Self, DecodeError>> + Send;
 
     fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize;
 }
 
-#[async_trait::async_trait]
 impl<Message> EntryMessage for Arc<Message>
 where
     Message: EntryMessage + Sync,

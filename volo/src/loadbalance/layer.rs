@@ -52,20 +52,16 @@ where
     LoadBalanceError: Into<S::Error>,
     S::Error: Debug + Retryable,
     Req: Clone + Send + Sync + 'static,
-    for<'cx> S::Future<'cx>: Send,
 {
     type Response = S::Response;
 
     type Error = S::Error;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
-    where
-        Self: 'cx;
-
-    fn call<'cx, 's>(&'s self, cx: &'cx mut Cx, req: Req) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
+    fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut Cx,
+        req: Req,
+    ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         debug_assert!(
             cx.rpc_info().callee.is_some(),
             "must set callee endpoint before load balance service"

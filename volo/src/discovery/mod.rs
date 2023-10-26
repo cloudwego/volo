@@ -31,11 +31,12 @@ pub trait Discover: Send + Sync + 'static {
     type Key: Hash + PartialEq + Eq + Send + Sync + Clone + 'static;
     /// `Error` is the discovery error.
     type Error: Into<LoadBalanceError>;
-    /// `DiscFut` is a Future object which returns a discovery result.
-    type DiscFut<'future>: Future<Output = Result<Vec<Arc<Instance>>, Self::Error>> + Send + 'future;
 
     /// `discover` allows to request an endpoint and return a discover future.
-    fn discover<'s>(&'s self, endpoint: &'s Endpoint) -> Self::DiscFut<'s>;
+    fn discover<'s>(
+        &'s self,
+        endpoint: &'s Endpoint,
+    ) -> impl Future<Output = Result<Vec<Arc<Instance>>, Self::Error>> + Send;
     /// `key` should return a key suitable for cache.
     fn key(&self, endpoint: &Endpoint) -> Self::Key;
     /// `watch` should return a [`async_broadcast::Receiver`] which can be used to subscribe
@@ -150,10 +151,9 @@ impl From<Vec<SocketAddr>> for StaticDiscover {
 impl Discover for StaticDiscover {
     type Key = ();
     type Error = Infallible;
-    type DiscFut<'a> = impl Future<Output = Result<Vec<Arc<Instance>>, Self::Error>> + 'a;
 
-    fn discover(&self, _: &Endpoint) -> Self::DiscFut<'_> {
-        async { Ok(self.instances.clone()) }
+    async fn discover<'s>(&'s self, _: &'s Endpoint) -> Result<Vec<Arc<Instance>>, Self::Error> {
+        Ok(self.instances.clone())
     }
 
     fn key(&self, _: &Endpoint) -> Self::Key {}
@@ -172,10 +172,9 @@ pub struct DummyDiscover;
 impl Discover for DummyDiscover {
     type Key = ();
     type Error = Infallible;
-    type DiscFut<'a> = impl Future<Output = Result<Vec<Arc<Instance>>, Self::Error>> + 'a;
 
-    fn discover(&self, _: &Endpoint) -> Self::DiscFut<'_> {
-        async { Ok(vec![]) }
+    async fn discover<'s>(&'s self, _: &'s Endpoint) -> Result<Vec<Arc<Instance>>, Self::Error> {
+        Ok(vec![])
     }
 
     fn key(&self, _: &Endpoint) {}

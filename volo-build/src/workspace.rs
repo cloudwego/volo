@@ -64,4 +64,9 @@ where
         self.pilota_builder = self.pilota_builder.plugin(plugin);
         self
     }
+
+    pub fn ignore_unused(mut self, ignore_unused: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.ignore_unused(ignore_unused);
+        self
+    }
 }

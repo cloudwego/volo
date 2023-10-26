@@ -1,5 +1,5 @@
 use core::cell::OnceCell;
-use std::{future::Future, hash::Hash, sync::Arc};
+use std::{hash::Hash, sync::Arc};
 
 use dashmap::{mapref::entry::Entry, DashMap};
 use rand::Rng;
@@ -117,41 +117,31 @@ where
 {
     type InstanceIter = InstancePicker;
 
-    type GetFut<'future> =
-        impl Future<Output = Result<Self::InstanceIter, LoadBalanceError>> + Send + 'future
-        where
-            Self: 'future;
-
-    fn get_picker<'future>(
+    async fn get_picker<'future>(
         &'future self,
         endpoint: &'future Endpoint,
         discover: &'future D,
-    ) -> Self::GetFut<'future>
-    where
-        Self: 'future,
-    {
-        async {
-            let key = discover.key(endpoint);
-            let weighted_list = match self.router.entry(key) {
-                Entry::Occupied(e) => e.get().clone(),
-                Entry::Vacant(e) => {
-                    let instances = Arc::new(WeightedInstances::from(
-                        discover
-                            .discover(endpoint)
-                            .await
-                            .map_err(|err| err.into())?,
-                    ));
-                    e.insert(instances).value().clone()
-                }
-            };
-            let sum_of_weights = weighted_list.sum_of_weights;
-            Ok(InstancePicker {
-                owned_instances: OnceCell::new(),
-                last_pick: None,
-                shared_instances: weighted_list,
-                sum_of_weights,
-            })
-        }
+    ) -> Result<Self::InstanceIter, LoadBalanceError> {
+        let key = discover.key(endpoint);
+        let weighted_list = match self.router.entry(key) {
+            Entry::Occupied(e) => e.get().clone(),
+            Entry::Vacant(e) => {
+                let instances = Arc::new(WeightedInstances::from(
+                    discover
+                        .discover(endpoint)
+                        .await
+                        .map_err(|err| err.into())?,
+                ));
+                e.insert(instances).value().clone()
+            }
+        };
+        let sum_of_weights = weighted_list.sum_of_weights;
+        Ok(InstancePicker {
+            owned_instances: OnceCell::new(),
+            last_pick: None,
+            shared_instances: weighted_list,
+            sum_of_weights,
+        })
     }
 
     fn rebalance(&self, changes: Change<D::Key>) {

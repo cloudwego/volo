@@ -1,10 +1,7 @@
-#![feature(impl_trait_in_assoc_type)]
-
 use std::net::SocketAddr;
 
 pub struct S;
 
-#[volo::async_trait]
 impl volo_gen::thrift_gen::echo_unknown::EchoService for S {
     async fn hello(
         &self,

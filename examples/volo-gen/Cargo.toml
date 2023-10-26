@@ -12,7 +12,6 @@ publish = false
 
 [dependencies]
 anyhow.workspace = true
-async-trait.workspace = true
 futures.workspace = true
 tokio = { workspace = true, features = ["full"] }
 

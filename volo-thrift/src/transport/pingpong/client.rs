@@ -1,6 +1,5 @@
 use std::{io, marker::PhantomData};
 
-use futures::Future;
 use motore::service::{Service, UnaryService};
 use pilota::thrift::{TransportError, TransportErrorKind};
 use volo::{
@@ -51,15 +50,12 @@ where
 {
     type Response = ThriftTransport<MkC::Encoder, MkC::Decoder>;
     type Error = io::Error;
-    type Future<'s> = impl Future<Output = Result<Self::Response, Self::Error>> + 's;
 
     #[inline]
-    fn call(&self, target: Address) -> Self::Future<'_> {
+    async fn call(&self, target: Address) -> Result<Self::Response, Self::Error> {
         let make_transport = self.make_transport.clone();
-        async move {
-            let (rh, wh) = make_transport.make_transport(target).await?;
-            Ok(ThriftTransport::new(rh, wh, self.make_codec.clone()))
-        }
+        let (rh, wh) = make_transport.make_transport(target).await?;
+        Ok(ThriftTransport::new(rh, wh, self.make_codec.clone()))
     }
 }
 
@@ -112,47 +108,40 @@ where
 
     type Error = crate::Error;
 
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx where Self:'cx;
-
     #[inline]
-    fn call<'cx, 's>(
+    async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ClientContext,
         req: ThriftMessage<Req>,
-    ) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            let rpc_info = &cx.rpc_info;
-            let target = rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
-                TransportError::from(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    format!("address is required, rpc_info: {:?}", rpc_info),
-                ))
-            })?;
-            let oneway = cx.message_type == TMessageType::OneWay;
-            cx.stats.record_make_transport_start_at();
-            let mut transport = self.make_transport.call(target).await?;
-            cx.stats.record_make_transport_end_at();
-            let resp = transport.send(cx, req, oneway).await;
-            if let Ok(None) = resp {
-                if !oneway {
-                    return Err(crate::Error::Transport(
-                        pilota::thrift::TransportError::new(
-                            TransportErrorKind::EndOfFile,
-                            format!(
-                                "an unexpected end of file from server, rpc_info: {:?}",
-                                cx.rpc_info
-                            ),
+    ) -> Result<Self::Response, Self::Error> {
+        let rpc_info = &cx.rpc_info;
+        let target = rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
+            TransportError::from(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("address is required, rpc_info: {:?}", rpc_info),
+            ))
+        })?;
+        let oneway = cx.message_type == TMessageType::OneWay;
+        cx.stats.record_make_transport_start_at();
+        let mut transport = self.make_transport.call(target).await?;
+        cx.stats.record_make_transport_end_at();
+        let resp = transport.send(cx, req, oneway).await;
+        if let Ok(None) = resp {
+            if !oneway {
+                return Err(crate::Error::Transport(
+                    pilota::thrift::TransportError::new(
+                        TransportErrorKind::EndOfFile,
+                        format!(
+                            "an unexpected end of file from server, rpc_info: {:?}",
+                            cx.rpc_info
                         ),
-                    ));
-                }
+                    ),
+                ));
             }
-            if cx.transport.should_reuse && resp.is_ok() {
-                transport.reuse();
-            }
-            resp
         }
+        if cx.transport.should_reuse && resp.is_ok() {
+            transport.reuse();
+        }
+        resp
     }
 }

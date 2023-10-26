@@ -23,22 +23,13 @@ where
     /// `InstanceIter` is an iterator of [`crate::discovery::Instance`].
     type InstanceIter: Iterator<Item = Address> + Send;
 
-    /// `GetFut` is the return type of `get_picker`.
-    type GetFut<'future>: Future<Output = Result<Self::InstanceIter, LoadBalanceError>>
-        + Send
-        + 'future
-    where
-        Self: 'future;
-
     /// `get_picker` allows to get an instance iterator of a specified endpoint from self or
     /// service discovery.
     fn get_picker<'future>(
         &'future self,
         endpoint: &'future Endpoint,
         discover: &'future D,
-    ) -> Self::GetFut<'future>
-    where
-        Self: 'future;
+    ) -> impl Future<Output = Result<Self::InstanceIter, LoadBalanceError>> + Send;
     /// `rebalance` is the callback method be used in service discovering subscription.
     fn rebalance(&self, changes: Change<D::Key>);
 }

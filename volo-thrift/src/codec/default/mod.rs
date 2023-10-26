@@ -26,6 +26,8 @@
 //! [Kitex]: https://github.com/cloudwego/kitex
 //! [TTHeader]: https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/
 //! [Framed]: https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#framed-vs-unframed-transport
+use std::future::Future;
+
 use bytes::Bytes;
 use linkedbytes::LinkedBytes;
 use pilota::thrift::{DecodeError, EncodeError, TransportError};
@@ -73,7 +75,6 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
 /// [`ZeroCopyDecoder`] tries to decode a message without copying large data, so the [`Bytes`] in
 /// the [`decode`] method is not designed to be reused, and the implementation can use
 /// `Bytes::split_to` to get a [`Bytes`] and hand it to the user directly.
-#[async_trait::async_trait]
 pub trait ZeroCopyDecoder: Send + Sync + 'static {
     /// If the outer decoder is framed, it can reads all the payload into a [`Bytes`] and
     /// call this function for better performance.
@@ -85,7 +86,7 @@ pub trait ZeroCopyDecoder: Send + Sync + 'static {
 
     /// The [`DefaultDecoder`] will always call `decode_async`, so the most outer decoder
     /// must implement this function.
-    async fn decode_async<
+    fn decode_async<
         Msg: Send + EntryMessage,
         Cx: ThriftContext,
         R: AsyncRead + Unpin + Send + Sync,
@@ -93,7 +94,7 @@ pub trait ZeroCopyDecoder: Send + Sync + 'static {
         &mut self,
         cx: &mut Cx,
         reader: &mut BufReader<R>,
-    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError>;
+    ) -> impl Future<Output = Result<Option<ThriftMessage<Msg>>, DecodeError>> + Send;
 }
 
 /// [`MakeZeroCopyCodec`] is used to create a [`ZeroCopyEncoder`] and a [`ZeroCopyDecoder`].
@@ -112,7 +113,6 @@ pub struct DefaultEncoder<E, W> {
     linked_bytes: LinkedBytes,
 }
 
-#[async_trait::async_trait]
 impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
     for DefaultEncoder<E, W>
 {
@@ -184,7 +184,6 @@ pub struct DefaultDecoder<D, R> {
     reader: BufReader<R>,
 }
 
-#[async_trait::async_trait]
 impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
     for DefaultDecoder<D, R>
 {

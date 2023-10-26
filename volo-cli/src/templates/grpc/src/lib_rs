@@ -1,8 +1,7 @@
-#![feature(impl_trait_in_assoc_type)]
+
 
 pub struct S;
 
-#[volo::async_trait]
 impl volo_gen::{service_global_name} for S {{
 	{methods}
 }}

@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 
-use futures::Future;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::Service,
@@ -126,52 +125,44 @@ where
 {
     type Response = Response<Body>;
     type Error = Status;
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
-    where
-        Self: 'cx;
 
-    fn call<'cx, 's>(
+    async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
         req: Request<hyper::Body>,
-    ) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            let (metadata, extensions, body) = req.into_parts();
-            let send_compression = CompressionEncoding::from_accept_encoding_header(
-                metadata.headers(),
-                &self.rpc_config.send_compressions,
+    ) -> Result<Self::Response, Self::Error> {
+        let (metadata, extensions, body) = req.into_parts();
+        let send_compression = CompressionEncoding::from_accept_encoding_header(
+            metadata.headers(),
+            &self.rpc_config.send_compressions,
+        );
+
+        let recv_compression = CompressionEncoding::from_encoding_header(
+            metadata.headers(),
+            &self.rpc_config.accept_compressions,
+        )?;
+
+        let message = T::from_body(
+            cx.rpc_info.method.as_deref(),
+            body,
+            Kind::Request,
+            recv_compression,
+        )?;
+
+        let volo_req = Request::from_parts(metadata, extensions, message);
+
+        let volo_resp = self.inner.call(cx, volo_req).await.map_err(Into::into)?;
+
+        let mut resp = volo_resp.map(|message| Body::new(message.into_body(send_compression)));
+
+        if let Some(encoding) = send_compression {
+            resp.metadata_mut().insert(
+                ENCODING_HEADER,
+                MetadataValue::unchecked_from_header_value(encoding.into_header_value()),
             );
+        };
 
-            let recv_compression = CompressionEncoding::from_encoding_header(
-                metadata.headers(),
-                &self.rpc_config.accept_compressions,
-            )?;
-
-            let message = T::from_body(
-                cx.rpc_info.method.as_deref(),
-                body,
-                Kind::Request,
-                recv_compression,
-            )?;
-
-            let volo_req = Request::from_parts(metadata, extensions, message);
-
-            let volo_resp = self.inner.call(cx, volo_req).await.map_err(Into::into)?;
-
-            let mut resp = volo_resp.map(|message| Body::new(message.into_body(send_compression)));
-
-            if let Some(encoding) = send_compression {
-                resp.metadata_mut().insert(
-                    ENCODING_HEADER,
-                    MetadataValue::unchecked_from_header_value(encoding.into_header_value()),
-                );
-            };
-
-            Ok(resp)
-        }
+        Ok(resp)
     }
 }
 

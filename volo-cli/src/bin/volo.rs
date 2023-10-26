@@ -25,7 +25,7 @@ fn main() -> Result<()> {
         error!("{}", e);
     }
 
-    // detech new version and notify the user
+    // detect new version and notify the user
     let pkg_name = env!("CARGO_PKG_NAME");
     let current_version = env!("CARGO_PKG_VERSION");
 
