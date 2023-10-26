@@ -2,8 +2,8 @@
 
 use std::{net::SocketAddr, path::Path, sync::Arc};
 
+use librustls::{Certificate, ClientConfig, RootCertStore}; /* crate `rustls` is renamed to `librustls` in this example */
 use pilota::FastStr;
-use librustls::{Certificate, RootCertStore};
 use rustls_pemfile::certs;
 use volo::net::dial::ClientTlsConfig;
 
@@ -22,7 +22,7 @@ async fn main() {
     let mut root_certs = RootCertStore::empty();
     root_certs.add(&root_cert[0]).unwrap();
 
-    let client_config = rustls::ClientConfig::builder()
+    let client_config = ClientConfig::builder()
         .with_safe_default_cipher_suites()
         .with_safe_default_kx_groups()
         .with_safe_default_protocol_versions()

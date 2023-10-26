@@ -1,3 +1,4 @@
+#[allow(unused_macros)] // Otherwise, it will complain if neither `rustls` nor `native-tls` is enabled.
 macro_rules! cfg_rustls {
     ($($item:item)*) => {
         $(
@@ -8,6 +9,7 @@ macro_rules! cfg_rustls {
     }
 }
 
+#[allow(unused_macros)] // Otherwise, it will complain if neither `rustls` nor `native-tls` is enabled.
 macro_rules! cfg_native_tls {
     ($($item:item)*) => {
         $(
@@ -18,6 +20,7 @@ macro_rules! cfg_native_tls {
     }
 }
 
+#[allow(unused_macros)] // Otherwise, it will complain if neither `rustls` nor `native-tls` is enabled.
 macro_rules! cfg_rustls_or_native_tls {
     ($($item:item)*) => {
         $(

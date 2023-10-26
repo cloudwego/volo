@@ -1,5 +1,4 @@
 use std::{
-    borrow::Cow,
     io,
     net::SocketAddr,
     pin::Pin,
@@ -7,14 +6,17 @@ use std::{
 };
 
 use futures::future::BoxFuture;
-use hex::FromHex;
 use hyper::client::connect::{Connected, Connection};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use volo::net::{
     conn::Conn,
-    dial::{Config, DefaultMakeTransport, MakeTransport, TlsMakeTransport, ClientTlsConfig},
+    dial::{Config, DefaultMakeTransport, MakeTransport},
     Address,
 };
+
+cfg_rustls_or_native_tls! {
+    use volo::net::dial::{TlsMakeTransport, ClientTlsConfig};
+}
 
 #[derive(Clone, Debug)]
 pub enum Connector {
@@ -83,7 +85,7 @@ impl tower::Service<hyper::Uri> for Connector {
                                     "authority must be hex-encoded path",
                                 )
                             })?;
-                            Address::Unix(Cow::Owned(
+                            Address::Unix(std::borrow::Cow::Owned(
                                 String::from_utf8(bytes)
                                     .map_err(|_| {
                                         io::Error::new(

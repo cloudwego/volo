@@ -2,7 +2,8 @@
 
 use std::{net::SocketAddr, path::Path, sync::Arc};
 
-use librustls::{Certificate, PrivateKey};
+use librustls::{Certificate, PrivateKey, ServerConfig}; /* crate `rustls` is renamed to
+                                                          * `librustls` in this example */
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use volo_grpc::{
     server::{Server, ServiceBuilder},
@@ -11,7 +12,6 @@ use volo_grpc::{
 
 pub struct S;
 
-#[volo::async_trait]
 impl volo_gen::proto_gen::hello::Greeter for S {
     async fn say_hello(
         &self,
@@ -39,15 +39,15 @@ fn load_keys(path: impl AsRef<Path>) -> std::io::Result<Vec<PrivateKey>> {
 
 #[volo::main]
 async fn main() {
-    // TLS configuration 
-    // 
+    // TLS configuration
+    //
     // The key and certificate are copied from
     // https://github.com/hyperium/tonic/tree/master/examples/data/tls
     let data_dir = std::path::PathBuf::from_iter([std::env!("CARGO_MANIFEST_DIR"), "data"]);
     let certs = load_certs(data_dir.join("tls/server.pem")).unwrap();
     let private_key = load_keys(data_dir.join("tls/server.key")).unwrap()[0].clone();
 
-    let mut server_config = rustls::ServerConfig::builder()
+    let mut server_config = ServerConfig::builder()
         .with_safe_defaults()
         .with_no_client_auth()
         .with_single_cert(certs, private_key)
