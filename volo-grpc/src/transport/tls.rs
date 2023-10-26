@@ -9,12 +9,12 @@ cfg_rustls_or_native_tls! {
     #[derive(Clone)]
     pub enum TlsAcceptor {
         /// `tokio_rustls::TlsAcceptor` internally uses `Arc`
-        #[doc(cfg(feature = "rustls"))]
+        #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
         #[cfg(feature = "rustls")]
         Rustls(tokio_rustls::TlsAcceptor),
     
         /// This takes an `Arc` because it does not internally use `Arc`
-        #[doc(cfg(feature = "native-tls"))]
+        #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
         #[cfg(feature = "native-tls")]
         NativeTls(std::sync::Arc<tokio_native_tls::TlsAcceptor>),
     }

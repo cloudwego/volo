@@ -144,12 +144,12 @@ cfg_rustls_or_native_tls! {
     /// A wrapper around [`tokio_rustls::TlsConnector`] and [`tokio_native_tls::TlsConnector`].
     #[derive(Clone)]
     pub enum TlsConnector {
-        #[doc(cfg(feature = "rustls"))]
+        #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
         #[cfg(feature = "rustls")]
         Rustls(tokio_rustls::TlsConnector),
 
         /// This takes an `Arc` because `tokio_native_tls::TlsConnector` does not internally use `Arc`
-        #[doc(cfg(feature = "native-tls"))]
+        #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
         #[cfg(feature = "native-tls")]
         NativeTls(std::sync::Arc<tokio_native_tls::TlsConnector>),
     }
