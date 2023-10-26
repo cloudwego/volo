@@ -2,7 +2,6 @@
     html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
-#![feature(impl_trait_in_assoc_type)]
 #![feature(doc_cfg)]
 
 #[macro_use]

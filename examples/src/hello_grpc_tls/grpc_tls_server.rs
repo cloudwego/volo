@@ -1,7 +1,5 @@
 //! Run with `cargo run --example hello-tls-grpc-server --features tls`
 
-#![feature(impl_trait_in_assoc_type)]
-
 use std::{net::SocketAddr, path::Path, sync::Arc};
 
 use rustls::{Certificate, PrivateKey};
