@@ -1,4 +1,4 @@
-use std::{io, net::SocketAddr, future::Future};
+use std::{future::Future, io, net::SocketAddr};
 
 use socket2::{Domain, Protocol, Socket, Type};
 #[cfg(target_family = "unix")]
@@ -140,8 +140,6 @@ impl DefaultMakeTransport {
     }
 }
 
-
-
 cfg_rustls_or_native_tls! {
     /// A wrapper around [`tokio_rustls::TlsConnector`] and [`tokio_native_tls::TlsConnector`].
     #[derive(Clone)]
@@ -149,7 +147,7 @@ cfg_rustls_or_native_tls! {
         #[doc(cfg(feature = "rustls"))]
         #[cfg(feature = "rustls")]
         Rustls(tokio_rustls::TlsConnector),
-    
+
         /// This takes an `Arc` because `tokio_native_tls::TlsConnector` does not internally use `Arc`
         #[doc(cfg(feature = "native-tls"))]
         #[cfg(feature = "native-tls")]
@@ -171,25 +169,25 @@ cfg_rustls_or_native_tls! {
     /// TLS config for client
     #[derive(Debug, Clone)]
     pub struct ClientTlsConfig {
-        pub domain: String,
+        pub server_name: String,
         pub connector: TlsConnector,
     }
 
     impl ClientTlsConfig {
-        pub fn new(domain: impl Into<String>, connector: impl Into<TlsConnector>) -> Self {
+        pub fn new(server_name: impl Into<String>, connector: impl Into<TlsConnector>) -> Self {
             Self {
-                domain: domain.into(),
+                server_name: server_name.into(),
                 connector: connector.into(),
             }
         }
     }
-    
+
     #[derive(Debug, Clone)]
     pub struct TlsMakeTransport {
         cfg: Config,
         tls_config: ClientTlsConfig,
     }
-    
+
     impl TlsMakeTransport {
         pub fn new(cfg: Config, tls_config: ClientTlsConfig) -> Self {
             Self {
@@ -197,19 +195,19 @@ cfg_rustls_or_native_tls! {
                 tls_config,
             }
         }
-    
+
         pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
             match addr {
                 Address::Ip(addr) => {
                     let tcp = make_tcp_connection(&self.cfg, addr).await?;
-    
+
                     match &self.tls_config.connector {
                         #[cfg(feature = "rustls")]
                         TlsConnector::Rustls(connector) => {
-                            let domain = librustls::ServerName::try_from(&self.tls_config.domain[..])
+                            let server_name = librustls::ServerName::try_from(&self.tls_config.server_name[..])
                                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
                             connector
-                                .connect(domain, tcp)
+                                .connect(server_name, tcp)
                                 .await
                                 .map(tokio_rustls::TlsStream::Client)
                                 .map(Conn::from)
@@ -218,7 +216,7 @@ cfg_rustls_or_native_tls! {
                         TlsConnector::NativeTls(connector) => {
                             let tcp = make_tcp_connection(&self.cfg, addr).await?;
                             connector
-                                .connect(&self.tls_config.domain[..], tcp)
+                                .connect(&self.tls_config.server_name[..], tcp)
                                 .await
                                 .map(Conn::from)
                                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
@@ -230,26 +228,26 @@ cfg_rustls_or_native_tls! {
             }
         }
     }
-    
+
     impl MakeTransport for TlsMakeTransport {
         type ReadHalf = OwnedReadHalf;
-    
+
         type WriteHalf = OwnedWriteHalf;
-    
+
         async fn make_transport(&self, addr: Address) -> io::Result<(Self::ReadHalf, Self::WriteHalf)> {
             let conn = self.make_connection(addr).await?;
             let (read, write) = conn.stream.into_split();
             Ok((read, write))
         }
-    
+
         fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
             self.cfg = self.cfg.with_connect_timeout(timeout);
         }
-    
+
         fn set_read_timeout(&mut self, timeout: Option<Duration>) {
             self.cfg = self.cfg.with_read_timeout(timeout);
         }
-    
+
         fn set_write_timeout(&mut self, timeout: Option<Duration>) {
             self.cfg = self.cfg.with_write_timeout(timeout);
         }
@@ -270,7 +268,7 @@ cfg_native_tls! {
             Self::NativeTls(value)
         }
     }
-    
+
     impl From<tokio_native_tls::TlsConnector> for TlsConnector {
         fn from(value: tokio_native_tls::TlsConnector) -> Self {
             Self::NativeTls(std::sync::Arc::new(value))
