@@ -22,6 +22,16 @@ path = "src/hello/thrift_server.rs"
 name = "hello-thrift-client"
 path = "src/hello/thrift_client.rs"
 
+# hello tls
+[[bin]]
+name = "hello-tls-grpc-server"
+path = "src/hello_grpc_tls/grpc_tls_server.rs"
+required-features = ["tls"]
+[[bin]]
+name = "hello-tls-grpc-client"
+path = "src/hello_grpc_tls/grpc_tls_client.rs"
+required-features = ["tls"]
+
 # compression
 [[bin]]
 name = "compresion-grpc-server"
@@ -79,3 +89,11 @@ volo-grpc = { path = "../volo-grpc" }
 volo-thrift = { path = "../volo-thrift" }
 
 volo-gen = { path = "./volo-gen" }
+
+# TLS dependencies
+librustls = { workspace = true, optional = true}
+rustls-pemfile = { workspace = true, optional = true }
+tokio-rustls = { workspace = true, optional = true }
+
+[features]
+tls = ["librustls", "rustls-pemfile", "tokio-rustls", "volo/rustls", "volo-grpc/rustls"]

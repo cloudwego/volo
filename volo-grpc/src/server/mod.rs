@@ -14,12 +14,21 @@ use motore::{
     BoxError,
 };
 pub use service::ServiceBuilder;
-use volo::{net::incoming::Incoming, spawn};
+use volo::{
+    net::{conn::Conn, incoming::Incoming},
+    spawn,
+};
 
 pub use self::router::Router;
 use crate::{
     body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status,
 };
+
+cfg_rustls_or_native_tls! {
+    use volo::net::conn::ConnStream;
+
+    use crate::transport::{ServerTlsConfig, TlsAcceptor};
+}
 
 /// A trait to provide a static reference to the service's
 /// name. This is used for routing service's within the router.
@@ -36,6 +45,9 @@ pub struct Server<L> {
     layer: L,
     http2_config: Http2Config,
     router: Router,
+
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    tls_config: Option<ServerTlsConfig>,
 }
 
 impl Default for Server<Identity> {
@@ -51,11 +63,24 @@ impl Server<Identity> {
             layer: Identity::new(),
             http2_config: Http2Config::default(),
             router: Router::new(),
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: None,
         }
     }
 }
 
 impl<L> Server<L> {
+    cfg_rustls_or_native_tls! {
+        /// Sets the TLS configuration for the server.
+        ///
+        /// If not set, the server will not use TLS.
+        pub fn tls_config(mut self, value: impl Into<ServerTlsConfig>) -> Self {
+            self.tls_config = Some(value.into());
+            self
+        }
+    }
+
     /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
     /// stream-level flow control.
     ///
@@ -174,6 +199,8 @@ impl<L> Server<L> {
             layer: Stack::new(layer, self.layer),
             http2_config: self.http2_config,
             router: self.router,
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -193,6 +220,8 @@ impl<L> Server<L> {
             layer: Stack::new(self.layer, layer),
             http2_config: self.http2_config,
             router: self.router,
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -210,6 +239,8 @@ impl<L> Server<L> {
             layer: self.layer,
             http2_config: self.http2_config,
             router: self.router.add_service(s),
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -253,10 +284,38 @@ impl<L> Server<L> {
                     return Ok(());
                 },
                 conn = incoming.accept() => {
-                    let conn = match conn? {
+                    let conn: Conn = match conn? {
                         Some(c) => c,
                         None => return Ok(()),
                     };
+                    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+                    let conn: Conn = {
+                        let info = conn.info;
+                        // Only perform TLS handshake if either rustls or native-tls is configured
+                        match (conn.stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
+                            #[cfg(feature = "rustls")]
+                            (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::Rustls(tls_acceptor))) => {
+                                let stream = tls_acceptor.accept(tcp).await?;
+                                Conn {
+                                    stream: ConnStream::Rustls(tokio_rustls::TlsStream::Server(stream)),
+                                    info
+                                }
+                            },
+                            #[cfg(feature = "native-tls")]
+                            (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::NativeTls(tls_acceptor))) => {
+                                let stream = tls_acceptor.accept(tcp).await?;
+                                Conn {
+                                    stream: ConnStream::NativeTls(stream),
+                                    info,
+                                }
+                            },
+                            (stream, _) => Conn {
+                                stream,
+                                info
+                            },
+                        }
+                    };
+
                     tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
                     let peer_addr = conn.info.peer_addr.clone();
 
