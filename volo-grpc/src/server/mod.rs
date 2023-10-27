@@ -295,7 +295,13 @@ impl<L> Server<L> {
                         match (conn.stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
                             #[cfg(feature = "rustls")]
                             (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::Rustls(tls_acceptor))) => {
-                                let stream = tls_acceptor.accept(tcp).await?;
+                                let stream = match tls_acceptor.accept(tcp).await {
+                                    Ok(stream) => stream,
+                                    Err(err) => {
+                                        tracing::debug!("[VOLO] TLS handshake error: {:?}", err);
+                                        continue;
+                                    },
+                                };
                                 Conn {
                                     stream: ConnStream::Rustls(tokio_rustls::TlsStream::Server(stream)),
                                     info
@@ -303,7 +309,13 @@ impl<L> Server<L> {
                             },
                             #[cfg(feature = "native-tls")]
                             (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::NativeTls(tls_acceptor))) => {
-                                let stream = tls_acceptor.accept(tcp).await?;
+                                let stream = match tls_acceptor.accept(tcp).await {
+                                    Ok(stream) => stream,
+                                    Err(err) => {
+                                        tracing::debug!("[VOLO] TLS handshake error: {:?}", err);
+                                        continue;
+                                    },
+                                };
                                 Conn {
                                     stream: ConnStream::NativeTls(stream),
                                     info,
