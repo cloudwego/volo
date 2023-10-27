@@ -2,6 +2,10 @@
     html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
+
+#[macro_use]
+mod cfg;
 
 pub use motore::{layer, layer::Layer, service, Service};
 pub use tokio::main;
