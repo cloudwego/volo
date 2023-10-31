@@ -198,6 +198,7 @@ impl CliCommand for Init {
                 });
             }
             idl.path = self.idl.clone();
+            idl.ensure_readable()?;
 
             let mut entry = Entry {
                 protocol: idl.protocol(),
