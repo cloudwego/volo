@@ -1,7 +1,3 @@
-
-
 pub struct S;
 
-impl volo_gen::{service_global_name} for S {{
-	{methods}
-}}
+impl volo_gen::{service_global_name} for S {{{methods}}}
