@@ -626,9 +626,15 @@ impl CodegenBackend for VoloGrpcBackend {
         let name = self.cx().rust_name(method.def_id);
 
         format!(
-            r#"async fn {name}(&self, {args}) -> ::std::result::Result<{ret_ty}>{{
-				{default_result}
-			}}"#
+            r#"
+    async fn {name}(
+        &self,
+        {args},
+    ) -> ::std::result::Result<{ret_ty}>
+    {{
+        {default_result}
+    }}
+"#
         )
     }
 

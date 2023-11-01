@@ -1,4 +1,4 @@
-use std::{fs::create_dir_all, path::PathBuf};
+use std::{fs::create_dir_all, path::PathBuf, process::Command};
 
 use clap::{value_parser, Parser};
 use volo_build::{
@@ -198,6 +198,7 @@ impl CliCommand for Init {
                 });
             }
             idl.path = self.idl.clone();
+            idl.ensure_readable()?;
 
             let mut entry = Entry {
                 protocol: idl.protocol(),
@@ -271,6 +272,8 @@ impl CliCommand for Init {
             DEFAULT_CONFIG_FILE,
             PathBuf::from("./volo-gen/").join(DEFAULT_CONFIG_FILE),
         )?;
+
+        let _ = Command::new("cargo").arg("fmt").arg("--all").output()?;
 
         Ok(())
     }

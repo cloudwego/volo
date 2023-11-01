@@ -1,8 +1,6 @@
-
-
 use std::net::SocketAddr;
 
-use {name}::{{S}};
+use {name}::S;
 
 #[volo::main]
 async fn main() {{
