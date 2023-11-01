@@ -23,6 +23,7 @@ pilota-build.workspace = true
 
 anyhow.workspace = true
 dirs.workspace = true
+git2.workspace = true
 heck.workspace = true
 itertools.workspace = true
 lazy_static.workspace = true

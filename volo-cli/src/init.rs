@@ -4,7 +4,7 @@ use clap::{value_parser, Parser};
 use volo_build::{
     config_builder::InitBuilder,
     model::{Entry, GitSource, Idl, Source, DEFAULT_FILENAME},
-    util::{get_repo_latest_commit_id, DEFAULT_CONFIG_FILE},
+    util::{get_repo_latest_commit_id, git_repo_init, DEFAULT_CONFIG_FILE},
 };
 
 use crate::command::CliCommand;
@@ -274,6 +274,9 @@ impl CliCommand for Init {
         )?;
 
         let _ = Command::new("cargo").arg("fmt").arg("--all").output()?;
+
+        let cwd = std::env::current_dir()?;
+        git_repo_init(&cwd)?;
 
         Ok(())
     }

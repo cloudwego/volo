@@ -272,3 +272,28 @@ where
 
     Ok(r)
 }
+
+pub fn git_repo_init(path: &Path) -> anyhow::Result<()> {
+    // Check if we are in a git repo and the path to the new package is not an ignored path in that
+    // repo.
+    //
+    // Reference: https://github.com/rust-lang/cargo/blob/0.74.0/src/cargo/util/vcs.rs
+    fn in_git_repo(path: &Path) -> bool {
+        if let Ok(repo) = git2::Repository::discover(path) {
+            // Don't check if the working directory itself is ignored.
+            if repo.workdir().map_or(false, |workdir| workdir == path) {
+                true
+            } else {
+                !repo.is_path_ignored(path).unwrap_or(false)
+            }
+        } else {
+            false
+        }
+    }
+
+    if !in_git_repo(path) {
+        git2::Repository::init(path)?;
+    }
+
+    Ok(())
+}
