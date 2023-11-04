@@ -297,3 +297,57 @@ pub fn git_repo_init(path: &Path) -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use tempfile::{tempdir, NamedTempFile};
+
+    use super::*;
+
+    #[test]
+    fn test_ensure_path() {
+        // Test case 1: directory already exists
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("existing_dir");
+        fs::create_dir_all(&path).unwrap();
+        assert!(ensure_path(&path).is_ok());
+
+        // Test case 2: directory does not exist
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("new_dir");
+        assert!(ensure_path(&path).is_ok());
+        assert!(fs::metadata(&path).unwrap().is_dir());
+    }
+
+    #[test]
+    fn test_ensure_file() {
+        // Test case 1: File does not exist
+        let result = tempdir().unwrap();
+        let binding = result.path().join("non_existing_file.txt");
+        let filename1 = binding.as_path();
+        match ensure_file(filename1) {
+            Ok(file) => {
+                assert!(file.metadata().is_ok());
+            }
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                assert!(false, "Failed to create new file");
+            }
+        }
+
+        // Test case 2: File already exists
+        let file1 = NamedTempFile::new().unwrap();
+        let filename2 = file1.path();
+        match ensure_file(filename2) {
+            Ok(file) => {
+                assert!(file.metadata().is_ok());
+            }
+            Err(err) => {
+                eprintln!("Error: {}", err);
+                assert!(false, "Failed to append to existing file");
+            }
+        }
+    }
+}
