@@ -38,7 +38,7 @@ pub struct Idl {
     pub includes: Option<Vec<PathBuf>>,
     #[serde(skip_serializing_if = "Vec::is_empty", default = "Vec::new")]
     pub touch: Vec<String>,
-    #[serde(default = "default_keep_unknown_fields")]
+    #[serde(skip_serializing_if = "is_false", default)]
     pub keep_unknown_fields: bool,
 }
 
@@ -70,8 +70,8 @@ impl Idl {
     }
 }
 
-fn default_keep_unknown_fields() -> bool {
-    false
+fn is_false(b: &bool) -> bool {
+    !b
 }
 
 fn try_open_readonly<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<()> {
