@@ -333,7 +333,7 @@ mod tests {
             }
             Err(err) => {
                 eprintln!("Error: {}", err);
-                assert!(false, "Failed to create new file");
+                panic!("Failed to create new file");
             }
         }
 
@@ -346,7 +346,7 @@ mod tests {
             }
             Err(err) => {
                 eprintln!("Error: {}", err);
-                assert!(false, "Failed to append to existing file");
+                panic!("Failed to append to existing file");
             }
         }
     }

@@ -59,7 +59,7 @@ impl VoloThriftBackend {
                     variant_names.iter(),
                     args_names.iter(),
                 )) {
-                    let decode_variants = helper.codegen_item_decode(args_name.clone().into());
+                    let decode_variants = helper.codegen_item_decode(args_name.clone());
                     match_methods.push_str(&format!(
                         "\"{methods_names}\" => {{ Self::{variant_names}({decode_variants}) }},"
                     ));
@@ -160,7 +160,7 @@ impl VoloThriftBackend {
                     variant_names.iter(),
                     args_names.iter(),
                 )) {
-                    let decode_item = helper.codegen_item_decode(args_name.clone().into());
+                    let decode_item = helper.codegen_item_decode(args_name.clone());
                     match_methods.push_str(&format!(
                         "\"{methods_names}\" => {{ Self::{variant_names}({decode_item}) }},"
                     ));
