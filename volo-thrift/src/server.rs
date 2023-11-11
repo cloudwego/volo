@@ -43,7 +43,7 @@ pub struct Server<S, L, Req, MkC, SP> {
     #[cfg(feature = "multiplex")]
     multiplex: bool,
     span_provider: SP,
-    shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()>>>,
+    shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>>,
     _marker: PhantomData<Req>,
 }
 
@@ -81,7 +81,7 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
     /// in reverse order of registration.
     pub fn register_shutdown_hook(
         mut self,
-        hook: impl FnOnce() -> BoxFuture<'static, ()> + 'static,
+        hook: impl FnOnce() -> BoxFuture<'static, ()> + 'static + Send,
     ) -> Self {
         self.shutdown_hooks.push(Box::new(hook));
         self
@@ -176,7 +176,6 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
         MkC: MakeCodec<OwnedReadHalf, OwnedWriteHalf>,
         L::Service: Service<ServerContext, Req, Response = S::Response> + Send + 'static + Sync,
         <L::Service as Service<ServerContext, Req>>::Error: Into<crate::Error> + Send,
-        for<'cx> <L::Service as Service<ServerContext, Req>>::Future<'cx>: Send,
         S: Service<ServerContext, Req> + Send + 'static,
         S::Error: Into<crate::Error> + Send,
         Req: EntryMessage + Send + 'static,

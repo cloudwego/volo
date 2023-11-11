@@ -46,10 +46,27 @@ impl VoloThriftBackend {
         let res_send_name = format!("{service_name}ResponseSend");
 
         let req_impl = {
-            let mk_decode = |is_async: bool| {
+            let mk_decode = |is_async: bool, is_send: bool| {
                 let helper = DecodeHelper::new(is_async);
-                let decode_variants = helper.codegen_item_decode();
-                let match_methods = crate::join_multi_strs!("", |methods_names, variant_names| -> "\"{methods_names}\" => {{ Self::{variant_names}({decode_variants}) }},");
+                let mut match_methods = String::new();
+                let args_names = if is_send {
+                    args_send_names.clone()
+                } else {
+                    args_recv_names.clone()
+                };
+                for (methods_names, variant_names, args_name) in itertools::multizip((
+                    methods_names.iter(),
+                    variant_names.iter(),
+                    args_names.iter(),
+                )) {
+                    let decode_variants = helper.codegen_item_decode(args_name.clone());
+                    match_methods.push_str(&format!(
+                        "\"{methods_names}\" => {{ Self::{variant_names}({decode_variants}) }},"
+                    ));
+                }
+                // let decode_variants = helper.codegen_item_decode(req_recv_name.clone().into());
+                // let match_methods = crate::join_multi_strs!("", |methods_names, variant_names| ->
+                // "\"{methods_names}\" => {{ Self::{variant_names}({decode_variants}) }},");
 
                 format! {
                     r#"Ok(match &*msg_ident.name {{
@@ -61,8 +78,10 @@ impl VoloThriftBackend {
                 }
             };
 
-            let decode = mk_decode(false);
-            let decode_async = mk_decode(true);
+            let send_decode = mk_decode(false, true);
+            let send_decode_async = mk_decode(true, true);
+            let recv_decode = mk_decode(false, false);
+            let recv_decode_async = mk_decode(true, false);
 
             let mut match_encode = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())}}");
             let mut match_size = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::volo_thrift::Message::size(value, protocol)}}");
@@ -73,8 +92,7 @@ impl VoloThriftBackend {
             }
 
             format! {
-                r#"#[::async_trait::async_trait]
-                impl ::volo_thrift::EntryMessage for {req_recv_name} {{
+                r#"impl ::volo_thrift::EntryMessage for {req_recv_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {{
                         match self {{
                             {match_encode}
@@ -82,7 +100,7 @@ impl VoloThriftBackend {
                     }}
 
                     fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {{
-                       {decode}
+                       {recv_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
@@ -90,7 +108,7 @@ impl VoloThriftBackend {
                         msg_ident: &::pilota::thrift::TMessageIdentifier
                     ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
                         {{
-                            {decode_async}
+                            {recv_decode_async}
                         }}
 
                     fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {{
@@ -100,7 +118,6 @@ impl VoloThriftBackend {
                     }}
                 }}
 
-                #[::async_trait::async_trait]
                 impl ::volo_thrift::EntryMessage for {req_send_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {{
                         match self {{
@@ -109,7 +126,7 @@ impl VoloThriftBackend {
                     }}
 
                     fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {{
-                       {decode}
+                       {send_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
@@ -117,7 +134,7 @@ impl VoloThriftBackend {
                         msg_ident: &::pilota::thrift::TMessageIdentifier
                     ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
                         {{
-                            {decode_async}
+                            {send_decode_async}
                         }}
 
                     fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {{
@@ -130,11 +147,28 @@ impl VoloThriftBackend {
         };
 
         let res_impl = {
-            let mk_decode = |is_async: bool| {
+            let mk_decode = |is_async: bool, is_send: bool| {
                 let helper = DecodeHelper::new(is_async);
-                let decode_item = helper.codegen_item_decode();
+                let mut match_methods = String::new();
+                let args_names = if is_send {
+                    result_send_names.clone()
+                } else {
+                    result_recv_names.clone()
+                };
+                for (methods_names, variant_names, args_name) in itertools::multizip((
+                    methods_names.iter(),
+                    variant_names.iter(),
+                    args_names.iter(),
+                )) {
+                    let decode_item = helper.codegen_item_decode(args_name.clone());
+                    match_methods.push_str(&format!(
+                        "\"{methods_names}\" => {{ Self::{variant_names}({decode_item}) }},"
+                    ));
+                }
+                // let decode_item = helper.codegen_item_decode(res_recv_name.clone().into());
 
-                let match_methods = crate::join_multi_strs!("", |methods_names, variant_names| -> "\"{methods_names}\" => {{ Self::{variant_names}({decode_item}) }},");
+                // let match_methods = crate::join_multi_strs!("", |methods_names, variant_names| ->
+                // "\"{methods_names}\" => {{ Self::{variant_names}({decode_item}) }},");
 
                 format!(
                     r#"Ok(match &*msg_ident.name {{
@@ -154,11 +188,12 @@ impl VoloThriftBackend {
                 match_size = "_ => unreachable!(),".to_string();
             }
 
-            let decode = mk_decode(false);
-            let decode_async = mk_decode(true);
+            let send_decode = mk_decode(false, true);
+            let send_decode_async = mk_decode(true, true);
+            let recv_decode = mk_decode(false, false);
+            let recv_decode_async = mk_decode(true, false);
             format! {
-                r#"#[::async_trait::async_trait]
-                impl ::volo_thrift::EntryMessage for {res_recv_name} {{
+                r#"impl ::volo_thrift::EntryMessage for {res_recv_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {{
                         match self {{
                             {match_encode}
@@ -166,7 +201,7 @@ impl VoloThriftBackend {
                     }}
 
                     fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {{
-                       {decode}
+                       {recv_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
@@ -174,7 +209,7 @@ impl VoloThriftBackend {
                         msg_ident: &::pilota::thrift::TMessageIdentifier,
                     ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
                         {{
-                            {decode_async}
+                            {recv_decode_async}
                         }}
 
                     fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {{
@@ -184,7 +219,6 @@ impl VoloThriftBackend {
                     }}
                 }}
 
-                #[::async_trait::async_trait]
                 impl ::volo_thrift::EntryMessage for {res_send_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {{
                         match self {{
@@ -193,7 +227,7 @@ impl VoloThriftBackend {
                     }}
 
                     fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {{
-                       {decode}
+                       {send_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
@@ -201,7 +235,7 @@ impl VoloThriftBackend {
                         msg_ident: &::pilota::thrift::TMessageIdentifier,
                     ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
                         {{
-                            {decode_async}
+                            {send_decode_async}
                         }}
 
                     fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {{
@@ -554,13 +588,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 type Response = {res_send_name};
                 type Error = ::anyhow::Error;
 
-                type Future<'cx> = impl ::std::future::Future<Output = ::std::result::Result<Self::Response, Self::Error>> + 'cx;
-
-                fn call<'cx, 's>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> Self::Future<'cx> where 's:'cx {{
-                    async move {{
-                        match req {{
-                           {handler}
-                        }}
+                async fn call<'s, 'cx>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> ::std::result::Result<Self::Response, Self::Error> {{
+                    match req {{
+                        {handler}
                     }}
                 }}
             }}"#
@@ -597,7 +627,10 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             "::volo_thrift::AnyhowError".into()
         };
 
-        format!("async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, {exception}>;")
+        format!(
+            "fn {name}(&self, {args}) -> impl ::std::future::Future<Output = \
+             ::core::result::Result<{ret_ty}, {exception}>> + Send;"
+        )
     }
 
     fn codegen_service_method_with_global_path(
@@ -637,9 +670,15 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         };
 
         format!(
-            r#"async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, {exception}>{{
-					Ok(Default::default())
-				}}"#
+            r#"
+    async fn {name}(
+        &self,
+        {args},
+    ) -> ::core::result::Result<{ret_ty}, {exception}>
+    {{
+        Ok(Default::default())
+    }}
+"#
         )
     }
 

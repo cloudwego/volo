@@ -1,5 +1,7 @@
 use std::{
-    fmt, io,
+    fmt,
+    future::Future,
+    io,
     task::{Context, Poll},
 };
 
@@ -22,7 +24,6 @@ pub enum DefaultIncoming {
     Unix(#[pin] UnixListenerStream),
 }
 
-#[async_trait::async_trait]
 impl MakeIncoming for DefaultIncoming {
     type Incoming = DefaultIncoming;
 
@@ -44,12 +45,10 @@ impl From<TcpListener> for DefaultIncoming {
     }
 }
 
-#[async_trait::async_trait]
 pub trait Incoming: fmt::Debug + Send + 'static {
-    async fn accept(&mut self) -> io::Result<Option<Conn>>;
+    fn accept(&mut self) -> impl Future<Output = io::Result<Option<Conn>>> + Send;
 }
 
-#[async_trait::async_trait]
 impl Incoming for DefaultIncoming {
     async fn accept(&mut self) -> io::Result<Option<Conn>> {
         if let Some(conn) = self.try_next().await? {
@@ -61,15 +60,13 @@ impl Incoming for DefaultIncoming {
     }
 }
 
-#[async_trait::async_trait]
 pub trait MakeIncoming {
     type Incoming: Incoming;
 
-    async fn make_incoming(self) -> io::Result<Self::Incoming>;
+    fn make_incoming(self) -> impl Future<Output = io::Result<Self::Incoming>> + Send;
 }
 
 #[cfg(target_family = "unix")]
-#[async_trait::async_trait]
 impl MakeIncoming for Address {
     type Incoming = DefaultIncoming;
 
@@ -88,7 +85,6 @@ impl MakeIncoming for Address {
 }
 
 #[cfg(not(target_family = "unix"))]
-#[async_trait::async_trait]
 impl MakeIncoming for Address {
     type Incoming = DefaultIncoming;
 
@@ -116,9 +112,12 @@ impl Stream for DefaultIncoming {
 #[cfg(target_family = "unix")]
 mod unix_helper {
 
+    #[cfg(target_os = "linux")]
     use std::{
         fs::File,
         io::{BufRead, BufReader},
+    };
+    use std::{
         net::{SocketAddr, TcpListener},
         os::{
             fd::{AsRawFd, FromRawFd, IntoRawFd},
@@ -169,6 +168,7 @@ mod unix_helper {
         (values[0], values[1])
     }
 
+    #[cfg(target_os = "linux")]
     pub fn split_at_bytes(s: &str, t: &str) -> Vec<String> {
         let mut result = Vec::new();
         let mut last = 0;
@@ -186,6 +186,7 @@ mod unix_helper {
         result
     }
 
+    #[cfg(target_os = "linux")]
     pub fn get_fields(s: &str) -> Vec<String> {
         split_at_bytes(s, " \r\t\n")
     }

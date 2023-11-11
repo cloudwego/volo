@@ -22,6 +22,16 @@ path = "src/hello/thrift_server.rs"
 name = "hello-thrift-client"
 path = "src/hello/thrift_client.rs"
 
+# hello tls
+[[bin]]
+name = "hello-tls-grpc-server"
+path = "src/hello_grpc_tls/grpc_tls_server.rs"
+required-features = ["tls"]
+[[bin]]
+name = "hello-tls-grpc-client"
+path = "src/hello_grpc_tls/grpc_tls_client.rs"
+required-features = ["tls"]
+
 # compression
 [[bin]]
 name = "compresion-grpc-server"
@@ -70,7 +80,6 @@ path = "src/http/http.rs"
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
-async-trait.workspace = true
 lazy_static.workspace = true
 metainfo.workspace = true
 tokio = { workspace = true, features = ["full"] }
@@ -90,3 +99,11 @@ http.workspace = true
 hyper = { version = "1.0.0-rc.3", features = ["server", "http1", "http2"] }
 motore.workspace = true
 serde.workspace = true
+
+# TLS dependencies
+librustls = { workspace = true, optional = true}
+rustls-pemfile = { workspace = true, optional = true }
+tokio-rustls = { workspace = true, optional = true }
+
+[features]
+tls = ["librustls", "rustls-pemfile", "tokio-rustls", "volo/rustls", "volo-grpc/rustls"]

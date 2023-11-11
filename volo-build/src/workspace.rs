@@ -24,6 +24,8 @@ pub struct Service {
 
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct WorkspaceConfig {
+    #[serde(default)]
+    pub(crate) touch_all: bool,
     pub(crate) services: Vec<Service>,
 }
 
@@ -56,12 +58,18 @@ where
             .collect::<Result<Vec<_>, _>>()
             .unwrap();
 
-        self.pilota_builder
+        self.ignore_unused(!config.touch_all)
+            .pilota_builder
             .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
     }
 
     pub fn plugin(mut self, plugin: impl Plugin + 'static) -> Self {
         self.pilota_builder = self.pilota_builder.plugin(plugin);
+        self
+    }
+
+    pub fn ignore_unused(mut self, ignore_unused: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.ignore_unused(ignore_unused);
         self
     }
 }

@@ -1,4 +1,3 @@
-#![feature(impl_trait_in_assoc_type)]
 #![doc(
     html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
 )]

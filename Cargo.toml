@@ -21,19 +21,20 @@ repository = "https://github.com/cloudwego/volo"
 license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
-pilota = "0.8"
-pilota-build = "0.8"
-pilota-thrift-parser = "0.4"
-# pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" }
-# pilota-build = { git = "https://github.com/cloudwego/pilota", branch = "main" }
-# pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota", branch = "main" }
+pilota = "0.9"
+pilota-build = "0.9"
+pilota-thrift-parser = "0.9"
+#pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" }
+#pilota-build = { git = "https://github.com/cloudwego/pilota", branch = "main" }
+#pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota", branch = "main" }
 
-motore = "0.3"
+motore = "0.4"
+# motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
 
 metainfo = "0.7"
 
 anyhow = "1"
-async-broadcast = "0.5"
+async-broadcast = "0.6"
 async-stream = "0.3"
 async-trait = "0.1"
 base64 = "0.13"
@@ -52,6 +53,7 @@ futures = "0.3"
 futures-util = "0.3"
 flate2 = "1"
 fxhash = "0.2"
+git2 = { version = "0.18", default-features = false }
 h2 = "0.3"
 heck = "0.4"
 hex = "0.4"
@@ -67,10 +69,10 @@ linked-hash-map = "0.5"
 log = "0.4"
 matchit = "0.7"
 mur3 = "0.1"
-nix = "0.26"
+nix = "0.27"
 nom = "7"
 normpath = "1"
-num_enum = "0.6"
+num_enum = "0.7"
 once_cell = "1"
 parking_lot = "0.12"
 paste = "1"
@@ -99,6 +101,12 @@ tracing-subscriber = "0.3"
 update-informer = "1"
 url_path = "0.1"
 walkdir = "2"
+
+# Optional dependencies
+librustls = { package = "rustls", version = "0.21" }
+rustls-pemfile = "1"
+tokio-rustls = "0.24"
+tokio-native-tls = "0.3"
 
 [profile.release]
 opt-level = 3

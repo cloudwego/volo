@@ -11,7 +11,6 @@ mod meta;
 use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
 
 pub use callopt::CallOpt;
-use futures::Future;
 pub use meta::MetaService;
 use motore::{
     layer::{Identity, Layer, Stack},
@@ -48,6 +47,9 @@ pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     mk_client: C,
     mk_lb: LB,
     _marker: PhantomData<fn(T, U)>,
+
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    tls_config: Option<volo::net::dial::ClientTlsConfig>,
 }
 
 impl<C, T, U>
@@ -73,6 +75,9 @@ impl<C, T, U>
             mk_client: service_client,
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: None,
         }
     }
 }
@@ -93,6 +98,9 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
             mk_client: self.mk_client,
             mk_lb: self.mk_lb.load_balance(load_balance),
             _marker: PhantomData,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -111,6 +119,9 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
             mk_client: self.mk_client,
             mk_lb: self.mk_lb.discover(discover),
             _marker: PhantomData,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 }
@@ -283,6 +294,9 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_client: self.mk_client,
             mk_lb: mk_load_balance,
             _marker: PhantomData,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -324,6 +338,9 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -355,6 +372,9 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
     }
 
@@ -386,7 +406,17 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             _marker: self._marker,
+
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            tls_config: self.tls_config,
         }
+    }
+
+    /// Sets the [`ClientTlsConfig`] for the client.
+    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    pub fn tls_config(mut self, tls_config: volo::net::dial::ClientTlsConfig) -> Self {
+        self.tls_config = Some(tls_config);
+        self
     }
 }
 
@@ -399,13 +429,10 @@ where
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Error:
         Into<Status>,
-    for<'cx> <<LB::Layer as Layer<IL::Service>>::Service as Service<ClientContext, Request<T>>>::Future<'cx>:
-        Send,
     IL: Layer<MetaService<ClientTransport<U>>>,
     IL::Service:
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <IL::Service as Service<ClientContext, Request<T>>>::Error: Into<Status>,
-    for<'cx> <IL::Service as Service<ClientContext, Request<T>>>::Future<'cx>: Send,
     OL:
         Layer<
             BoxCloneService<
@@ -421,13 +448,23 @@ where
     OL::Service:
         Service<ClientContext, Request<T>, Response = Response<U>> + 'static + Send + Clone + Sync,
     <OL::Service as Service<ClientContext, Request<T>>>::Error: Send + Into<Status>,
-    for<'cx> <OL::Service as Service<ClientContext, Request<T>>>::Future<'cx>: Send,
     T: 'static + Send,
 {
     /// Builds a new [`Client`].
     pub fn build(self) -> C::Target {
+        #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
         let transport =
             MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config));
+        #[cfg(any(feature = "rustls", feature = "native-tls"))]
+        let transport = match self.tls_config {
+            Some(tls_config) => MetaService::new(ClientTransport::new_with_tls(
+                &self.http2_config,
+                &self.rpc_config,
+                tls_config,
+            )),
+            None => MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config)),
+        };
+
         let transport = self.outer_layer.layer(BoxCloneService::new(
             self.mk_lb.make().layer(self.inner_layer.layer(transport)),
         ));
@@ -509,17 +546,13 @@ macro_rules! impl_client {
         {
             type Response = S::Response;
             type Error = S::Error;
-            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
-            fn call<'cx, 's>(
+            async fn call<'s, 'cx>(
                 &'s $self,
                 $cx: &'cx mut crate::context::ClientContext,
                 $req: Req,
-            ) -> Self::Future<'cx>
-            where
-                's: 'cx,
-            {
-                async move { $e }
+            ) -> Result<Self::Response, Self::Error> {
+                $e
             }
         }
 
@@ -536,17 +569,13 @@ macro_rules! impl_client {
         {
             type Response = S::Response;
             type Error = S::Error;
-            type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx;
 
-            fn call<'cx>(
+            async fn call<'cx>(
                 $self,
                 $cx: &'cx mut crate::context::ClientContext,
                 $req: Req,
-            ) -> Self::Future<'cx>
-            where
-                Self: 'cx,
-            {
-                async move { $e }
+            ) -> Result<Self::Response, Self::Error> {
+                $e
             }
         }
     };

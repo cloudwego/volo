@@ -1,5 +1,3 @@
-#![feature(impl_trait_in_assoc_type)]
-
 use std::net::SocketAddr;
 
 use tokio::sync::mpsc;
@@ -12,7 +10,6 @@ use volo_grpc::{
 
 pub struct S;
 
-#[volo::async_trait]
 impl volo_gen::proto_gen::streaming::Streaming for S {
     async fn unary(
         &self,

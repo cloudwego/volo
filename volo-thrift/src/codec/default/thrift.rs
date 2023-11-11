@@ -104,7 +104,6 @@ impl Default for ThriftCodec {
     }
 }
 
-#[async_trait::async_trait]
 impl ZeroCopyDecoder for ThriftCodec {
     #[inline]
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(

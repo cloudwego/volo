@@ -1,5 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
+use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 
 use crate::util::get_repo_latest_commit_id;
@@ -37,7 +38,7 @@ pub struct Idl {
     pub includes: Option<Vec<PathBuf>>,
     #[serde(skip_serializing_if = "Vec::is_empty", default = "Vec::new")]
     pub touch: Vec<String>,
-    #[serde(default = "default_keep_unknown_fields")]
+    #[serde(skip_serializing_if = "is_false", default)]
     pub keep_unknown_fields: bool,
 }
 
@@ -48,10 +49,34 @@ impl Idl {
             Source::Local => Ok(()),
         }
     }
+
+    pub fn ensure_readable(&self) -> anyhow::Result<()> {
+        // We should ensure that:
+        //   1. All the files exist (`ENOENT` may occur)
+        //   2. All the files can be accessed by the current user (`EPERM` may occur)
+        //   3. All the files can be read by the current user (`EPERM` may occur)
+        // The simplest method is opening it with read perm (`O_RDONLY`)
+
+        try_open_readonly(&self.path)
+            .map_err(|e| anyhow!("{}: {}", self.path.to_str().unwrap(), e))?;
+
+        if let Some(includes) = &self.includes {
+            for inc in includes.iter() {
+                try_open_readonly(inc).map_err(|e| anyhow!("{}: {}", inc.to_str().unwrap(), e))?;
+            }
+        }
+
+        Ok(())
+    }
 }
 
-fn default_keep_unknown_fields() -> bool {
-    false
+fn is_false(b: &bool) -> bool {
+    !b
+}
+
+fn try_open_readonly<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<()> {
+    let _ = std::fs::OpenOptions::new().read(true).open(path)?;
+    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

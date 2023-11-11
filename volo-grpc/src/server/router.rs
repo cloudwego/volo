@@ -3,7 +3,6 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use futures::Future;
 use fxhash::FxHashMap;
 use http_body::Body as HttpBody;
 use motore::{BoxCloneService, Service};
@@ -93,24 +92,20 @@ where
 {
     type Response = Response<Body>;
     type Error = Status;
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + 'cx
-    where
-        Self: 'cx;
 
-    fn call<'cx, 's>(&'s self, cx: &'cx mut ServerContext, req: Request<B>) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            let path = cx.rpc_info.method.as_ref().unwrap();
-            match self.node.at(path) {
-                Ok(match_) => {
-                    let id = match_.value;
-                    let route = self.routes.get(id).volo_unwrap().clone();
-                    route.call(cx, req).await
-                }
-                Err(err) => Err(Status::unimplemented(err.to_string())),
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut ServerContext,
+        req: Request<B>,
+    ) -> Result<Self::Response, Self::Error> {
+        let path = cx.rpc_info.method.as_ref().unwrap();
+        match self.node.at(path) {
+            Ok(match_) => {
+                let id = match_.value;
+                let route = self.routes.get(id).volo_unwrap().clone();
+                route.call(cx, req).await
             }
+            Err(err) => Err(Status::unimplemented(err.to_string())),
         }
     }
 }

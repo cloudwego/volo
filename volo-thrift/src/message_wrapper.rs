@@ -24,7 +24,6 @@ pub struct ThriftMessage<M> {
 
 pub(crate) struct DummyMessage;
 
-#[async_trait::async_trait]
 impl EntryMessage for DummyMessage {
     #[inline]
     fn encode<T: TOutputProtocol>(&self, _protocol: &mut T) -> Result<(), EncodeError> {
@@ -186,7 +185,7 @@ where
 
         let res = match msg_ident.message_type {
             TMessageType::Exception => Err(crate::Error::Application(
-                Message::decode_async(protocol).await?,
+                <ApplicationError as Message>::decode_async(protocol).await?,
             )),
             _ => Ok(U::decode_async(protocol, &msg_ident).await?),
         };

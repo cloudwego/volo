@@ -109,15 +109,12 @@ where
 {
     type Response = Response<RespBody>;
     type Error = http::Error;
-    type Future<'cx> = impl Future<Output = Result<Self::Response, Self::Error>> + Send + 'cx
-        where
-            HttpContext: 'cx,
-            Self: 'cx;
 
-    fn call<'cx, 's>(&'s self, cx: &'cx mut HttpContext, req: Incoming) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move { Ok(self.h.clone().call(cx, req).await) }
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut HttpContext,
+        req: Incoming,
+    ) -> Result<Self::Response, Self::Error> {
+        Ok(self.h.clone().call(cx, req).await)
     }
 }

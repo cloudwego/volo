@@ -1,8 +1,6 @@
 //! Applies a timeout to request
 //! if the inner service's call does not complete within specified timeout, the response will be
 //! aborted.
-
-use futures::Future;
 use motore::{layer::Layer, service::Service};
 use tracing::warn;
 
@@ -23,39 +21,36 @@ where
 
     type Error = crate::Error;
 
-    type Future<'cx> = impl Future<Output = Result<S::Response, Self::Error>> + 'cx;
-
-    fn call<'cx, 's>(&'s self, cx: &'cx mut ClientContext, req: Req) -> Self::Future<'cx>
-    where
-        's: 'cx,
-    {
-        async move {
-            if let Some(config) = cx.rpc_info.config() {
-                match config.rpc_timeout() {
-                    Some(duration) => {
-                        let start = std::time::Instant::now();
-                        match tokio::time::timeout(duration, self.inner.call(cx, req)).await {
-                            Ok(r) => r.map_err(Into::into),
-                            Err(_) => {
-                                let msg = format!(
-                                    "[VOLO] thrift rpc call timeout, rpcinfo: {:?}, elpased: \
-                                     {:?}, timeout config: {:?}",
-                                    cx.rpc_info,
-                                    start.elapsed(),
-                                    duration
-                                );
-                                warn!(msg);
-                                Err(crate::Error::Transport(
-                                    std::io::Error::new(std::io::ErrorKind::TimedOut, msg).into(),
-                                ))
-                            }
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut ClientContext,
+        req: Req,
+    ) -> Result<Self::Response, Self::Error> {
+        if let Some(config) = cx.rpc_info.config() {
+            match config.rpc_timeout() {
+                Some(duration) => {
+                    let start = std::time::Instant::now();
+                    match tokio::time::timeout(duration, self.inner.call(cx, req)).await {
+                        Ok(r) => r.map_err(Into::into),
+                        Err(_) => {
+                            let msg = format!(
+                                "[VOLO] thrift rpc call timeout, rpcinfo: {:?}, elpased: {:?}, \
+                                 timeout config: {:?}",
+                                cx.rpc_info,
+                                start.elapsed(),
+                                duration
+                            );
+                            warn!(msg);
+                            Err(crate::Error::Transport(
+                                std::io::Error::new(std::io::ErrorKind::TimedOut, msg).into(),
+                            ))
                         }
                     }
-                    None => self.inner.call(cx, req).await.map_err(Into::into),
                 }
-            } else {
-                unreachable!("rpc_info.config should never be None")
+                None => self.inner.call(cx, req).await.map_err(Into::into),
             }
+        } else {
+            unreachable!("rpc_info.config should never be None")
         }
     }
 }

@@ -3,7 +3,9 @@ pub mod dial;
 pub mod incoming;
 mod probe;
 
-use std::{borrow::Cow, fmt, net::Ipv6Addr, path::Path};
+#[cfg(target_family = "unix")]
+use std::{borrow::Cow, path::Path};
+use std::{fmt, net::Ipv6Addr};
 
 pub use incoming::{DefaultIncoming, MakeIncoming};
 

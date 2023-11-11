@@ -11,9 +11,9 @@
 
 [English](README.md) | 中文
 
-Volo 是字节跳动服务框架团队研发的 **高性能**、**可扩展性强** 的 Rust RPC 框架，使用了 Rust 最新的 GAT 特性。
+Volo 是字节跳动服务框架团队研发的 **高性能**、**可扩展性强** 的 Rust RPC 框架，使用了 Rust 最新的 AFIT 和 RPITIT 特性。
 
-Volo 使用 [`Motore`][motore] 作为其中间件抽象层, Motore 基于 GAT 设计。
+Volo 使用 [`Motore`][motore] 作为其中间件抽象层, Motore 基于 AFIT 和 RPITIT 设计。
 
 ## 概览
 
@@ -30,11 +30,11 @@ Volo 主要包含 6 个 crate 库:
 
 ### 特点
 
-#### 使用 GAT 特性
+#### 使用 AFIT 和 RPITIT 特性
 
-Volo 使用 [`Motore`][motore] 作为其中间件抽象层, Motore 基于 GAT 设计。
+Volo 使用 [`Motore`][motore] 作为其中间件抽象层, Motore 基于 AFIT 和 RPITIT 设计。
 
-通过 GAT，我们可以避免很多不必要的 Box 内存分配，以及提升易用性，给用户提供更友好的编程接口和更符合人体工程学的编程范式。
+通过 RPITIT，我们可以避免很多不必要的 Box 内存分配，以及提升易用性，给用户提供更友好的编程接口和更符合人体工程学的编程范式。
 
 #### 高性能
 
@@ -77,7 +77,7 @@ Volo-gRPC: https://www.cloudwego.io/zh/docs/volo/volo-grpc/getting-started/
 ## 相关生态
 
 - [Volo-rs][volo-rs]: Volo 的相关生态，包含了 Volo 的许多组件
-- [Motore][motore]: Volo 参考 Tower 设计的，使用了 GAT 的 middleware 抽象层
+- [Motore][motore]: Volo 参考 Tower 设计的，使用了 AFIT 和 RPITIT 的 middleware 抽象层
 - [Pilota][pilota]: Volo 使用的 Thrift 与 Protobuf 编译器及编解码的纯 Rust 实现（不依赖 protoc）
 - [Metainfo][metainfo]: Volo 用于进行元信息透传的组件，期望定义一套元信息透传的标准
 

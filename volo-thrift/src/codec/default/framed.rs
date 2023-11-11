@@ -74,7 +74,6 @@ impl<D: ZeroCopyDecoder> FramedDecoder<D> {
 /// https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
 pub const HEADER_DETECT_LENGTH: usize = 6;
 
-#[async_trait::async_trait]
 impl<D> ZeroCopyDecoder for FramedDecoder<D>
 where
     D: ZeroCopyDecoder,

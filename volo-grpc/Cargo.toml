@@ -1,6 +1,6 @@
 [package]
 name = "volo-grpc"
-version = "0.6.0"
+version = "0.8.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -14,18 +14,20 @@ keywords = ["async", "rpc", "grpc", "protobuf"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"] # for conditional intra-doc links
+
 [badges]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
 pilota.workspace = true
-volo = { version = "0.5", path = "../volo" }
+volo = { version = "0.8", path = "../volo" }
 motore = { workspace = true, features = ["tower"] }
 metainfo.workspace = true
 
 anyhow.workspace = true
 async-stream.workspace = true
-async-trait.workspace = true
 base64.workspace = true
 bytes.workspace = true
 fxhash.workspace = true
@@ -54,5 +56,14 @@ tower = { workspace = true, features = [
 ] }
 tracing.workspace = true
 
+tokio-rustls = { workspace = true, optional = true }
+tokio-native-tls = { workspace = true, optional = true }
+
 [dev-dependencies]
 tracing-subscriber.workspace = true
+
+[features]
+default = []
+
+rustls = ["tokio-rustls"]
+native-tls = ["tokio-native-tls"]

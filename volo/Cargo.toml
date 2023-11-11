@@ -1,6 +1,6 @@
 [package]
 name = "volo"
-version = "0.5.5"
+version = "0.8.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -16,6 +16,9 @@ keywords = ["async", "rpc", "thrift", "grpc", "protobuf"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[package.metadata.docs.rs]
+rustdoc-args = ["--cfg", "docsrs"] # for conditional intra-doc links
+
 [badges]
 maintenance = { status = "actively-developed" }
 
@@ -23,7 +26,6 @@ maintenance = { status = "actively-developed" }
 motore.workspace = true
 
 async-broadcast.workspace = true
-async-trait.workspace = true
 dashmap.workspace = true
 faststr.workspace = true
 futures.workspace = true
@@ -31,7 +33,13 @@ lazy_static.workspace = true
 libc.workspace = true
 metainfo.workspace = true
 mur3.workspace = true
-nix.workspace = true
+nix = { workspace = true, features = [
+    "uio",
+    "socket",
+    "process",
+    "signal",
+    "feature",
+] }
 once_cell.workspace = true
 pin-project.workspace = true
 rand.workspace = true
@@ -41,3 +49,14 @@ tokio = { workspace = true, features = ["net", "time", "sync", "io-util"] }
 tokio-stream = { workspace = true, features = ["net"] }
 tower.workspace = true
 tracing.workspace = true
+
+# Optional dependencies
+librustls = { workspace = true, optional = true }
+tokio-rustls = { workspace = true, optional = true }
+tokio-native-tls = { workspace = true, optional = true }
+
+[features]
+default = []
+
+rustls = ["tokio-rustls", "librustls"]
+native-tls = ["tokio-native-tls"]

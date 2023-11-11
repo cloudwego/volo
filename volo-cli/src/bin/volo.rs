@@ -1,11 +1,10 @@
-use anyhow::Result;
 use clap::Parser;
 use colored::*;
 use log::{debug, error};
 use update_informer::{registry, Check};
 use volo_cli::model;
 
-fn main() -> Result<()> {
+fn main() {
     // set default log level if not set
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "WARN");
@@ -25,7 +24,7 @@ fn main() -> Result<()> {
         error!("{}", e);
     }
 
-    // detech new version and notify the user
+    // detect new version and notify the user
     let pkg_name = env!("CARGO_PKG_NAME");
     let current_version = env!("CARGO_PKG_VERSION");
 
@@ -46,5 +45,7 @@ fn main() -> Result<()> {
         println!("\n{outdated_msg}\n{update_msg}");
     }
 
-    res
+    if res.is_err() {
+        std::process::exit(1);
+    }
 }
