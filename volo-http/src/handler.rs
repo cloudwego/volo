@@ -21,12 +21,24 @@ where
         }
     }
 }
+
 pub trait Handler<T> {
     fn call(
         self,
         context: &mut HttpContext,
         req: Incoming,
     ) -> impl Future<Output = Response<RespBody>> + Send;
+}
+
+impl<F, Fut, Res> Handler<()> for F
+where
+    F: FnOnce() -> Fut + Clone + Send,
+    Fut: Future<Output = Res> + Send,
+    Res: IntoResponse,
+{
+    async fn call(self, _context: &mut HttpContext, _req: Incoming) -> Response<RespBody> {
+        self().await.into_response()
+    }
 }
 
 macro_rules! impl_handler {

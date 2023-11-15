@@ -6,7 +6,11 @@ use hyper::body::{Bytes, Incoming};
 use motore::{layer::Layer, Service};
 
 use crate::{
-    dispatch::DispatchService, request::FromRequest, response::RespBody, DynError, HttpContext,
+    dispatch::DispatchService,
+    handler::{Handler, HandlerService},
+    request::FromRequest,
+    response::RespBody,
+    DynError, HttpContext,
 };
 
 // The `matchit::Router` cannot be converted to `Iterator`, so using
@@ -209,11 +213,17 @@ impl Service<HttpContext, Incoming> for MethodRouter {
     }
 }
 
+macro_rules! for_all_methods {
+    ($name:ident) => {
+        $name!(options, get, post, put, delete, head, trace, connect, patch);
+    };
+}
+
 pub struct MethodRouterBuilder {
     route: MethodRouter,
 }
 
-macro_rules! impl_method_register {
+macro_rules! impl_method_register_for_builder {
     ($( $method:ident ),*) => {
         $(
         pub fn $method<S, IB, OB>(mut self, handler: S) -> Self
@@ -235,7 +245,7 @@ macro_rules! impl_method_register {
 }
 
 impl MethodRouterBuilder {
-    impl_method_register!(options, get, post, put, delete, head, trace, connect, patch);
+    for_all_methods!(impl_method_register_for_builder);
 
     pub fn build(self) -> MethodRouter {
         self.route
@@ -284,3 +294,19 @@ impl Service<HttpContext, Incoming> for Route {
         self.0.call(cx, req).await
     }
 }
+
+macro_rules! impl_method_register {
+    ($( $method:ident ),*) => {
+        $(
+        pub fn $method<H, T>(h: H) -> MethodRouter
+        where
+            for<'a> H: Handler<T> + Clone + Send + Sync + 'a,
+            for<'a> T: 'a,
+        {
+            MethodRouter::builder().$method(HandlerService::new(h)).build()
+        }
+        )+
+    };
+}
+
+for_all_methods!(impl_method_register);

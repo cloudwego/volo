@@ -1,46 +1,36 @@
-use std::{convert::Infallible, net::SocketAddr};
+use std::net::SocketAddr;
 
 use bytes::Bytes;
-use http::{Method, Response, StatusCode, Uri};
-use hyper::body::Incoming;
-use motore::{service::service_fn, timeout::TimeoutLayer};
-use serde::{Deserialize, Serialize};
+use http::{Method, StatusCode, Uri};
+use motore::timeout::TimeoutLayer;
+use serde::Deserialize;
 use volo_http::{
     handler::HandlerService,
+    param::Params,
     request::Json,
-    route::{MethodRouter, Router},
+    route::{get, post, MethodRouter, Router},
     server::Server,
-    HttpContext,
 };
 
-async fn hello(
-    _cx: &mut HttpContext,
-    _request: Incoming,
-) -> Result<Response<&'static str>, Infallible> {
-    Ok(Response::new("hello, world\n"))
+async fn hello() -> &'static str {
+    "hello, world\n"
 }
 
-async fn echo(cx: &mut HttpContext, _request: Incoming) -> Result<Response<Bytes>, Infallible> {
-    if let Some(echo) = cx.params.get("echo") {
-        return Ok(Response::new(echo.clone()));
+async fn echo(params: Params) -> Result<Bytes, StatusCode> {
+    if let Some(echo) = params.get("echo") {
+        return Ok(echo.clone());
     }
-    Ok(Response::builder()
-        .status(StatusCode::BAD_REQUEST)
-        .body(Bytes::new())
-        .unwrap())
+    Err(StatusCode::BAD_REQUEST)
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Deserialize, Debug)]
 struct Person {
     name: String,
     age: u8,
     phones: Vec<String>,
 }
 
-async fn json(
-    _cx: &mut HttpContext,
-    Json(request): Json<Person>,
-) -> Result<Response<()>, Infallible> {
+async fn json(Json(request): Json<Person>) {
     let first_phone = request
         .phones
         .get(0)
@@ -50,7 +40,6 @@ async fn json(
         "{} is {} years old, {}'s first phone number is {}",
         request.name, request.age, request.name, first_phone
     );
-    Ok(Response::new(()))
 }
 
 async fn test(
@@ -73,19 +62,10 @@ async fn main() {
     let app = Router::new()
         .route(
             "/",
-            MethodRouter::builder()
-                .get(service_fn(hello))
-                .build()
-                .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1)))),
+            get(hello).layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1)))),
         )
-        .route(
-            "/:echo",
-            MethodRouter::builder().get(service_fn(echo)).build(),
-        )
-        .route(
-            "/user",
-            MethodRouter::builder().post(service_fn(json)).build(),
-        )
+        .route("/:echo", get(echo))
+        .route("/user", post(json))
         .route(
             "/test",
             MethodRouter::builder()

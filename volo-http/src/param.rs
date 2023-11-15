@@ -2,6 +2,7 @@ use std::slice::Iter;
 
 use bytes::{BufMut, Bytes, BytesMut};
 
+#[derive(Clone)]
 pub struct Params {
     pub(crate) inner: Vec<(Bytes, Bytes)>,
 }
