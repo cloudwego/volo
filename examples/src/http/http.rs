@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use volo_http::{
     handler::HandlerService,
     request::Json,
-    route::{Route, Router, ServiceLayerExt},
+    route::{MethodRouter, Router},
     server::Server,
     HttpContext,
 };
@@ -73,16 +73,22 @@ async fn main() {
     let app = Router::new()
         .route(
             "/",
-            Route::builder()
+            MethodRouter::builder()
                 .get(service_fn(hello))
                 .build()
                 .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1)))),
         )
-        .route("/:echo", Route::builder().get(service_fn(echo)).build())
-        .route("/user", Route::builder().post(service_fn(json)).build())
+        .route(
+            "/:echo",
+            MethodRouter::builder().get(service_fn(echo)).build(),
+        )
+        .route(
+            "/user",
+            MethodRouter::builder().post(service_fn(json)).build(),
+        )
         .route(
             "/test",
-            Route::builder()
+            MethodRouter::builder()
                 .get(HandlerService::new(test))
                 .post(HandlerService::new(test))
                 .build(),
