@@ -44,11 +44,9 @@ async fn json(Json(request): Json<Person>) {
 async fn test(
     u: Uri,
     m: Method,
-    Json(request): Json<Person>,
 ) -> Result<&'static str, (StatusCode, &'static str)> {
-    println!("{u:?}");
-    println!("{m:?}");
-    println!("{request:?}");
+    println!("uri:    {u:?}");
+    println!("method: {m:?}");
     if u.to_string().ends_with("a") {
         Ok("a") // http://localhost:3000/test?a=a
     } else {

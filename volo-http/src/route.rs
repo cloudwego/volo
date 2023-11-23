@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
 use http::{Method, Response, StatusCode};
-use http_body_util::Full;
-use hyper::body::{Bytes, Incoming};
+use hyper::body::Incoming;
 use motore::{layer::Layer, Service};
 
 use crate::{
     handler::{DynHandler, Handler},
-    response::RespBody,
+    response::{IntoResponse, RespBody},
     DynError, DynService, HttpContext,
 };
 
@@ -35,6 +34,7 @@ impl RouteId {
 pub struct Router<S = ()> {
     matcher: matchit::Router<RouteId>,
     routes: HashMap<RouteId, MethodRouter<S>>,
+    fallback: Fallback<S>,
 }
 
 impl<S> Router<S>
@@ -45,6 +45,7 @@ where
         Self {
             matcher: Default::default(),
             routes: Default::default(),
+            fallback: Fallback::from_status_code(StatusCode::NOT_FOUND),
         }
     }
 
@@ -58,6 +59,11 @@ where
         }
         self.routes.insert(route_id, route);
 
+        self
+    }
+
+    pub fn fallback_for_all(mut self, fallback: Fallback<S>) -> Self {
+        self.fallback = fallback;
         self
     }
 
@@ -79,9 +85,12 @@ where
             })
             .collect();
 
+        let fallback = self.fallback.layer(l.clone());
+
         Router {
             matcher: self.matcher,
             routes,
+            fallback,
         }
     }
 
@@ -96,9 +105,12 @@ where
             })
             .collect();
 
+        let fallback = self.fallback.with_state(&s);
+
         Router {
             matcher: self.matcher,
             routes,
+            fallback,
         }
     }
 }
@@ -120,10 +132,7 @@ impl Service<HttpContext, Incoming> for Router<()> {
             }
         }
 
-        Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Full::new(Bytes::new()).into())
-            .unwrap())
+        self.fallback.call_with_state(cx, req, ()).await
     }
 }
 
@@ -137,6 +146,7 @@ pub struct MethodRouter<S = ()> {
     trace: MethodEndpoint<S>,
     connect: MethodEndpoint<S>,
     patch: MethodEndpoint<S>,
+    fallback: Fallback<S>,
 }
 
 impl<S> MethodRouter<S>
@@ -154,6 +164,7 @@ where
             trace: MethodEndpoint::None,
             connect: MethodEndpoint::None,
             patch: MethodEndpoint::None,
+            fallback: Fallback::from_status_code(StatusCode::METHOD_NOT_ALLOWED),
         }
     }
 
@@ -182,6 +193,7 @@ where
             trace,
             connect,
             patch,
+            fallback,
         } = self;
 
         let layer_fn = move |route: DynService| DynService::new(l.clone().layer(route));
@@ -196,6 +208,8 @@ where
         let connect = connect.map(layer_fn.clone());
         let patch = patch.map(layer_fn.clone());
 
+        let fallback = fallback.map(layer_fn);
+
         Self {
             options,
             get,
@@ -206,6 +220,7 @@ where
             trace,
             connect,
             patch,
+            fallback,
         }
     }
 
@@ -220,10 +235,11 @@ where
             trace: self.trace.with_state(&state),
             connect: self.connect.with_state(&state),
             patch: self.patch.with_state(&state),
+            fallback: self.fallback.with_state(&state),
         }
     }
 
-    async fn call_with_state<'s, 'cx>(
+    pub(crate) async fn call_with_state<'s, 'cx>(
         &'s self,
         cx: &'cx mut HttpContext,
         req: Incoming,
@@ -233,32 +249,24 @@ where
         S: 'cx,
     {
         let handler = match cx.method {
-            Method::OPTIONS => &self.options,
-            Method::GET => &self.get,
-            Method::POST => &self.post,
-            Method::PUT => &self.put,
-            Method::DELETE => &self.delete,
-            Method::HEAD => &self.head,
-            Method::TRACE => &self.trace,
-            Method::CONNECT => &self.connect,
-            Method::PATCH => &self.patch,
-            _ => {
-                return Ok(Response::builder()
-                    .status(StatusCode::METHOD_NOT_ALLOWED)
-                    .body(Full::new(Bytes::new()).into())
-                    .unwrap());
-            }
+            Method::OPTIONS => Some(&self.options),
+            Method::GET => Some(&self.get),
+            Method::POST => Some(&self.post),
+            Method::PUT => Some(&self.put),
+            Method::DELETE => Some(&self.delete),
+            Method::HEAD => Some(&self.head),
+            Method::TRACE => Some(&self.trace),
+            Method::CONNECT => Some(&self.connect),
+            Method::PATCH => Some(&self.patch),
+            _ => None,
         };
 
         match handler {
-            MethodEndpoint::None => Ok(Response::builder()
-                .status(StatusCode::NOT_FOUND)
-                .body(Full::new(Bytes::new()).into())
-                .unwrap()),
-            MethodEndpoint::Route(route) => route.call(cx, req).await,
-            MethodEndpoint::Handler(handler) => {
+            Some(MethodEndpoint::Route(route)) => route.call(cx, req).await,
+            Some(MethodEndpoint::Handler(handler)) => {
                 handler.clone().call_with_state(cx, req, state).await
             }
+            _ => self.fallback.call_with_state(cx, req, state).await,
         }
     }
 }
@@ -305,40 +313,6 @@ where
     }
 }
 
-#[derive(Clone, Default)]
-enum MethodEndpoint<S> {
-    #[default]
-    None,
-    Route(DynService),
-    Handler(DynHandler<S>),
-}
-
-impl<S> MethodEndpoint<S>
-where
-    S: Clone + Send + Sync + 'static,
-{
-    fn map<F>(self, f: F) -> MethodEndpoint<S>
-    where
-        F: FnOnce(DynService) -> DynService + Clone + 'static,
-    {
-        match self {
-            MethodEndpoint::None => MethodEndpoint::None,
-            MethodEndpoint::Route(route) => MethodEndpoint::Route(f(route)),
-            MethodEndpoint::Handler(handler) => MethodEndpoint::Handler(handler.map(f)),
-        }
-    }
-
-    fn with_state<S2>(self, state: &S) -> MethodEndpoint<S2> {
-        match self {
-            MethodEndpoint::None => MethodEndpoint::None,
-            MethodEndpoint::Route(route) => MethodEndpoint::Route(route),
-            MethodEndpoint::Handler(handler) => {
-                MethodEndpoint::Route(handler.into_route(state.clone()))
-            }
-        }
-    }
-}
-
 macro_rules! impl_method_register {
     ($( $method:ident ),*) => {
         $(
@@ -355,3 +329,173 @@ macro_rules! impl_method_register {
 }
 
 for_all_methods!(impl_method_register);
+
+#[derive(Clone, Default)]
+pub enum MethodEndpoint<S> {
+    #[default]
+    None,
+    Route(DynService),
+    Handler(DynHandler<S>),
+}
+
+impl<S> MethodEndpoint<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    pub fn from_handler<H, T>(h: H) -> MethodEndpoint<S>
+    where
+        for<'a> H: Handler<T, S> + Clone + Send + Sync + 'a,
+        for<'a> T: 'a,
+        S: Clone + Send + Sync + 'static,
+    {
+        MethodEndpoint::Handler(DynHandler::new(h))
+    }
+
+    pub fn from_service<Srv>(srv: Srv) -> MethodEndpoint<S>
+    where
+        Srv: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        MethodEndpoint::Route(DynService::new(srv))
+    }
+
+    pub(crate) fn map<F>(self, f: F) -> MethodEndpoint<S>
+    where
+        F: FnOnce(DynService) -> DynService + Clone + 'static,
+    {
+        match self {
+            MethodEndpoint::None => MethodEndpoint::None,
+            MethodEndpoint::Route(route) => MethodEndpoint::Route(f(route)),
+            MethodEndpoint::Handler(handler) => MethodEndpoint::Handler(handler.map(f)),
+        }
+    }
+
+    pub(crate) fn with_state<S2>(self, state: &S) -> MethodEndpoint<S2> {
+        match self {
+            MethodEndpoint::None => MethodEndpoint::None,
+            MethodEndpoint::Route(route) => MethodEndpoint::Route(route),
+            MethodEndpoint::Handler(handler) => {
+                MethodEndpoint::Route(handler.into_route(state.clone()))
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum Fallback<S> {
+    Route(DynService),
+    Handler(DynHandler<S>),
+}
+
+impl<S> Fallback<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    pub(crate) fn from_status_code(status: StatusCode) -> Fallback<S> {
+        Fallback::Route(DynService::new(RouteForStatusCode(status)))
+    }
+
+    pub fn from_handler<H, T>(h: H) -> Fallback<S>
+    where
+        for<'a> H: Handler<T, S> + Clone + Send + Sync + 'a,
+        for<'a> T: 'a,
+        S: Clone + Send + Sync + 'static,
+    {
+        Fallback::Handler(DynHandler::new(h))
+    }
+
+    pub fn from_service<Srv>(srv: Srv) -> Fallback<S>
+    where
+        Srv: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        Fallback::Route(DynService::new(srv))
+    }
+
+    pub(crate) fn map<F>(self, f: F) -> Fallback<S>
+    where
+        F: FnOnce(DynService) -> DynService + Clone + 'static,
+    {
+        match self {
+            Fallback::Route(route) => Fallback::Route(f(route)),
+            Fallback::Handler(handler) => Fallback::Handler(handler.map(f)),
+        }
+    }
+
+    pub(crate) fn layer<L>(self, l: L) -> Self
+    where
+        L: Layer<DynService> + Clone + Send + Sync + 'static,
+        L::Service: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+    {
+        self.map(move |route: DynService| DynService::new(l.clone().layer(route)))
+    }
+
+    pub(crate) fn with_state<S2>(self, state: &S) -> Fallback<S2> {
+        match self {
+            Fallback::Route(route) => Fallback::Route(route),
+            Fallback::Handler(handler) => Fallback::Route(handler.into_route(state.clone())),
+        }
+    }
+
+    pub(crate) async fn call_with_state<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut HttpContext,
+        req: Incoming,
+        state: S,
+    ) -> Result<Response<RespBody>, DynError>
+    where
+        S: 'cx,
+    {
+        match self {
+            Fallback::Route(route) => route.call(cx, req).await,
+            Fallback::Handler(handler) => handler.clone().call_with_state(cx, req, state).await,
+        }
+    }
+}
+
+pub fn from_handler<H, T, S>(h: H) -> MethodEndpoint<S>
+where
+    for<'a> H: Handler<T, S> + Clone + Send + Sync + 'a,
+    for<'a> T: 'a,
+    S: Clone + Send + Sync + 'static,
+{
+    MethodEndpoint::from_handler(h)
+}
+
+pub fn from_service<Srv, S>(srv: Srv) -> MethodEndpoint<S>
+where
+    Srv: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+    S: Clone + Send + Sync + 'static,
+{
+    MethodEndpoint::from_service(srv)
+}
+
+#[derive(Clone)]
+struct RouteForStatusCode(StatusCode);
+
+impl Service<HttpContext, Incoming> for RouteForStatusCode {
+    type Response = Response<RespBody>;
+    type Error = DynError;
+
+    async fn call<'s, 'cx>(
+        &'s self,
+        _cx: &'cx mut HttpContext,
+        _req: Incoming,
+    ) -> Result<Self::Response, Self::Error> {
+        Ok(self.0.into_response())
+    }
+}

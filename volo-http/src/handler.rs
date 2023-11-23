@@ -106,7 +106,7 @@ impl_handler!(
 );
 
 // Use an extra trait with less generic types for hiding the type of handler
-pub(crate) struct DynHandler<S>(Box<dyn ErasedIntoRoute<S>>);
+pub struct DynHandler<S>(Box<dyn ErasedIntoRoute<S>>);
 
 unsafe impl<S> Send for DynHandler<S> {}
 unsafe impl<S> Sync for DynHandler<S> {}
