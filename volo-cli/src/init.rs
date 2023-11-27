@@ -204,6 +204,7 @@ impl CliCommand for Init {
                 protocol: idl.protocol(),
                 filename: PathBuf::from(DEFAULT_FILENAME),
                 idls: vec![idl.clone()],
+                touch_all: false,
             };
             if self.is_grpc_project() {
                 self.copy_grpc_template(entry.clone())?;

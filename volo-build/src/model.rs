@@ -19,6 +19,8 @@ pub struct Entry {
     pub filename: PathBuf,
 
     pub idls: Vec<Idl>,
+    #[serde(default)]
+    pub touch_all: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]

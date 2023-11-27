@@ -149,6 +149,7 @@ impl CliCommand for Add {
                         protocol: new_idl.protocol(),
                         filename: PathBuf::from(&self.filename),
                         idls: vec![new_idl],
+                        touch_all: false,
                     },
                 );
             }
