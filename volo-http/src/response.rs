@@ -14,10 +14,14 @@ use crate::DynError;
 #[pin_project(project = RespBodyProj)]
 pub enum RespBody {
     Stream {
-        #[pin] inner: StreamBody<stream::Iter<Box<dyn Iterator<Item = Result<Frame<Bytes>, DynError>> + Send + Sync>>>,
+        #[pin]
+        inner: StreamBody<
+            stream::Iter<Box<dyn Iterator<Item = Result<Frame<Bytes>, DynError>> + Send + Sync>>,
+        >,
     },
     Full {
-        #[pin] inner: Full<Bytes>,
+        #[pin]
+        inner: Full<Bytes>,
     },
 }
 

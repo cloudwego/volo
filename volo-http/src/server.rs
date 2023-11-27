@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use http::Response;
+use http::{Request, Response};
 use hyper::{
     body::{Body, Incoming as BodyIncoming},
     server::conn::http1,
@@ -12,7 +12,7 @@ use motore::BoxError;
 use tracing::{info, trace};
 use volo::net::{incoming::Incoming, MakeIncoming};
 
-use crate::{DynError, HttpContext, MotoreService};
+use crate::{param::Params, DynError, HttpContext};
 
 #[derive(Clone)]
 pub struct Server<App> {
@@ -31,7 +31,7 @@ where
     App::Error: Into<DynError>,
 {
     pub fn new(app: App) -> Self {
-        Self { app: app }
+        Self { app }
     }
 
     pub async fn run<MI: MakeIncoming>(self, mk_incoming: MI) -> Result<(), BoxError> {
@@ -44,7 +44,6 @@ where
         let exit_mark_inner = exit_mark.clone();
         let rx_inner = rx.clone();
 
-        let service = self;
         let handler = tokio::spawn(async move {
             let exit_mark = exit_mark_inner.clone();
             loop {
@@ -56,11 +55,31 @@ where
                         let peer = conn.info.peer_addr.clone().unwrap();
                         trace!("[VOLO] accept connection from: {:?}", peer);
 
-                        let s = service.clone();
+                        let service = self.clone();
                         let mut watch = rx_inner.clone();
                         tokio::task::spawn(async move {
-                            let mut http_conn = http1::Builder::new()
-                                .serve_connection(conn, MotoreService { peer, inner: s.app });
+                            let mut http_conn = http1::Builder::new().serve_connection(
+                                conn,
+                                hyper::service::service_fn(move |req: Request<BodyIncoming>| {
+                                    let s = service.clone();
+                                    let peer = peer.clone();
+                                    async move {
+                                        let (parts, req) = req.into_parts();
+                                        let mut cx = HttpContext {
+                                            peer,
+                                            method: parts.method,
+                                            uri: parts.uri,
+                                            version: parts.version,
+                                            headers: parts.headers,
+                                            extensions: parts.extensions,
+                                            params: Params {
+                                                inner: Vec::with_capacity(0),
+                                            },
+                                        };
+                                        s.app.call(&mut cx, req).await
+                                    }
+                                }),
+                            );
                             tokio::select! {
                                 _ = watch.changed() => {
                                     tracing::trace!("[VOLO] closing a pending connection");
