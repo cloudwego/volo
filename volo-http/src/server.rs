@@ -8,6 +8,7 @@ use hyper::{
     body::{Body, Incoming as BodyIncoming},
     server::conn::http1,
 };
+use hyper_util::rt::TokioIo;
 use motore::BoxError;
 use tracing::{info, trace};
 use volo::net::{incoming::Incoming, MakeIncoming};
@@ -59,7 +60,7 @@ where
                         let mut watch = rx_inner.clone();
                         tokio::task::spawn(async move {
                             let mut http_conn = http1::Builder::new().serve_connection(
-                                conn,
+                                TokioIo::new(conn),
                                 hyper::service::service_fn(move |req: Request<BodyIncoming>| {
                                     let s = service.clone();
                                     let peer = peer.clone();
@@ -84,7 +85,9 @@ where
                                 _ = watch.changed() => {
                                     tracing::trace!("[VOLO] closing a pending connection");
                                     // Graceful shutdown.
-                                    hyper::server::conn::http1::Connection::graceful_shutdown(Pin::new(&mut http_conn));
+                                    hyper::server::conn::http1::Connection::graceful_shutdown(
+                                        Pin::new(&mut http_conn)
+                                    );
                                     // Continue to poll this connection until shutdown can finish.
                                     let result = http_conn.await;
                                     if let Err(err) = result {

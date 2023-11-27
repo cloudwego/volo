@@ -19,9 +19,22 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 volo = { version = "0.8", path = "../volo" }
-motore.workspace = true
 
-hyper = { version = "=1.0.0-rc.3", features = ["server", "http1", "http2"] }
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+
+bytes.workspace = true
+futures-util.workspace = true
+matchit.workspace = true
+mime.workspace = true
+motore.workspace = true
+parking_lot.workspace = true
+pin-project.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
 tokio = { workspace = true, features = [
     "time",
     "macros",
@@ -29,18 +42,7 @@ tokio = { workspace = true, features = [
     "signal",
     "parking_lot",
 ] }
-http.workspace = true
-http-body-util = "=0.1.0-rc.2"
-matchit.workspace = true
 tracing.workspace = true
-futures-util.workspace = true
-pin-project.workspace = true
-bytes.workspace = true
-serde_json.workspace = true
-thiserror.workspace = true
-mime.workspace = true
-serde.workspace = true
-parking_lot.workspace = true
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
