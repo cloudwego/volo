@@ -1,14 +1,16 @@
 use std::{net::SocketAddr, time::Duration};
 
 use bytes::Bytes;
-use http::{Method, StatusCode, Uri};
-use motore::timeout::TimeoutLayer;
+use http::{Method, Response, StatusCode, Uri};
+use http_body_util::Full;
 use serde::Deserialize;
 use volo_http::{
+    layer::TimeoutLayer,
     param::Params,
     request::Json,
     route::{get, post, MethodRouter, Router},
     server::Server,
+    HttpContext,
 };
 
 async fn hello() -> &'static str {
@@ -41,10 +43,7 @@ async fn json(Json(request): Json<Person>) {
     );
 }
 
-async fn test(
-    u: Uri,
-    m: Method,
-) -> Result<&'static str, (StatusCode, &'static str)> {
+async fn test(u: Uri, m: Method) -> Result<&'static str, (StatusCode, &'static str)> {
     println!("uri:    {u:?}");
     println!("method: {m:?}");
     if u.to_string().ends_with("a") {
@@ -58,6 +57,11 @@ async fn timeout_test() {
     tokio::time::sleep(Duration::from_secs(5)).await
 }
 
+fn timeout_handler(ctx: &HttpContext) -> StatusCode {
+    tracing::info!("Timeout on `{}`, peer: {}", ctx.uri, ctx.peer);
+    StatusCode::INTERNAL_SERVER_ERROR
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -66,10 +70,17 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
+    let timeout_response = Response::builder()
+        .status(StatusCode::INTERNAL_SERVER_ERROR)
+        .body(Full::new(Bytes::new()))
+        .unwrap();
+
     let app = Router::new()
         .route(
             "/",
-            get(hello).layer(TimeoutLayer::new(Some(Duration::from_secs(1)))),
+            get(hello).layer(TimeoutLayer::new(Duration::from_secs(1), move |_| {
+                timeout_response
+            })),
         )
         .route("/:echo", get(echo))
         .route("/user", post(json))
@@ -78,7 +89,7 @@ async fn main() {
             MethodRouter::builder().get(test).post(test).build(),
         )
         .route("/timeout", get(timeout_test))
-        .layer(TimeoutLayer::new(Some(Duration::from_secs(1))));
+        .layer(TimeoutLayer::new(Duration::from_secs(1), timeout_handler));
 
     let addr: SocketAddr = "[::]:9091".parse().unwrap();
     let addr = volo::net::Address::from(addr);

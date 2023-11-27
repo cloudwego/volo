@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use http::{Method, Response, StatusCode};
 use hyper::body::Incoming;
-use motore::{layer::Layer, Service};
+use motore::{layer::Layer, service::Service};
 
 use crate::{
     handler::{DynHandler, Handler},

@@ -530,6 +530,7 @@ dependencies = [
  "async-stream",
  "bytes",
  "http 1.0.0",
+ "http-body-util",
  "hyper 1.0.1",
  "lazy_static",
  "metainfo",
