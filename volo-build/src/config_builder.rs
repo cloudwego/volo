@@ -87,6 +87,15 @@ impl InnerBuilder {
         }
     }
 
+    pub fn ignore_unused(self, ignore_unused: bool) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.ignore_unused(ignore_unused))
+            }
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.ignore_unused(ignore_unused)),
+        }
+    }
+
     pub fn keep_unknown_fields(self, keep: impl IntoIterator<Item = PathBuf>) -> Self {
         match self {
             InnerBuilder::Protobuf(inner) => {
@@ -144,7 +153,7 @@ impl ConfigBuilder {
                 }
             }
 
-            builder.write()?;
+            builder.ignore_unused(!entry.touch_all).write()?;
 
             Ok(())
         })?;

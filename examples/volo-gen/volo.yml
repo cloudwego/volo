@@ -2,6 +2,7 @@ entries:
   proto:
     protocol: protobuf
     filename: proto_gen.rs
+    touch_all: false
     idls:
       - source: local
         path: ../proto/hello.proto
@@ -18,6 +19,7 @@ entries:
   thrift:
     protocol: thrift
     filename: thrift_gen.rs
+    touch_all: false
     idls:
       - source: local
         path: ../thrift_idl/hello.thrift
