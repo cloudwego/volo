@@ -1,11 +1,10 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Duration};
 
 use bytes::Bytes;
 use http::{Method, StatusCode, Uri};
 use motore::timeout::TimeoutLayer;
 use serde::Deserialize;
 use volo_http::{
-    handler::HandlerService,
     param::Params,
     request::Json,
     route::{get, post, MethodRouter, Router},
@@ -57,26 +56,30 @@ async fn test(
     }
 }
 
+async fn timeout_test() {
+    tokio::time::sleep(Duration::from_secs(5)).await
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let app = Router::new()
         .route(
             "/",
-            get(hello).layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1)))),
+            get(hello).layer(TimeoutLayer::new(Some(Duration::from_secs(1)))),
         )
         .route("/:echo", get(echo))
         .route("/user", post(json))
         .route(
             "/test",
-            MethodRouter::builder()
-                .get(HandlerService::new(test))
-                .post(HandlerService::new(test))
-                .build(),
+            MethodRouter::builder().get(test).post(test).build(),
         )
-        .layer(TimeoutLayer::new(Some(std::time::Duration::from_secs(1))));
+        .route("/timeout", get(timeout_test))
+        .layer(TimeoutLayer::new(Some(Duration::from_secs(1))));
 
     let addr: SocketAddr = "[::]:9091".parse().unwrap();
     let addr = volo::net::Address::from(addr);
+
+    println!("Listening on {addr}");
 
     Server::new(app).run(addr).await.unwrap();
 }

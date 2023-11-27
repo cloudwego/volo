@@ -7,49 +7,56 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     extract::FromContext,
+    private,
     response::{IntoResponse, RespBody},
     HttpContext,
 };
 
-pub trait FromRequest: Sized {
+pub trait FromRequest<S, M = private::ViaRequest>: Sized {
     fn from(
         cx: &HttpContext,
         body: Incoming,
+        state: &S,
     ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send;
 }
 
-impl<T> FromRequest for T
+impl<T, S> FromRequest<S, private::ViaContext> for T
 where
-    T: FromContext,
+    T: FromContext<S> + Sync,
+    S: Sync,
 {
-    fn from(
+    async fn from(
         cx: &HttpContext,
         _body: Incoming,
-    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
-        async move {
-            match T::from_context(cx).await {
-                Ok(value) => Ok(value),
-                Err(rejection) => Err(rejection.into_response()),
-            }
+        state: &S,
+    ) -> Result<Self, Response<RespBody>> {
+        match T::from_context(cx, state).await {
+            Ok(value) => Ok(value),
+            Err(rejection) => Err(rejection.into_response()),
         }
     }
 }
 
-impl FromRequest for Incoming {
-    fn from(
+impl<S> FromRequest<S> for Incoming
+where
+    S: Sync,
+{
+    async fn from(
         _cx: &HttpContext,
         body: Incoming,
-    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
-        async { Ok(body) }
+        _state: &S,
+    ) -> Result<Self, Response<RespBody>> {
+        Ok(body)
     }
 }
 
 pub struct Json<T>(pub T);
 
-impl<T: DeserializeOwned> FromRequest for Json<T> {
+impl<T: DeserializeOwned, S> FromRequest<S> for Json<T> {
     fn from(
         cx: &HttpContext,
         body: Incoming,
+        _state: &S,
     ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
         async move {
             if !json_content_type(&cx.headers) {

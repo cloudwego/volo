@@ -72,10 +72,10 @@ path = "src/unknown/thrift_server.rs"
 name = "unknown-thrift-client"
 path = "src/unknown/thrift_client.rs"
 
+# http
 [[bin]]
-name = "http"
-path = "src/http/http.rs"
-
+name = "http-simple"
+path = "src/http/simple.rs"
 
 [dependencies]
 anyhow.workspace = true

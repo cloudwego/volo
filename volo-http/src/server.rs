@@ -15,24 +15,28 @@ use volo::net::{incoming::Incoming, MakeIncoming};
 
 use crate::{param::Params, DynError, HttpContext};
 
-#[derive(Clone)]
 pub struct Server<App> {
-    app: App,
+    app: Arc<App>,
+}
+
+impl<A> Clone for Server<A> {
+    fn clone(&self) -> Self {
+        Self {
+            app: self.app.clone(),
+        }
+    }
 }
 
 impl<OB, App> Server<App>
 where
     OB: Body<Error = DynError> + Send + 'static,
     OB::Data: Send,
-    App: motore::Service<HttpContext, BodyIncoming, Response = Response<OB>>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    App:
+        motore::Service<HttpContext, BodyIncoming, Response = Response<OB>> + Send + Sync + 'static,
     App::Error: Into<DynError>,
 {
     pub fn new(app: App) -> Self {
-        Self { app }
+        Self { app: Arc::new(app) }
     }
 
     pub async fn run<MI: MakeIncoming>(self, mk_incoming: MI) -> Result<(), BoxError> {
@@ -56,13 +60,13 @@ where
                         let peer = conn.info.peer_addr.clone().unwrap();
                         trace!("[VOLO] accept connection from: {:?}", peer);
 
-                        let service = self.clone();
+                        let app = self.app.clone();
                         let mut watch = rx_inner.clone();
                         tokio::task::spawn(async move {
                             let mut http_conn = http1::Builder::new().serve_connection(
                                 TokioIo::new(conn),
                                 hyper::service::service_fn(move |req: Request<BodyIncoming>| {
-                                    let s = service.clone();
+                                    let app = app.clone();
                                     let peer = peer.clone();
                                     async move {
                                         let (parts, req) = req.into_parts();
@@ -77,7 +81,7 @@ where
                                                 inner: Vec::with_capacity(0),
                                             },
                                         };
-                                        s.app.call(&mut cx, req).await
+                                        app.call(&mut cx, req).await
                                     }
                                 }),
                             );

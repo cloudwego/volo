@@ -6,11 +6,9 @@ use hyper::body::{Bytes, Incoming};
 use motore::{layer::Layer, Service};
 
 use crate::{
-    dispatch::DispatchService,
-    handler::{Handler, HandlerService},
-    request::FromRequest,
+    handler::{DynHandler, Handler},
     response::RespBody,
-    DynError, HttpContext,
+    DynError, DynService, HttpContext,
 };
 
 // The `matchit::Router` cannot be converted to `Iterator`, so using
@@ -34,42 +32,23 @@ impl RouteId {
     }
 }
 
-#[derive(Clone, Default)]
-pub struct Router {
+pub struct Router<S = ()> {
     matcher: matchit::Router<RouteId>,
-    routes: HashMap<RouteId, MethodRouter>,
+    routes: HashMap<RouteId, MethodRouter<S>>,
 }
 
-impl Service<HttpContext, Incoming> for Router {
-    type Response = Response<RespBody>;
-
-    type Error = DynError;
-
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut HttpContext,
-        req: Incoming,
-    ) -> Result<Self::Response, Self::Error> {
-        if let Ok(matched) = self.matcher.at(cx.uri.path()) {
-            if let Some(srv) = self.routes.get(matched.value) {
-                cx.params = matched.params.into();
-                return srv.call(cx, req).await;
-            }
-        }
-
-        Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(Full::new(Bytes::new()).into())
-            .unwrap())
-    }
-}
-
-impl Router {
+impl<S> Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            matcher: Default::default(),
+            routes: Default::default(),
+        }
     }
 
-    pub fn route<R>(mut self, uri: R, route: MethodRouter) -> Self
+    pub fn route<R>(mut self, uri: R, route: MethodRouter<S>) -> Self
     where
         R: Into<String>,
     {
@@ -84,7 +63,7 @@ impl Router {
 
     pub fn layer<L>(self, l: L) -> Self
     where
-        L: Layer<Route> + Clone + Send + Sync + 'static,
+        L: Layer<DynService> + Clone + Send + Sync + 'static,
         L::Service: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
             + Clone
             + Send
@@ -105,33 +84,88 @@ impl Router {
             routes,
         }
     }
+
+    #[allow(dead_code)]
+    fn with_state<S2>(self, s: S) -> Router<S2> {
+        let routes = self
+            .routes
+            .into_iter()
+            .map(|(id, route)| {
+                let route = route.with_state(s.clone());
+                (id, route)
+            })
+            .collect();
+
+        Router {
+            matcher: self.matcher,
+            routes,
+        }
+    }
 }
 
-#[derive(Default, Clone)]
-pub struct MethodRouter {
-    options: Option<Route>,
-    get: Option<Route>,
-    post: Option<Route>,
-    put: Option<Route>,
-    delete: Option<Route>,
-    head: Option<Route>,
-    trace: Option<Route>,
-    connect: Option<Route>,
-    patch: Option<Route>,
+impl Service<HttpContext, Incoming> for Router<()> {
+    type Response = Response<RespBody>;
+
+    type Error = DynError;
+
+    async fn call<'s, 'cx>(
+        &'s self,
+        cx: &'cx mut HttpContext,
+        req: Incoming,
+    ) -> Result<Self::Response, Self::Error> {
+        if let Ok(matched) = self.matcher.at(cx.uri.path()) {
+            if let Some(srv) = self.routes.get(matched.value) {
+                cx.params = matched.params.into();
+                return srv.call_with_state(cx, req, ()).await;
+            }
+        }
+
+        Ok(Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Full::new(Bytes::new()).into())
+            .unwrap())
+    }
 }
 
-impl MethodRouter {
+pub struct MethodRouter<S = ()> {
+    options: MethodEndpoint<S>,
+    get: MethodEndpoint<S>,
+    post: MethodEndpoint<S>,
+    put: MethodEndpoint<S>,
+    delete: MethodEndpoint<S>,
+    head: MethodEndpoint<S>,
+    trace: MethodEndpoint<S>,
+    connect: MethodEndpoint<S>,
+    patch: MethodEndpoint<S>,
+}
+
+impl<S> MethodRouter<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
     pub fn new() -> Self {
-        Default::default()
+        Self {
+            options: MethodEndpoint::None,
+            get: MethodEndpoint::None,
+            post: MethodEndpoint::None,
+            put: MethodEndpoint::None,
+            delete: MethodEndpoint::None,
+            head: MethodEndpoint::None,
+            trace: MethodEndpoint::None,
+            connect: MethodEndpoint::None,
+            patch: MethodEndpoint::None,
+        }
     }
 
-    pub fn builder() -> MethodRouterBuilder {
-        MethodRouterBuilder { route: Self::new() }
+    pub fn builder() -> MethodRouterBuilder<S> {
+        MethodRouterBuilder {
+            router: Self::new(),
+        }
     }
 
     pub fn layer<L>(self, l: L) -> Self
     where
-        L: Layer<Route> + Clone + Send + Sync + 'static,
+        L: Layer<DynService> + Clone + Send + Sync + 'static,
         L::Service: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
             + Clone
             + Send
@@ -150,15 +184,17 @@ impl MethodRouter {
             patch,
         } = self;
 
-        let options = options.map(|r| r.layer(l.clone()));
-        let get = get.map(|r| r.layer(l.clone()));
-        let post = post.map(|r| r.layer(l.clone()));
-        let put = put.map(|r| r.layer(l.clone()));
-        let delete = delete.map(|r| r.layer(l.clone()));
-        let head = head.map(|r| r.layer(l.clone()));
-        let trace = trace.map(|r| r.layer(l.clone()));
-        let connect = connect.map(|r| r.layer(l.clone()));
-        let patch = patch.map(|r| r.layer(l.clone()));
+        let layer_fn = move |route: DynService| DynService::new(l.clone().layer(route));
+
+        let options = options.map(layer_fn.clone());
+        let get = get.map(layer_fn.clone());
+        let post = post.map(layer_fn.clone());
+        let put = put.map(layer_fn.clone());
+        let delete = delete.map(layer_fn.clone());
+        let head = head.map(layer_fn.clone());
+        let trace = trace.map(layer_fn.clone());
+        let connect = connect.map(layer_fn.clone());
+        let patch = patch.map(layer_fn.clone());
 
         Self {
             options,
@@ -172,18 +208,30 @@ impl MethodRouter {
             patch,
         }
     }
-}
 
-impl Service<HttpContext, Incoming> for MethodRouter {
-    type Response = Response<RespBody>;
+    pub fn with_state<S2>(self, state: S) -> MethodRouter<S2> {
+        MethodRouter {
+            options: self.options.with_state(&state),
+            get: self.get.with_state(&state),
+            post: self.post.with_state(&state),
+            put: self.put.with_state(&state),
+            delete: self.delete.with_state(&state),
+            head: self.head.with_state(&state),
+            trace: self.trace.with_state(&state),
+            connect: self.connect.with_state(&state),
+            patch: self.patch.with_state(&state),
+        }
+    }
 
-    type Error = DynError;
-
-    async fn call<'s, 'cx>(
+    async fn call_with_state<'s, 'cx>(
         &'s self,
         cx: &'cx mut HttpContext,
         req: Incoming,
-    ) -> Result<Self::Response, Self::Error> {
+        state: S,
+    ) -> Result<Response<RespBody>, DynError>
+    where
+        S: 'cx,
+    {
         let handler = match cx.method {
             Method::OPTIONS => &self.options,
             Method::GET => &self.get,
@@ -197,18 +245,20 @@ impl Service<HttpContext, Incoming> for MethodRouter {
             _ => {
                 return Ok(Response::builder()
                     .status(StatusCode::METHOD_NOT_ALLOWED)
-                    .body("".into())
+                    .body(Full::new(Bytes::new()).into())
                     .unwrap());
             }
         };
 
-        if let Some(service) = handler {
-            service.call(cx, req).await
-        } else {
-            Ok(Response::builder()
+        match handler {
+            MethodEndpoint::None => Ok(Response::builder()
                 .status(StatusCode::NOT_FOUND)
-                .body("".into())
-                .unwrap())
+                .body(Full::new(Bytes::new()).into())
+                .unwrap()),
+            MethodEndpoint::Route(route) => route.call(cx, req).await,
+            MethodEndpoint::Handler(handler) => {
+                handler.clone().call_with_state(cx, req, state).await
+            }
         }
     }
 }
@@ -219,91 +269,86 @@ macro_rules! for_all_methods {
     };
 }
 
-pub struct MethodRouterBuilder {
-    route: MethodRouter,
+pub struct MethodRouterBuilder<S> {
+    router: MethodRouter<S>,
 }
 
 macro_rules! impl_method_register_for_builder {
     ($( $method:ident ),*) => {
         $(
-        pub fn $method<S, IB, OB>(mut self, handler: S) -> Self
+        pub fn $method<H, T>(mut self, handler: H) -> Self
         where
-            S: Service<HttpContext, IB, Response = Response<OB>>
-                + Send
-                + Sync
-                + Clone
-                + 'static,
-            S::Error: std::error::Error + Send + Sync,
-            OB: Into<RespBody> + 'static,
-            IB: FromRequest + Send + 'static,
+            for<'a> H: Handler<T, S> + Clone + Send + Sync + 'a,
+            for<'a> T: 'a,
         {
-            self.route.$method = Some(Route::new(DispatchService::new(handler)));
+            self.router.$method = MethodEndpoint::Handler(DynHandler::new(handler));
             self
         }
         )+
     };
 }
 
-impl MethodRouterBuilder {
+impl<S> MethodRouterBuilder<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    pub fn new() -> Self {
+        Self {
+            router: MethodRouter::new(),
+        }
+    }
+
     for_all_methods!(impl_method_register_for_builder);
 
-    pub fn build(self) -> MethodRouter {
-        self.route
+    pub fn build(self) -> MethodRouter<S> {
+        self.router
     }
 }
 
-#[derive(Clone)]
-pub struct Route(motore::BoxCloneService<HttpContext, Incoming, Response<RespBody>, DynError>);
-
-impl Route {
-    pub fn new<S>(inner: S) -> Self
-    where
-        S: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
-            + Clone
-            + Send
-            + Sync
-            + 'static,
-    {
-        Route(motore::BoxCloneService::new(inner))
-    }
-
-    pub fn layer<L>(self, l: L) -> Self
-    where
-        L: Layer<Route>,
-        L::Service: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
-            + Clone
-            + Send
-            + Sync
-            + 'static,
-    {
-        Route::new(l.layer(self))
-    }
+#[derive(Clone, Default)]
+enum MethodEndpoint<S> {
+    #[default]
+    None,
+    Route(DynService),
+    Handler(DynHandler<S>),
 }
 
-impl Service<HttpContext, Incoming> for Route {
-    type Response = Response<RespBody>;
+impl<S> MethodEndpoint<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    fn map<F>(self, f: F) -> MethodEndpoint<S>
+    where
+        F: FnOnce(DynService) -> DynService + Clone + 'static,
+    {
+        match self {
+            MethodEndpoint::None => MethodEndpoint::None,
+            MethodEndpoint::Route(route) => MethodEndpoint::Route(f(route)),
+            MethodEndpoint::Handler(handler) => MethodEndpoint::Handler(handler.map(f)),
+        }
+    }
 
-    type Error = DynError;
-
-    #[inline]
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut HttpContext,
-        req: Incoming,
-    ) -> Result<Self::Response, Self::Error> {
-        self.0.call(cx, req).await
+    fn with_state<S2>(self, state: &S) -> MethodEndpoint<S2> {
+        match self {
+            MethodEndpoint::None => MethodEndpoint::None,
+            MethodEndpoint::Route(route) => MethodEndpoint::Route(route),
+            MethodEndpoint::Handler(handler) => {
+                MethodEndpoint::Route(handler.into_route(state.clone()))
+            }
+        }
     }
 }
 
 macro_rules! impl_method_register {
     ($( $method:ident ),*) => {
         $(
-        pub fn $method<H, T>(h: H) -> MethodRouter
+        pub fn $method<H, T, S>(h: H) -> MethodRouter<S>
         where
-            for<'a> H: Handler<T> + Clone + Send + Sync + 'a,
+            for<'a> H: Handler<T, S> + Clone + Send + Sync + 'a,
             for<'a> T: 'a,
+            S: Clone + Send + Sync + 'static,
         {
-            MethodRouter::builder().$method(HandlerService::new(h)).build()
+            MethodRouterBuilder::new().$method(h).build()
         }
         )+
     };
