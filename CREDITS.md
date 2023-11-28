@@ -18,3 +18,10 @@ We've copied and modified some code of [`tonic`](https://github.com/hyperium/ton
 We really appreciate the work that the `tonic` team have done.
 
 `Tonic` is licensed under the MIT license, and a copy can be found under the `licenses/tonic` directory.
+
+# axum
+
+We've copied and modified some code of [`axum`](https://github.com/tokio-rs/axum).
+We really appreciate the work that the `axum` team have done.
+
+`axum` is licensed under the MIT license, and a copy can be found under the `licenses/axum` directory.

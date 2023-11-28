@@ -72,12 +72,22 @@ path = "src/unknown/thrift_server.rs"
 name = "unknown-thrift-client"
 path = "src/unknown/thrift_client.rs"
 
+# http
+[[bin]]
+name = "http-simple"
+path = "src/http/simple.rs"
 
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
+bytes.workspace = true
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["server", "http1", "http2"] }
 lazy_static.workspace = true
 metainfo.workspace = true
+motore.workspace = true
+serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tracing.workspace = true
@@ -87,6 +97,7 @@ pilota.workspace = true
 volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc" }
 volo-thrift = { path = "../volo-thrift" }
+volo-http = { path = "../volo-http" }
 
 volo-gen = { path = "./volo-gen" }
 

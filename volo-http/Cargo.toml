@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.0.0"
+version = "0.1.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -10,8 +10,39 @@ description = "HTTP framework implementation of volo."
 documentation = "https://docs.rs/volo-http"
 readme = "README.md"
 categories = ["asynchronous", "network-programming", "web-programming"]
-keywords = ["async", "http"]
+keywords = ["async", "rpc", "http"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[badges]
+maintenance = { status = "actively-developed" }
+
 [dependencies]
+volo = { version = "0.8", path = "../volo" }
+
+http = "1"
+http-body-util = "0.1"
+hyper = { version = "1", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+
+bytes.workspace = true
+futures-util.workspace = true
+matchit.workspace = true
+mime.workspace = true
+motore.workspace = true
+parking_lot.workspace = true
+pin-project.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = [
+    "time",
+    "macros",
+    "rt",
+    "signal",
+    "parking_lot",
+] }
+tracing.workspace = true
+
+[dev-dependencies]
+serde = { version = "1", features = ["derive"] }
