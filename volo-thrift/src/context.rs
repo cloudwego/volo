@@ -209,12 +209,13 @@ impl ClientContext {
 
     #[inline]
     pub fn reset(&mut self, seq_id: i32, msg_type: TMessageType) {
-        self.rpc_info.clear();
         self.seq_id = seq_id;
         self.message_type = msg_type;
         self.transport.should_reuse = true;
         self.stats.reset();
         self.common_stats.reset();
+        // self.0 is RpcCx, this reset will clear rpcinfo and extension
+        self.0.reset(self.0.inner);
     }
 }
 
