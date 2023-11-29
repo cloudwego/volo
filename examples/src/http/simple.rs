@@ -1,16 +1,15 @@
 use std::{net::SocketAddr, time::Duration};
 
 use bytes::Bytes;
-use http::{Method, Response, StatusCode, Uri};
-use http_body_util::Full;
+use http::{Method, StatusCode, Uri};
 use serde::Deserialize;
+use volo::net::Address;
 use volo_http::{
     layer::TimeoutLayer,
     param::Params,
     request::Json,
     route::{get, post, MethodRouter, Router},
     server::Server,
-    HttpContext,
 };
 
 async fn hello() -> &'static str {
@@ -57,8 +56,8 @@ async fn timeout_test() {
     tokio::time::sleep(Duration::from_secs(5)).await
 }
 
-fn timeout_handler(ctx: &HttpContext) -> StatusCode {
-    tracing::info!("Timeout on `{}`, peer: {}", ctx.uri, ctx.peer);
+fn timeout_handler(uri: Uri, peer: Address) -> StatusCode {
+    tracing::info!("Timeout on `{}`, peer: {}", uri, peer);
     StatusCode::INTERNAL_SERVER_ERROR
 }
 
@@ -70,16 +69,11 @@ async fn main() {
 
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    let timeout_response = Response::builder()
-        .status(StatusCode::INTERNAL_SERVER_ERROR)
-        .body(Full::new(Bytes::new()))
-        .unwrap();
-
     let app = Router::new()
         .route(
             "/",
-            get(hello).layer(TimeoutLayer::new(Duration::from_secs(1), move |_| {
-                timeout_response
+            get(hello).layer(TimeoutLayer::new(Duration::from_secs(1), || {
+                StatusCode::INTERNAL_SERVER_ERROR
             })),
         )
         .route("/:echo", get(echo))

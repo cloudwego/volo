@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{marker::PhantomData, time::Duration};
 
 use http::{Method, Request, Response, StatusCode};
 use http_body_util::Full;
@@ -6,6 +6,7 @@ use hyper::body::{Bytes, Incoming};
 use motore::{layer::Layer, service::Service};
 
 use crate::{
+    handler::HandlerWithoutRequest,
     response::{IntoResponse, RespBody},
     HttpContext,
 };
@@ -93,50 +94,57 @@ where
 }
 
 #[derive(Clone)]
-pub struct TimeoutLayer<F> {
+pub struct TimeoutLayer<H, T> {
     duration: Duration,
-    handler: F,
+    handler: H,
+    _marker: PhantomData<T>,
 }
 
-impl<F> TimeoutLayer<F> {
-    pub fn new<T>(duration: Duration, handler: F) -> Self
+impl<H, T> TimeoutLayer<H, T> {
+    pub fn new(duration: Duration, handler: H) -> Self
     where
-        F: FnOnce(&HttpContext) -> T + Clone + Sync,
-        T: IntoResponse,
+        H: HandlerWithoutRequest<T> + Clone + Send + Sync + 'static,
     {
-        Self { duration, handler }
+        Self {
+            duration,
+            handler,
+            _marker: PhantomData,
+        }
     }
 }
 
-impl<S, F, T> Layer<S> for TimeoutLayer<F>
+impl<S, H, T> Layer<S> for TimeoutLayer<H, T>
 where
     S: Service<HttpContext, Incoming, Response = Response<RespBody>> + Send + Sync + 'static,
-    F: FnOnce(&HttpContext) -> T + Clone + Sync,
-    T: IntoResponse,
+    H: HandlerWithoutRequest<T> + Clone + Send + Sync + 'static,
+    T: Sync,
 {
-    type Service = Timeout<S, F>;
+    type Service = Timeout<S, H, T>;
 
     fn layer(self, inner: S) -> Self::Service {
         Timeout {
             service: inner,
             duration: self.duration,
             handler: self.handler,
+            _marker: PhantomData,
         }
     }
 }
 
 #[derive(Clone)]
-pub struct Timeout<S, F> {
+pub struct Timeout<S, H, T> {
     service: S,
     duration: Duration,
-    handler: F,
+    handler: H,
+    _marker: PhantomData<T>,
 }
 
-impl<S, F, T> Service<HttpContext, Incoming> for Timeout<S, F>
+impl<S, H, T> Service<HttpContext, Incoming> for Timeout<S, H, T>
 where
     S: Service<HttpContext, Incoming, Response = Response<RespBody>> + Send + Sync + 'static,
-    F: FnOnce(&HttpContext) -> T + Clone + Sync,
-    T: IntoResponse,
+    S::Error: Send,
+    H: HandlerWithoutRequest<T> + Clone + Send + Sync + 'static,
+    T: Sync,
 {
     type Response = S::Response;
 
@@ -153,7 +161,7 @@ where
         tokio::select! {
             resp = fut_service => resp,
             _ = fut_timeout => {
-                Ok((self.handler.clone())(cx).into_response())
+                Ok(self.handler.clone().call(cx).await.into_response())
             },
         }
     }

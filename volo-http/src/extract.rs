@@ -1,5 +1,6 @@
 use futures_util::Future;
 use http::{Method, Response, Uri};
+use volo::net::Address;
 
 use crate::{response::IntoResponse, HttpContext, Params, State};
 
@@ -20,6 +21,17 @@ where
 
     async fn from_context(context: &HttpContext, state: &S) -> Result<Self, Self::Rejection> {
         Ok(T::from_context(context, state).await.ok())
+    }
+}
+
+impl<S> FromContext<S> for Address
+where
+    S: Send + Sync,
+{
+    type Rejection = Response<()>; // Infallible
+
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Address, Self::Rejection> {
+        Ok(context.peer.clone())
     }
 }
 

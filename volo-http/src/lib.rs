@@ -7,6 +7,8 @@ pub mod response;
 pub mod route;
 pub mod server;
 
+mod macros;
+
 use http::{Extensions, HeaderMap, HeaderValue, Method, Uri, Version};
 use hyper::{body::Incoming, Response};
 use param::Params;
