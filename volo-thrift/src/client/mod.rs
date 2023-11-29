@@ -444,6 +444,11 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             multiplex,
         }
     }
+
+    #[doc(hidden)]
+    pub fn get_callee_name(&self) -> &FastStr {
+        &self.callee_name
+    }
 }
 
 #[derive(Clone)]
