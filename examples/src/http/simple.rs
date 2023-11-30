@@ -1,15 +1,10 @@
 use std::{net::SocketAddr, time::Duration};
 
-use bytes::Bytes;
-use http::{Method, StatusCode, Uri};
 use serde::Deserialize;
-use volo::net::Address;
 use volo_http::{
     layer::TimeoutLayer,
-    param::Params,
-    request::Json,
     route::{get, post, MethodRouter, Router},
-    server::Server,
+    Address, Bytes, Json, Method, Params, Server, StatusCode, Uri,
 };
 
 async fn hello() -> &'static str {

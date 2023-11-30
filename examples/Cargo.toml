@@ -81,9 +81,6 @@ path = "src/http/simple.rs"
 anyhow.workspace = true
 async-stream.workspace = true
 bytes.workspace = true
-http = "1"
-http-body-util = "0.1"
-hyper = { version = "1", features = ["server", "http1", "http2"] }
 lazy_static.workspace = true
 metainfo.workspace = true
 motore.workspace = true
