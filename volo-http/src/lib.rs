@@ -10,20 +10,16 @@ pub mod server;
 mod macros;
 
 pub use bytes::Bytes;
-use http::{Extensions, HeaderMap, HeaderValue, Version};
-pub use http::{Method, StatusCode, Uri};
-use hyper::{body::Incoming, Response};
+pub use hyper::{
+    body::Incoming,
+    http::{
+        Extensions, HeaderMap, HeaderName, HeaderValue, Method, Request, Response, StatusCode, Uri,
+        Version,
+    },
+};
 pub use volo::net::Address;
 
 pub use crate::{param::Params, request::Json, server::Server};
-
-mod private {
-    #[derive(Debug, Clone, Copy)]
-    pub enum ViaContext {}
-
-    #[derive(Debug, Clone, Copy)]
-    pub enum ViaRequest {}
-}
 
 pub type DynService =
     motore::BoxCloneService<HttpContext, Incoming, Response<response::RespBody>, DynError>;

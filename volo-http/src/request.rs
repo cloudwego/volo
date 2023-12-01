@@ -7,10 +7,17 @@ use serde::de::DeserializeOwned;
 
 use crate::{
     extract::FromContext,
-    private,
     response::{IntoResponse, RespBody},
     HttpContext,
 };
+
+mod private {
+    #[derive(Debug, Clone, Copy)]
+    pub enum ViaContext {}
+
+    #[derive(Debug, Clone, Copy)]
+    pub enum ViaRequest {}
+}
 
 pub trait FromRequest<S, M = private::ViaRequest>: Sized {
     fn from(
