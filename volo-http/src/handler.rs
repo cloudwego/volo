@@ -6,6 +6,7 @@ use motore::Service;
 
 use crate::{
     extract::FromContext,
+    macros::{all_the_tuples, all_the_tuples_no_last_special_case},
     request::FromRequest,
     response::{IntoResponse, RespBody},
     DynError, DynService, HttpContext,
@@ -79,31 +80,7 @@ macro_rules! impl_handler {
     };
 }
 
-impl_handler!([], T1);
-impl_handler!([T1], T2);
-impl_handler!([T1, T2], T3);
-impl_handler!([T1, T2, T3], T4);
-impl_handler!([T1, T2, T3, T4], T5);
-impl_handler!([T1, T2, T3, T4, T5], T6);
-impl_handler!([T1, T2, T3, T4, T5, T6], T7);
-impl_handler!([T1, T2, T3, T4, T5, T6, T7], T8);
-impl_handler!([T1, T2, T3, T4, T5, T6, T7, T8], T9);
-impl_handler!([T1, T2, T3, T4, T5, T6, T7, T8, T9], T10);
-impl_handler!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10], T11);
-impl_handler!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11], T12);
-impl_handler!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12], T13);
-impl_handler!(
-    [T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13],
-    T14
-);
-impl_handler!(
-    [T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14],
-    T15
-);
-impl_handler!(
-    [T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15],
-    T16
-);
+all_the_tuples!(impl_handler);
 
 // Use an extra trait with less generic types for hiding the type of handler
 pub struct DynHandler<S>(Box<dyn ErasedIntoRoute<S>>);
@@ -272,3 +249,43 @@ where
         Ok(self.handler.clone().call(cx, req, &self.state).await)
     }
 }
+
+pub trait HandlerWithoutRequest<T>: Sized {
+    fn call(self, context: &HttpContext) -> impl Future<Output = Response<RespBody>> + Send;
+}
+
+impl<F, Res> HandlerWithoutRequest<()> for F
+where
+    F: FnOnce() -> Res + Clone + Send,
+    Res: IntoResponse,
+{
+    async fn call(self, _context: &HttpContext) -> Response<RespBody> {
+        self().into_response()
+    }
+}
+
+macro_rules! impl_handler_without_request {
+    (
+        $($ty:ident),* $(,)?
+    ) => {
+        #[allow(non_snake_case, unused_mut, unused_variables)]
+        impl<F, Res, $($ty,)*> HandlerWithoutRequest<($($ty,)*)> for F
+        where
+            F: FnOnce($($ty,)*) -> Res + Clone + Send,
+            Res: IntoResponse,
+            $( for<'r> $ty: FromContext<()> + Send + 'r, )*
+        {
+            async fn call(self, context: &HttpContext) -> Response<RespBody> {
+                $(
+                    let $ty = match $ty::from_context(context, &()).await {
+                        Ok(value) => value,
+                        Err(rejection) => return rejection.into_response(),
+                    };
+                )*
+                self($($ty,)*).into_response()
+            }
+        }
+    };
+}
+
+all_the_tuples_no_last_special_case!(impl_handler_without_request);
