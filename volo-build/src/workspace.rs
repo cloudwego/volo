@@ -1,4 +1,5 @@
 use pilota_build::{IdlService, Plugin};
+use volo::FastStr;
 
 use crate::{model, util::get_or_download_idl};
 
@@ -26,6 +27,8 @@ pub struct Service {
 pub struct WorkspaceConfig {
     #[serde(default)]
     pub(crate) touch_all: bool,
+    #[serde(default)]
+    pub(crate) dedup_list: Vec<FastStr>,
     pub(crate) services: Vec<Service>,
 }
 
@@ -59,6 +62,7 @@ where
             .unwrap();
 
         self.ignore_unused(!config.touch_all)
+            .dedup(config.dedup_list)
             .pilota_builder
             .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
     }
@@ -70,6 +74,11 @@ where
 
     pub fn ignore_unused(mut self, ignore_unused: bool) -> Self {
         self.pilota_builder = self.pilota_builder.ignore_unused(ignore_unused);
+        self
+    }
+
+    pub fn dedup(mut self, dedup_list: Vec<FastStr>) -> Self {
+        self.pilota_builder = self.pilota_builder.dedup(dedup_list);
         self
     }
 }
