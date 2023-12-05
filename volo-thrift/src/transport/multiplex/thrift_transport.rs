@@ -32,6 +32,7 @@ lazy_static::lazy_static! {
 #[pin_project]
 pub struct ThriftTransport<E, Resp> {
     write_half: Arc<Mutex<WriteHalf<E>>>,
+    dirty: Arc<AtomicBool>,
     #[allow(clippy::type_complexity)]
     tx_map: Arc<
         Mutex<
@@ -54,6 +55,7 @@ impl<E, Resp> Clone for ThriftTransport<E, Resp> {
     fn clone(&self) -> Self {
         Self {
             write_half: self.write_half.clone(),
+            dirty: self.dirty.clone(),
             tx_map: self.tx_map.clone(),
             write_error: self.write_error.clone(),
             read_error: self.read_error.clone(),
@@ -176,6 +178,7 @@ where
         });
         Self {
             write_half: Arc::new(Mutex::new(write_half)),
+            dirty: Arc::new(AtomicBool::new(false)),
             tx_map,
             write_error,
             read_error,
@@ -195,8 +198,6 @@ where
         msg: ThriftMessage<Req>,
         oneway: bool,
     ) -> Result<Option<ThriftMessage<Resp>>, Error> {
-        let (tx, rx) = oneshot::channel();
-        let mut tx_map = self.tx_map.lock().await;
         // check error and closed
         if self.read_error.load(std::sync::atomic::Ordering::Relaxed) {
             return Err(Error::Application(ApplicationError::new(
@@ -210,12 +211,31 @@ where
                 "multiplex connection closed".to_string(),
             )));
         }
+        let (tx, rx) = oneshot::channel();
+        let mut tx_map = self.tx_map.lock().await;
         let seq_id = msg.meta.seq_id;
         if !oneway {
             tx_map.insert(seq_id, tx);
         }
         drop(tx_map);
-        if let Err(e) = self.write_half.lock().await.send(cx, msg).await {
+        let mut wh = self.write_half.lock().await;
+        // check connection dirty
+        if self.dirty.load(std::sync::atomic::Ordering::Relaxed) {
+            // connection is dirty, we should also set write error to indicate the connection should
+            // not be reused
+            self.write_error
+                .store(true, std::sync::atomic::Ordering::Relaxed);
+            return Err(Error::Application(ApplicationError::new(
+                ApplicationErrorKind::UNKNOWN,
+                "multiplex connection is dirty".to_string(),
+            )));
+        }
+        self.dirty.store(true, std::sync::atomic::Ordering::Relaxed);
+        let res = wh.send(cx, msg).await;
+        self.dirty
+            .store(false, std::sync::atomic::Ordering::Relaxed);
+        drop(wh);
+        if let Err(e) = res {
             self.write_error
                 .store(true, std::sync::atomic::Ordering::Relaxed);
             if !oneway {
