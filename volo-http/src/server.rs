@@ -1,4 +1,5 @@
 use std::{
+    convert::Infallible,
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
@@ -10,7 +11,11 @@ use tokio::sync::Notify;
 use tracing::{info, trace};
 use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
 
-use crate::{param::Params, response::Response, DynError, HttpContext};
+use crate::{
+    param::Params,
+    response::{IntoResponse, RespBody, Response},
+    HttpContext,
+};
 
 pub struct Server<App> {
     app: Arc<App>,
@@ -26,8 +31,10 @@ impl<A> Clone for Server<A> {
 
 impl<App> Server<App>
 where
-    App: motore::Service<HttpContext, BodyIncoming, Response = Response> + Send + Sync + 'static,
-    App::Error: Into<DynError>,
+    App: motore::Service<HttpContext, BodyIncoming, Response = Response, Error = Infallible>
+        + Send
+        + Sync
+        + 'static,
 {
     pub fn new(app: App) -> Self {
         Self { app: Arc::new(app) }
@@ -157,12 +164,11 @@ async fn handle_conn<S>(
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer: Address,
 ) where
-    S: motore::Service<HttpContext, BodyIncoming, Response = Response>
+    S: motore::Service<HttpContext, BodyIncoming, Response = Response, Error = Infallible>
         + Clone
         + Send
         + Sync
         + 'static,
-    S::Error: Into<DynError>,
 {
     let notified = exit_notify.notified();
     tokio::pin!(notified);
@@ -186,7 +192,11 @@ async fn handle_conn<S>(
                         inner: Vec::with_capacity(0),
                     },
                 };
-                service.call(&mut cx, req).await.map(|resp| resp.0)
+                let resp = match service.call(&mut cx, req).await {
+                    Ok(resp) => resp,
+                    Err(inf) => inf.into_response(),
+                };
+                Ok::<hyper::http::Response<RespBody>, Infallible>(resp.inner())
             }
         }),
     );

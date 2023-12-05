@@ -1,4 +1,5 @@
 use std::{
+    convert::Infallible,
     ops::{Deref, DerefMut},
     pin::Pin,
     task::{Context, Poll},
@@ -12,14 +13,15 @@ use hyper::{
 };
 use pin_project::pin_project;
 
-use crate::DynError;
-
-pub struct Response(pub(crate) hyper::http::Response<RespBody>);
-pub struct Infallible;
+pub struct Response(hyper::http::Response<RespBody>);
 
 impl Response {
     pub fn builder() -> Builder {
         Builder::new()
+    }
+
+    pub(crate) fn inner(self) -> hyper::http::Response<RespBody> {
+        self.0
     }
 }
 
@@ -52,7 +54,7 @@ pub struct RespBody {
 impl Body for RespBody {
     type Data = Bytes;
 
-    type Error = DynError;
+    type Error = Infallible;
 
     fn poll_frame(
         self: Pin<&mut Self>,

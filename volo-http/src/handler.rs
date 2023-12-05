@@ -1,4 +1,4 @@
-use std::{future::Future, marker::PhantomData};
+use std::{convert::Infallible, future::Future, marker::PhantomData};
 
 use hyper::body::Incoming;
 use motore::Service;
@@ -8,7 +8,7 @@ use crate::{
     macros::{all_the_tuples, all_the_tuples_no_last_special_case},
     request::FromRequest,
     response::{IntoResponse, Response},
-    DynError, DynService, HttpContext,
+    DynService, HttpContext,
 };
 
 pub trait Handler<T, S>: Sized {
@@ -126,7 +126,7 @@ where
         cx: &mut HttpContext,
         req: Incoming,
         state: S,
-    ) -> Result<Response, DynError> {
+    ) -> Result<Response, Infallible> {
         self.0.into_route(state).call(cx, req).await
     }
 }
@@ -233,7 +233,7 @@ where
     S: Sync,
 {
     type Response = Response;
-    type Error = DynError;
+    type Error = Infallible;
 
     async fn call<'s, 'cx>(
         &'s self,

@@ -1,8 +1,10 @@
+use std::convert::Infallible;
+
 use futures_util::Future;
 use hyper::http::{Method, Uri};
 use volo::net::Address;
 
-use crate::{response::Infallible, HttpContext, Params, State};
+use crate::{HttpContext, Params, State};
 
 pub trait FromContext<S>: Sized {
     fn from_context(
