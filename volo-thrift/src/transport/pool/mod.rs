@@ -21,7 +21,7 @@ use futures::{
 };
 use linked_hash_map::LinkedHashMap;
 pub use make_transport::PooledMakeTransport;
-use motore::{service::UnaryService, BoxError};
+use motore::service::UnaryService;
 use pin_project::pin_project;
 use started::Started as _;
 use tokio::{
@@ -201,10 +201,14 @@ where
         Pool { inner }
     }
 
-    pub async fn get<MT>(&self, key: Key, mt: MT) -> Result<Pooled<Key, T>, BoxError>
+    pub async fn get<MT>(
+        &self,
+        key: Key,
+        mt: MT,
+    ) -> Result<Pooled<Key, T>, pilota::thrift::TransportError>
     where
         MT: UnaryService<Key, Response = T> + Send + 'static + Sync,
-        MT::Error: Into<BoxError>,
+        MT::Error: Into<pilota::thrift::TransportError>,
     {
         let (rx, _waiter_token) = {
             let mut inner = self.inner.lock().volo_unwrap();
@@ -270,9 +274,11 @@ where
             }
             // means connection pool is dropped
             Either::Left((Err(e), _)) => {
-                let e = e.into();
                 tracing::error!("[VOLO] wait a idle connection error: {:?}", e);
-                Err(e)
+                Err(pilota::thrift::TransportError::new(
+                    pilota::thrift::TransportErrorKind::Unknown,
+                    format!("wait a idle connection error: {:?}", e),
+                ))
             }
             // maybe there is no more connection put back into pool and waiter will block forever,
             // so just return error
@@ -537,7 +543,7 @@ where
         if let Some(t) = value {
             // means doesn't send success
             // then put back to idle list
-            let idle = self.idle.entry(key).or_insert_with(Vec::new);
+            let idle = self.idle.entry(key).or_default();
             if idle.len() < self.max_idle_per_key {
                 idle.push(Idle {
                     inner: t,

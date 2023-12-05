@@ -1650,9 +1650,9 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.9.10"
+version = "0.9.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4a6a15c72d2e75d195fee6d5f81641e2a33c5577fb30e7a3232a22d440cf6d7e"
+checksum = "68aba7abce083335d96a9088d2fde39910f284cd829becdb943dab5848112644"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -2961,7 +2961,7 @@ version = "0.8.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.8.2"
+version = "0.8.3"
 dependencies = [
  "anyhow",
  "bytes",

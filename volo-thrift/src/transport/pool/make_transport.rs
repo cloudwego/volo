@@ -2,7 +2,7 @@
 
 use std::{fmt::Debug, hash::Hash};
 
-use motore::{service::UnaryService, BoxError};
+use motore::service::UnaryService;
 
 use super::{Pool, Poolable, Pooled};
 
@@ -48,14 +48,14 @@ where
     Key: Clone + Eq + Hash + Debug + Send + 'static,
     MT: UnaryService<Key> + Send + Clone + 'static + Sync,
     MT::Response: Poolable + Send,
-    MT::Error: Into<BoxError>,
+    MT::Error: Into<pilota::thrift::TransportError>,
 {
     type Response = Pooled<Key, MT::Response>;
 
-    type Error = BoxError;
+    type Error = crate::Error;
 
     async fn call(&self, key: Key) -> Result<Self::Response, Self::Error> {
         let mt = self.inner.clone();
-        self.pool.get(key, mt).await
+        self.pool.get(key, mt).await.map_err(Into::into)
     }
 }
