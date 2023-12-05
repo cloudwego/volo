@@ -18,6 +18,7 @@ macro_rules! volo_unreachable {
 }
 
 #[macro_export]
+#[deprecated(since = "0.8.1", note = "use `include!` instead")]
 macro_rules! include_service {
     ($service: tt) => {
         include!(concat!(env!("OUT_DIR"), concat!("/", $service)));

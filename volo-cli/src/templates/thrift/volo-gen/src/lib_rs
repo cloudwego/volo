@@ -1,5 +1,5 @@
 mod gen {{
-    volo::include_service!("volo_gen.rs");
+    include!(concat!(env!("OUT_DIR"), "/volo_gen.rs"));
 }}
 
 pub use gen::volo_gen::*;
