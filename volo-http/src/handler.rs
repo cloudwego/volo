@@ -65,7 +65,7 @@ macro_rules! impl_handler {
                 )*
                 let $last = match $last::from(context, req, state).await {
                     Ok(value) => value,
-                    Err(rejection) => return rejection,
+                    Err(rejection) => return rejection.into_response(),
                 };
                 self($($ty,)* $last).await.into_response()
             }

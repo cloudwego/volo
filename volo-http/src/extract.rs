@@ -1,6 +1,5 @@
 use std::convert::Infallible;
 
-use bytes::Bytes;
 use futures_util::Future;
 use http_body_util::BodyExt;
 use hyper::{
@@ -10,11 +9,7 @@ use hyper::{
 use serde::de::DeserializeOwned;
 use volo::net::Address;
 
-use crate::{
-    param::Params,
-    response::{IntoResponse, Response},
-    HttpContext,
-};
+use crate::{param::Params, response::IntoResponse, HttpContext};
 
 mod private {
     #[derive(Debug, Clone, Copy)]
@@ -25,18 +20,22 @@ mod private {
 }
 
 pub trait FromContext<S>: Sized {
+    type Rejection: IntoResponse;
+
     fn from_context(
         context: &HttpContext,
         state: &S,
-    ) -> impl Future<Output = Result<Self, Infallible>> + Send;
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
 pub trait FromRequest<S, M = private::ViaRequest>: Sized {
+    type Rejection: IntoResponse;
+
     fn from(
         cx: &HttpContext,
         body: Incoming,
         state: &S,
-    ) -> impl Future<Output = Result<Self, Response>> + Send;
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -47,54 +46,54 @@ pub struct Json<T>(pub T);
 impl<T, S> FromContext<S> for Option<T>
 where
     T: FromContext<S>,
-    S: Send + Sync,
+    S: Clone + Send + Sync,
 {
-    async fn from_context(context: &HttpContext, state: &S) -> Result<Self, Infallible> {
+    type Rejection = Infallible;
+
+    async fn from_context(context: &HttpContext, state: &S) -> Result<Self, Self::Rejection> {
         Ok(T::from_context(context, state).await.ok())
     }
 }
 
-impl<S> FromContext<S> for Address
-where
-    S: Send + Sync,
-{
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Address, Infallible> {
+impl<S: Sync> FromContext<S> for Address {
+    type Rejection = Infallible;
+
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Address, Self::Rejection> {
         Ok(context.peer.clone())
     }
 }
 
-impl<S> FromContext<S> for Uri
-where
-    S: Send + Sync,
-{
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Uri, Infallible> {
+impl<S: Sync> FromContext<S> for Uri {
+    type Rejection = Infallible;
+
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Uri, Self::Rejection> {
         Ok(context.uri.clone())
     }
 }
 
-impl<S> FromContext<S> for Method
-where
-    S: Send + Sync,
-{
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Method, Infallible> {
+impl<S: Sync> FromContext<S> for Method {
+    type Rejection = Infallible;
+
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Method, Self::Rejection> {
         Ok(context.method.clone())
     }
 }
 
-impl<S> FromContext<S> for Params
-where
-    S: Send + Sync,
-{
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Params, Infallible> {
+impl<S: Sync> FromContext<S> for Params {
+    type Rejection = Infallible;
+
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Params, Self::Rejection> {
         Ok(context.params.clone())
     }
 }
 
 impl<S> FromContext<S> for State<S>
 where
-    S: Clone + Send + Sync,
+    S: Clone + Sync,
 {
-    async fn from_context(_context: &HttpContext, state: &S) -> Result<Self, Infallible> {
+    type Rejection = Infallible;
+
+    async fn from_context(_context: &HttpContext, state: &S) -> Result<Self, Self::Rejection> {
         Ok(State(state.clone()))
     }
 }
@@ -102,65 +101,71 @@ where
 impl<T, S> FromRequest<S, private::ViaContext> for T
 where
     T: FromContext<S> + Sync,
-    S: Sync,
+    S: Clone + Send + Sync,
 {
-    async fn from(cx: &HttpContext, _body: Incoming, state: &S) -> Result<Self, Response> {
-        match T::from_context(cx, state).await {
-            Ok(value) => Ok(value),
-            Err(rejection) => Err(rejection.into_response()),
-        }
+    type Rejection = T::Rejection;
+
+    async fn from(cx: &HttpContext, _body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
+        T::from_context(cx, state).await
     }
 }
 
-impl<S> FromRequest<S> for Incoming
-where
-    S: Sync,
-{
-    async fn from(_cx: &HttpContext, body: Incoming, _state: &S) -> Result<Self, Response> {
+impl<S: Sync> FromRequest<S> for Incoming {
+    type Rejection = Infallible;
+
+    async fn from(_cx: &HttpContext, body: Incoming, _state: &S) -> Result<Self, Self::Rejection> {
         Ok(body)
     }
 }
 
-impl<T: DeserializeOwned, S> FromRequest<S> for Json<T> {
-    fn from(
-        cx: &HttpContext,
-        body: Incoming,
-        _state: &S,
-    ) -> impl Future<Output = Result<Self, Response>> + Send {
-        async move {
-            if !json_content_type(&cx.headers) {
-                return Err(Response::builder()
-                    .status(StatusCode::UNSUPPORTED_MEDIA_TYPE)
-                    .body(Bytes::new().into())
-                    .unwrap()
-                    .into());
-            }
+impl<T, S> FromRequest<S> for Json<T>
+where
+    T: DeserializeOwned,
+    S: Sync,
+{
+    type Rejection = JsonRejection;
 
-            match body.collect().await {
-                Ok(body) => {
-                    let body = body.to_bytes();
-                    match serde_json::from_slice::<T>(body.as_ref()) {
-                        Ok(t) => Ok(Self(t)),
-                        Err(e) => {
-                            tracing::warn!("json serialization error {e}");
-                            Err(Response::builder()
-                                .status(StatusCode::BAD_REQUEST)
-                                .body(Bytes::new().into())
-                                .unwrap()
-                                .into())
-                        }
+    async fn from(cx: &HttpContext, body: Incoming, _state: &S) -> Result<Self, Self::Rejection> {
+        if !json_content_type(&cx.headers) {
+            return Err(JsonRejection::MissingJsonContentType);
+        }
+
+        match body.collect().await {
+            Ok(body) => {
+                let body = body.to_bytes();
+                match serde_json::from_slice::<T>(body.as_ref()) {
+                    Ok(t) => Ok(Self(t)),
+                    Err(e) => {
+                        tracing::warn!("json serialization error {e}");
+                        Err(JsonRejection::SerializationError)
                     }
                 }
-                Err(e) => {
-                    tracing::warn!("collect body error: {e}");
-                    Err(Response::builder()
-                        .status(StatusCode::BAD_REQUEST)
-                        .body(Bytes::new().into())
-                        .unwrap()
-                        .into())
-                }
+            }
+            Err(e) => {
+                tracing::warn!("collect body error: {e}");
+                Err(JsonRejection::BodyCollectionError)
             }
         }
+    }
+}
+
+pub enum JsonRejection {
+    MissingJsonContentType,
+    SerializationError,
+    BodyCollectionError,
+}
+
+unsafe impl Send for JsonRejection {}
+
+impl IntoResponse for JsonRejection {
+    fn into_response(self) -> crate::Response {
+        let status = match self {
+            Self::MissingJsonContentType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::SerializationError => StatusCode::BAD_REQUEST,
+            Self::BodyCollectionError => StatusCode::BAD_REQUEST,
+        };
+
+        status.into_response()
     }
 }
 
