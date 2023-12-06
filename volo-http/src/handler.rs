@@ -1,6 +1,5 @@
-use std::{future::Future, marker::PhantomData};
+use std::{convert::Infallible, future::Future, marker::PhantomData};
 
-use http::Response;
 use hyper::body::Incoming;
 use motore::Service;
 
@@ -8,8 +7,8 @@ use crate::{
     extract::FromContext,
     macros::{all_the_tuples, all_the_tuples_no_last_special_case},
     request::FromRequest,
-    response::{IntoResponse, RespBody},
-    DynError, DynService, HttpContext,
+    response::{IntoResponse, Response},
+    DynService, HttpContext,
 };
 
 pub trait Handler<T, S>: Sized {
@@ -18,7 +17,7 @@ pub trait Handler<T, S>: Sized {
         context: &mut HttpContext,
         req: Incoming,
         state: &S,
-    ) -> impl Future<Output = Response<RespBody>> + Send;
+    ) -> impl Future<Output = Response> + Send;
 
     fn with_state(self, state: S) -> HandlerService<Self, S, T>
     where
@@ -39,12 +38,7 @@ where
     Res: IntoResponse,
     S: Send + Sync,
 {
-    async fn call(
-        self,
-        _context: &mut HttpContext,
-        _req: Incoming,
-        _state: &S,
-    ) -> Response<RespBody> {
+    async fn call(self, _context: &mut HttpContext, _req: Incoming, _state: &S) -> Response {
         self().await.into_response()
     }
 }
@@ -63,7 +57,7 @@ macro_rules! impl_handler {
             $( for<'r> $ty: FromContext<S> + Send + 'r, )*
             for<'r> $last: FromRequest<S, M> + Send + 'r,
         {
-            async fn call(self, context: &mut HttpContext, req: Incoming, state: &S) -> Response<RespBody> {
+            async fn call(self, context: &mut HttpContext, req: Incoming, state: &S) -> Response {
                 $(
                     let $ty = match $ty::from_context(context, state).await {
                         Ok(value) => value,
@@ -132,7 +126,7 @@ where
         cx: &mut HttpContext,
         req: Incoming,
         state: S,
-    ) -> Result<Response<RespBody>, DynError> {
+    ) -> Result<Response, Infallible> {
         self.0.into_route(state).call(cx, req).await
     }
 }
@@ -238,8 +232,8 @@ where
     for<'r> H: Handler<T, S> + Clone + Send + Sync + 'r,
     S: Sync,
 {
-    type Response = Response<RespBody>;
-    type Error = DynError;
+    type Response = Response;
+    type Error = Infallible;
 
     async fn call<'s, 'cx>(
         &'s self,
@@ -251,7 +245,7 @@ where
 }
 
 pub trait HandlerWithoutRequest<T>: Sized {
-    fn call(self, context: &HttpContext) -> impl Future<Output = Response<RespBody>> + Send;
+    fn call(self, context: &HttpContext) -> impl Future<Output = Response> + Send;
 }
 
 impl<F, Res> HandlerWithoutRequest<()> for F
@@ -259,7 +253,7 @@ where
     F: FnOnce() -> Res + Clone + Send,
     Res: IntoResponse,
 {
-    async fn call(self, _context: &HttpContext) -> Response<RespBody> {
+    async fn call(self, _context: &HttpContext) -> Response {
         self().into_response()
     }
 }
@@ -275,7 +269,7 @@ macro_rules! impl_handler_without_request {
             Res: IntoResponse,
             $( for<'r> $ty: FromContext<()> + Send + 'r, )*
         {
-            async fn call(self, context: &HttpContext) -> Response<RespBody> {
+            async fn call(self, context: &HttpContext) -> Response {
                 $(
                     let $ty = match $ty::from_context(context, &()).await {
                         Ok(value) => value,

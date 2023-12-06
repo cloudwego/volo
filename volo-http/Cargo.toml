@@ -20,7 +20,6 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 volo = { version = "0.8", path = "../volo" }
 
-http = "1"
 http-body-util = "0.1"
 hyper = { version = "1", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }

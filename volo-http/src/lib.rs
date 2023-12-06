@@ -9,25 +9,23 @@ pub mod server;
 
 mod macros;
 
+use std::convert::Infallible;
+
 pub use bytes::Bytes;
-use http::{Extensions, HeaderMap, HeaderValue, Version};
-pub use http::{Method, StatusCode, Uri};
-use hyper::{body::Incoming, Response};
+pub use hyper::{
+    body::Incoming,
+    http::{Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
+};
 pub use volo::net::Address;
 
-pub use crate::{param::Params, request::Json, server::Server};
+pub use crate::{
+    param::Params,
+    request::{Json, Request},
+    response::Response,
+    server::Server,
+};
 
-mod private {
-    #[derive(Debug, Clone, Copy)]
-    pub enum ViaContext {}
-
-    #[derive(Debug, Clone, Copy)]
-    pub enum ViaRequest {}
-}
-
-pub type DynService =
-    motore::BoxCloneService<HttpContext, Incoming, Response<response::RespBody>, DynError>;
-pub type DynError = Box<dyn std::error::Error + Send + Sync>;
+pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response, Infallible>;
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct State<S>(pub S);
