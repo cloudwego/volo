@@ -19,16 +19,14 @@ pub use hyper::{
 pub use volo::net::Address;
 
 pub use crate::{
+    extract::{Json, State},
     param::Params,
-    request::{Json, Request},
+    request::Request,
     response::Response,
     server::Server,
 };
 
 pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response, Infallible>;
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct State<S>(pub S);
 
 pub struct HttpContext {
     pub peer: Address,

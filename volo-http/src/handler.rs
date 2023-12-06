@@ -4,9 +4,8 @@ use hyper::body::Incoming;
 use motore::Service;
 
 use crate::{
-    extract::FromContext,
+    extract::{FromContext, FromRequest},
     macros::{all_the_tuples, all_the_tuples_no_last_special_case},
-    request::FromRequest,
     response::{IntoResponse, Response},
     DynService, HttpContext,
 };
