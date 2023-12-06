@@ -1,13 +1,15 @@
 use std::{marker::PhantomData, time::Duration};
 
-use http::{Method, Request, Response, StatusCode};
-use http_body_util::Full;
-use hyper::body::{Bytes, Incoming};
+use hyper::{
+    body::Incoming,
+    http::{Method, StatusCode},
+};
 use motore::{layer::Layer, service::Service};
 
 use crate::{
     handler::HandlerWithoutRequest,
-    response::{IntoResponse, RespBody},
+    request::Request,
+    response::{IntoResponse, Response},
     HttpContext,
 };
 
@@ -15,25 +17,23 @@ pub trait LayerExt {
     fn method(
         self,
         method: Method,
-    ) -> FilterLayer<Box<dyn Fn(&mut HttpContext, &Request<Incoming>) -> Result<(), StatusCode>>>
+    ) -> FilterLayer<Box<dyn Fn(&mut HttpContext, &Request) -> Result<(), StatusCode>>>
     where
         Self: Sized,
     {
-        self.filter(Box::new(
-            move |cx: &mut HttpContext, _: &Request<Incoming>| {
-                if cx.method == method {
-                    Ok(())
-                } else {
-                    Err(StatusCode::METHOD_NOT_ALLOWED)
-                }
-            },
-        ))
+        self.filter(Box::new(move |cx: &mut HttpContext, _: &Request| {
+            if cx.method == method {
+                Ok(())
+            } else {
+                Err(StatusCode::METHOD_NOT_ALLOWED)
+            }
+        }))
     }
 
     fn filter<F>(self, f: F) -> FilterLayer<F>
     where
         Self: Sized,
-        F: Fn(&mut HttpContext, &Request<Incoming>) -> Result<(), StatusCode>,
+        F: Fn(&mut HttpContext, &Request) -> Result<(), StatusCode>,
     {
         FilterLayer { f }
     }
@@ -45,11 +45,8 @@ pub struct FilterLayer<F> {
 
 impl<S, F> Layer<S> for FilterLayer<F>
 where
-    S: Service<HttpContext, Request<Incoming>, Response = Response<Full<Bytes>>>
-        + Send
-        + Sync
-        + 'static,
-    F: Fn(&mut HttpContext, &Request<Incoming>) -> Result<(), StatusCode> + Send + Sync,
+    S: Service<HttpContext, Request, Response = Response> + Send + Sync + 'static,
+    F: Fn(&mut HttpContext, &Request) -> Result<(), StatusCode> + Send + Sync,
 {
     type Service = Filter<S, F>;
 
@@ -66,13 +63,10 @@ pub struct Filter<S, F> {
     f: F,
 }
 
-impl<S, F> Service<HttpContext, Request<Incoming>> for Filter<S, F>
+impl<S, F> Service<HttpContext, Request> for Filter<S, F>
 where
-    S: Service<HttpContext, Request<Incoming>, Response = Response<Full<Bytes>>>
-        + Send
-        + Sync
-        + 'static,
-    F: Fn(&mut HttpContext, &Request<Incoming>) -> Result<(), StatusCode> + Send + Sync,
+    S: Service<HttpContext, Request, Response = Response> + Send + Sync + 'static,
+    F: Fn(&mut HttpContext, &Request) -> Result<(), StatusCode> + Send + Sync,
 {
     type Response = S::Response;
 
@@ -81,13 +75,10 @@ where
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut HttpContext,
-        req: Request<Incoming>,
+        req: Request,
     ) -> Result<Self::Response, Self::Error> {
         if let Err(status) = (self.f)(cx, &req) {
-            return Ok(Response::builder()
-                .status(status)
-                .body(Full::new(Bytes::new()))
-                .unwrap());
+            return Ok(status.into_response());
         }
         self.service.call(cx, req).await
     }
@@ -115,7 +106,7 @@ impl<H, T> TimeoutLayer<H, T> {
 
 impl<S, H, T> Layer<S> for TimeoutLayer<H, T>
 where
-    S: Service<HttpContext, Incoming, Response = Response<RespBody>> + Send + Sync + 'static,
+    S: Service<HttpContext, Incoming, Response = Response> + Send + Sync + 'static,
     H: HandlerWithoutRequest<T> + Clone + Send + Sync + 'static,
     T: Sync,
 {
@@ -141,7 +132,7 @@ pub struct Timeout<S, H, T> {
 
 impl<S, H, T> Service<HttpContext, Incoming> for Timeout<S, H, T>
 where
-    S: Service<HttpContext, Incoming, Response = Response<RespBody>> + Send + Sync + 'static,
+    S: Service<HttpContext, Incoming, Response = Response> + Send + Sync + 'static,
     S::Error: Send,
     H: HandlerWithoutRequest<T> + Clone + Send + Sync + 'static,
     T: Sync,
@@ -161,7 +152,7 @@ where
         tokio::select! {
             resp = fut_service => resp,
             _ = fut_timeout => {
-                Ok(self.handler.clone().call(cx).await.into_response())
+                Ok(self.handler.clone().call(cx).await)
             },
         }
     }

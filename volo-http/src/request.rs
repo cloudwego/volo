@@ -1,15 +1,47 @@
+use std::ops::{Deref, DerefMut};
+
 use bytes::Bytes;
 use futures_util::Future;
-use http::{header, HeaderMap, Response, StatusCode};
 use http_body_util::BodyExt;
-use hyper::body::Incoming;
+use hyper::{
+    body::Incoming,
+    http::{header, request::Builder, HeaderMap, StatusCode},
+};
 use serde::de::DeserializeOwned;
 
 use crate::{
     extract::FromContext,
-    response::{IntoResponse, RespBody},
+    response::{IntoResponse, Response},
     HttpContext,
 };
+
+pub struct Request(pub(crate) hyper::http::Request<hyper::body::Incoming>);
+
+impl Request {
+    pub fn builder() -> Builder {
+        Builder::new()
+    }
+}
+
+impl Deref for Request {
+    type Target = hyper::http::Request<hyper::body::Incoming>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for Request {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl From<hyper::http::Request<Incoming>> for Request {
+    fn from(value: hyper::http::Request<Incoming>) -> Self {
+        Self(value)
+    }
+}
 
 mod private {
     #[derive(Debug, Clone, Copy)]
@@ -24,7 +56,7 @@ pub trait FromRequest<S, M = private::ViaRequest>: Sized {
         cx: &HttpContext,
         body: Incoming,
         state: &S,
-    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send;
+    ) -> impl Future<Output = Result<Self, Response>> + Send;
 }
 
 impl<T, S> FromRequest<S, private::ViaContext> for T
@@ -32,11 +64,7 @@ where
     T: FromContext<S> + Sync,
     S: Sync,
 {
-    async fn from(
-        cx: &HttpContext,
-        _body: Incoming,
-        state: &S,
-    ) -> Result<Self, Response<RespBody>> {
+    async fn from(cx: &HttpContext, _body: Incoming, state: &S) -> Result<Self, Response> {
         match T::from_context(cx, state).await {
             Ok(value) => Ok(value),
             Err(rejection) => Err(rejection.into_response()),
@@ -48,11 +76,7 @@ impl<S> FromRequest<S> for Incoming
 where
     S: Sync,
 {
-    async fn from(
-        _cx: &HttpContext,
-        body: Incoming,
-        _state: &S,
-    ) -> Result<Self, Response<RespBody>> {
+    async fn from(_cx: &HttpContext, body: Incoming, _state: &S) -> Result<Self, Response> {
         Ok(body)
     }
 }
@@ -64,13 +88,14 @@ impl<T: DeserializeOwned, S> FromRequest<S> for Json<T> {
         cx: &HttpContext,
         body: Incoming,
         _state: &S,
-    ) -> impl Future<Output = Result<Self, Response<RespBody>>> + Send {
+    ) -> impl Future<Output = Result<Self, Response>> + Send {
         async move {
             if !json_content_type(&cx.headers) {
                 return Err(Response::builder()
                     .status(StatusCode::UNSUPPORTED_MEDIA_TYPE)
                     .body(Bytes::new().into())
-                    .unwrap());
+                    .unwrap()
+                    .into());
             }
 
             match body.collect().await {
@@ -83,7 +108,8 @@ impl<T: DeserializeOwned, S> FromRequest<S> for Json<T> {
                             Err(Response::builder()
                                 .status(StatusCode::BAD_REQUEST)
                                 .body(Bytes::new().into())
-                                .unwrap())
+                                .unwrap()
+                                .into())
                         }
                     }
                 }
@@ -92,7 +118,8 @@ impl<T: DeserializeOwned, S> FromRequest<S> for Json<T> {
                     Err(Response::builder()
                         .status(StatusCode::BAD_REQUEST)
                         .body(Bytes::new().into())
-                        .unwrap())
+                        .unwrap()
+                        .into())
                 }
             }
         }

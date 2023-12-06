@@ -3,18 +3,14 @@ use std::{
     time::Duration,
 };
 
-use http::{Request, Response};
-use hyper::{
-    body::{Body, Incoming as BodyIncoming},
-    server::conn::http1,
-};
+use hyper::{body::Incoming as BodyIncoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use motore::BoxError;
 use tokio::sync::Notify;
 use tracing::{info, trace};
 use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
 
-use crate::{param::Params, DynError, HttpContext};
+use crate::{param::Params, response::Response, DynError, HttpContext};
 
 pub struct Server<App> {
     app: Arc<App>,
@@ -28,12 +24,9 @@ impl<A> Clone for Server<A> {
     }
 }
 
-impl<OB, App> Server<App>
+impl<App> Server<App>
 where
-    OB: Body<Error = DynError> + Send + 'static,
-    OB::Data: Send,
-    App:
-        motore::Service<HttpContext, BodyIncoming, Response = Response<OB>> + Send + Sync + 'static,
+    App: motore::Service<HttpContext, BodyIncoming, Response = Response> + Send + Sync + 'static,
     App::Error: Into<DynError>,
 {
     pub fn new(app: App) -> Self {
@@ -156,7 +149,7 @@ where
     }
 }
 
-async fn handle_conn<S, B>(
+async fn handle_conn<S>(
     conn: Conn,
     service: S,
     exit_notify: Arc<Notify>,
@@ -164,25 +157,24 @@ async fn handle_conn<S, B>(
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer: Address,
 ) where
-    S: motore::Service<HttpContext, BodyIncoming, Response = Response<B>>
+    S: motore::Service<HttpContext, BodyIncoming, Response = Response>
         + Clone
         + Send
         + Sync
         + 'static,
     S::Error: Into<DynError>,
-    B: Body<Error = DynError> + Send + 'static,
-    B::Data: Send,
 {
     let notified = exit_notify.notified();
     tokio::pin!(notified);
 
     let mut http_conn = http1::Builder::new().serve_connection(
         TokioIo::new(conn),
-        hyper::service::service_fn(move |req: Request<BodyIncoming>| {
+        hyper::service::service_fn(move |req: hyper::http::Request<BodyIncoming>| {
             let service = service.clone();
             let peer = peer.clone();
             async move {
                 let (parts, req) = req.into_parts();
+                let req = req.into();
                 let mut cx = HttpContext {
                     peer,
                     method: parts.method,
@@ -194,7 +186,7 @@ async fn handle_conn<S, B>(
                         inner: Vec::with_capacity(0),
                     },
                 };
-                service.call(&mut cx, req).await
+                service.call(&mut cx, req).await.map(|resp| resp.0)
             }
         }),
     );

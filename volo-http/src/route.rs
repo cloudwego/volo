@@ -1,13 +1,15 @@
 use std::collections::HashMap;
 
-use http::{Method, Response, StatusCode};
-use hyper::body::Incoming;
+use hyper::{
+    body::Incoming,
+    http::{Method, StatusCode},
+};
 use motore::{layer::Layer, service::Service};
 
 use crate::{
     handler::{DynHandler, Handler},
-    response::{IntoResponse, RespBody},
-    DynError, DynService, HttpContext,
+    response::IntoResponse,
+    DynError, DynService, HttpContext, Response,
 };
 
 // The `matchit::Router` cannot be converted to `Iterator`, so using
@@ -70,7 +72,7 @@ where
     pub fn layer<L>(self, l: L) -> Self
     where
         L: Layer<DynService> + Clone + Send + Sync + 'static,
-        L::Service: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+        L::Service: Service<HttpContext, Incoming, Response = Response, Error = DynError>
             + Clone
             + Send
             + Sync
@@ -116,7 +118,7 @@ where
 }
 
 impl Service<HttpContext, Incoming> for Router<()> {
-    type Response = Response<RespBody>;
+    type Response = Response;
 
     type Error = DynError;
 
@@ -177,7 +179,7 @@ where
     pub fn layer<L>(self, l: L) -> Self
     where
         L: Layer<DynService> + Clone + Send + Sync + 'static,
-        L::Service: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+        L::Service: Service<HttpContext, Incoming, Response = Response, Error = DynError>
             + Clone
             + Send
             + Sync
@@ -244,7 +246,7 @@ where
         cx: &'cx mut HttpContext,
         req: Incoming,
         state: S,
-    ) -> Result<Response<RespBody>, DynError>
+    ) -> Result<Response, DynError>
     where
         S: 'cx,
     {
@@ -353,7 +355,7 @@ where
 
     pub fn from_service<Srv>(srv: Srv) -> MethodEndpoint<S>
     where
-        Srv: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+        Srv: Service<HttpContext, Incoming, Response = Response, Error = DynError>
             + Clone
             + Send
             + Sync
@@ -409,7 +411,7 @@ where
 
     pub fn from_service<Srv>(srv: Srv) -> Fallback<S>
     where
-        Srv: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+        Srv: Service<HttpContext, Incoming, Response = Response, Error = DynError>
             + Clone
             + Send
             + Sync
@@ -431,7 +433,7 @@ where
     pub(crate) fn layer<L>(self, l: L) -> Self
     where
         L: Layer<DynService> + Clone + Send + Sync + 'static,
-        L::Service: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+        L::Service: Service<HttpContext, Incoming, Response = Response, Error = DynError>
             + Clone
             + Send
             + Sync
@@ -452,7 +454,7 @@ where
         cx: &'cx mut HttpContext,
         req: Incoming,
         state: S,
-    ) -> Result<Response<RespBody>, DynError>
+    ) -> Result<Response, DynError>
     where
         S: 'cx,
     {
@@ -474,7 +476,7 @@ where
 
 pub fn from_service<Srv, S>(srv: Srv) -> MethodEndpoint<S>
 where
-    Srv: Service<HttpContext, Incoming, Response = Response<RespBody>, Error = DynError>
+    Srv: Service<HttpContext, Incoming, Response = Response, Error = DynError>
         + Clone
         + Send
         + Sync
@@ -488,7 +490,7 @@ where
 struct RouteForStatusCode(StatusCode);
 
 impl Service<HttpContext, Incoming> for RouteForStatusCode {
-    type Response = Response<RespBody>;
+    type Response = Response;
     type Error = DynError;
 
     async fn call<'s, 'cx>(

@@ -12,17 +12,18 @@ mod macros;
 pub use bytes::Bytes;
 pub use hyper::{
     body::Incoming,
-    http::{
-        Extensions, HeaderMap, HeaderName, HeaderValue, Method, Request, Response, StatusCode, Uri,
-        Version,
-    },
+    http::{Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
 };
 pub use volo::net::Address;
 
-pub use crate::{param::Params, request::Json, server::Server};
+pub use crate::{
+    param::Params,
+    request::{Json, Request},
+    response::{Infallible, Response},
+    server::Server,
+};
 
-pub type DynService =
-    motore::BoxCloneService<HttpContext, Incoming, Response<response::RespBody>, DynError>;
+pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response, DynError>;
 pub type DynError = Box<dyn std::error::Error + Send + Sync>;
 
 #[derive(Debug, Default, Clone, Copy)]
