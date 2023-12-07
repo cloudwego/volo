@@ -529,6 +529,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "bytes",
+ "faststr",
  "lazy_static",
  "metainfo",
  "motore",
