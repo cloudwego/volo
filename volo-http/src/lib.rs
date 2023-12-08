@@ -1,3 +1,4 @@
+pub mod context;
 pub mod extract;
 pub mod handler;
 pub mod layer;
@@ -19,6 +20,7 @@ pub use hyper::{
 pub use volo::net::Address;
 
 pub use crate::{
+    context::{ConnectionInfo, HttpContext},
     extract::{Json, MaybeInvalid, State},
     param::Params,
     request::Request,
@@ -27,14 +29,3 @@ pub use crate::{
 };
 
 pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response, Infallible>;
-
-pub struct HttpContext {
-    pub peer: Address,
-    pub method: Method,
-    pub uri: Uri,
-    pub version: Version,
-    pub headers: HeaderMap<HeaderValue>,
-    pub extensions: Extensions,
-
-    pub params: Params,
-}

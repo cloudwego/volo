@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use volo_http::{
     layer::TimeoutLayer,
     route::{get, post, MethodRouter, Router},
-    Address, Bytes, Json, MaybeInvalid, Method, Params, Server, StatusCode, Uri,
+    Address, Bytes, ConnectionInfo, Json, MaybeInvalid, Method, Params, Server, StatusCode, Uri,
 };
 
 async fn hello() -> &'static str {
@@ -50,6 +50,10 @@ async fn test(
         Method::POST => Ok(format!("{m} {u}\n\n{msg}\n")),
         _ => unreachable!(),
     }
+}
+
+async fn conn_show(conn: ConnectionInfo) -> String {
+    format!("{conn:?}\n")
 }
 
 async fn timeout_test() {
@@ -99,6 +103,7 @@ fn test_router() -> Router {
         )
         // curl -v http://127.0.0.1:8080/test/param/114514
         .route("/test/param/:echo", get(echo))
+        .route("/test/conn_show", get(conn_show))
 }
 
 #[tokio::main(flavor = "multi_thread")]
