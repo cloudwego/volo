@@ -34,9 +34,10 @@ impl RouteId {
 }
 
 pub struct Router<S = ()> {
-    matcher: matchit::Router<RouteId>,
+    matcher: Matcher,
     routes: HashMap<RouteId, MethodRouter<S>>,
     fallback: Fallback<S>,
+    is_default_fallback: bool,
 }
 
 impl<S> Router<S>
@@ -48,6 +49,7 @@ where
             matcher: Default::default(),
             routes: Default::default(),
             fallback: Fallback::from_status_code(StatusCode::NOT_FOUND),
+            is_default_fallback: true,
         }
     }
 
@@ -55,10 +57,11 @@ where
     where
         R: Into<String>,
     {
-        let route_id = RouteId::next();
-        if let Err(e) = self.matcher.insert(uri, route_id) {
-            panic!("Insert routing rule failed, error: {e}");
-        }
+        let route_id = self
+            .matcher
+            .insert(uri)
+            .expect("Insert routing rule failed");
+
         self.routes.insert(route_id, route);
 
         self
@@ -66,6 +69,43 @@ where
 
     pub fn fallback_for_all(mut self, fallback: Fallback<S>) -> Self {
         self.fallback = fallback;
+        self
+    }
+
+    pub fn merge(mut self, other: Router<S>) -> Self {
+        let Router {
+            mut matcher,
+            mut routes,
+            fallback,
+            is_default_fallback,
+        } = other;
+
+        for (path, route_id) in matcher.matches.drain() {
+            self.matcher
+                .insert_with_id(path, route_id)
+                .expect("Insert routing rule failed during merging router");
+        }
+        for (route_id, method_router) in routes.drain() {
+            if self.routes.insert(route_id, method_router).is_some() {
+                // Infallible
+                panic!(
+                    "Insert routes failed during merging router: Conflicting `RouteId`: \
+                     {route_id:?}"
+                );
+            }
+        }
+
+        match (self.is_default_fallback, is_default_fallback) {
+            (_, true) => {}
+            (true, false) => {
+                self.fallback = fallback;
+                self.is_default_fallback = false;
+            }
+            (false, false) => {
+                panic!("Merge `Router` failed because both `Router` have customized `fallback`")
+            }
+        }
+
         self
     }
 
@@ -93,6 +133,7 @@ where
             matcher: self.matcher,
             routes,
             fallback,
+            is_default_fallback: self.is_default_fallback,
         }
     }
 
@@ -113,6 +154,7 @@ where
             matcher: self.matcher,
             routes,
             fallback,
+            is_default_fallback: self.is_default_fallback,
         }
     }
 }
@@ -136,6 +178,49 @@ impl Service<HttpContext, Incoming> for Router<()> {
 
         self.fallback.call_with_state(cx, req, ()).await
     }
+}
+
+#[derive(Default)]
+struct Matcher {
+    matches: HashMap<String, RouteId>,
+    router: matchit::Router<RouteId>,
+}
+
+impl Matcher {
+    fn insert<R>(&mut self, uri: R) -> Result<RouteId, MatcherError>
+    where
+        R: Into<String>,
+    {
+        let route_id = RouteId::next();
+        self.insert_with_id(uri, route_id)?;
+        Ok(route_id)
+    }
+
+    fn insert_with_id<R>(&mut self, uri: R, route_id: RouteId) -> Result<(), MatcherError>
+    where
+        R: Into<String>,
+    {
+        let uri = uri.into();
+        if self.matches.insert(uri.clone(), route_id).is_some() {
+            return Err(MatcherError::UriConflict(uri));
+        }
+        let _ = self
+            .router
+            .insert(uri, route_id)
+            .map_err(MatcherError::RouterInsertError)?;
+        Ok(())
+    }
+
+    fn at<'a>(&'a self, path: &'a str) -> Result<matchit::Match<&RouteId>, MatcherError> {
+        self.router.at(path).map_err(MatcherError::RouterMatchError)
+    }
+}
+
+#[derive(Debug)]
+enum MatcherError {
+    UriConflict(String),
+    RouterInsertError(matchit::InsertError),
+    RouterMatchError(matchit::MatchError),
 }
 
 pub struct MethodRouter<S = ()> {

@@ -81,6 +81,7 @@ path = "src/http/simple.rs"
 anyhow.workspace = true
 async-stream.workspace = true
 bytes.workspace = true
+faststr.workspace = true
 lazy_static.workspace = true
 metainfo.workspace = true
 motore.workspace = true

@@ -19,7 +19,7 @@ pub use hyper::{
 pub use volo::net::Address;
 
 pub use crate::{
-    extract::{Json, State},
+    extract::{Json, MaybeInvalid, State},
     param::Params,
     request::Request,
     response::Response,

@@ -529,6 +529,7 @@ dependencies = [
  "anyhow",
  "async-stream",
  "bytes",
+ "faststr",
  "lazy_static",
  "metainfo",
  "motore",
@@ -2284,6 +2285,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "simdutf8"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f27f6278552951f1f2b8cf9da965d10969b2efdea95a6ec47987ab46edfe263a"
+
+[[package]]
 name = "siphasher"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2937,6 +2944,7 @@ name = "volo-http"
 version = "0.1.0"
 dependencies = [
  "bytes",
+ "faststr",
  "futures-util",
  "http-body-util",
  "hyper 1.0.1",
@@ -2948,6 +2956,7 @@ dependencies = [
  "pin-project",
  "serde",
  "serde_json",
+ "simdutf8",
  "thiserror",
  "tokio",
  "tracing",

@@ -25,6 +25,7 @@ hyper = { version = "1", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 
 bytes.workspace = true
+faststr.workspace = true
 futures-util.workspace = true
 matchit.workspace = true
 mime.workspace = true
@@ -33,6 +34,7 @@ parking_lot.workspace = true
 pin-project.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+simdutf8.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = [
     "time",

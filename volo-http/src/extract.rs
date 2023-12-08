@@ -1,5 +1,7 @@
-use std::convert::Infallible;
+use std::{convert::Infallible, marker::PhantomData};
 
+use bytes::Bytes;
+use faststr::FastStr;
 use futures_util::Future;
 use http_body_util::BodyExt;
 use hyper::{
@@ -42,6 +44,20 @@ pub trait FromRequest<S, M = private::ViaRequest>: Sized {
 pub struct State<S>(pub S);
 
 pub struct Json<T>(pub T);
+
+pub struct MaybeInvalid<T>(Vec<u8>, PhantomData<T>);
+
+impl MaybeInvalid<String> {
+    pub unsafe fn assume_valid(self) -> String {
+        String::from_utf8_unchecked(self.0)
+    }
+}
+
+impl MaybeInvalid<FastStr> {
+    pub unsafe fn assume_valid(self) -> FastStr {
+        FastStr::from_vec_u8_unchecked(self.0)
+    }
+}
 
 impl<T, S> FromContext<S> for Option<T>
 where
@@ -118,51 +134,118 @@ impl<S: Sync> FromRequest<S> for Incoming {
     }
 }
 
+impl<S: Sync> FromRequest<S> for Vec<u8> {
+    type Rejection = RejectionError;
+
+    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
+        Ok(<Bytes as FromRequest<S>>::from(cx, body, state)
+            .await?
+            .into())
+    }
+}
+
+impl<S: Sync> FromRequest<S> for Bytes {
+    type Rejection = RejectionError;
+
+    async fn from(cx: &HttpContext, body: Incoming, _state: &S) -> Result<Self, Self::Rejection> {
+        let bytes = body
+            .collect()
+            .await
+            .map_err(|_| RejectionError::BodyCollectionError)?
+            .to_bytes();
+
+        if let Some(Ok(Ok(cap))) = cx
+            .headers
+            .get(header::CONTENT_LENGTH)
+            .map(|v| v.to_str().map(|c| c.parse::<usize>()))
+        {
+            if bytes.len() != cap {
+                tracing::warn!(
+                    "The length of body ({}) does not match the Content-Length ({})",
+                    bytes.len(),
+                    cap
+                );
+            }
+        }
+
+        Ok(bytes)
+    }
+}
+
+impl<S: Sync> FromRequest<S> for String {
+    type Rejection = RejectionError;
+
+    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
+        let vec = <Vec<u8> as FromRequest<S>>::from(cx, body, state).await?;
+
+        // Check if the &[u8] is a valid string
+        let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::StringRejection)?;
+
+        // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
+        Ok(unsafe { String::from_utf8_unchecked(vec) })
+    }
+}
+
+impl<S: Sync> FromRequest<S> for FastStr {
+    type Rejection = RejectionError;
+
+    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
+        let vec = <Vec<u8> as FromRequest<S>>::from(cx, body, state).await?;
+
+        // Check if the &[u8] is a valid string
+        let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::StringRejection)?;
+
+        // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
+        Ok(unsafe { FastStr::from_vec_u8_unchecked(vec) })
+    }
+}
+
+impl<T, S: Sync> FromRequest<S> for MaybeInvalid<T> {
+    type Rejection = RejectionError;
+
+    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
+        let vec = <Vec<u8> as FromRequest<S>>::from(cx, body, state).await?;
+
+        Ok(MaybeInvalid(vec, PhantomData))
+    }
+}
+
 impl<T, S> FromRequest<S> for Json<T>
 where
     T: DeserializeOwned,
     S: Sync,
 {
-    type Rejection = JsonRejection;
+    type Rejection = RejectionError;
 
-    async fn from(cx: &HttpContext, body: Incoming, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
         if !json_content_type(&cx.headers) {
-            return Err(JsonRejection::MissingJsonContentType);
+            return Err(RejectionError::InvalidContentType);
         }
 
-        match body.collect().await {
-            Ok(body) => {
-                let body = body.to_bytes();
-                match serde_json::from_slice::<T>(body.as_ref()) {
-                    Ok(t) => Ok(Self(t)),
-                    Err(e) => {
-                        tracing::warn!("json serialization error {e}");
-                        Err(JsonRejection::SerializationError)
-                    }
-                }
-            }
-            Err(e) => {
-                tracing::warn!("collect body error: {e}");
-                Err(JsonRejection::BodyCollectionError)
-            }
-        }
+        let bytes = <Bytes as FromRequest<S>>::from(cx, body, state).await?;
+        let json = serde_json::from_slice::<T>(bytes.as_ref())
+            .map_err(|_| RejectionError::BodyCollectionError)?;
+
+        Ok(Json(json))
     }
 }
 
-pub enum JsonRejection {
-    MissingJsonContentType,
-    SerializationError,
+pub enum RejectionError {
     BodyCollectionError,
+    InvalidContentType,
+    StringRejection(simdutf8::basic::Utf8Error),
+    JsonRejection(serde_json::Error),
 }
 
-unsafe impl Send for JsonRejection {}
+unsafe impl Send for RejectionError {}
 
-impl IntoResponse for JsonRejection {
+impl IntoResponse for RejectionError {
     fn into_response(self) -> crate::Response {
         let status = match self {
-            Self::MissingJsonContentType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            Self::SerializationError => StatusCode::BAD_REQUEST,
-            Self::BodyCollectionError => StatusCode::BAD_REQUEST,
+            Self::BodyCollectionError => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::InvalidContentType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::StringRejection(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            Self::JsonRejection(_) => StatusCode::BAD_REQUEST,
         };
 
         status.into_response()
