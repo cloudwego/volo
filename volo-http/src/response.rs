@@ -9,7 +9,9 @@ use futures_util::ready;
 use http_body_util::Full;
 use hyper::{
     body::{Body, Bytes, Frame},
-    http::{response::Builder, StatusCode},
+    header::HeaderValue,
+    http::{header::IntoHeaderName, response::Builder, StatusCode},
+    HeaderMap,
 };
 use pin_project::pin_project;
 use serde::Serialize;
@@ -105,8 +107,44 @@ impl From<()> for RespBody {
     }
 }
 
+pub trait TryIntoResponseHeaders {
+    type Error;
+
+    fn try_into_response_headers(self) -> Result<HeaderMap, Self::Error>;
+}
+
 pub trait IntoResponse {
     fn into_response(self) -> Response;
+}
+
+impl<K, V> TryIntoResponseHeaders for (K, V)
+where
+    K: IntoHeaderName,
+    V: TryInto<HeaderValue>,
+{
+    type Error = V::Error;
+
+    fn try_into_response_headers(self) -> Result<HeaderMap, Self::Error> {
+        let mut headers = HeaderMap::with_capacity(1);
+        headers.insert(self.0, self.1.try_into()?);
+        Ok(headers)
+    }
+}
+
+impl<K, V, const N: usize> TryIntoResponseHeaders for [(K, V); N]
+where
+    K: IntoHeaderName,
+    V: TryInto<HeaderValue>,
+{
+    type Error = V::Error;
+
+    fn try_into_response_headers(self) -> Result<HeaderMap, Self::Error> {
+        let mut headers = HeaderMap::with_capacity(N);
+        for (k, v) in self.into_iter() {
+            headers.insert(k, v.try_into()?);
+        }
+        Ok(headers)
+    }
 }
 
 impl IntoResponse for Infallible {
@@ -171,5 +209,25 @@ impl IntoResponse for StatusCode {
             .body(String::new().into())
             .unwrap()
             .into()
+    }
+}
+
+impl IntoResponse for Response {
+    fn into_response(self) -> Response {
+        self
+    }
+}
+
+impl<H, R> IntoResponse for (H, R)
+where
+    H: TryIntoResponseHeaders,
+    R: IntoResponse,
+{
+    fn into_response(self) -> Response {
+        let mut resp = self.1.into_response();
+        if let Ok(headers) = self.0.try_into_response_headers() {
+            resp.headers_mut().extend(headers);
+        }
+        resp
     }
 }
