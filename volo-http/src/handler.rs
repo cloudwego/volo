@@ -354,6 +354,76 @@ macro_rules! impl_middleware_handler_from_fn {
 
 all_the_tuples!(impl_middleware_handler_from_fn);
 
+pub trait MiddlewareHandlerMapResponse<'r, T, S>: Sized {
+    // type Response: IntoResponse;
+    type Future: Future<Output = Response> + Send + 'r;
+
+    fn call(&self, context: &'r HttpContext, state: &'r S, response: Response) -> Self::Future;
+}
+
+impl<'r, F, Fut, Res, S> MiddlewareHandlerMapResponse<'r, ((),), S> for F
+where
+    F: Fn(Response) -> Fut + Copy + Send + Sync + 'static,
+    Fut: Future<Output = Res> + Send + 'r,
+    Res: IntoResponse + 'r,
+    S: Send + Sync + 'r,
+{
+    // type Response = Response;
+    type Future = ResponseFuture<'r, Response>;
+
+    fn call(&self, _context: &'r HttpContext, _state: &'r S, response: Response) -> Self::Future {
+        let f = *self;
+
+        let future = Box::pin(async move { f(response).await.into_response() });
+
+        ResponseFuture { inner: future }
+    }
+}
+
+macro_rules! impl_middleware_handler_map_response {
+    (
+        $($ty:ident),* $(,)?
+    ) => {
+        #[allow(non_snake_case, unused_mut, unused_variables)]
+        impl<'r, F, Fut, Res, M, S, $($ty,)*> MiddlewareHandlerMapResponse<'r, (M, $($ty,)*), S> for F
+        where
+            F: Fn($($ty,)* Response) -> Fut + Copy + Send + Sync + 'static,
+            Fut: Future<Output = Res> + Send + 'r,
+            Res: IntoResponse + 'r,
+            S: Send + Sync + 'r,
+            $( $ty: FromContext<S> + Send + 'r, )*
+        {
+            // type Response = Response;
+            type Future = ResponseFuture<'r, Response>;
+
+            fn call(
+                &self,
+                context: &'r HttpContext,
+                state: &'r S,
+                response: Response,
+            ) -> Self::Future {
+                let f = *self;
+
+                let future = Box::pin(async move {
+                    $(
+                        let $ty = match $ty::from_context(context, state).await {
+                            Ok(value) => value,
+                            Err(rejection) => return rejection.into_response(),
+                        };
+                    )*
+                    f($($ty,)* response).await.into_response()
+                });
+
+                ResponseFuture {
+                    inner: future,
+                }
+            }
+        }
+    };
+}
+
+all_the_tuples_no_last_special_case!(impl_middleware_handler_map_response);
+
 /// Response future for [`MapResponse`].
 pub struct ResponseFuture<'r, Res> {
     inner: BoxFuture<'r, Res>,
