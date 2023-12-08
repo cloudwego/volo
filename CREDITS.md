@@ -25,3 +25,10 @@ We've copied and modified some code of [`axum`](https://github.com/tokio-rs/axum
 We really appreciate the work that the `axum` team have done.
 
 `axum` is licensed under the MIT license, and a copy can be found under the `licenses/axum` directory.
+
+# Actix Web
+
+We've copied and modified some code of [`actix-web`](https://github.com/actix/actix-web).
+We really appreciate the work that the `actix-web` team have done.
+
+`actix-web` is licensed under the MIT or Apache-2.0 license, and a copy can be found under the `licenses/actix-web` directory.
