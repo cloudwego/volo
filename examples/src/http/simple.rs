@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use volo_http::{
     layer::TimeoutLayer,
     route::{get, post, MethodRouter, Router},
-    Address, Bytes, Json, Method, Params, Server, StatusCode, Uri,
+    Address, Bytes, Json, MaybeInvalid, Method, Params, Server, StatusCode, Uri,
 };
 
 async fn hello() -> &'static str {
@@ -39,10 +39,15 @@ async fn json_post(Json(request): Json<Person>) -> String {
     )
 }
 
-async fn test(u: Uri, m: Method, data: FastStr) -> Result<String, (StatusCode, &'static str)> {
+async fn test(
+    u: Uri,
+    m: Method,
+    data: MaybeInvalid<FastStr>,
+) -> Result<String, (StatusCode, &'static str)> {
+    let msg = unsafe { data.assume_valid() };
     match m {
         Method::GET => Err((StatusCode::BAD_REQUEST, "Try POST something\n")),
-        Method::POST => Ok(format!("{m} {u}\n\n{data}\n")),
+        Method::POST => Ok(format!("{m} {u}\n\n{msg}\n")),
         _ => unreachable!(),
     }
 }
