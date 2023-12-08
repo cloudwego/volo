@@ -117,6 +117,8 @@ where
             + Send
             + Sync
             + 'static,
+        <L::Service as Service<HttpContext, Incoming>>::Response: Send + 'static,
+        <L::Service as Service<HttpContext, Incoming>>::Error: Send + 'static,
     {
         let routes = self
             .routes

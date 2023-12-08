@@ -4,8 +4,10 @@ use faststr::FastStr;
 use serde::{Deserialize, Serialize};
 use volo_http::{
     layer::TimeoutLayer,
+    middleware::{self, Next},
     route::{get, post, MethodRouter, Router},
-    Address, Bytes, ConnectionInfo, Json, MaybeInvalid, Method, Params, Server, StatusCode, Uri,
+    Address, Bytes, ConnectionInfo, HttpContext, Incoming, Json, MaybeInvalid, Method, Params,
+    Server, StatusCode, Uri,
 };
 
 async fn hello() -> &'static str {
@@ -106,6 +108,20 @@ fn test_router() -> Router {
         .route("/test/conn_show", get(conn_show))
 }
 
+async fn middleware_noarg_test(cx: &mut HttpContext, req: Incoming, next: Next) -> StatusCode {
+    let _ = next.run(cx, req).await;
+    StatusCode::OK
+}
+
+async fn middleware_arg_test(
+    _uri: Uri,
+    _cx: &mut HttpContext,
+    _req: Incoming,
+    _next: Next,
+) -> StatusCode {
+    StatusCode::NOT_FOUND
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -118,6 +134,8 @@ async fn main() {
         .merge(index_router())
         .merge(user_router())
         .merge(test_router())
+        .layer(middleware::from_fn(middleware_noarg_test))
+        .layer(middleware::from_fn(middleware_arg_test))
         .layer(TimeoutLayer::new(Duration::from_secs(5), || {
             StatusCode::INTERNAL_SERVER_ERROR
         }));

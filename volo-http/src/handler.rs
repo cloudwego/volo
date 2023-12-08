@@ -1,11 +1,19 @@
-use std::{convert::Infallible, future::Future, marker::PhantomData};
+use std::{
+    convert::Infallible,
+    future::Future,
+    marker::PhantomData,
+    pin::Pin,
+    task::{Context, Poll},
+};
 
+use futures_util::future::BoxFuture;
 use hyper::body::Incoming;
 use motore::Service;
 
 use crate::{
     extract::{FromContext, FromRequest},
     macros::{all_the_tuples, all_the_tuples_no_last_special_case},
+    middleware::Next,
     response::{IntoResponse, Response},
     DynService, HttpContext,
 };
@@ -282,3 +290,82 @@ macro_rules! impl_handler_without_request {
 }
 
 all_the_tuples_no_last_special_case!(impl_handler_without_request);
+
+pub trait MiddlewareHandlerFromFn<'r, T, S>: Sized {
+    // type Response: IntoResponse;
+    type Future: Future<Output = Response> + Send + 'r;
+
+    fn call(
+        &self,
+        context: &'r mut HttpContext,
+        req: Incoming,
+        state: &'r S,
+        next: Next,
+    ) -> Self::Future;
+}
+
+macro_rules! impl_middleware_handler_from_fn {
+    (
+        [$($ty:ident),*], $last:ident
+    ) => {
+        #[allow(non_snake_case, unused_mut, unused_variables)]
+        impl<'r, F, Fut, Res, M, S, $($ty,)* $last> MiddlewareHandlerFromFn<'r, (M, $($ty,)* $last), S> for F
+        where
+            F: Fn($($ty,)* &'r mut HttpContext, $last, Next) -> Fut + Copy + Send + Sync + 'static,
+            Fut: Future<Output = Res> + Send + 'r,
+            Res: IntoResponse + 'r,
+            S: Send + Sync + 'r,
+            $( $ty: FromContext<S> + Send + 'r, )*
+            $last: FromRequest<S, M> + Send + 'r,
+        {
+            // type Response = Response;
+            type Future = ResponseFuture<'r, Response>;
+
+            fn call(
+                &self,
+                context: &'r mut HttpContext,
+                req: Incoming,
+                state: &'r S,
+                next: Next,
+            ) -> Self::Future {
+                let f = *self;
+
+                let future = Box::pin(async move {
+                    $(
+                        let $ty = match $ty::from_context(context, state).await {
+                            Ok(value) => value,
+                            Err(rejection) => return rejection.into_response(),
+                        };
+                    )*
+                    let $last = match $last::from(context, req, state).await {
+                        Ok(value) => value,
+                        Err(rejection) => return rejection.into_response(),
+                    };
+                    f($($ty,)* context, $last, next).await.into_response()
+                });
+
+                ResponseFuture {
+                    inner: future,
+                }
+            }
+        }
+    };
+}
+
+all_the_tuples!(impl_middleware_handler_from_fn);
+
+/// Response future for [`MapResponse`].
+pub struct ResponseFuture<'r, Res> {
+    inner: BoxFuture<'r, Res>,
+}
+
+impl<'r, Res> Future for ResponseFuture<'r, Res>
+where
+    Res: 'r,
+{
+    type Output = Res;
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+        self.inner.as_mut().poll(cx)
+    }
+}
