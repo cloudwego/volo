@@ -11,7 +11,11 @@ use hyper::{
 use serde::de::DeserializeOwned;
 use volo::net::Address;
 
-use crate::{param::Params, response::IntoResponse, HttpContext};
+use crate::{
+    context::{ConnectionInfo, HttpContext},
+    param::Params,
+    response::IntoResponse,
+};
 
 mod private {
     #[derive(Debug, Clone, Copy)]
@@ -111,6 +115,13 @@ where
 
     async fn from_context(_context: &HttpContext, state: &S) -> Result<Self, Self::Rejection> {
         Ok(State(state.clone()))
+    }
+}
+
+impl<S: Sync> FromContext<S> for ConnectionInfo {
+    type Rejection = Infallible;
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(context.get_connection_info())
     }
 }
 
