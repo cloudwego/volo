@@ -26,6 +26,7 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 
 bytes.workspace = true
 faststr.workspace = true
+futures.workspace = true
 futures-util.workspace = true
 matchit.workspace = true
 mime.workspace = true

@@ -4,6 +4,7 @@ use std::{
     time::Duration,
 };
 
+use futures::future::BoxFuture;
 use hyper::{body::Incoming as BodyIncoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use motore::{
@@ -24,6 +25,7 @@ use crate::{
 pub struct Server<S, L> {
     service: S,
     layer: L,
+    shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>>,
 }
 
 impl<S> Server<S, Identity> {
@@ -34,11 +36,24 @@ impl<S> Server<S, Identity> {
         Self {
             service,
             layer: Identity::new(),
+            shutdown_hooks: Vec::new(),
         }
     }
 }
 
 impl<S, L> Server<S, L> {
+    /// Register shutdown hook.
+    ///
+    /// Hook functions will be called just before volo's own gracefull existing code starts,
+    /// in reverse order of registration.
+    pub fn register_shutdown_hook(
+        mut self,
+        hook: impl FnOnce() -> BoxFuture<'static, ()> + 'static + Send,
+    ) -> Self {
+        self.shutdown_hooks.push(Box::new(hook));
+        self
+    }
+
     /// Adds a new inner layer to the server.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
@@ -54,6 +69,7 @@ impl<S, L> Server<S, L> {
         Server {
             service: self.service,
             layer: Stack::new(layer, self.layer),
+            shutdown_hooks: self.shutdown_hooks,
         }
     }
 
@@ -72,6 +88,7 @@ impl<S, L> Server<S, L> {
         Server {
             service: self.service,
             layer: Stack::new(self.layer, layer),
+            shutdown_hooks: self.shutdown_hooks,
         }
     }
 
@@ -171,6 +188,14 @@ impl<S, L> Server<S, L> {
                     }
                     Err(e) => return Err(Box::new(e)),
                 }
+            }
+        }
+
+        if !self.shutdown_hooks.is_empty() {
+            info!("[VOLO] call shutdown hooks");
+
+            for hook in self.shutdown_hooks {
+                (hook)().await;
             }
         }
 
