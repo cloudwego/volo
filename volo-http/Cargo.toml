@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -26,6 +26,7 @@ hyper-util = { version = "0.1", features = ["tokio"] }
 
 bytes.workspace = true
 faststr.workspace = true
+futures.workspace = true
 futures-util.workspace = true
 matchit.workspace = true
 mime.workspace = true
