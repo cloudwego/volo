@@ -4,8 +4,11 @@ use faststr::FastStr;
 use serde::{Deserialize, Serialize};
 use volo_http::{
     layer::TimeoutLayer,
+    middleware::{self, Next},
+    response::IntoResponse,
     route::{get, post, MethodRouter, Router},
-    Address, Bytes, ConnectionInfo, Json, MaybeInvalid, Method, Params, Server, StatusCode, Uri,
+    Address, Bytes, ConnectionInfo, HttpContext, Incoming, Json, MaybeInvalid, Method, Params,
+    Response, Server, StatusCode, Uri,
 };
 
 async fn hello() -> &'static str {
@@ -106,6 +109,35 @@ fn test_router() -> Router {
         .route("/test/conn_show", get(conn_show))
 }
 
+async fn tracing_from_fn(
+    uri: Uri,
+    peer: Address,
+    cx: &mut HttpContext,
+    req: Incoming,
+    next: Next,
+) -> Response {
+    tracing::info!("Before {peer} request {uri}");
+
+    let start = std::time::Instant::now();
+    let resp = next.run(cx, req).await;
+    let elapsed = start.elapsed();
+
+    tracing::info!("After {peer} request {uri}, elapsed {elapsed:?}");
+
+    resp.into_response()
+}
+
+async fn headers_map_response(response: Response) -> impl IntoResponse {
+    (
+        [
+            ("Access-Control-Allow-Origin", "*"),
+            ("Access-Control-Allow-Headers", "*"),
+            ("Access-Control-Allow-Method", "*"),
+        ],
+        response,
+    )
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -118,6 +150,8 @@ async fn main() {
         .merge(index_router())
         .merge(user_router())
         .merge(test_router())
+        .layer(middleware::from_fn(tracing_from_fn))
+        .layer(middleware::map_response(headers_map_response))
         .layer(TimeoutLayer::new(Duration::from_secs(5), || {
             StatusCode::INTERNAL_SERVER_ERROR
         }));

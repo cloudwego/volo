@@ -2,6 +2,7 @@ pub mod context;
 pub mod extract;
 pub mod handler;
 pub mod layer;
+pub mod middleware;
 pub mod param;
 pub mod request;
 pub mod response;
