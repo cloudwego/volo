@@ -6,7 +6,11 @@ use std::{
 
 use hyper::{body::Incoming as BodyIncoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
-use motore::BoxError;
+use motore::{
+    layer::{Identity, Layer, Stack},
+    service::Service,
+    BoxError,
+};
 use tokio::sync::Notify;
 use tracing::{info, trace};
 use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
@@ -17,30 +21,72 @@ use crate::{
     HttpContext,
 };
 
-pub struct Server<App> {
-    app: Arc<App>,
+pub struct Server<S, L> {
+    service: S,
+    layer: L,
 }
 
-impl<A> Clone for Server<A> {
-    fn clone(&self) -> Self {
+impl<S> Server<S, Identity> {
+    pub fn new(service: S) -> Self
+    where
+        S: Service<HttpContext, BodyIncoming, Response = Response, Error = Infallible>,
+    {
         Self {
-            app: self.app.clone(),
+            service,
+            layer: Identity::new(),
         }
     }
 }
 
-impl<App> Server<App>
-where
-    App: motore::Service<HttpContext, BodyIncoming, Response = Response, Error = Infallible>
-        + Send
-        + Sync
-        + 'static,
-{
-    pub fn new(app: App) -> Self {
-        Self { app: Arc::new(app) }
+impl<S, L> Server<S, L> {
+    /// Adds a new inner layer to the server.
+    ///
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
+    pub fn layer<Inner>(self, layer: Inner) -> Server<S, Stack<Inner, L>> {
+        Server {
+            service: self.service,
+            layer: Stack::new(layer, self.layer),
+        }
     }
 
-    pub async fn run<MI: MakeIncoming>(self, mk_incoming: MI) -> Result<(), BoxError> {
+    /// Adds a new front layer to the server.
+    ///
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
+    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>> {
+        Server {
+            service: self.service,
+            layer: Stack::new(self.layer, layer),
+        }
+    }
+
+    pub async fn run<MI: MakeIncoming>(self, mk_incoming: MI) -> Result<(), BoxError>
+    where
+        S: Service<HttpContext, BodyIncoming, Response = Response, Error = Infallible>,
+        L: Layer<S>,
+        L::Service: Service<HttpContext, BodyIncoming, Response = Response, Error = Infallible>
+            + Send
+            + Sync
+            + 'static,
+    {
+        // init server
+        let service = Arc::new(self.layer.layer(self.service));
+
         let mut incoming = mk_incoming.make_incoming().await?;
         info!("[VOLO] server start at: {:?}", incoming);
 
@@ -69,7 +115,7 @@ where
 
                         tokio::task::spawn(handle_conn(
                             conn,
-                            self.app.clone(),
+                            service.clone(),
                             exit_notify_inner.clone(),
                             exit_mark_inner.clone(),
                             conn_cnt.clone(),
@@ -164,7 +210,7 @@ async fn handle_conn<S>(
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer: Address,
 ) where
-    S: motore::Service<HttpContext, BodyIncoming, Response = Response, Error = Infallible>
+    S: Service<HttpContext, BodyIncoming, Response = Response, Error = Infallible>
         + Clone
         + Send
         + Sync
