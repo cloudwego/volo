@@ -15,7 +15,7 @@ use std::convert::Infallible;
 
 pub use bytes::Bytes;
 pub use hyper::{
-    body::Incoming,
+    body::Incoming as BodyIncoming,
     http::{Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
 };
 pub use volo::net::Address;
@@ -29,4 +29,4 @@ pub use crate::{
     server::Server,
 };
 
-pub type DynService = motore::BoxCloneService<HttpContext, Incoming, Response, Infallible>;
+pub type DynService = motore::BoxCloneService<HttpContext, BodyIncoming, Response, Infallible>;
