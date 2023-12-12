@@ -1,4 +1,7 @@
-use std::fmt::{self, Display, Formatter};
+use std::{
+    fmt::{self, Display, Formatter},
+    io,
+};
 
 use pilota::thrift::{
     DecodeError, EncodeError, Error as PilotaError, Message, ProtocolError, TAsyncInputProtocol,
@@ -28,6 +31,10 @@ pub enum Error {
     /// This variant also functions as a catch-all: errors from handler
     /// functions are automatically returned as an `ApplicationError`.
     Application(ApplicationError),
+
+    /// Basic error types, will be converted to `ApplicationError::INTERNAL_ERROR`
+    /// when encoding.
+    Basic(BasicError),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -61,6 +68,7 @@ impl Error {
                 e.message.push_str(msg);
             }
             Error::Application(e) => e.message.push_str(msg),
+            Error::Basic(e) => e.message.push_str(msg),
         }
     }
 }
@@ -131,9 +139,14 @@ impl From<ApplicationError> for Error {
     }
 }
 
-impl From<LoadBalanceError> for Error {
-    fn from(err: LoadBalanceError) -> Self {
-        new_application_error(ApplicationErrorKind::INTERNAL_ERROR, err.to_string())
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        match err.kind() {
+            io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => {
+                Error::Basic(BasicError::new(BasicErrorKind::GetConn, err.to_string()))
+            }
+            _ => Error::Transport(TransportError::from(err)),
+        }
     }
 }
 
@@ -351,7 +364,7 @@ impl ApplicationErrorKind {
     pub const BAD_SEQUENCE_ID: Self = Self(4);
     /// Service reply is missing required fields.
     pub const MISSING_RESULT: Self = Self(5);
-    /// Auto-generated code failed unexpectedly.
+    /// User server handler error.
     pub const INTERNAL_ERROR: Self = Self(6);
     /// Thrift protocol error. When possible use `Error::ProtocolError` with a
     /// specific `ProtocolErrorKind` instead.
@@ -388,6 +401,63 @@ pub fn new_application_error<S: Into<String>>(kind: ApplicationErrorKind, messag
     Error::Application(ApplicationError::new(kind, message))
 }
 
+/// Information about errors in framework.
+#[derive(Debug, Eq, PartialEq)]
+pub struct BasicError {
+    /// Basic error variant.
+    pub kind: BasicErrorKind,
+    /// Human-readable error message.
+    pub message: String,
+}
+
+impl BasicError {
+    /// Create a new `BasicError`.
+    pub fn new<S: Into<String>>(kind: BasicErrorKind, message: S) -> BasicError {
+        BasicError {
+            kind,
+            message: message.into(),
+        }
+    }
+}
+
+#[allow(unreachable_patterns)]
+impl Display for BasicError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        let error_text = match self.kind {
+            BasicErrorKind::LoadBalance => "load balance error",
+            BasicErrorKind::GetConn => "get connection error",
+            _ => "other error",
+        };
+
+        write!(f, "{}, msg: {}", error_text, self.message)
+    }
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum BasicErrorKind {
+    LoadBalance,
+    GetConn,
+}
+
+/// Create a new `Error` instance of type `Basic` that wraps an
+/// `BasicError`.
+pub fn new_basic_error<S: Into<String>>(kind: BasicErrorKind, message: S) -> Error {
+    Error::Basic(BasicError::new(kind, message))
+}
+
+impl From<BasicError> for Error {
+    fn from(e: BasicError) -> Self {
+        Error::Basic(e)
+    }
+}
+
+impl From<LoadBalanceError> for Error {
+    fn from(err: LoadBalanceError) -> Self {
+        new_basic_error(BasicErrorKind::LoadBalance, err.to_string())
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum UserError<T> {
     #[error("a exception from remote: {0}")]
@@ -406,6 +476,8 @@ pub enum ResponseError<T> {
     Transport(TransportError),
     #[error("protocol error: {0}")]
     Protocol(ProtocolError),
+    #[error("basic error: {0}")]
+    Basic(BasicError),
 }
 
 impl<T> From<Error> for ResponseError<T> {
@@ -414,6 +486,7 @@ impl<T> From<Error> for ResponseError<T> {
             Error::Transport(e) => ResponseError::Transport(e),
             Error::Protocol(e) => ResponseError::Protocol(e),
             Error::Application(e) => ResponseError::Application(e),
+            Error::Basic(e) => ResponseError::Basic(e),
         }
     }
 }

@@ -144,6 +144,14 @@ where
                 crate::Error::Transport(e) => {
                     panic!("should not call send when there is a transport error: {e:?}");
                 }
+                crate::Error::Basic(e) => {
+                    protocol.write_message_begin(&ident)?;
+                    let e = ApplicationError::new(
+                        ApplicationErrorKind::INTERNAL_ERROR,
+                        e.message.clone(),
+                    );
+                    e.encode(protocol)?;
+                }
             },
         }
         protocol.write_message_end()?;
