@@ -7,7 +7,7 @@ use volo_http::{
     middleware::{self, Next},
     response::IntoResponse,
     route::{get, post, MethodRouter, Router},
-    Address, Bytes, ConnectionInfo, HttpContext, Incoming, Json, MaybeInvalid, Method, Params,
+    Address, BodyIncoming, Bytes, ConnectionInfo, HttpContext, Json, MaybeInvalid, Method, Params,
     Response, Server, StatusCode, Uri,
 };
 
@@ -113,7 +113,7 @@ async fn tracing_from_fn(
     uri: Uri,
     peer: Address,
     cx: &mut HttpContext,
-    req: Incoming,
+    req: BodyIncoming,
     next: Next,
 ) -> Response {
     tracing::info!("Before {peer} request {uri}");
