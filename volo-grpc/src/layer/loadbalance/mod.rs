@@ -6,7 +6,7 @@ use volo::{
     context::Context,
     discovery::Discover,
     loadbalance::{error::LoadBalanceError, LoadBalance, MkLbLayer},
-    Layer, Unwrap,
+    Layer,
 };
 
 use crate::Request;
@@ -92,11 +92,7 @@ where
         cx: &'cx mut Cx,
         req: Request<T>,
     ) -> Result<Self::Response, Self::Error> {
-        debug_assert!(
-            cx.rpc_info().callee.is_some(),
-            "must set callee endpoint before load balance service"
-        );
-        let callee = cx.rpc_info().callee().volo_unwrap();
+        let callee = cx.rpc_info().callee();
 
         let mut picker = match &callee.address {
             None => self
@@ -110,9 +106,7 @@ where
         };
 
         if let Some(addr) = picker.next() {
-            if let Some(callee) = cx.rpc_info_mut().callee_mut() {
-                callee.address = Some(addr.clone())
-            }
+            cx.rpc_info_mut().callee_mut().address = Some(addr.clone());
 
             return match self.service.call(cx, req).await {
                 Ok(resp) => Ok(resp),

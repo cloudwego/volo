@@ -59,7 +59,7 @@ impl<M> ThriftMessage<M> {
     ) -> Result<Self, crate::Error> {
         let meta = MessageMeta {
             msg_type: cx.message_type,
-            method: cx.rpc_info.method.clone().unwrap(),
+            method: cx.rpc_info.method().clone(),
             seq_id: cx.seq_id,
         };
         Ok(Self { data: msg, meta })
@@ -75,7 +75,7 @@ impl<M> ThriftMessage<M> {
                 Ok(_) => TMessageType::Reply,
                 Err(_) => TMessageType::Exception,
             },
-            method: cx.rpc_info.method.clone().unwrap_or_else(|| "".into()),
+            method: cx.rpc_info.method().clone(),
             seq_id: cx.seq_id.unwrap_or(0),
         };
         Ok(Self { data: msg, meta })

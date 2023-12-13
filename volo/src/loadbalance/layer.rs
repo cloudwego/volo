@@ -4,7 +4,7 @@ use motore::Service;
 use tracing::warn;
 
 use super::error::{LoadBalanceError, Retryable};
-use crate::{context::Context, discovery::Discover, loadbalance::LoadBalance, Layer, Unwrap};
+use crate::{context::Context, discovery::Discover, loadbalance::LoadBalance, Layer};
 
 #[derive(Clone)]
 pub struct LoadBalanceService<D, LB, S> {
@@ -62,12 +62,8 @@ where
         cx: &'cx mut Cx,
         req: Req,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
-        debug_assert!(
-            cx.rpc_info().callee.is_some(),
-            "must set callee endpoint before load balance service"
-        );
         async move {
-            let callee = cx.rpc_info().callee().volo_unwrap();
+            let callee = cx.rpc_info().callee();
 
             let picker = match &callee.address {
                 None => self
@@ -82,9 +78,7 @@ where
             let mut call_count = 0;
             for (addr, _) in picker.zip(0..self.retry + 1) {
                 call_count += 1;
-                if let Some(callee) = cx.rpc_info_mut().callee_mut() {
-                    callee.address = Some(addr.clone())
-                }
+                cx.rpc_info_mut().callee_mut().address = Some(addr.clone());
 
                 match self.service.call(cx, req.clone()).await {
                     Ok(resp) => {

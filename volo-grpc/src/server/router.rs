@@ -98,7 +98,7 @@ where
         cx: &'cx mut ServerContext,
         req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
-        let path = cx.rpc_info.method.as_ref().unwrap();
+        let path = cx.rpc_info.method();
         match self.node.at(path) {
             Ok(match_) => {
                 let id = match_.value;

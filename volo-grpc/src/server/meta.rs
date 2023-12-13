@@ -1,11 +1,7 @@
 use std::{cell::RefCell, net::SocketAddr, str::FromStr, sync::Arc};
 
 use metainfo::{Backward, Forward};
-use volo::{
-    context::{Context, Endpoint},
-    net::Address,
-    FastStr, Service,
-};
+use volo::{context::Context, net::Address, FastStr, Service};
 
 use crate::{
     body::Body,
@@ -59,7 +55,7 @@ where
 
         metainfo::METAINFO
             .scope(RefCell::new(metainfo::MetaInfo::default()), async move {
-                cx.rpc_info.method = Some(FastStr::new(req.uri().path()));
+                cx.rpc_info.set_method(FastStr::new(req.uri().path()));
 
                 let mut volo_req = Request::from_http(req);
 
@@ -71,7 +67,8 @@ where
                     // caller
                     if let Some(source_service) = metadata.remove(SOURCE_SERVICE) {
                         let source_service = Arc::<str>::from(source_service.to_str()?);
-                        let mut caller = Endpoint::new(source_service.into());
+                        let caller = cx.rpc_info_mut().caller_mut();
+                        caller.set_service_name(source_service.into());
                         if let Some(ad) = metadata.remove(HEADER_TRANS_REMOTE_ADDR) {
                             let addr = ad.to_str()?.parse::<SocketAddr>();
                             if let Ok(addr) = addr {
@@ -81,14 +78,14 @@ where
                         if caller.address.is_none() {
                             caller.address = peer_addr;
                         }
-                        cx.rpc_info_mut().caller = Some(caller);
                     }
 
                     // callee
                     if let Some(destination_service) = metadata.remove(DESTINATION_SERVICE) {
                         let destination_service = Arc::<str>::from(destination_service.to_str()?);
-                        let callee = Endpoint::new(destination_service.into());
-                        cx.rpc_info_mut().callee = Some(callee);
+                        cx.rpc_info_mut()
+                            .callee_mut()
+                            .set_service_name(destination_service.into());
                     }
 
                     // persistent and transient

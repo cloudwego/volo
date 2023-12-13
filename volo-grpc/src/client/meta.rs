@@ -61,17 +61,14 @@ where
             }
 
             // caller
-            if let Some(caller) = cx.rpc_info.caller.as_ref() {
-                metadata.insert(SOURCE_SERVICE, caller.service_name().parse()?);
-            }
+            metadata.insert(SOURCE_SERVICE, cx.rpc_info.caller().service_name().parse()?);
 
             // callee
-            if let Some(callee) = cx.rpc_info.callee.as_ref() {
-                metadata.insert(DESTINATION_SERVICE, callee.service_name().parse()?);
-                if let Some(method) = cx.rpc_info.method() {
-                    metadata.insert(DESTINATION_METHOD, method.parse()?);
-                }
-            }
+            metadata.insert(
+                DESTINATION_SERVICE,
+                cx.rpc_info.callee().service_name().parse()?,
+            );
+            metadata.insert(DESTINATION_METHOD, cx.rpc_info.method().parse()?);
 
             Ok::<(), Status>(())
         });
@@ -85,8 +82,10 @@ where
             // callee
             if let Some(ad) = metadata.remove(HEADER_TRANS_REMOTE_ADDR) {
                 let maybe_addr = ad.to_str()?.parse::<SocketAddr>();
-                if let (Some(callee), Ok(addr)) = (cx.rpc_info_mut().callee.as_mut(), maybe_addr) {
-                    callee.set_address(volo::net::Address::from(addr));
+                if let Ok(addr) = maybe_addr {
+                    cx.rpc_info_mut()
+                        .callee_mut()
+                        .set_address(volo::net::Address::from(addr));
                 }
             }
 

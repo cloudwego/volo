@@ -37,8 +37,12 @@ macro_rules! newtype_impl_context {
 
 const DEFAULT_MAP_CAPACITY: usize = 10;
 
+pub trait Reusable {
+    fn clear(&mut self);
+}
+
 #[derive(Debug)]
-pub struct RpcCx<I, Config> {
+pub struct RpcCx<I, Config: Reusable + Default> {
     pub rpc_info: RpcInfo<Config>,
     pub inner: I,
     pub extensions: Extensions,
@@ -64,7 +68,7 @@ impl std::ops::DerefMut for Extensions {
 }
 
 pub trait Context {
-    type Config: Send + Debug;
+    type Config: Reusable + Default + Send + Debug;
 
     fn rpc_info(&self) -> &RpcInfo<Self::Config>;
     fn rpc_info_mut(&mut self) -> &mut RpcInfo<Self::Config>;
@@ -75,7 +79,7 @@ pub trait Context {
 
 impl<I, Config> Context for RpcCx<I, Config>
 where
-    Config: Send + Debug,
+    Config: Reusable + Default + Send + Debug,
 {
     type Config = Config;
 
@@ -100,7 +104,10 @@ where
     }
 }
 
-impl<I, Config> std::ops::Deref for RpcCx<I, Config> {
+impl<I, Config> std::ops::Deref for RpcCx<I, Config>
+where
+    Config: Reusable + Default,
+{
     type Target = I;
 
     #[inline]
@@ -109,14 +116,20 @@ impl<I, Config> std::ops::Deref for RpcCx<I, Config> {
     }
 }
 
-impl<I, Config> std::ops::DerefMut for RpcCx<I, Config> {
+impl<I, Config> std::ops::DerefMut for RpcCx<I, Config>
+where
+    Config: Reusable + Default,
+{
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl<I, Config> RpcCx<I, Config> {
+impl<I, Config> RpcCx<I, Config>
+where
+    Config: Reusable + Default,
+{
     #[inline]
     pub fn new(ri: RpcInfo<Config>, inner: I) -> Self {
         Self {
@@ -135,7 +148,7 @@ impl<I, Config> RpcCx<I, Config> {
 }
 
 /// Endpoint contains the information of the service.
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Endpoint {
     /// `service_name` is the most important information, which is used by the service discovering.
     pub service_name: FastStr,
@@ -246,23 +259,23 @@ pub enum Role {
 }
 
 #[derive(Debug)]
-pub struct RpcInfo<Config> {
-    pub role: Role,
-    pub caller: Option<Endpoint>,
-    pub callee: Option<Endpoint>,
-    pub method: Option<FastStr>,
-    pub config: Option<Config>,
+pub struct RpcInfo<Config: Reusable + Default> {
+    role: Role,
+    caller: Endpoint,
+    callee: Endpoint,
+    method: FastStr,
+    config: Config,
 }
 
-impl<Config> RpcInfo<Config> {
+impl<Config: Reusable + Default> RpcInfo<Config> {
     #[inline]
     pub fn with_role(role: Role) -> RpcInfo<Config> {
         RpcInfo {
             role,
-            caller: None,
-            callee: None,
-            method: None,
-            config: None,
+            caller: Default::default(),
+            callee: Default::default(),
+            method: Default::default(),
+            config: Default::default(),
         }
     }
 
@@ -276,10 +289,10 @@ impl<Config> RpcInfo<Config> {
     ) -> Self {
         RpcInfo {
             role,
-            caller: Some(caller),
-            callee: Some(callee),
-            method: Some(method),
-            config: Some(config),
+            caller,
+            callee,
+            method,
+            config,
         }
     }
 
@@ -294,54 +307,60 @@ impl<Config> RpcInfo<Config> {
     }
 
     #[inline]
-    pub fn method(&self) -> Option<&FastStr> {
-        self.method.as_ref()
+    pub fn method(&self) -> &FastStr {
+        &self.method
     }
 
     #[inline]
-    pub fn method_mut(&mut self) -> Option<&mut FastStr> {
-        self.method.as_mut()
+    pub fn method_mut(&mut self) -> &mut FastStr {
+        &mut self.method
     }
 
     #[inline]
-    pub fn caller(&self) -> Option<&Endpoint> {
-        self.caller.as_ref()
+    pub fn set_method(&mut self, method: FastStr) {
+        self.method = method;
     }
 
     #[inline]
-    pub fn caller_mut(&mut self) -> Option<&mut Endpoint> {
-        self.caller.as_mut()
+    pub fn caller(&self) -> &Endpoint {
+        &self.caller
     }
 
     #[inline]
-    pub fn callee(&self) -> Option<&Endpoint> {
-        self.callee.as_ref()
+    pub fn caller_mut(&mut self) -> &mut Endpoint {
+        &mut self.caller
     }
 
     #[inline]
-    pub fn callee_mut(&mut self) -> Option<&mut Endpoint> {
-        self.callee.as_mut()
+    pub fn callee(&self) -> &Endpoint {
+        &self.callee
     }
 
     #[inline]
-    pub fn config(&self) -> Option<&Config> {
-        self.config.as_ref()
+    pub fn callee_mut(&mut self) -> &mut Endpoint {
+        &mut self.callee
     }
 
     #[inline]
-    pub fn config_mut(&mut self) -> Option<&mut Config> {
-        self.config.as_mut()
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    #[inline]
+    pub fn config_mut(&mut self) -> &mut Config {
+        &mut self.config
+    }
+
+    #[inline]
+    pub fn set_config(&mut self, config: Config) {
+        self.config = config;
     }
 
     #[inline]
     pub fn clear(&mut self) {
-        if let Some(ep) = self.caller_mut() {
-            ep.clear()
-        }
-        if let Some(ep) = self.callee_mut() {
-            ep.clear()
-        }
-        self.method = None;
-        self.config = None;
+        self.caller.clear();
+        self.callee.clear();
+        self.method = Default::default();
+        self.config.clear();
     }
 }

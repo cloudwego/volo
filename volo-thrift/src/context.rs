@@ -4,7 +4,7 @@ use chrono::{DateTime, Local};
 use paste::paste;
 use pilota::thrift::TMessageIdentifier;
 use volo::{
-    context::{Role, RpcCx, RpcInfo},
+    context::{Context, Reusable, Role, RpcCx, RpcInfo},
     newtype_impl_context,
 };
 
@@ -338,7 +338,7 @@ impl ThriftContext for ServerContext {
     fn handle_decoded_msg_ident(&mut self, ident: &TMessageIdentifier) {
         self.seq_id = Some(ident.sequence_number);
         self.req_msg_type = Some(ident.message_type);
-        self.rpc_info.method = Some(ident.name.clone());
+        self.rpc_info_mut().set_method(ident.name.clone());
     }
 
     #[inline]
@@ -463,6 +463,15 @@ impl Config {
     }
 }
 
+impl Reusable for Config {
+    fn clear(&mut self) {
+        self.rpc_timeout = None;
+        self.connect_timeout = None;
+        self.read_write_timeout = None;
+        self.max_frame_size = DEFAULT_MAX_FRAME_SIZE;
+    }
+}
+
 impl Default for Config {
     fn default() -> Self {
         Self {
@@ -479,7 +488,7 @@ impl ::volo::client::Apply<ClientContext> for CallOpt {
 
     #[inline]
     fn apply(self, cx: &mut ClientContext) -> Result<(), Self::Error> {
-        let caller = cx.rpc_info.caller_mut().unwrap();
+        let caller = cx.rpc_info.caller_mut();
         if !self.caller_faststr_tags.is_empty() {
             caller.faststr_tags.extend(self.caller_faststr_tags);
         }
@@ -487,7 +496,7 @@ impl ::volo::client::Apply<ClientContext> for CallOpt {
             caller.tags.extend(self.caller_tags);
         }
 
-        let callee = cx.rpc_info.callee_mut().unwrap();
+        let callee = cx.rpc_info.callee_mut();
         if !self.callee_faststr_tags.is_empty() {
             callee.faststr_tags.extend(self.callee_faststr_tags);
         }
@@ -497,7 +506,7 @@ impl ::volo::client::Apply<ClientContext> for CallOpt {
         if let Some(addr) = self.address {
             callee.set_address(addr);
         }
-        cx.rpc_info.config_mut().unwrap().merge(self.config);
+        cx.rpc_info.config_mut().merge(self.config);
         Ok(())
     }
 }
