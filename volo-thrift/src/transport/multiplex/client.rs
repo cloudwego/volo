@@ -2,10 +2,7 @@ use std::{io, marker::PhantomData};
 
 use motore::service::{Service, UnaryService};
 use pilota::thrift::TransportErrorKind;
-use volo::{
-    net::{dial::MakeTransport, Address},
-    Unwrap,
-};
+use volo::net::{dial::MakeTransport, Address};
 
 use crate::{
     codec::MakeCodec,
@@ -134,7 +131,7 @@ where
         req: ThriftMessage<Req>,
     ) -> Result<Self::Response, Self::Error> {
         let rpc_info = &cx.rpc_info;
-        let target = rpc_info.callee().volo_unwrap().address().ok_or_else(|| {
+        let target = rpc_info.callee().address().ok_or_else(|| {
             let msg = format!("address is required, rpcinfo: {:?}", rpc_info);
             crate::Error::Transport(io::Error::new(io::ErrorKind::InvalidData, msg).into())
         })?;

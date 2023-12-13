@@ -622,20 +622,16 @@ impl<S> Client<S> {
                     // reset rpc_info
                     cx.rpc_info_mut()
                         .caller_mut()
-                        .unwrap()
                         .set_service_name(self.inner.caller_name.clone());
                     cx.rpc_info_mut()
                         .callee_mut()
-                        .unwrap()
                         .set_service_name(self.inner.callee_name.clone());
                     if let Some(target) = &self.inner.address {
-                        cx.rpc_info_mut()
-                            .callee_mut()
-                            .unwrap()
-                            .set_address(target.clone());
+                        cx.rpc_info_mut().callee_mut().set_address(target.clone());
                     }
-                    cx.rpc_info_mut().config = Some(self.inner.config);
-                    cx.rpc_info_mut().method = Some(FastStr::from_static_str(method));
+                    cx.rpc_info_mut().set_config(self.inner.config);
+                    cx.rpc_info_mut()
+                        .set_method(FastStr::from_static_str(method));
                     Some(cx)
                 })
                 .unwrap_or_else(|| {

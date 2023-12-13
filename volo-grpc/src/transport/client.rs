@@ -7,7 +7,7 @@ use http::{
 use hyper::Client as HyperClient;
 use motore::Service;
 use tower::{util::ServiceExt, Service as TowerService};
-use volo::{net::Address, Unwrap};
+use volo::net::Address;
 
 use super::connect::Connector;
 use crate::{
@@ -114,18 +114,13 @@ where
         let mut http_client = self.http_client.clone();
         // SAFETY: parameters controlled by volo-grpc are guaranteed to be valid.
         // get the call address from the context
-        let target = cx
-            .rpc_info
-            .callee()
-            .volo_unwrap()
-            .address()
-            .ok_or_else(|| {
-                io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
-            })?;
+        let target = cx.rpc_info.callee().address().ok_or_else(|| {
+            io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
+        })?;
 
         let (metadata, extensions, message) = volo_req.into_parts();
-        let path = cx.rpc_info.method().volo_unwrap();
-        let rpc_config = cx.rpc_info.config().volo_unwrap();
+        let path = cx.rpc_info.method();
+        let rpc_config = cx.rpc_info.config();
         let accept_compressions = &rpc_config.accept_compressions;
 
         // select the compression algorithm with the highest priority by user's config

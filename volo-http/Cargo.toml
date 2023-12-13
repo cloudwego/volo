@@ -18,7 +18,7 @@ keywords = ["async", "rpc", "http"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.8", path = "../volo" }
+volo = { version = "0.9", path = "../volo" }
 
 http-body-util = "0.1"
 hyper = { version = "1", features = ["server", "http1", "http2"] }

@@ -550,7 +550,7 @@ impl CodegenBackend for VoloGrpcBackend {
 
                 async fn call<'s, 'cx>(&'s self, cx: &'cx mut ::volo_grpc::context::ServerContext, req: ::volo_grpc::Request<{req_enum_name_recv}>) -> ::std::result::Result<Self::Response, Self::Error> {{
                     let inner = self.inner.clone();
-                    match cx.rpc_info.method().unwrap().as_str() {{
+                    match cx.rpc_info.method().as_str() {{
                         {req_matches}
                         path => {{
                             let path = path.to_string();

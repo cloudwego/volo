@@ -143,7 +143,7 @@ where
         )?;
 
         let message = T::from_body(
-            cx.rpc_info.method.as_deref(),
+            Some(cx.rpc_info.method().as_str()),
             body,
             Kind::Request,
             recv_compression,

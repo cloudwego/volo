@@ -80,6 +80,20 @@ pub struct Config {
     pub(crate) send_compressions: Option<Vec<CompressionEncoding>>,
 }
 
+impl Reusable for Config {
+    fn clear(&mut self) {
+        self.connect_timeout = None;
+        self.read_timeout = None;
+        self.write_timeout = None;
+        if let Some(v) = self.accept_compressions.as_mut() {
+            v.clear();
+        }
+        if let Some(v) = self.send_compressions.as_mut() {
+            v.clear();
+        }
+    }
+}
+
 impl Config {
     pub fn merge(&mut self, other: Self) {
         if let Some(t) = other.connect_timeout {

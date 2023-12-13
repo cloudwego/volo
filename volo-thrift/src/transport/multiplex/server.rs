@@ -8,7 +8,7 @@ use metainfo::MetaInfo;
 use motore::service::Service;
 use tokio::sync::{futures::Notified, mpsc};
 use tracing::*;
-use volo::{context::Endpoint, net::Address, volo_unreachable};
+use volo::{context::Context, net::Address, volo_unreachable};
 
 use crate::{
     codec::{Decoder, Encoder},
@@ -98,9 +98,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                 // new context
                 let mut cx = ServerContext::default();
                 if let Some(peer_addr) = &peer_addr {
-                    let mut caller = Endpoint::new("-".into());
-                    caller.set_address(peer_addr.clone());
-                    cx.rpc_info.caller = Some(caller);
+                    cx.rpc_info_mut().caller_mut().set_address(peer_addr.clone());
                 }
 
                 tokio::select! {

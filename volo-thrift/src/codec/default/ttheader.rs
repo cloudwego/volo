@@ -15,16 +15,12 @@ use num_enum::TryFromPrimitive;
 use pilota::thrift::{DecodeError, EncodeError, ProtocolErrorKind};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
 use tracing::{trace, warn};
-use volo::{
-    context::{Endpoint, Role},
-    util::buf_reader::BufReader,
-    FastStr,
-};
+use volo::{context::Role, util::buf_reader::BufReader, FastStr};
 
 use super::MakeZeroCopyCodec;
 use crate::{
     codec::default::{ZeroCopyDecoder, ZeroCopyEncoder},
-    context::{Config, ThriftContext},
+    context::ThriftContext,
     EntryMessage, ThriftMessage,
 };
 
@@ -409,54 +405,51 @@ pub(crate) fn encode<Cx: ThriftContext>(
                 int_kv_len += 1;
 
                 // Config
-                if let Some(config) = cx.rpc_info().config.as_ref() {
-                    if let Some(timeout) = config.rpc_timeout() {
-                        let timeout = timeout.as_millis().to_string();
-                        dst.put_u16(IntMetaKey::RPCTimeout as u16);
-                        dst.put_u16(timeout.len() as u16);
-                        dst.put_slice(timeout.as_bytes());
-                        int_kv_len += 1;
-                    }
+                let config = cx.rpc_info().config();
+                if let Some(timeout) = config.rpc_timeout() {
+                    let timeout = timeout.as_millis().to_string();
+                    dst.put_u16(IntMetaKey::RPCTimeout as u16);
+                    dst.put_u16(timeout.len() as u16);
+                    dst.put_slice(timeout.as_bytes());
+                    int_kv_len += 1;
+                }
 
-                    if let Some(timeout) = config.connect_timeout() {
-                        let timeout = timeout.as_millis().to_string();
-                        dst.put_u16(IntMetaKey::ConnTimeout as u16);
-                        dst.put_u16(timeout.len() as u16);
-                        dst.put_slice(timeout.as_bytes());
-                        int_kv_len += 1;
-                    }
+                if let Some(timeout) = config.connect_timeout() {
+                    let timeout = timeout.as_millis().to_string();
+                    dst.put_u16(IntMetaKey::ConnTimeout as u16);
+                    dst.put_u16(timeout.len() as u16);
+                    dst.put_slice(timeout.as_bytes());
+                    int_kv_len += 1;
                 }
 
                 // Caller
-                if let Some(caller) = cx.rpc_info().caller.as_ref() {
-                    let svc = caller.service_name();
-                    dst.put_u16(IntMetaKey::FromService as u16);
-                    dst.put_u16(svc.len() as u16);
-                    dst.put_slice(svc.as_bytes());
-                    int_kv_len += 1;
-                }
+                let caller = cx.rpc_info().caller();
+                let svc = caller.service_name();
+                dst.put_u16(IntMetaKey::FromService as u16);
+                dst.put_u16(svc.len() as u16);
+                dst.put_slice(svc.as_bytes());
+                int_kv_len += 1;
 
                 // Callee
-                if let Some(callee) = cx.rpc_info().callee.as_ref() {
-                    let method = cx.rpc_info().method.as_ref().unwrap();
-                    dst.put_u16(IntMetaKey::ToMethod as u16);
-                    dst.put_u16(method.len() as u16);
-                    dst.put_slice(method.as_bytes());
-                    int_kv_len += 1;
+                let callee = cx.rpc_info().callee();
+                let method = cx.rpc_info().method();
+                dst.put_u16(IntMetaKey::ToMethod as u16);
+                dst.put_u16(method.len() as u16);
+                dst.put_slice(method.as_bytes());
+                int_kv_len += 1;
 
-                    let svc = callee.service_name();
-                    dst.put_u16(IntMetaKey::ToService as u16);
-                    dst.put_u16(svc.len() as u16);
-                    dst.put_slice(svc.as_bytes());
-                    int_kv_len += 1;
+                let svc = callee.service_name();
+                dst.put_u16(IntMetaKey::ToService as u16);
+                dst.put_u16(svc.len() as u16);
+                dst.put_slice(svc.as_bytes());
+                int_kv_len += 1;
 
-                    if let Some(addr) = callee.address() {
-                        let addr = addr.to_string();
-                        dst.put_u16(IntMetaKey::DestAddress as u16);
-                        dst.put_u16(addr.len() as u16);
-                        dst.put_slice(addr.as_bytes());
-                        int_kv_len += 1;
-                    }
+                if let Some(addr) = callee.address() {
+                    let addr = addr.to_string();
+                    dst.put_u16(IntMetaKey::DestAddress as u16);
+                    dst.put_u16(addr.len() as u16);
+                    dst.put_slice(addr.as_bytes());
+                    int_kv_len += 1;
                 }
             }
         };
@@ -606,48 +599,45 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Encod
                 len += "3".as_bytes().len();
 
                 // Config
-                if let Some(config) = thrift_cx.rpc_info().config.as_ref() {
-                    if let Some(timeout) = config.rpc_timeout() {
-                        let timeout = timeout.as_millis().to_string();
-                        len += 2;
-                        len += 2;
-                        len += timeout.as_bytes().len();
-                    }
+                let config = thrift_cx.rpc_info().config();
+                if let Some(timeout) = config.rpc_timeout() {
+                    let timeout = timeout.as_millis().to_string();
+                    len += 2;
+                    len += 2;
+                    len += timeout.as_bytes().len();
+                }
 
-                    if let Some(timeout) = config.connect_timeout() {
-                        let timeout = timeout.as_millis().to_string();
-                        len += 2;
-                        len += 2;
-                        len += timeout.as_bytes().len();
-                    }
+                if let Some(timeout) = config.connect_timeout() {
+                    let timeout = timeout.as_millis().to_string();
+                    len += 2;
+                    len += 2;
+                    len += timeout.as_bytes().len();
                 }
 
                 // Caller
-                if let Some(caller) = thrift_cx.rpc_info().caller.as_ref() {
-                    let svc = caller.service_name();
-                    len += 2;
-                    len += 2;
-                    len += svc.as_bytes().len();
-                }
+                let caller = thrift_cx.rpc_info().caller();
+                let svc = caller.service_name();
+                len += 2;
+                len += 2;
+                len += svc.as_bytes().len();
 
                 // Callee
-                if let Some(callee) = thrift_cx.rpc_info().callee.as_ref() {
-                    let method = thrift_cx.rpc_info().method.as_ref().unwrap();
-                    len += 2;
-                    len += 2;
-                    len += method.as_bytes().len();
+                let callee = thrift_cx.rpc_info().callee();
+                let method = thrift_cx.rpc_info().method();
+                len += 2;
+                len += 2;
+                len += method.as_bytes().len();
 
-                    let svc = callee.service_name();
-                    len += 2;
-                    len += 2;
-                    len += svc.as_bytes().len();
+                let svc = callee.service_name();
+                len += 2;
+                len += 2;
+                len += svc.as_bytes().len();
 
-                    if let Some(addr) = callee.address() {
-                        let addr = addr.to_string();
-                        len += 2;
-                        len += 2;
-                        len += addr.as_bytes().len();
-                    }
+                if let Some(addr) = callee.address() {
+                    let addr = addr.to_string();
+                    len += 2;
+                    len += 2;
+                    len += addr.as_bytes().len();
                 }
             }
         };
@@ -774,10 +764,8 @@ pub(crate) fn decode<Cx: ThriftContext>(
                             // TODO: get_idc_from_ip and set tag
                         // }
                         let maybe_addr = ad.parse::<SocketAddr>();
-                        if let (Some(callee), Ok(addr)) =
-                            (cx.rpc_info_mut().callee.as_mut(), maybe_addr)
-                        {
-                            callee.set_address(volo::net::Address::from(addr));
+                        if let Ok(addr) = maybe_addr {
+                            cx.rpc_info_mut().callee_mut().set_address(volo::net::Address::from(addr));
                         }
                     }
                     if let Some(crrst) = headers.remove(HEADER_CONNECTION_READY_TO_RESET) {
@@ -801,7 +789,8 @@ pub(crate) fn decode<Cx: ThriftContext>(
                         .map(|(_, v)| v);
 
                     if let Some(from_service) = from_service {
-                        let mut caller = Endpoint::new(from_service);
+                        let caller = cx.rpc_info_mut().caller_mut();
+                        caller.set_service_name(from_service);
                         if let Some(ad) = headers.remove(HEADER_TRANS_REMOTE_ADDR) {
                             let addr = ad.parse::<SocketAddr>();
                             if let Ok(addr) = addr {
@@ -810,16 +799,10 @@ pub(crate) fn decode<Cx: ThriftContext>(
                         }
 
                         if caller.address.is_none() {
-                            if let Some(v) = cx
-                                .rpc_info_mut()
-                                .caller
-                                .as_mut()
-                                .and_then(|x| x.address.take())
-                            {
+                            if let Some(v) = caller.address() {
                                 caller.set_address(v);
                             }
                         }
-                        cx.rpc_info_mut().caller = Some(caller);
                     }
 
                     // Callee
@@ -828,21 +811,16 @@ pub(crate) fn decode<Cx: ThriftContext>(
                         .map(|(_, v)| v);
 
                     if let Some(to_service) = to_service {
-                        let callee = Endpoint::new(to_service);
-
-                        cx.rpc_info_mut().callee = Some(callee);
+                        cx.rpc_info_mut().callee_mut().set_service_name(to_service);
                     }
 
                     // Config
-                    let mut config = Config::new();
                     if let Some(Ok(rpc_timeout)) = int_headers
                         .get(&IntMetaKey::RPCTimeout)
                         .map(|x| x.parse().map(Duration::from_millis))
                     {
-                        config.set_rpc_timeout(Some(rpc_timeout));
+                        cx.rpc_info_mut().config_mut().set_rpc_timeout(Some(rpc_timeout));
                     }
-
-                    cx.rpc_info_mut().config = Some(config);
 
                     // Search for forward metainfo.
                     // We are not supposed to use headers, so we can use into_iter to avoid clone.
