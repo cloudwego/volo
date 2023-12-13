@@ -10,6 +10,7 @@ use futures::{future, Stream};
 use futures_util::ready;
 use http::StatusCode;
 use http_body::Body;
+use hyper::body::Incoming;
 use pilota::prost::Message;
 use tracing::{debug, trace};
 
@@ -28,7 +29,7 @@ use crate::{
 ///
 /// Provides an interface for receiving messages and trailers.
 pub struct RecvStream<T> {
-    body: hyper::Body,
+    body: Incoming,
     decoder: DefaultDecoder<T>,
     trailers: Option<MetadataMap>,
     buf: BytesMut,
@@ -55,7 +56,7 @@ pub enum Kind {
 
 impl<T> RecvStream<T> {
     pub fn new(
-        body: hyper::Body,
+        body: Incoming,
         kind: Kind,
         compression_encoding: Option<CompressionEncoding>,
     ) -> Self {
@@ -96,10 +97,23 @@ impl<T: Message + Default> RecvStream<T> {
             return Ok(Some(trailers));
         }
 
-        future::poll_fn(|cx| Pin::new(&mut self.body).poll_trailers(cx))
-            .await
-            .map(|t| t.map(MetadataMap::from_headers))
-            .map_err(|e| Status::from_error(Box::new(e)))
+        let maybe_trailer = future::poll_fn(|cx| Pin::new(&mut self.body).poll_frame(cx)).await;
+
+        match maybe_trailer {
+            Some(Ok(frame)) => match frame.into_trailers() {
+                Ok(headers) => Ok(Some(MetadataMap::from_headers(headers))),
+                Err(_frame) => {
+                    // **unreachable** because the `frame` cannot be `Frame::Data` here
+                    trace!("[VOLO] unexpected data from stream");
+                    return Err(Status::new(
+                        Code::Internal,
+                        "Unexpected data from stream.".to_string(),
+                    ));
+                }
+            },
+            Some(Err(err)) => Err(Status::from_error(Box::new(err))),
+            None => Ok(None),
+        }
     }
 
     fn decode_chunk(&mut self) -> Result<Option<T>, Status> {
@@ -187,7 +201,7 @@ impl<T: Message + Default> Stream for RecvStream<T> {
                 return Poll::Ready(Some(Ok(item)));
             }
 
-            let chunk = match ready!(Pin::new(&mut self.body).poll_data(cx)) {
+            let chunk = match ready!(Pin::new(&mut self.body).poll_frame(cx)) {
                 Some(Ok(d)) => Some(d),
                 Some(Err(e)) => {
                     let err: crate::BoxError = e.into();
@@ -202,21 +216,51 @@ impl<T: Message + Default> Stream for RecvStream<T> {
                 None => None,
             };
 
-            if let Some(data) = chunk {
-                self.buf.put(data);
-            } else if self.buf.has_remaining() {
-                trace!("[VOLO] unexpected EOF decoding stream");
-                return Poll::Ready(Some(Err(Status::new(
-                    Code::Internal,
-                    "Unexpected EOF decoding stream.".to_string(),
-                ))));
-            } else {
-                break;
+            match chunk.map(|frame| frame.into_data()) {
+                Some(Ok(data)) => self.buf.put(data),
+                Some(Err(_frame)) => {
+                    // **unreachable** because the `chunk` must be `Frame::Data` or `None` here
+                    trace!("[VOLO] unexpected trailer from stream");
+                    return Poll::Ready(Some(Err(Status::new(
+                        Code::Internal,
+                        "Unexpected trailer from stream.".to_string(),
+                    ))));
+                }
+                None => {
+                    if self.buf.has_remaining() {
+                        trace!("[VOLO] unexpected EOF decoding stream");
+                        return Poll::Ready(Some(Err(Status::new(
+                            Code::Internal,
+                            "Unexpected EOF decoding stream.".to_string(),
+                        ))));
+                    } else {
+                        break;
+                    }
+                }
             }
         }
 
         if let Kind::Response(status) = self.kind {
-            match ready!(Pin::new(&mut self.body).poll_trailers(cx)) {
+            let trailer = match ready!(Pin::new(&mut self.body).poll_frame(cx)) {
+                Some(Ok(frame)) => {
+                    let trailer = match frame.into_trailers() {
+                        Ok(trailer) => trailer,
+                        Err(_frame) => {
+                            // **unreachable** because the `frame` cannot be `Frame::Data` here
+                            trace!("[VOLO] unexpected data from stream");
+                            return Poll::Ready(Some(Err(Status::new(
+                                Code::Internal,
+                                "Unexpected data from stream.".to_string(),
+                            ))));
+                        }
+                    };
+                    Ok(Some(trailer))
+                }
+                Some(Err(err)) => Err(err),
+                None => Ok(None),
+            };
+
+            match trailer {
                 Ok(trailer) => {
                     if let Err(e) = Status::infer_grpc_status(trailer.as_ref(), status) {
                         return if let Some(e) = e {

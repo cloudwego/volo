@@ -1,5 +1,6 @@
 use std::marker::PhantomData;
 
+use hyper::body::Incoming;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::Service,
@@ -116,7 +117,7 @@ impl<S, T, U> CodecService<S, T, U> {
     }
 }
 
-impl<S, T, U> Service<ServerContext, Request<hyper::Body>> for CodecService<S, T, U>
+impl<S, T, U> Service<ServerContext, Request<Incoming>> for CodecService<S, T, U>
 where
     S: Service<ServerContext, Request<T>, Response = Response<U>> + Clone + Send + Sync + 'static,
     S::Error: Into<Status>,
@@ -129,7 +130,7 @@ where
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: Request<hyper::Body>,
+        req: Request<Incoming>,
     ) -> Result<Self::Response, Self::Error> {
         let (metadata, extensions, body) = req.into_parts();
         let send_compression = CompressionEncoding::from_accept_encoding_header(

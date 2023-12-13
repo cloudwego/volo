@@ -36,10 +36,12 @@ futures.workspace = true
 flate2.workspace = true
 h2.workspace = true
 hex.workspace = true
-http-body.workspace = true
 http.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
 hyper = { workspace = true, features = ["full"] }
 hyper-timeout.workspace = true
+hyper-util.workspace = true
 matchit.workspace = true
 percent-encoding.workspace = true
 pin-project.workspace = true

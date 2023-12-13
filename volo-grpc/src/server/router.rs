@@ -5,6 +5,7 @@ use std::{
 
 use fxhash::FxHashMap;
 use http_body::Body as HttpBody;
+use hyper::body::Incoming;
 use motore::{BoxCloneService, Service};
 use volo::Unwrap;
 
@@ -27,7 +28,7 @@ impl RouteId {
 }
 
 #[derive(Default)]
-pub struct Router<B = hyper::Body> {
+pub struct Router<B = Incoming> {
     routes: FxHashMap<RouteId, BoxCloneService<ServerContext, Request<B>, Response<Body>, Status>>,
     node: matchit::Router<RouteId>,
 }

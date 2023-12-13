@@ -441,7 +441,7 @@ impl CodegenBackend for VoloGrpcBackend {
             }}
 
             impl ::volo_grpc::RecvEntryMessage for {req_enum_name_recv} {{
-                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::Body, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status> {{
+                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::body::Incoming, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status> {{
                     match method {{
                         {req_recv_from_body}
                         _ => Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
@@ -466,7 +466,7 @@ impl CodegenBackend for VoloGrpcBackend {
             }}
 
             impl ::volo_grpc::RecvEntryMessage for {resp_enum_name_recv} {{
-                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::Body, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status>
+                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::body::Incoming, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status>
                 where
                     Self: ::core::marker::Sized,
                 {{

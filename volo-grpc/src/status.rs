@@ -11,7 +11,7 @@ use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
 use crate::{body::Body, metadata::MetadataMap};
 
-pub type BoxBody = http_body::combinators::BoxBody<Bytes, Status>;
+pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, Status>;
 
 const ENCODING_SET: &AsciiSet = &CONTROLS
     .add(b' ')
@@ -408,7 +408,7 @@ impl Status {
         // matches the spec of:
         // > The service is currently unavailable. This is most likely a transient condition that
         // > can be corrected if retried with a backoff.
-        if err.is_timeout() || err.is_connect() {
+        if err.is_timeout() {
             return Some(Self::unavailable(err.to_string()));
         }
         if let Some(h2_err) = err.source().and_then(|e| e.downcast_ref::<h2::Error>()) {
@@ -628,7 +628,7 @@ impl Status {
 
         http::Response::from_parts(
             parts,
-            Body::new(Box::pin(futures::stream::empty())).end_stream(true),
+            Body::new(Box::pin(futures::stream::empty())).end_stream(),
         )
     }
 }

@@ -4,13 +4,14 @@ use http::{
     header::{CONTENT_TYPE, TE},
     HeaderValue,
 };
-use hyper::Client as HyperClient;
+use hyper::client::conn::http2;
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use motore::Service;
-use tower::{util::ServiceExt, Service as TowerService};
 use volo::net::Address;
 
 use super::connect::Connector;
 use crate::{
+    body::Body,
     client::Http2Config,
     codec::{
         compression::{CompressionEncoding, ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
@@ -23,7 +24,8 @@ use crate::{
 /// A simple wrapper of [`hyper::client::client`] that implements [`Service`]
 /// to make outgoing requests.
 pub struct ClientTransport<U> {
-    http_client: HyperClient<Connector>,
+    http_client: http2::Builder<TokioExecutor>,
+    connector: Connector,
     _marker: PhantomData<fn(U)>,
 }
 
@@ -31,6 +33,7 @@ impl<U> Clone for ClientTransport<U> {
     fn clone(&self) -> Self {
         Self {
             http_client: self.http_client.clone(),
+            connector: self.connector.clone(),
             _marker: self._marker,
         }
     }
@@ -45,22 +48,22 @@ impl<U> ClientTransport<U> {
             rpc_config.read_timeout,
             rpc_config.write_timeout,
         );
-        let http = HyperClient::builder()
-            .http2_only(!http2_config.accept_http1)
-            .http2_initial_stream_window_size(http2_config.init_stream_window_size)
-            .http2_initial_connection_window_size(http2_config.init_connection_window_size)
-            .http2_max_frame_size(http2_config.max_frame_size)
-            .http2_adaptive_window(http2_config.adaptive_window)
-            .http2_keep_alive_interval(http2_config.http2_keepalive_interval)
-            .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
-            .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
-            .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
-            .http2_max_send_buf_size(http2_config.max_send_buf_size)
-            .retry_canceled_requests(http2_config.retry_canceled_requests)
-            .build(Connector::new(Some(config)));
+        let mut http_client = http2::Builder::new(TokioExecutor::new());
+        http_client
+            .initial_stream_window_size(http2_config.init_stream_window_size)
+            .initial_connection_window_size(http2_config.init_connection_window_size)
+            .max_frame_size(http2_config.max_frame_size)
+            .adaptive_window(http2_config.adaptive_window)
+            .keep_alive_interval(http2_config.http2_keepalive_interval)
+            .keep_alive_timeout(http2_config.http2_keepalive_timeout)
+            .keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
+            .max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
+            .max_send_buf_size(http2_config.max_send_buf_size);
+        let connector = Connector::new(Some(config));
 
         ClientTransport {
-            http_client: http,
+            http_client,
+            connector,
             _marker: PhantomData,
         }
     }
@@ -76,22 +79,22 @@ impl<U> ClientTransport<U> {
             rpc_config.read_timeout,
             rpc_config.write_timeout,
         );
-        let http = HyperClient::builder()
-            .http2_only(!http2_config.accept_http1)
-            .http2_initial_stream_window_size(http2_config.init_stream_window_size)
-            .http2_initial_connection_window_size(http2_config.init_connection_window_size)
-            .http2_max_frame_size(http2_config.max_frame_size)
-            .http2_adaptive_window(http2_config.adaptive_window)
-            .http2_keep_alive_interval(http2_config.http2_keepalive_interval)
-            .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
-            .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
-            .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
-            .http2_max_send_buf_size(http2_config.max_send_buf_size)
-            .retry_canceled_requests(http2_config.retry_canceled_requests)
-            .build(Connector::new_with_tls(Some(config), tls_config));
+        let mut http_client = http2::Builder::new(TokioExecutor::new());
+        http_client
+            .initial_stream_window_size(http2_config.init_stream_window_size)
+            .initial_connection_window_size(http2_config.init_connection_window_size)
+            .max_frame_size(http2_config.max_frame_size)
+            .adaptive_window(http2_config.adaptive_window)
+            .keep_alive_interval(http2_config.http2_keepalive_interval)
+            .keep_alive_timeout(http2_config.http2_keepalive_timeout)
+            .keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
+            .max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
+            .max_send_buf_size(http2_config.max_send_buf_size);
+        let connector = Connector::new_with_tls(Some(config), tls_config);
 
         ClientTransport {
-            http_client: http,
+            http_client,
+            connector,
             _marker: PhantomData,
         }
     }
@@ -111,7 +114,7 @@ where
         cx: &'cx mut ClientContext,
         volo_req: Request<T>,
     ) -> Result<Self::Response, Self::Error> {
-        let mut http_client = self.http_client.clone();
+        let http_client = self.http_client.clone();
         // SAFETY: parameters controlled by volo-grpc are guaranteed to be valid.
         // get the call address from the context
         let target = cx.rpc_info.callee().address().ok_or_else(|| {
@@ -129,14 +132,16 @@ where
             .as_ref()
             .map(|config| config[0]);
 
-        let body = hyper::Body::wrap_stream(message.into_body(send_compression));
+        let body = Body::new(message.into_body(send_compression));
 
-        let mut req = hyper::Request::new(body);
-        *req.version_mut() = http::Version::HTTP_2;
-        *req.method_mut() = http::Method::POST;
-        *req.uri_mut() = build_uri(target, path);
+        let mut req = http::Request::builder()
+            .version(http::Version::HTTP_2)
+            .method(http::Method::POST)
+            .uri(build_uri(target.clone(), path))
+            .extension(extensions)
+            .body(body)
+            .map_err(|err| Status::from_error(err.into()))?;
         *req.headers_mut() = metadata.into_headers();
-        *req.extensions_mut() = extensions;
         req.headers_mut()
             .insert(TE, HeaderValue::from_static("trailers"));
         req.headers_mut()
@@ -158,14 +163,31 @@ where
             }
         }
 
+        // wrap io stream
+        let io = TokioIo::new(
+            self.connector
+                .connect(target)
+                .await
+                .map_err(|err| Status::from_error(err.into()))?,
+        );
+
         // call the service through hyper client
-        let resp = http_client
-            .ready()
-            .await
-            .map_err(|err| Status::from_error(err.into()))?
-            .call(req)
+        let (mut sender, conn) = http_client
+            .handshake(io)
             .await
             .map_err(|err| Status::from_error(err.into()))?;
+
+        let resp = tokio::select! {
+            resp = sender.send_request(req) => {
+                resp.map_err(|err| Status::from_error(err.into()))?
+            }
+            status = conn => {
+                status.map_err(|err| Status::from_error(err.into()))?;
+                // **unreachable** because the connect cannot be broken without error before
+                // receiving response.
+                return Err(Status::new(Code::Internal, "Early broken of connection."));
+            }
+        };
 
         let status_code = resp.status();
         let headers = resp.headers();
