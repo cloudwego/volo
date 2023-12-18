@@ -45,7 +45,12 @@ pin-project.workspace = true
 rand.workspace = true
 socket2 = { workspace = true, features = ["all"] }
 thiserror.workspace = true
-tokio = { workspace = true, features = ["net", "time", "sync", "io-util"] }
+tokio = { workspace = true, default-features = false, features = [
+    "net",
+    "time",
+    "sync",
+    "io-util",
+] }
 tokio-stream = { workspace = true, features = ["net"] }
 tower.workspace = true
 tracing.workspace = true

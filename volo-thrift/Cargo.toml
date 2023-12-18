@@ -36,12 +36,11 @@ parking_lot.workspace = true
 paste.workspace = true
 pin-project.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = [
+tokio = { workspace = true, default-features = false, features = [
+    "net",
     "time",
-    "macros",
-    "rt",
-    "signal",
-    "parking_lot",
+    "sync",
+    "io-util",
 ] }
 tracing.workspace = true
 
