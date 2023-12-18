@@ -219,16 +219,22 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     /// to write.
     ///
     /// Default is `true`.
-    pub fn retry_canceled_requests(mut self, enabled: bool) -> Self {
-        self.http2_config.retry_canceled_requests = enabled;
+    #[deprecated(
+        since = "0.9.0",
+        note = "`retry_canceled_requests` has been removed in `hyper`"
+    )]
+    pub fn retry_canceled_requests(self, _enabled: bool) -> Self {
         self
     }
 
     /// Sets whether the connection **must** use HTTP/2.
     ///
     /// Default is `false`.
-    pub fn accept_http1(mut self, accept_http1: bool) -> Self {
-        self.http2_config.accept_http1 = accept_http1;
+    #[deprecated(
+        since = "0.9.0",
+        note = "accepting http1 connection was not supported by `hyper`"
+    )]
+    pub fn accept_http1(self, _accept_http1: bool) -> Self {
         self
     }
 
@@ -613,9 +619,7 @@ pub struct Http2Config {
     pub(crate) http2_keepalive_timeout: Duration,
     pub(crate) http2_keepalive_while_idle: bool,
     pub(crate) max_concurrent_reset_streams: usize,
-    pub(crate) retry_canceled_requests: bool,
     pub(crate) max_send_buf_size: usize,
-    pub(crate) accept_http1: bool,
 }
 
 impl Default for Http2Config {
@@ -630,8 +634,6 @@ impl Default for Http2Config {
             http2_keepalive_while_idle: false,
             max_concurrent_reset_streams: DEFAULT_MAX_CONCURRENT_RESET_STREAMS,
             max_send_buf_size: DEFAULT_MAX_SEND_BUF_SIZE,
-            retry_canceled_requests: true,
-            accept_http1: false,
         }
     }
 }

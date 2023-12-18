@@ -1,5 +1,5 @@
 use bytes::Bytes;
-use hyper::Body;
+use hyper::body::Incoming;
 
 use crate::codec::{compression::CompressionEncoding, decode::Kind};
 
@@ -13,7 +13,7 @@ pub trait SendEntryMessage {
 pub trait RecvEntryMessage: Sized {
     fn from_body(
         method: Option<&str>,
-        body: Body,
+        body: Incoming,
         kind: Kind,
         compression_encoding: Option<CompressionEncoding>,
     ) -> Result<Self, crate::Status>;

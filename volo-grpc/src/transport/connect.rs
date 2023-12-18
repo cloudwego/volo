@@ -1,12 +1,9 @@
 use std::{
     io,
-    net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
 };
 
-use futures::future::BoxFuture;
-use hyper::client::connect::{Connected, Connection};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use volo::net::{
     conn::Conn,
@@ -46,79 +43,25 @@ impl Connector {
         }
         Self::Tls(mt)
     }
+
+    pub async fn connect(&self, addr: Address) -> Result<Conn, io::Error> {
+        match self {
+            Self::Default(mk_conn) => {
+                let mk_conn = mk_conn.clone();
+                mk_conn.make_connection(addr).await
+            }
+            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            Self::Tls(mk_conn) => {
+                let mk_conn = mk_conn.clone();
+                mk_conn.make_connection(addr).await
+            }
+        }
+    }
 }
 
 impl Default for Connector {
     fn default() -> Self {
         Self::new(None)
-    }
-}
-
-impl tower::Service<hyper::Uri> for Connector {
-    type Response = ConnectionWrapper;
-
-    type Error = io::Error;
-
-    type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
-
-    fn poll_ready(&mut self, _cx: &mut Context<'_>) -> Poll<Result<(), Self::Error>> {
-        Poll::Ready(Ok(()))
-    }
-
-    fn call(&mut self, uri: hyper::Uri) -> Self::Future {
-        macro_rules! box_pin_call {
-            ($mk_conn:ident) => {
-                Box::pin(async move {
-                    let authority = uri.authority().expect("authority required").as_str();
-                    let target: Address = match uri.scheme_str() {
-                        Some("http") => {
-                            Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
-                                io::Error::new(
-                                    io::ErrorKind::InvalidInput,
-                                    "authority must be valid SocketAddr",
-                                )
-                            })?)
-                        }
-                        #[cfg(target_family = "unix")]
-                        Some("http+unix") => {
-                            use hex::FromHex;
-
-                            let bytes = Vec::from_hex(authority).map_err(|_| {
-                                io::Error::new(
-                                    io::ErrorKind::InvalidInput,
-                                    "authority must be hex-encoded path",
-                                )
-                            })?;
-                            Address::Unix(std::borrow::Cow::Owned(
-                                String::from_utf8(bytes)
-                                    .map_err(|_| {
-                                        io::Error::new(
-                                            io::ErrorKind::InvalidInput,
-                                            "authority must be valid UTF-8",
-                                        )
-                                    })?
-                                    .into(),
-                            ))
-                        }
-                        _ => unimplemented!(),
-                    };
-
-                    Ok(ConnectionWrapper($mk_conn.make_connection(target).await?))
-                })
-            };
-        }
-
-        match self {
-            Self::Default(mk_conn) => {
-                let mk_conn = mk_conn.clone();
-                box_pin_call!(mk_conn)
-            }
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
-            Self::Tls(mk_conn) => {
-                let mk_conn = mk_conn.clone();
-                box_pin_call!(mk_conn)
-            }
-        }
     }
 }
 
@@ -153,12 +96,6 @@ impl AsyncWrite for ConnectionWrapper {
     #[inline]
     fn poll_shutdown(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<()>> {
         Pin::new(&mut self.0).poll_shutdown(cx)
-    }
-}
-
-impl Connection for ConnectionWrapper {
-    fn connected(&self) -> Connected {
-        Connected::new()
     }
 }
 

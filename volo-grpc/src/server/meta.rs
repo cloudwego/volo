@@ -1,5 +1,6 @@
 use std::{cell::RefCell, net::SocketAddr, str::FromStr, sync::Arc};
 
+use hyper::body::Incoming;
 use metainfo::{Backward, Forward};
 use volo::{context::Context, net::Address, FastStr, Service};
 
@@ -33,9 +34,9 @@ impl<S> MetaService<S> {
     }
 }
 
-impl<S> Service<ServerContext, hyper::Request<hyper::Body>> for MetaService<S>
+impl<S> Service<ServerContext, hyper::Request<Incoming>> for MetaService<S>
 where
-    S: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>>
+    S: Service<ServerContext, Request<Incoming>, Response = Response<Body>>
         + Clone
         + Send
         + Sync
@@ -49,7 +50,7 @@ where
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: hyper::Request<hyper::Body>,
+        req: hyper::Request<Incoming>,
     ) -> Result<Self::Response, Self::Error> {
         let peer_addr = self.peer_addr.clone();
 

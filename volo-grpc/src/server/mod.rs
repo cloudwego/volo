@@ -8,9 +8,11 @@ mod service;
 
 use std::{fmt, io, time::Duration};
 
+use hyper::{body::Incoming as BodyIncoming, server::conn::http2};
+use hyper_util::rt::{TokioExecutor, TokioIo};
 use motore::{
     layer::{Identity, Layer, Stack},
-    service::{Service, TowerAdapter},
+    service::Service,
     BoxError,
 };
 pub use service::ServiceBuilder;
@@ -178,8 +180,11 @@ impl<L> Server<L> {
     /// return confusing (but correct) protocol errors.
     ///
     /// Default is `false`.
-    pub fn accept_http1(mut self, accept_http1: bool) -> Self {
-        self.http2_config.accept_http1 = accept_http1;
+    #[deprecated(
+        since = "0.9.0",
+        note = "accepting http1 connection was not supported by `hyper`"
+    )]
+    pub fn accept_http1(self, _accept_http1: bool) -> Self {
         self
     }
 
@@ -228,7 +233,7 @@ impl<L> Server<L> {
     /// Adds a new service to the router.
     pub fn add_service<S>(self, s: S) -> Self
     where
-        S: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>, Error = Status>
+        S: Service<ServerContext, Request<BodyIncoming>, Response = Response<Body>, Error = Status>
             + NamedService
             + Clone
             + Send
@@ -256,12 +261,12 @@ impl<L> Server<L> {
     ) -> Result<(), BoxError>
     where
         L: Layer<Router>,
-        L::Service: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>>
+        L::Service: Service<ServerContext, Request<BodyIncoming>, Response = Response<Body>>
             + Clone
             + Send
             + Sync
             + 'static,
-        <L::Service as Service<ServerContext, Request<hyper::Body>>>::Error: Into<Status> + Send,
+        <L::Service as Service<ServerContext, Request<BodyIncoming>>>::Error: Into<Status> + Send,
     {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
@@ -331,31 +336,37 @@ impl<L> Server<L> {
                     tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
                     let peer_addr = conn.info.peer_addr.clone();
 
-                    let service = MetaService::new(service.clone(), peer_addr)
-                        .tower(|req| (ServerContext::default(), req));
+                    let service = MetaService::new(service.clone(), peer_addr);
 
                     // init server
-                    let mut server = hyper::server::conn::Http::new();
-                    server
-                        .http2_only(!self.http2_config.accept_http1)
-                        .http2_initial_stream_window_size(self.http2_config.init_stream_window_size)
-                        .http2_initial_connection_window_size(self.http2_config.init_connection_window_size)
-                        .http2_adaptive_window(self.http2_config.adaptive_window)
-                        .http2_max_concurrent_streams(self.http2_config.max_concurrent_streams)
-                        .http2_keep_alive_interval(self.http2_config.http2_keepalive_interval)
-                        .http2_keep_alive_timeout(self.http2_config.http2_keepalive_timeout)
-                        .http2_max_frame_size(self.http2_config.max_frame_size)
-                        .http2_max_send_buf_size(self.http2_config.max_send_buf_size)
-                        .http2_max_header_list_size(self.http2_config.max_header_list_size);
+                    let mut server = http2::Builder::new(TokioExecutor::new());
+                    server.initial_stream_window_size(self.http2_config.init_stream_window_size)
+                        .initial_connection_window_size(self.http2_config.init_connection_window_size)
+                        .adaptive_window(self.http2_config.adaptive_window)
+                        .max_concurrent_streams(self.http2_config.max_concurrent_streams)
+                        .keep_alive_interval(self.http2_config.http2_keepalive_interval)
+                        .keep_alive_timeout(self.http2_config.http2_keepalive_timeout)
+                        .max_frame_size(self.http2_config.max_frame_size)
+                        .max_send_buf_size(self.http2_config.max_send_buf_size)
+                        .max_header_list_size(self.http2_config.max_header_list_size);
 
                     let mut watch = rx.clone();
                     spawn(async move {
-                        let mut http_conn = server.serve_connection(conn, service);
+                        let mut http_conn = server.serve_connection(
+                            TokioIo::new(conn),
+                            hyper::service::service_fn(move |req| {
+                                let mut cx = ServerContext::default();
+                                let service = service.clone();
+                                async move {
+                                    service.call(&mut cx, req).await
+                                }
+                            })
+                        );
                         tokio::select! {
                             _ = watch.changed() => {
                                 tracing::trace!("[VOLO] closing a pending connection");
                                 // Graceful shutdown.
-                                hyper::server::conn::Connection::graceful_shutdown(Pin::new(&mut http_conn));
+                                http2::Connection::graceful_shutdown(Pin::new(&mut http_conn));
                                 // Continue to poll this connection until shutdown can finish.
                                 let result = http_conn.await;
                                 if let Err(err) = result {
@@ -378,12 +389,12 @@ impl<L> Server<L> {
     pub async fn run<A: volo::net::MakeIncoming>(self, incoming: A) -> Result<(), BoxError>
     where
         L: Layer<Router>,
-        L::Service: Service<ServerContext, Request<hyper::Body>, Response = Response<Body>>
+        L::Service: Service<ServerContext, Request<BodyIncoming>, Response = Response<Body>>
             + Clone
             + Send
             + Sync
             + 'static,
-        <L::Service as Service<ServerContext, Request<hyper::Body>>>::Error: Into<Status> + Send,
+        <L::Service as Service<ServerContext, Request<BodyIncoming>>>::Error: Into<Status> + Send,
     {
         self.run_with_shutdown(incoming, tokio::signal::ctrl_c())
             .await
@@ -417,7 +428,6 @@ pub struct Http2Config {
     pub(crate) max_frame_size: Option<u32>,
     pub(crate) max_send_buf_size: usize,
     pub(crate) max_header_list_size: u32,
-    pub(crate) accept_http1: bool,
 }
 
 impl Default for Http2Config {
@@ -432,7 +442,6 @@ impl Default for Http2Config {
             max_frame_size: None,
             max_send_buf_size: DEFAULT_MAX_SEND_BUF_SIZE,
             max_header_list_size: DEFAULT_SETTINGS_MAX_HEADER_LIST_SIZE,
-            accept_http1: false,
         }
     }
 }

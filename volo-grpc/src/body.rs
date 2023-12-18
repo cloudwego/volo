@@ -6,11 +6,10 @@ use std::{
 
 use bytes::Bytes;
 use futures::{ready, TryStreamExt};
-use http::HeaderMap;
-use hyper::body::HttpBody;
+use http_body::{Body as HttpBody, Frame};
 use pin_project::pin_project;
 
-use crate::{status::Code, BoxStream, Status};
+use crate::{BoxStream, Code, Status};
 
 /// Similar to [`hyper::Body`], used when sending bodies to client.
 ///
@@ -20,8 +19,15 @@ use crate::{status::Code, BoxStream, Status};
 pub struct Body {
     #[pin]
     bytes_stream: BoxStream<'static, Result<Bytes, Status>>,
-    error_occurred: Option<Status>,
-    is_end_stream: bool,
+    state: StreamState,
+}
+
+#[derive(Debug)]
+enum StreamState {
+    Polling,
+    Ok,
+    ErrorOccurred(Status),
+    End,
 }
 
 impl Body {
@@ -29,18 +35,13 @@ impl Body {
     pub fn new(bytes_stream: BoxStream<'static, Result<Bytes, Status>>) -> Self {
         Self {
             bytes_stream,
-            error_occurred: None,
-            is_end_stream: false,
+            state: StreamState::Polling,
         }
     }
 
-    pub fn end_stream(mut self, flag: bool) -> Self {
-        self.is_end_stream = flag;
+    pub fn end_stream(mut self) -> Self {
+        self.state = StreamState::End;
         self
-    }
-
-    pub fn status(&self) -> Option<Status> {
-        self.error_occurred.clone()
     }
 }
 
@@ -48,53 +49,45 @@ impl HttpBody for Body {
     type Data = Bytes;
     type Error = Status;
 
-    fn poll_data(
+    fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Self::Data, Self::Error>>> {
-        let mut this = self.project();
+    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+        let mut self_proj = self.project();
 
-        // if there is an error, store it and return in poll_trailers().
-        match ready!(this.bytes_stream.try_poll_next_unpin(cx)) {
-            Some(Ok(data)) => Poll::Ready(Some(Ok(data))),
-            Some(Err(err)) => {
-                *this.error_occurred = Some(err);
-                Poll::Ready(None)
+        match self_proj.state {
+            StreamState::Polling => match ready!(self_proj.bytes_stream.try_poll_next_unpin(cx)) {
+                Some(Ok(data)) => Poll::Ready(Some(Ok(Frame::data(data)))),
+                Some(Err(err)) => {
+                    *self_proj.state = StreamState::ErrorOccurred(err);
+                    Poll::Ready(None)
+                }
+                None => {
+                    *self_proj.state = StreamState::Ok;
+                    Poll::Ready(None)
+                }
+            },
+            StreamState::Ok => {
+                *self_proj.state = StreamState::End;
+                let status = Status::new(Code::Ok, "");
+                Poll::Ready(Some(Ok(Frame::trailers(status.to_header_map()?))))
             }
-            None => Poll::Ready(None),
+            StreamState::ErrorOccurred(status) => {
+                let trailer = Frame::trailers(status.to_header_map()?);
+                *self_proj.state = StreamState::End;
+                Poll::Ready(Some(Ok(trailer)))
+            }
+            StreamState::End => Poll::Ready(None),
         }
-    }
-
-    fn poll_trailers(
-        self: Pin<&mut Self>,
-        _cx: &mut Context<'_>,
-    ) -> Poll<Result<Option<HeaderMap>, Self::Error>> {
-        let this = self.project();
-
-        // return immediately if there was an error already returned.
-        if *this.is_end_stream {
-            return Poll::Ready(Ok(None));
-        }
-        let status = if let Some(status) = this.error_occurred.take() {
-            *this.is_end_stream = true;
-            status
-        } else {
-            Status::new(Code::Ok, "")
-        };
-
-        Poll::Ready(Ok(Some(status.to_header_map()?)))
     }
 
     fn is_end_stream(&self) -> bool {
-        self.is_end_stream
+        matches!(self.state, StreamState::End)
     }
 }
 
 impl fmt::Debug for Body {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Body")
-            .field("error_occurred", &self.error_occurred)
-            .field("is_end_stream", &self.is_end_stream)
-            .finish()
+        f.debug_struct("Body").field("state", &self.state).finish()
     }
 }
