@@ -117,7 +117,7 @@ where
     U: EntryMessage + Send,
 {
     #[inline]
-    pub(crate) fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError> {
+    pub fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError> {
         let ident = TMessageIdentifier::new(
             self.meta.method.clone(),
             self.meta.msg_type,
@@ -151,7 +151,7 @@ where
     }
 
     #[inline]
-    pub(crate) fn decode<Cx: ThriftContext, T: TInputProtocol>(
+    pub fn decode<Cx: ThriftContext, T: TInputProtocol>(
         protocol: &mut T,
         cx: &mut Cx,
     ) -> Result<Self, DecodeError> {
