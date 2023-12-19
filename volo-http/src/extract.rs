@@ -47,8 +47,16 @@ pub trait FromRequest<S, M = private::ViaRequest>: Sized {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct State<S>(pub S);
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Query<T>(pub T);
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Form<T>(pub T);
+
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Json<T>(pub T);
 
+#[derive(Debug, Default, Clone)]
 pub struct MaybeInvalid<T>(Vec<u8>, PhantomData<T>);
 
 impl MaybeInvalid<String> {
@@ -115,6 +123,20 @@ where
 
     async fn from_context(_context: &HttpContext, state: &S) -> Result<Self, Self::Rejection> {
         Ok(State(state.clone()))
+    }
+}
+
+impl<T, S> FromContext<S> for Query<T>
+where
+    T: DeserializeOwned,
+    S: Clone + Sync,
+{
+    type Rejection = RejectionError;
+
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        let query = context.uri.query().unwrap_or_default();
+        let param = serde_urlencoded::from_str(query).map_err(RejectionError::QueryRejection)?;
+        Ok(Query(param))
     }
 }
 
@@ -221,6 +243,22 @@ impl<T, S: Sync> FromRequest<S> for MaybeInvalid<T> {
     }
 }
 
+impl<T, S> FromRequest<S> for Form<T>
+where
+    T: DeserializeOwned,
+    S: Sync,
+{
+    type Rejection = RejectionError;
+
+    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
+        let bytes = <Bytes as FromRequest<S>>::from(cx, body, state).await?;
+        let form = serde_html_form::from_bytes::<T>(bytes.as_ref())
+            .map_err(RejectionError::FormRejection)?;
+
+        Ok(Form(form))
+    }
+}
+
 impl<T, S> FromRequest<S> for Json<T>
 where
     T: DeserializeOwned,
@@ -234,8 +272,8 @@ where
         }
 
         let bytes = <Bytes as FromRequest<S>>::from(cx, body, state).await?;
-        let json = serde_json::from_slice::<T>(bytes.as_ref())
-            .map_err(|_| RejectionError::BodyCollectionError)?;
+        let json =
+            serde_json::from_slice::<T>(bytes.as_ref()).map_err(RejectionError::JsonRejection)?;
 
         Ok(Json(json))
     }
@@ -246,6 +284,8 @@ pub enum RejectionError {
     InvalidContentType,
     StringRejection(simdutf8::basic::Utf8Error),
     JsonRejection(serde_json::Error),
+    QueryRejection(serde_urlencoded::de::Error),
+    FormRejection(serde_html_form::de::Error),
 }
 
 unsafe impl Send for RejectionError {}
@@ -257,6 +297,8 @@ impl IntoResponse for RejectionError {
             Self::InvalidContentType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::StringRejection(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::JsonRejection(_) => StatusCode::BAD_REQUEST,
+            Self::QueryRejection(_) => StatusCode::BAD_REQUEST,
+            Self::FormRejection(_) => StatusCode::BAD_REQUEST,
         };
 
         status.into_response()

@@ -3,6 +3,7 @@ use std::{net::SocketAddr, time::Duration};
 use faststr::FastStr;
 use serde::{Deserialize, Serialize};
 use volo_http::{
+    extract::{Form, Query},
     layer::TimeoutLayer,
     middleware::{self, Next},
     response::IntoResponse,
@@ -40,6 +41,28 @@ async fn json_post(Json(request): Json<Person>) -> String {
         "{} is {} years old, {}'s first phone number is `{}`\n",
         request.name, request.age, request.name, first_phone
     )
+}
+
+#[derive(Deserialize, Debug)]
+struct Login {
+    username: String,
+    password: String,
+}
+
+fn process_login(info: Login) -> Result<String, StatusCode> {
+    if info.username == "admin" && info.password == "password" {
+        Ok("Login Success!".to_string())
+    } else {
+        Err(StatusCode::IM_A_TEAPOT)
+    }
+}
+
+async fn get_with_query(Query(info): Query<Login>) -> Result<String, StatusCode> {
+    process_login(info)
+}
+
+async fn post_with_form(Form(info): Form<Login>) -> Result<String, StatusCode> {
+    process_login(info)
 }
 
 async fn test(
@@ -80,7 +103,7 @@ fn index_router() -> Router {
     Router::new().route("/", get(hello))
 }
 
-fn user_router() -> Router {
+fn user_json_router() -> Router {
     Router::new()
         // curl http://localhost:8080/user/json_get
         .route("/user/json_get", get(json_get))
@@ -89,6 +112,24 @@ fn user_router() -> Router {
         //     -H "Content-Type: application/json" \
         //     -d '{"name":"Foo", "age": 25, "phones":["Bar", "114514"]}'
         .route("/user/json_post", post(json_post))
+}
+
+fn user_form_router() -> Router {
+    Router::new().route(
+        "/user/login",
+        MethodRouter::builder()
+            // curl "http://localhost:8080/user/login?username=admin&password=admin"
+            // curl "http://localhost:8080/user/login?username=admin&password=password"
+            .get(get_with_query)
+            // curl http://localhost:8080/user/login \
+            //     -X POST \
+            //     -d 'username=admin&password=admin'
+            // curl http://localhost:8080/user/login \
+            //     -X POST \
+            //     -d 'username=admin&password=password'
+            .post(post_with_form)
+            .build(),
+    )
 }
 
 fn test_router() -> Router {
@@ -148,7 +189,8 @@ async fn main() {
 
     let app = Router::new()
         .merge(index_router())
-        .merge(user_router())
+        .merge(user_json_router())
+        .merge(user_form_router())
         .merge(test_router())
         .layer(middleware::from_fn(tracing_from_fn))
         .layer(middleware::map_response(headers_map_response))
