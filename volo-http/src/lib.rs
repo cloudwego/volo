@@ -15,8 +15,11 @@ use std::convert::Infallible;
 
 pub use bytes::Bytes;
 pub use hyper::{
+    self,
     body::Incoming as BodyIncoming,
-    http::{Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
+    http::{
+        self, Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version,
+    },
 };
 pub use volo::net::Address;
 
