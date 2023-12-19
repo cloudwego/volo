@@ -8,7 +8,7 @@ use std::{
 use futures_util::ready;
 use http_body_util::Full;
 use hyper::{
-    body::{Body, Bytes, Frame},
+    body::{Body, Bytes, Frame, SizeHint},
     header::HeaderValue,
     http::{header::IntoHeaderName, response::Builder, StatusCode},
     HeaderMap,
@@ -66,6 +66,14 @@ impl Body for RespBody {
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         Poll::Ready(ready!(self.project().inner.poll_frame(cx)).map(|result| Ok(result.unwrap())))
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.inner.is_end_stream()
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        self.inner.size_hint()
     }
 }
 

@@ -2262,6 +2262,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_html_form"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "224e6a14f315852940f3ec103125aa6482f0e224732ed91ed3330ed633077c34"
+dependencies = [
+ "form_urlencoded",
+ "indexmap 2.1.0",
+ "itoa",
+ "ryu",
+ "serde",
+]
+
+[[package]]
 name = "serde_json"
 version = "1.0.108"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2984,7 +2997,9 @@ dependencies = [
  "parking_lot 0.12.1",
  "pin-project",
  "serde",
+ "serde_html_form",
  "serde_json",
+ "serde_urlencoded",
  "simdutf8",
  "thiserror",
  "tokio",

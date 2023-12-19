@@ -71,7 +71,7 @@ macro_rules! impl_handler {
                         Err(rejection) => return rejection.into_response(),
                     };
                 )*
-                let $last = match $last::from(context, req, state).await {
+                let $last = match $last::from_request(context, req, state).await {
                     Ok(value) => value,
                     Err(rejection) => return rejection.into_response(),
                 };
@@ -337,7 +337,7 @@ macro_rules! impl_middleware_handler_from_fn {
                             Err(rejection) => return rejection.into_response(),
                         };
                     )*
-                    let $last = match $last::from(context, req, state).await {
+                    let $last = match $last::from_request(context, req, state).await {
                         Ok(value) => value,
                         Err(rejection) => return rejection.into_response(),
                     };

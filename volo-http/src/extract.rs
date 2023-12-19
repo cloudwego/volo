@@ -37,7 +37,7 @@ pub trait FromContext<S>: Sized {
 pub trait FromRequest<S, M = private::ViaRequest>: Sized {
     type Rejection: IntoResponse;
 
-    fn from(
+    fn from_request(
         cx: &HttpContext,
         body: Incoming,
         state: &S,
@@ -47,8 +47,16 @@ pub trait FromRequest<S, M = private::ViaRequest>: Sized {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct State<S>(pub S);
 
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Query<T>(pub T);
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Form<T>(pub T);
+
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Json<T>(pub T);
 
+#[derive(Debug, Default, Clone)]
 pub struct MaybeInvalid<T>(Vec<u8>, PhantomData<T>);
 
 impl MaybeInvalid<String> {
@@ -118,6 +126,20 @@ where
     }
 }
 
+impl<T, S> FromContext<S> for Query<T>
+where
+    T: DeserializeOwned,
+    S: Clone + Sync,
+{
+    type Rejection = RejectionError;
+
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        let query = context.uri.query().unwrap_or_default();
+        let param = serde_urlencoded::from_str(query).map_err(RejectionError::QueryRejection)?;
+        Ok(Query(param))
+    }
+}
+
 impl<S: Sync> FromContext<S> for ConnectionInfo {
     type Rejection = Infallible;
     async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
@@ -132,7 +154,11 @@ where
 {
     type Rejection = T::Rejection;
 
-    async fn from(cx: &HttpContext, _body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(
+        cx: &HttpContext,
+        _body: Incoming,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
         T::from_context(cx, state).await
     }
 }
@@ -140,7 +166,11 @@ where
 impl<S: Sync> FromRequest<S> for Incoming {
     type Rejection = Infallible;
 
-    async fn from(_cx: &HttpContext, body: Incoming, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(
+        _cx: &HttpContext,
+        body: Incoming,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
         Ok(body)
     }
 }
@@ -148,17 +178,23 @@ impl<S: Sync> FromRequest<S> for Incoming {
 impl<S: Sync> FromRequest<S> for Vec<u8> {
     type Rejection = RejectionError;
 
-    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
-        Ok(<Bytes as FromRequest<S>>::from(cx, body, state)
-            .await?
-            .into())
+    async fn from_request(
+        cx: &HttpContext,
+        body: Incoming,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(Bytes::from_request(cx, body, state).await?.into())
     }
 }
 
 impl<S: Sync> FromRequest<S> for Bytes {
     type Rejection = RejectionError;
 
-    async fn from(cx: &HttpContext, body: Incoming, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(
+        cx: &HttpContext,
+        body: Incoming,
+        _state: &S,
+    ) -> Result<Self, Self::Rejection> {
         let bytes = body
             .collect()
             .await
@@ -186,8 +222,12 @@ impl<S: Sync> FromRequest<S> for Bytes {
 impl<S: Sync> FromRequest<S> for String {
     type Rejection = RejectionError;
 
-    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
-        let vec = <Vec<u8> as FromRequest<S>>::from(cx, body, state).await?;
+    async fn from_request(
+        cx: &HttpContext,
+        body: Incoming,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let vec = Vec::<u8>::from_request(cx, body, state).await?;
 
         // Check if the &[u8] is a valid string
         let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::StringRejection)?;
@@ -200,8 +240,12 @@ impl<S: Sync> FromRequest<S> for String {
 impl<S: Sync> FromRequest<S> for FastStr {
     type Rejection = RejectionError;
 
-    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
-        let vec = <Vec<u8> as FromRequest<S>>::from(cx, body, state).await?;
+    async fn from_request(
+        cx: &HttpContext,
+        body: Incoming,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let vec = Vec::<u8>::from_request(cx, body, state).await?;
 
         // Check if the &[u8] is a valid string
         let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::StringRejection)?;
@@ -214,10 +258,34 @@ impl<S: Sync> FromRequest<S> for FastStr {
 impl<T, S: Sync> FromRequest<S> for MaybeInvalid<T> {
     type Rejection = RejectionError;
 
-    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
-        let vec = <Vec<u8> as FromRequest<S>>::from(cx, body, state).await?;
+    async fn from_request(
+        cx: &HttpContext,
+        body: Incoming,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let vec = Vec::<u8>::from_request(cx, body, state).await?;
 
         Ok(MaybeInvalid(vec, PhantomData))
+    }
+}
+
+impl<T, S> FromRequest<S> for Form<T>
+where
+    T: DeserializeOwned,
+    S: Sync,
+{
+    type Rejection = RejectionError;
+
+    async fn from_request(
+        cx: &HttpContext,
+        body: Incoming,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        let bytes = Bytes::from_request(cx, body, state).await?;
+        let form = serde_html_form::from_bytes::<T>(bytes.as_ref())
+            .map_err(RejectionError::FormRejection)?;
+
+        Ok(Form(form))
     }
 }
 
@@ -228,14 +296,18 @@ where
 {
     type Rejection = RejectionError;
 
-    async fn from(cx: &HttpContext, body: Incoming, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request(
+        cx: &HttpContext,
+        body: Incoming,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
         if !json_content_type(&cx.headers) {
             return Err(RejectionError::InvalidContentType);
         }
 
-        let bytes = <Bytes as FromRequest<S>>::from(cx, body, state).await?;
-        let json = serde_json::from_slice::<T>(bytes.as_ref())
-            .map_err(|_| RejectionError::BodyCollectionError)?;
+        let bytes = Bytes::from_request(cx, body, state).await?;
+        let json =
+            serde_json::from_slice::<T>(bytes.as_ref()).map_err(RejectionError::JsonRejection)?;
 
         Ok(Json(json))
     }
@@ -246,6 +318,8 @@ pub enum RejectionError {
     InvalidContentType,
     StringRejection(simdutf8::basic::Utf8Error),
     JsonRejection(serde_json::Error),
+    QueryRejection(serde_urlencoded::de::Error),
+    FormRejection(serde_html_form::de::Error),
 }
 
 unsafe impl Send for RejectionError {}
@@ -257,6 +331,8 @@ impl IntoResponse for RejectionError {
             Self::InvalidContentType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::StringRejection(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::JsonRejection(_) => StatusCode::BAD_REQUEST,
+            Self::QueryRejection(_) => StatusCode::BAD_REQUEST,
+            Self::FormRejection(_) => StatusCode::BAD_REQUEST,
         };
 
         status.into_response()
