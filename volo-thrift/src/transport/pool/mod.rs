@@ -201,14 +201,10 @@ where
         Pool { inner }
     }
 
-    pub async fn get<MT>(
-        &self,
-        key: Key,
-        mt: MT,
-    ) -> Result<Pooled<Key, T>, pilota::thrift::TransportError>
+    pub async fn get<MT>(&self, key: Key, mt: MT) -> Result<Pooled<Key, T>, crate::error::Error>
     where
         MT: UnaryService<Key, Response = T> + Send + 'static + Sync,
-        MT::Error: Into<pilota::thrift::TransportError>,
+        MT::Error: Into<crate::error::Error>,
     {
         let (rx, _waiter_token) = {
             let mut inner = self.inner.lock().volo_unwrap();
@@ -275,10 +271,11 @@ where
             // means connection pool is dropped
             Either::Left((Err(e), _)) => {
                 tracing::error!("[VOLO] wait a idle connection error: {:?}", e);
-                Err(pilota::thrift::TransportError::new(
-                    pilota::thrift::TransportErrorKind::Unknown,
+                Err(crate::error::BasicError::new(
+                    crate::error::BasicErrorKind::GetConn,
                     format!("wait a idle connection error: {:?}", e),
-                ))
+                )
+                .into())
             }
             // maybe there is no more connection put back into pool and waiter will block forever,
             // so just return error

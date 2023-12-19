@@ -48,7 +48,7 @@ where
     Key: Clone + Eq + Hash + Debug + Send + 'static,
     MT: UnaryService<Key> + Send + Clone + 'static + Sync,
     MT::Response: Poolable + Send,
-    MT::Error: Into<pilota::thrift::TransportError>,
+    MT::Error: Into<crate::Error>,
 {
     type Response = Pooled<Key, MT::Response>;
 
