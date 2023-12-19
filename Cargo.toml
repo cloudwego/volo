@@ -34,7 +34,7 @@ motore = "0.4"
 metainfo = "0.7"
 
 anyhow = "1"
-async-broadcast = "0.6"
+# async-broadcast = "0.6"
 async-stream = "0.3"
 base64 = "0.13"
 bytes = "1"

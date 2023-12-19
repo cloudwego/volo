@@ -25,7 +25,7 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 motore.workspace = true
 
-async-broadcast.workspace = true
+# async-broadcast.workspace = true
 dashmap.workspace = true
 faststr.workspace = true
 futures.workspace = true
