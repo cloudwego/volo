@@ -45,7 +45,7 @@ hyper-util.workspace = true
 matchit.workspace = true
 percent-encoding.workspace = true
 pin-project.workspace = true
-tokio = { workspace = true, features = ["time", "rt", "net", "sync", "signal"] }
+tokio = { workspace = true }
 tokio-stream.workspace = true
 tokio-util = { workspace = true, features = ["codec", "compat"] }
 tower = { workspace = true, features = [

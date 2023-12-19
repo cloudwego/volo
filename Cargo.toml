@@ -96,9 +96,19 @@ socket2 = "0.5"
 syn = "1"
 tempfile = "3"
 thiserror = "1"
-tokio = "1"
-tokio-stream = "0.1"
-tokio-util = "0.7"
+tokio = { version = "1.29.1", default-features = false, features = [
+  "sync",
+  "macros",
+  "io-util",
+  "rt",
+  "time",
+] }
+tokio-stream = { version = "0.1", default-features = false, features = [
+  "time",
+] }
+
+tokio-util = { version = "0.7", default-features = false, features = [] }
+
 tower = "0.4"
 tracing = "0.1"
 tracing-subscriber = "0.3"
