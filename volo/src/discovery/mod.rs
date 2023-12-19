@@ -13,7 +13,9 @@ use std::{
     sync::Arc,
 };
 
-use async_broadcast::Receiver;
+// #[cfg(not(target_os = "wasi"))]
+// use async_broadcast::Receiver;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::{context::Endpoint, loadbalance::error::LoadBalanceError, net::Address};
 
@@ -41,7 +43,7 @@ pub trait Discover: Send + Sync + 'static {
     fn key(&self, endpoint: &Endpoint) -> Self::Key;
     /// `watch` should return a [`async_broadcast::Receiver`] which can be used to subscribe
     /// [`Change`].
-    fn watch(&self, keys: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>>;
+    fn watch(&self, keys: Option<&[Self::Key]>) -> Option<UnboundedReceiver<Change<Self::Key>>>;
 }
 
 /// Change indicates the change of the service discover.
@@ -158,7 +160,7 @@ impl Discover for StaticDiscover {
 
     fn key(&self, _: &Endpoint) -> Self::Key {}
 
-    fn watch(&self, _keys: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {
+    fn watch(&self, _keys: Option<&[Self::Key]>) -> Option<UnboundedReceiver<Change<Self::Key>>> {
         None
     }
 }
@@ -179,7 +181,7 @@ impl Discover for DummyDiscover {
 
     fn key(&self, _: &Endpoint) {}
 
-    fn watch(&self, _keys: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {
+    fn watch(&self, _keys: Option<&[Self::Key]>) -> Option<UnboundedReceiver<Change<Self::Key>>> {
         None
     }
 }

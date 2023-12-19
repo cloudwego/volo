@@ -62,8 +62,8 @@ where
             tokio::spawn(async move {
                 loop {
                     match channel.recv().await {
-                        Ok(recv) => lb.rebalance(recv),
-                        Err(err) => warn!("[VOLO] discovering subscription error {:?}", err),
+                        Some(recv) => lb.rebalance(recv),
+                        None => warn!("[VOLO] discovering subscription error"),
                     }
                 }
             });

@@ -45,7 +45,10 @@ tokio = { workspace = true, default-features = false, features = [
 tracing.workspace = true
 
 [features]
+# default = ["async_broadcast"]
+# wasi = []
 default = []
+
 # multiplex is unstable and we don't provide backward compatibility
 multiplex = []
 # unsafe-codec can achieve better performance for thrift binary protocol, but may cause undefined behavior
