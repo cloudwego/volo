@@ -5,7 +5,7 @@ mod make_transport;
 mod started;
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     fmt::Debug,
     future::Future,
     hash::Hash,
@@ -131,12 +131,12 @@ impl Expiration {
 /// Pop off this list, looking for a usable connection that hasn't expired.
 struct IdlePopper<'a, Key, T> {
     key: &'a Key,
-    list: &'a mut Vec<Idle<T>>,
+    list: &'a mut VecDeque<Idle<T>>,
 }
 
 impl<'a, Key: Debug, T: Poolable + 'a> IdlePopper<'a, Key, T> {
     fn pop(self, expiration: &Expiration) -> Option<Idle<T>> {
-        while let Some(entry) = self.list.pop() {
+        while let Some(entry) = self.list.pop_front() {
             // If the connection has been closed, or is older than our idle
             // timeout, simply drop it and keep looking...
             if !entry.inner.reusable() {
@@ -156,7 +156,7 @@ impl<'a, Key: Debug, T: Poolable + 'a> IdlePopper<'a, Key, T> {
 
             let value = match entry.inner.reserve() {
                 Reservation::Shared(to_reinsert, to_return) => {
-                    self.list.push(Idle {
+                    self.list.push_back(Idle {
                         idle_at: Instant::now(),
                         inner: to_reinsert,
                     });
@@ -456,7 +456,7 @@ impl<T> WaiterList<T> {
 
 struct Inner<Key, T> {
     // idle queue
-    idle: HashMap<Key, Vec<Idle<T>>>,
+    idle: HashMap<Key, VecDeque<Idle<T>>>,
     // waiters wait for idle transport
     waiters: HashMap<Key, WaiterList<T>>,
     // idle timeout and check interval
@@ -545,7 +545,7 @@ where
             // then put back to idle list
             let idle = self.idle.entry(key).or_default();
             if idle.len() < self.max_idle_per_key {
-                idle.push(Idle {
+                idle.push_back(Idle {
                     inner: t,
                     idle_at: Instant::now(),
                 });
