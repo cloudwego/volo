@@ -341,6 +341,7 @@ impl<L> Server<L> {
                     // init server
                     let mut server = http2::Builder::new(TokioExecutor::new());
                     server.initial_stream_window_size(self.http2_config.init_stream_window_size)
+                        .timer(crate::timer::TokioTimer::new())
                         .initial_connection_window_size(self.http2_config.init_connection_window_size)
                         .adaptive_window(self.http2_config.adaptive_window)
                         .max_concurrent_streams(self.http2_config.max_concurrent_streams)
