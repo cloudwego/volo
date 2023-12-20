@@ -362,8 +362,6 @@ impl ThriftContext for ServerContext {
     }
 }
 
-// defaults to 16M
-const DEFAULT_MAX_FRAME_SIZE: u32 = 1024 * 1024 * 16;
 const DEFAULT_RPC_TIMEOUT: Duration = Duration::from_secs(1);
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_millis(50);
 const DEFAULT_READ_WRITE_TIMEOUT: Duration = Duration::from_secs(1);
@@ -373,7 +371,6 @@ pub struct Config {
     rpc_timeout: Option<Duration>,
     connect_timeout: Option<Duration>,
     read_write_timeout: Option<Duration>,
-    max_frame_size: u32,
 }
 
 impl Config {
@@ -383,7 +380,6 @@ impl Config {
             rpc_timeout: None,
             connect_timeout: None,
             read_write_timeout: None,
-            max_frame_size: DEFAULT_MAX_FRAME_SIZE,
         }
     }
 
@@ -439,18 +435,7 @@ impl Config {
     }
 
     #[inline]
-    pub fn max_frame_size(&self) -> u32 {
-        self.max_frame_size
-    }
-
-    #[inline]
-    pub(crate) fn set_max_frame_size(&mut self, size: u32) {
-        self.max_frame_size = size
-    }
-
-    #[inline]
     pub fn merge(&mut self, other: Self) {
-        self.max_frame_size = other.max_frame_size;
         if let Some(t) = other.rpc_timeout {
             self.rpc_timeout = Some(t);
         }
@@ -468,7 +453,6 @@ impl Reusable for Config {
         self.rpc_timeout = None;
         self.connect_timeout = None;
         self.read_write_timeout = None;
-        self.max_frame_size = DEFAULT_MAX_FRAME_SIZE;
     }
 }
 
@@ -478,7 +462,6 @@ impl Default for Config {
             rpc_timeout: None,
             connect_timeout: None,
             read_write_timeout: None,
-            max_frame_size: DEFAULT_MAX_FRAME_SIZE,
         }
     }
 }
