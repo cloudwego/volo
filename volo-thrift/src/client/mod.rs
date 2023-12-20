@@ -191,14 +191,6 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
         self
     }
 
-    /// Sets the max frame size for the client.
-    ///
-    /// Defaults to 16MB.
-    pub fn max_frame_size(mut self, max_frame_size: u32) -> Self {
-        self.config.set_max_frame_size(max_frame_size);
-        self
-    }
-
     /// Sets the client's name sent to the server.
     pub fn caller_name(mut self, name: impl AsRef<str>) -> Self {
         self.caller_name = FastStr::new(name);
