@@ -20,7 +20,6 @@ pub mod request;
 pub mod response;
 pub mod server;
 pub mod status;
-mod timer;
 pub mod transport;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;

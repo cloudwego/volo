@@ -5,7 +5,7 @@ use http::{
     HeaderValue,
 };
 use hyper::client::conn::http2;
-use hyper_util::rt::{TokioExecutor, TokioIo};
+use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use motore::Service;
 use volo::net::Address;
 
@@ -50,7 +50,7 @@ impl<U> ClientTransport<U> {
         );
         let mut http_client = http2::Builder::new(TokioExecutor::new());
         http_client
-            .timer(crate::timer::TokioTimer::new())
+            .timer(TokioTimer::new())
             .initial_stream_window_size(http2_config.init_stream_window_size)
             .initial_connection_window_size(http2_config.init_connection_window_size)
             .max_frame_size(http2_config.max_frame_size)
@@ -82,7 +82,7 @@ impl<U> ClientTransport<U> {
         );
         let mut http_client = http2::Builder::new(TokioExecutor::new());
         http_client
-            .timer(crate::timer::TokioTimer::new())
+            .timer(TokioTimer::new())
             .initial_stream_window_size(http2_config.init_stream_window_size)
             .initial_connection_window_size(http2_config.init_connection_window_size)
             .max_frame_size(http2_config.max_frame_size)
