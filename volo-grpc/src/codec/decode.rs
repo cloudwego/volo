@@ -12,7 +12,7 @@ use http::StatusCode;
 use http_body::Body;
 use hyper::body::Incoming;
 use pilota::prost::Message;
-use tracing::{debug, trace};
+use tracing::debug;
 
 use super::{DefaultDecoder, BUFFER_SIZE, PREFIX_LEN};
 use crate::{
@@ -104,7 +104,7 @@ impl<T: Message + Default> RecvStream<T> {
                 Ok(headers) => Ok(Some(MetadataMap::from_headers(headers))),
                 Err(_frame) => {
                     // **unreachable** because the `frame` cannot be `Frame::Data` here
-                    trace!("[VOLO] unexpected data from stream");
+                    debug!("[VOLO] unexpected data from stream");
                     return Err(Status::new(
                         Code::Internal,
                         "Unexpected data from stream.".to_string(),
@@ -193,7 +193,7 @@ impl<T: Message + Default> Stream for RecvStream<T> {
     type Item = Result<T, Status>;
 
     fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        loop {
+        let trailer_frame = loop {
             if let State::Error = &self.state {
                 return Poll::Ready(None);
             }
@@ -201,8 +201,13 @@ impl<T: Message + Default> Stream for RecvStream<T> {
                 return Poll::Ready(Some(Ok(item)));
             }
 
-            let chunk = match ready!(Pin::new(&mut self.body).poll_frame(cx)) {
-                Some(Ok(d)) => Some(d),
+            match ready!(Pin::new(&mut self.body).poll_frame(cx)) {
+                Some(Ok(frame)) => match frame.into_data() {
+                    Ok(data) => self.buf.put(data),
+                    Err(trailer) => {
+                        break Some(trailer);
+                    }
+                },
                 Some(Err(e)) => {
                     let err: crate::BoxError = e.into();
                     let status = Status::from_error(err);
@@ -213,71 +218,42 @@ impl<T: Message + Default> Stream for RecvStream<T> {
                     let _ = std::mem::replace(&mut self.state, State::Error);
                     return Poll::Ready(Some(Err(status)));
                 }
-                None => None,
-            };
-
-            match chunk.map(|frame| frame.into_data()) {
-                Some(Ok(data)) => self.buf.put(data),
-                Some(Err(_frame)) => {
-                    // **unreachable** because the `chunk` must be `Frame::Data` or `None` here
-                    trace!("[VOLO] unexpected trailer from stream");
-                    return Poll::Ready(Some(Err(Status::new(
-                        Code::Internal,
-                        "Unexpected trailer from stream.".to_string(),
-                    ))));
-                }
                 None => {
                     if self.buf.has_remaining() {
-                        trace!("[VOLO] unexpected EOF decoding stream");
+                        debug!("[VOLO] unexpected EOF decoding stream");
                         return Poll::Ready(Some(Err(Status::new(
                             Code::Internal,
                             "Unexpected EOF decoding stream.".to_string(),
                         ))));
                     } else {
-                        break;
+                        break None;
                     }
                 }
             }
-        }
+        };
 
         if let Kind::Response(status) = self.kind {
-            let trailer = match ready!(Pin::new(&mut self.body).poll_frame(cx)) {
-                Some(Ok(frame)) => {
-                    let trailer = match frame.into_trailers() {
-                        Ok(trailer) => trailer,
-                        Err(_frame) => {
-                            // **unreachable** because the `frame` cannot be `Frame::Data` here
-                            trace!("[VOLO] unexpected data from stream");
-                            return Poll::Ready(Some(Err(Status::new(
-                                Code::Internal,
-                                "Unexpected data from stream.".to_string(),
-                            ))));
-                        }
-                    };
-                    Ok(Some(trailer))
+            let trailer = match trailer_frame.map(|frame| frame.into_trailers()) {
+                Some(Ok(trailer)) => Some(trailer),
+                Some(Err(_frame)) => {
+                    // **unreachable** because the `frame` cannot be `Frame::Data` here
+                    debug!("[VOLO] unexpected data from stream");
+                    return Poll::Ready(Some(Err(Status::new(
+                        Code::Internal,
+                        "Unexpected data from stream.".to_string(),
+                    ))));
                 }
-                Some(Err(err)) => Err(err),
-                None => Ok(None),
+                None => None,
             };
 
-            match trailer {
-                Ok(trailer) => {
-                    if let Err(e) = Status::infer_grpc_status(trailer.as_ref(), status) {
-                        return if let Some(e) = e {
-                            Some(Err(e)).into()
-                        } else {
-                            Poll::Ready(None)
-                        };
-                    } else {
-                        self.trailers = trailer.map(MetadataMap::from_headers);
-                    }
-                }
-                Err(e) => {
-                    let err: crate::BoxError = e.into();
-                    debug!("[VOLO] decoder inner trailers error: {:?}", err);
-                    let status = Status::from_error(err);
-                    return Some(Err(status)).into();
-                }
+            if let Err(e) = Status::infer_grpc_status(trailer.as_ref(), status) {
+                return if let Some(e) = e {
+                    Some(Err(e)).into()
+                } else {
+                    Poll::Ready(None)
+                };
+            } else {
+                self.trailers = trailer.map(MetadataMap::from_headers);
             }
         }
 
