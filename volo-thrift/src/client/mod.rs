@@ -464,6 +464,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
