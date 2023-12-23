@@ -8,7 +8,7 @@
 use std::{
     cell::RefCell,
     marker::PhantomData,
-    sync::{atomic::AtomicI32, Arc}, collections::HashMap,
+    sync::{atomic::AtomicI32, Arc},
 };
 
 use http::{HeaderMap, header::IntoHeaderName, HeaderValue};
