@@ -8,7 +8,7 @@ mod probe;
 use std::{borrow::Cow, path::Path};
 use std::{fmt, net::Ipv6Addr};
 
-use faststr::FastStr;
+
 pub use incoming::{DefaultIncoming, MakeIncoming};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]

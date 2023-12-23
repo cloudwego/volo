@@ -1,12 +1,12 @@
-use std::{borrow::Cow, sync::{Arc, Mutex}, process::Output, collections::HashMap, time::Duration, io};
+use std::{sync::{Arc, Mutex}, time::Duration, io};
 
-use faststr::FastStr;
+
 use futures::Future;
 use pin_project::pin_project;
-use reqwest::{ClientBuilder, header::HeaderMap};
+use reqwest::{header::HeaderMap};
 use tokio::io::{DuplexStream, AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
 
-use super::{Address, dial::{MakeTransport, Config}, MakeIncoming};
+use super::{Address, dial::{MakeTransport, Config}};
 
 const WINDOW_SIZE: usize = 0x4000; // 4 * 4
 

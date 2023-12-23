@@ -4,12 +4,12 @@ use std::{
     task::{Context, Poll},
 };
 
-use futures::io::WriteHalf;
+
 use pin_project::pin_project;
 #[cfg(target_family = "unix")]
 use tokio::net::{unix, UnixStream};
 use tokio::{
-    io::{AsyncRead, AsyncWrite, ReadBuf, DuplexStream, ReadHalf},
+    io::{AsyncRead, AsyncWrite, ReadBuf},
     net::{tcp, TcpStream},
 };
 
