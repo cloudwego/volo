@@ -1,9 +1,9 @@
-use std::{sync::{Arc, Mutex}, time::Duration, io};
+use std::{sync::{Arc, Mutex}, time::Duration, io, collections::HashMap};
 
 
 use futures::Future;
+use hyper::HeaderMap;
 use pin_project::pin_project;
-use reqwest::{header::HeaderMap};
 use tokio::io::{DuplexStream, AsyncRead, AsyncWrite, AsyncReadExt, AsyncWriteExt};
 
 use super::{Address, dial::{MakeTransport, Config}};
@@ -215,7 +215,15 @@ impl HttpTransport {
                     // println!("headers = {:?}", headers);
                     let mut req = client.post(url.to_string());
                     if let Some(headers) = headers {
-                        req = req.headers(headers)
+                        let headers = headers
+                            .iter()
+                            .map(|(key, val)| (key.to_string(), val.to_str().unwrap().to_string()))
+                            .collect::<HashMap<String, String>>();
+
+                        let headers: reqwest::header::HeaderMap = (&headers)
+                            .try_into()
+                            .expect("valid headers");
+                        req = req.headers(headers);
                     }
                     let req = req.body(reqwest::Body::from(payload))
                         .build()
