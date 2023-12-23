@@ -1,12 +1,14 @@
 pub mod conn;
 pub mod dial;
 pub mod incoming;
+mod http;
 mod probe;
 
 #[cfg(target_family = "unix")]
 use std::{borrow::Cow, path::Path};
 use std::{fmt, net::Ipv6Addr};
 
+use faststr::FastStr;
 pub use incoming::{DefaultIncoming, MakeIncoming};
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -14,6 +16,7 @@ pub enum Address {
     Ip(std::net::SocketAddr),
     #[cfg(target_family = "unix")]
     Unix(Cow<'static, Path>),
+    Http(hyper::Uri)
 }
 
 impl Address {
@@ -43,7 +46,14 @@ impl fmt::Display for Address {
             Address::Ip(addr) => write!(f, "{addr}"),
             #[cfg(target_family = "unix")]
             Address::Unix(path) => write!(f, "{}", path.display()),
+            Address::Http(url) => write!(f, "{url}"),
         }
+    }
+}
+
+impl From<hyper::Uri> for Address {
+    fn from(url: hyper::Uri) -> Self {
+        Address::Http(url)
     }
 }
 

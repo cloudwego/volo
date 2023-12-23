@@ -80,6 +80,7 @@ impl MakeIncoming for Address {
                 let listener = unix_helper::create_unix_listener_with_max_backlog(addr).await;
                 UnixListener::from_std(listener?).map(DefaultIncoming::from)
             }
+            Address::Http(url) => panic!("unimplemented"),
         }
     }
 }
