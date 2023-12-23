@@ -80,7 +80,7 @@ impl MakeIncoming for Address {
                 let listener = unix_helper::create_unix_listener_with_max_backlog(addr).await;
                 UnixListener::from_std(listener?).map(DefaultIncoming::from)
             }
-            Address::Http(_url) => panic!("unimplemented"),
+            Address::Http(_url) => todo!("not implemented yet"),
         }
     }
 }
@@ -94,6 +94,7 @@ impl MakeIncoming for Address {
             Address::Ip(addr) => TcpListener::bind(addr).await.map(DefaultIncoming::from),
             #[cfg(target_family = "unix")]
             Address::Unix(addr) => UnixListener::bind(addr).map(DefaultIncoming::from),
+            Address::Http(_url) => todo!("not implemented yet")
         }
     }
 }
