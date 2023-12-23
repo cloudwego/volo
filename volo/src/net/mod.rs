@@ -29,6 +29,7 @@ impl Address {
                     self
                 }
             }
+            Address::Http(_) => self,
             #[cfg(target_family = "unix")]
             _ => self,
         }
