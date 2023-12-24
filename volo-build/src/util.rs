@@ -94,7 +94,8 @@ pub fn get_or_download_idl(idl: Idl, target_dir: impl AsRef<Path>) -> anyhow::Re
         download_files_from_git(task).with_context(|| format!("download repo {repo}"))?;
 
         (
-            dir.join(&idl.path),
+            // git should use relative path instead of absolute path
+            dir.join(strip_slash_prefix(idl.path.as_path())),
             idl.includes
                 .unwrap_or_default()
                 .into_iter()
@@ -296,6 +297,15 @@ pub fn git_repo_init(path: &Path) -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+pub fn strip_slash_prefix(p: &Path) -> PathBuf {
+    if p.starts_with("/") {
+        // remove the "/" prefix to the start of idl path
+        p.strip_prefix("/").unwrap().to_path_buf()
+    } else {
+        p.to_path_buf()
+    }
 }
 
 #[cfg(test)]

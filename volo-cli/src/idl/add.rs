@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{value_parser, Parser};
 use volo_build::{
     model::{Entry, GitSource, Idl, Source},
-    util::get_repo_latest_commit_id,
+    util::{get_repo_latest_commit_id, strip_slash_prefix},
 };
 
 use crate::{command::CliCommand, context::Context};
@@ -69,7 +69,7 @@ impl CliCommand for Add {
                             lock: Some(lock),
                         }),
                         touch: vec![],
-                        path: self.idl.clone(),
+                        path: strip_slash_prefix(self.idl.as_path()),
                         includes: self.includes.clone(),
                         keep_unknown_fields: false,
                     }

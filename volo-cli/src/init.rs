@@ -4,7 +4,7 @@ use clap::{value_parser, Parser};
 use volo_build::{
     config_builder::InitBuilder,
     model::{Entry, GitSource, Idl, Source, DEFAULT_FILENAME},
-    util::{get_repo_latest_commit_id, git_repo_init, DEFAULT_CONFIG_FILE},
+    util::{get_repo_latest_commit_id, git_repo_init, strip_slash_prefix, DEFAULT_CONFIG_FILE},
 };
 
 use crate::command::CliCommand;
@@ -197,8 +197,13 @@ impl CliCommand for Init {
                     lock,
                 });
             }
-            idl.path = self.idl.clone();
-            idl.ensure_readable()?;
+            if self.git.is_some() {
+                idl.path = strip_slash_prefix(&self.idl);
+            } else {
+                idl.path = self.idl.clone();
+                // only ensure readable when idl is from local
+                idl.ensure_readable()?;
+            }
 
             let mut entry = Entry {
                 protocol: idl.protocol(),
