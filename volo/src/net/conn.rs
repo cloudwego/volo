@@ -365,7 +365,10 @@ impl ConnStream {
                 .peer_addr()
                 .map(Address::from)
                 .ok(),
-            Self::Http(s) => s.meta.get_address(),
+            Self::Http(s) => {
+                // TOOD: should we return remote_addr?
+                s.meta.get_address()
+            }
         }
     }
 }   
