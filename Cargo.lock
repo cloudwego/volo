@@ -2800,7 +2800,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "dirs",
@@ -2827,7 +2827,7 @@ dependencies = [
 
 [[package]]
 name = "volo-cli"
-version = "0.9.0"
+version = "0.9.1"
 dependencies = [
  "anyhow",
  "clap",
