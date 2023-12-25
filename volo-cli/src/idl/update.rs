@@ -1,7 +1,10 @@
 use std::collections::HashSet;
 
 use clap::Parser;
-use volo_build::model::{GitSource, Source};
+use volo_build::{
+    model::{GitSource, Source},
+    util::strip_slash_prefix,
+};
 
 use crate::{command::CliCommand, context::Context};
 
@@ -22,7 +25,8 @@ impl CliCommand for Update {
             let entry = config.entries.get_mut(&cx.entry_name).unwrap();
             let mut exists = HashSet::new();
 
-            entry.idls.iter().for_each(|idl| {
+            entry.idls.iter_mut().for_each(|idl| {
+                idl.path = strip_slash_prefix(idl.path.as_path());
                 if let Source::Git(ref git) = idl.source {
                     exists.insert(git.repo.clone());
                 }
