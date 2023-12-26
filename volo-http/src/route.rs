@@ -397,6 +397,15 @@ where
 
     for_all_methods!(impl_method_register_for_builder);
 
+    pub fn fallback<H, T>(mut self, handler: H) -> Self
+    where
+        for<'a> H: Handler<T, S> + Clone + Send + Sync + 'a,
+        for<'a> T: 'a,
+    {
+        self.router.fallback = Fallback::Handler(DynHandler::new(handler));
+        self
+    }
+
     pub fn build(self) -> MethodRouter<S> {
         self.router
     }
@@ -418,6 +427,15 @@ macro_rules! impl_method_register {
 }
 
 for_all_methods!(impl_method_register);
+
+pub fn any<H, T, S>(h: H) -> MethodRouter<S>
+where
+    for<'a> H: Handler<T, S> + Clone + Send + Sync + 'a,
+    for<'a> T: 'a,
+    S: Clone + Send + Sync + 'static,
+{
+    MethodRouterBuilder::new().fallback(h).build()
+}
 
 #[derive(Clone, Default)]
 pub enum MethodEndpoint<S> {
