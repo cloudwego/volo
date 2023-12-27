@@ -76,14 +76,11 @@ impl<C, Req, Resp>
         C,
         Req,
         Resp,
-        // MkT,
         DefaultMakeTransport,
 
         DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>,
         LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>,
     >
-// where
-//     MkT: MakeTransport + Default,
 {
     pub fn new(service_name: impl AsRef<str>, service_client: C) -> Self {
         ClientBuilder {
@@ -96,7 +93,6 @@ impl<C, Req, Resp>
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
             mk_client: service_client,
-            // make_transport: MkT::default(),
             make_transport: DefaultMakeTransport::default(),
 
             make_codec: DefaultMakeCodec::default(),
