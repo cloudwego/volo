@@ -58,5 +58,6 @@ tokio-native-tls = { workspace = true, optional = true }
 [features]
 default = []
 
+vendored = ["tokio-native-tls/vendored"]
 rustls = ["tokio-rustls", "librustls"]
 native-tls = ["tokio-native-tls"]
