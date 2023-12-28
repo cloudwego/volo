@@ -25,6 +25,7 @@ hyper = { version = "1", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 
 bytes.workspace = true
+cookie = { workspace = true, optional = true, features = ["percent-encode"] }
 faststr.workspace = true
 futures.workspace = true
 futures-util.workspace = true
@@ -51,3 +52,7 @@ url.workspace = true
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
+
+[features]
+default = []
+cookie = ["dep:cookie"]
