@@ -1,8 +1,9 @@
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use faststr::FastStr;
 use serde::{Deserialize, Serialize};
 use volo_http::{
+    extension::Extension,
     extract::{Form, Query},
     layer::TimeoutLayer,
     middleware::{self, Next},
@@ -78,10 +79,6 @@ async fn test(
     }
 }
 
-async fn conn_show(conn: ConnectionInfo) -> String {
-    format!("{conn:?}\n")
-}
-
 async fn timeout_test() {
     tokio::time::sleep(Duration::from_secs(10)).await
 }
@@ -91,6 +88,14 @@ async fn echo(params: Params) -> Result<Bytes, StatusCode> {
         return Ok(echo.clone());
     }
     Err(StatusCode::BAD_REQUEST)
+}
+
+async fn conn_show(conn: ConnectionInfo) -> String {
+    format!("{conn:?}\n")
+}
+
+async fn extension(Extension(state): Extension<Arc<State>>) -> String {
+    format!("State {{ foo: {}, bar: {} }}\n", state.foo, state.bar)
 }
 
 fn timeout_handler(uri: Uri, peer: Address) -> StatusCode {
@@ -147,7 +152,10 @@ fn test_router() -> Router {
         )
         // curl -v http://127.0.0.1:8080/test/param/114514
         .route("/test/param/:echo", get(echo))
+        // curl http://127.0.0.1:8080/test/conn_show
         .route("/test/conn_show", get(conn_show))
+        // curl http://127.0.0.1:8080/test/extension
+        .route("/test/extension", get(extension))
 }
 
 async fn tracing_from_fn(
@@ -179,6 +187,11 @@ async fn headers_map_response(response: Response) -> impl IntoResponse {
     )
 }
 
+struct State {
+    foo: String,
+    bar: usize,
+}
+
 #[tokio::main(flavor = "multi_thread")]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -192,6 +205,10 @@ async fn main() {
         .merge(user_json_router())
         .merge(user_form_router())
         .merge(test_router())
+        .layer(Extension(Arc::new(State {
+            foo: "Foo".to_string(),
+            bar: 114514,
+        })))
         .layer(middleware::from_fn(tracing_from_fn))
         .layer(middleware::map_response(headers_map_response))
         .layer(TimeoutLayer::new(Duration::from_secs(5), || {

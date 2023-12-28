@@ -1,4 +1,5 @@
 pub mod context;
+pub mod extension;
 pub mod extract;
 pub mod handler;
 pub mod layer;
@@ -17,14 +18,13 @@ pub use bytes::Bytes;
 pub use hyper::{
     self,
     body::Incoming as BodyIncoming,
-    http::{
-        self, Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version,
-    },
+    http::{self, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
 };
 pub use volo::net::Address;
 
 pub use crate::{
     context::{ConnectionInfo, HttpContext},
+    extension::Extension,
     extract::{Form, Json, MaybeInvalid, Query, State},
     param::Params,
     request::Request,
