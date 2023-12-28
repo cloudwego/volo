@@ -3,14 +3,16 @@ use std::{net::SocketAddr, sync::Arc, time::Duration};
 use faststr::FastStr;
 use serde::{Deserialize, Serialize};
 use volo_http::{
+    cookie,
     extension::Extension,
     extract::{Form, Query},
+    http::header,
     layer::TimeoutLayer,
     middleware::{self, Next},
     response::IntoResponse,
     route::{get, post, MethodRouter, Router},
-    Address, BodyIncoming, Bytes, ConnectionInfo, HttpContext, Json, MaybeInvalid, Method, Params,
-    Response, Server, StatusCode, Uri,
+    Address, BodyIncoming, Bytes, ConnectionInfo, CookieJar, HttpContext, Json, MaybeInvalid,
+    Method, Params, Response, Server, StatusCode, Uri,
 };
 
 async fn hello() -> &'static str {
@@ -158,22 +160,47 @@ fn test_router() -> Router {
         .route("/test/extension", get(extension))
 }
 
+// You can use the following commands for testing cookies
+//
+// ```bash
+// # create a cookie jar for `curl`
+// TMPFILE=$(mktemp --tmpdir cookie_jar.XXXXXX)
+//
+// # access it for more than one times!
+// curl -v http://127.0.0.1:8080/ -b $TMPFILE -c $TMPFILE
+// curl -v http://127.0.0.1:8080/ -b $TMPFILE -c $TMPFILE
+// # ......
+// ```
 async fn tracing_from_fn(
     uri: Uri,
     peer: Address,
+    cookie_jar: CookieJar,
     cx: &mut HttpContext,
     req: BodyIncoming,
     next: Next,
 ) -> Response {
-    tracing::info!("Before {peer} request {uri}");
-
+    tracing::info!("{:?}", *cookie_jar);
+    let count = cookie_jar.get("count").map_or(0usize, |val| {
+        val.value().to_string().parse().unwrap_or(0usize)
+    });
     let start = std::time::Instant::now();
     let resp = next.run(cx, req).await;
     let elapsed = start.elapsed();
 
-    tracing::info!("After {peer} request {uri}, elapsed {elapsed:?}");
+    tracing::info!("seq: {count}: {peer} request {uri}, cost {elapsed:?}");
 
-    resp.into_response()
+    (
+        (
+            header::SET_COOKIE,
+            cookie::Cookie::build(("count", format!("{}", count + 1)))
+                .path("/")
+                .max_age(cookie::Duration::days(1))
+                .build()
+                .to_string(),
+        ),
+        resp,
+    )
+        .into_response()
 }
 
 async fn headers_map_response(response: Response) -> impl IntoResponse {
