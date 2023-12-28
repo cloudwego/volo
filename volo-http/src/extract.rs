@@ -147,6 +147,13 @@ impl<S: Sync> FromContext<S> for ConnectionInfo {
     }
 }
 
+impl<S: Sync> FromContext<S> for HeaderMap {
+    type Rejection = Infallible;
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(context.headers.clone())
+    }
+}
+
 impl<T, S> FromRequest<S, private::ViaContext> for T
 where
     T: FromContext<S> + Sync,
