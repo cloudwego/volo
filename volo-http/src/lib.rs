@@ -1,4 +1,6 @@
 pub mod context;
+#[cfg(feature = "cookie")]
+pub mod cookie;
 pub mod extension;
 pub mod extract;
 pub mod handler;
@@ -15,6 +17,7 @@ mod macros;
 use std::convert::Infallible;
 
 pub use bytes::Bytes;
+#[cfg(feature = "cookie")]
 pub use hyper::{
     self,
     body::Incoming as BodyIncoming,
@@ -22,6 +25,8 @@ pub use hyper::{
 };
 pub use volo::net::Address;
 
+#[cfg(feature = "cookie")]
+pub use crate::cookie::CookieJar;
 pub use crate::{
     context::{ConnectionInfo, HttpContext},
     extension::Extension,
