@@ -17,7 +17,6 @@ mod macros;
 use std::convert::Infallible;
 
 pub use bytes::Bytes;
-#[cfg(feature = "cookie")]
 pub use hyper::{
     self,
     body::Incoming as BodyIncoming,
