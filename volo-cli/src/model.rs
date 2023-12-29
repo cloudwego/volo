@@ -2,9 +2,9 @@ use anyhow::Result;
 use clap::{ArgAction, Parser};
 use volo_build::model::DEFAULT_ENTRY_NAME;
 
-use crate::{command::CliCommand, context::Context, idl::Idl, init::Init};
+use crate::{command::CliCommand, context::Context, http::Http, idl::Idl, init::Init};
 
-define_commands!(Subcommand { Init, Idl });
+define_commands!(Subcommand { Init, Idl, Http });
 
 #[derive(Parser, Debug)]
 #[command(
