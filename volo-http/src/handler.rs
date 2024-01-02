@@ -255,13 +255,14 @@ pub trait HandlerWithoutRequest<T>: Sized {
     fn call(self, context: &HttpContext) -> impl Future<Output = Response> + Send;
 }
 
-impl<F, Res> HandlerWithoutRequest<()> for F
+impl<F, Fut, Res> HandlerWithoutRequest<()> for F
 where
-    F: FnOnce() -> Res + Clone + Send,
+    F: FnOnce() -> Fut + Clone + Send,
+    Fut: Future<Output = Res> + Send,
     Res: IntoResponse,
 {
     async fn call(self, _context: &HttpContext) -> Response {
-        self().into_response()
+        self().await.into_response()
     }
 }
 
@@ -270,9 +271,10 @@ macro_rules! impl_handler_without_request {
         $($ty:ident),* $(,)?
     ) => {
         #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<F, Res, $($ty,)*> HandlerWithoutRequest<($($ty,)*)> for F
+        impl<F, Fut, Res, $($ty,)*> HandlerWithoutRequest<($($ty,)*)> for F
         where
-            F: FnOnce($($ty,)*) -> Res + Clone + Send,
+            F: FnOnce($($ty,)*) -> Fut + Clone + Send,
+            Fut: Future<Output = Res> + Send,
             Res: IntoResponse,
             $( for<'r> $ty: FromContext<()> + Send + 'r, )*
         {
@@ -283,7 +285,7 @@ macro_rules! impl_handler_without_request {
                         Err(rejection) => return rejection.into_response(),
                     };
                 )*
-                self($($ty,)*).into_response()
+                self($($ty,)*).await.into_response()
             }
         }
     };
