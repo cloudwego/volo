@@ -36,9 +36,10 @@ parking_lot.workspace = true
 pin-project.workspace = true
 serde.workspace = true
 serde_html_form.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, optional = true }
 serde_urlencoded.workspace = true
 simdutf8.workspace = true
+sonic-rs = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = [
     "time",
@@ -55,4 +56,9 @@ serde = { version = "1", features = ["derive"] }
 
 [features]
 default = []
+
+full = ["cookie", "sonic_json"]
+
 cookie = ["dep:cookie"]
+sonic_json = ["dep:sonic-rs"]
+serde_json = ["dep:serde_json"]

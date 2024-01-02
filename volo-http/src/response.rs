@@ -14,9 +14,6 @@ use hyper::{
     HeaderMap,
 };
 use pin_project::pin_project;
-use serde::Serialize;
-
-use crate::Json;
 
 pub struct Response(hyper::http::Response<RespBody>);
 
@@ -171,18 +168,6 @@ where
             .body(self.into())
             .unwrap()
             .into()
-    }
-}
-
-impl<T> IntoResponse for Json<T>
-where
-    T: Serialize,
-{
-    fn into_response(self) -> Response {
-        match serde_json::to_string::<T>(&self.0) {
-            Ok(s) => s.into_response(),
-            Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-        }
     }
 }
 
