@@ -10,7 +10,7 @@ use volo_build::{
 use crate::command::CliCommand;
 
 #[derive(Parser, Debug)]
-#[command(about = "init your project")]
+#[command(about = "init your thrift or grpc project")]
 pub struct Init {
     #[arg(help = "The name of project")]
     pub name: String,
