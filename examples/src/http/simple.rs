@@ -100,7 +100,7 @@ async fn extension(Extension(state): Extension<Arc<State>>) -> String {
     format!("State {{ foo: {}, bar: {} }}\n", state.foo, state.bar)
 }
 
-fn timeout_handler(uri: Uri, peer: Address) -> StatusCode {
+async fn timeout_handler(uri: Uri, peer: Address) -> StatusCode {
     tracing::info!("Timeout on `{}`, peer: {}", uri, peer);
     StatusCode::INTERNAL_SERVER_ERROR
 }
@@ -238,7 +238,7 @@ async fn main() {
         })))
         .layer(middleware::from_fn(tracing_from_fn))
         .layer(middleware::map_response(headers_map_response))
-        .layer(TimeoutLayer::new(Duration::from_secs(5), || {
+        .layer(TimeoutLayer::new(Duration::from_secs(5), || async {
             StatusCode::INTERNAL_SERVER_ERROR
         }));
 
