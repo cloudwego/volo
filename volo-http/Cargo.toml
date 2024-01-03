@@ -55,7 +55,7 @@ url.workspace = true
 serde = { version = "1", features = ["derive"] }
 
 [features]
-default = []
+default = ["sonic_json"]
 
 full = ["cookie", "sonic_json"]
 
