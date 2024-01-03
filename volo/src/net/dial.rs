@@ -1,5 +1,6 @@
 use std::{future::Future, io, net::SocketAddr};
 
+use hyper::HeaderMap;
 use socket2::{Domain, Protocol, Socket, Type};
 #[cfg(target_family = "unix")]
 use tokio::net::UnixStream;
@@ -11,7 +12,7 @@ use tokio::{
 
 use super::{
     conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
-    Address,
+    Address, http::make_http_connection,
 };
 
 /// [`MakeTransport`] creates an [`AsyncRead`] and an [`AsyncWrite`] for the given [`Address`].
@@ -26,18 +27,21 @@ pub trait MakeTransport: Clone + Send + Sync + 'static {
     fn set_connect_timeout(&mut self, timeout: Option<Duration>);
     fn set_read_timeout(&mut self, timeout: Option<Duration>);
     fn set_write_timeout(&mut self, timeout: Option<Duration>);
+
+    fn set_headers(&mut self, headers: Option<HeaderMap>);
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone)]
 pub struct DefaultMakeTransport {
     cfg: Config,
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone)]
 pub struct Config {
     pub connect_timeout: Option<Duration>,
     pub read_timeout: Option<Duration>,
     pub write_timeout: Option<Duration>,
+    pub headers: Option<HeaderMap>,
 }
 
 impl Config {
@@ -45,11 +49,13 @@ impl Config {
         connect_timeout: Option<Duration>,
         read_timeout: Option<Duration>,
         write_timeout: Option<Duration>,
+        headers: Option<HeaderMap>,
     ) -> Self {
         Self {
             connect_timeout,
             read_timeout,
             write_timeout,
+            headers,
         }
     }
 
@@ -65,6 +71,10 @@ impl Config {
 
     pub fn with_write_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.write_timeout = timeout;
+        self
+    }
+    pub fn with_headers(mut self, headers: Option<HeaderMap>) -> Self {
+        self.headers = headers;
         self
     }
 }
@@ -87,15 +97,19 @@ impl MakeTransport for DefaultMakeTransport {
     }
 
     fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
-        self.cfg = self.cfg.with_connect_timeout(timeout);
+        self.cfg = self.cfg.clone().with_connect_timeout(timeout);
     }
 
     fn set_read_timeout(&mut self, timeout: Option<Duration>) {
-        self.cfg = self.cfg.with_read_timeout(timeout);
+        self.cfg = self.cfg.clone().with_read_timeout(timeout);
     }
 
     fn set_write_timeout(&mut self, timeout: Option<Duration>) {
-        self.cfg = self.cfg.with_write_timeout(timeout);
+        self.cfg = self.cfg.clone().with_write_timeout(timeout);
+    }
+
+    fn set_headers(&mut self, headers: Option<HeaderMap>) {
+        self.cfg = self.cfg.clone().with_headers(headers);
     }
 }
 
@@ -136,6 +150,10 @@ impl DefaultMakeTransport {
             }
             #[cfg(target_family = "unix")]
             Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
+            Address::Http(url) => {
+                let stream = make_http_connection(&self.cfg, url).await?;
+                Ok(Conn::from(stream))
+            }
         }
     }
 }
@@ -204,8 +222,8 @@ cfg_rustls_or_native_tls! {
                     match &self.tls_config.connector {
                         #[cfg(feature = "rustls")]
                         TlsConnector::Rustls(connector) => {
-                            let server_name = librustls::ServerName::try_from(&self.tls_config.server_name[..])
-                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+                            let server_name = librustls::pki_types::ServerName::try_from(&self.tls_config.server_name[..])
+                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?.to_owned();
                             connector
                                 .connect(server_name, tcp)
                                 .await
@@ -225,6 +243,8 @@ cfg_rustls_or_native_tls! {
                 }
                 #[cfg(target_family = "unix")]
                 Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
+
+                Address::Http(url) => todo!(),
             }
         }
     }
@@ -241,15 +261,19 @@ cfg_rustls_or_native_tls! {
         }
 
         fn set_connect_timeout(&mut self, timeout: Option<Duration>) {
-            self.cfg = self.cfg.with_connect_timeout(timeout);
+            self.cfg = self.cfg.clone().with_connect_timeout(timeout);
         }
 
         fn set_read_timeout(&mut self, timeout: Option<Duration>) {
-            self.cfg = self.cfg.with_read_timeout(timeout);
+            self.cfg = self.cfg.clone().with_read_timeout(timeout);
         }
 
         fn set_write_timeout(&mut self, timeout: Option<Duration>) {
-            self.cfg = self.cfg.with_write_timeout(timeout);
+            self.cfg = self.cfg.clone().with_write_timeout(timeout);
+        }
+
+        fn set_headers(&mut self, headers: Option<HeaderMap>) {
+            todo!()
         }
     }
 }

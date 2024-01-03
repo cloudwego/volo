@@ -35,7 +35,7 @@ impl Connector {
 
     #[cfg(any(feature = "rustls", feature = "native-tls"))]
     pub fn new_with_tls(cfg: Option<Config>, tls_config: ClientTlsConfig) -> Self {
-        let mut mt = TlsMakeTransport::new(cfg.unwrap_or_default(), tls_config);
+        let mut mt = TlsMakeTransport::new(cfg.clone().unwrap_or_default(), tls_config);
         if let Some(cfg) = cfg {
             mt.set_connect_timeout(cfg.connect_timeout);
             mt.set_read_timeout(cfg.read_timeout);

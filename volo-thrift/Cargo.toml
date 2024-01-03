@@ -28,6 +28,7 @@ bytes.workspace = true
 chrono.workspace = true
 futures.workspace = true
 fxhash.workspace = true
+http.workspace = true
 lazy_static.workspace = true
 linkedbytes.workspace = true
 linked-hash-map.workspace = true

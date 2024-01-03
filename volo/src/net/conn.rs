@@ -4,6 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
+
 use pin_project::pin_project;
 #[cfg(target_family = "unix")]
 use tokio::net::{unix, UnixStream};
@@ -12,7 +13,7 @@ use tokio::{
     net::{tcp, TcpStream},
 };
 
-use super::Address;
+use super::{Address, http::{Http, HttpReadHalf, HttpWriteHalf}};
 
 #[derive(Clone)]
 pub struct ConnInfo {
@@ -32,6 +33,7 @@ pub enum ConnStream {
     Rustls(#[pin] tokio_rustls::TlsStream<TcpStream>),
     #[cfg(feature = "native-tls")]
     NativeTls(#[pin] tokio_native_tls::TlsStream<TcpStream>),
+    Http(#[pin] Http),
 }
 
 cfg_rustls! {
@@ -51,6 +53,7 @@ pub enum OwnedWriteHalf {
     Rustls(#[pin] RustlsWriteHalf),
     #[cfg(feature = "native-tls")]
     NativeTls(#[pin] NativeTlsWriteHalf),
+    Http(#[pin] HttpWriteHalf),
 }
 
 impl AsyncWrite for OwnedWriteHalf {
@@ -68,6 +71,7 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Rustls(half) => half.poll_write(cx, buf),
             #[cfg(feature = "native-tls")]
             OwnedWriteHalfProj::NativeTls(half) => half.poll_write(cx, buf),
+            OwnedWriteHalfProj::Http(half) => half.poll_write(cx, buf),
         }
     }
 
@@ -81,6 +85,7 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Rustls(half) => half.poll_flush(cx),
             #[cfg(feature = "native-tls")]
             OwnedWriteHalfProj::NativeTls(half) => half.poll_flush(cx),
+            OwnedWriteHalfProj::Http(half) => half.poll_flush(cx),
         }
     }
 
@@ -94,6 +99,7 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Rustls(half) => half.poll_shutdown(cx),
             #[cfg(feature = "native-tls")]
             OwnedWriteHalfProj::NativeTls(half) => half.poll_shutdown(cx),
+            OwnedWriteHalfProj::Http(half) => half.poll_shutdown(cx),
         }
     }
 
@@ -111,6 +117,7 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Rustls(half) => half.poll_write_vectored(cx, bufs),
             #[cfg(feature = "native-tls")]
             OwnedWriteHalfProj::NativeTls(half) => half.poll_write_vectored(cx, bufs),
+            OwnedWriteHalfProj::Http(half) => half.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -124,6 +131,7 @@ impl AsyncWrite for OwnedWriteHalf {
             Self::Rustls(half) => half.is_write_vectored(),
             #[cfg(feature = "native-tls")]
             Self::NativeTls(half) => half.is_write_vectored(),
+            Self::Http(half) => half.is_write_vectored(),
         }
     }
 }
@@ -145,6 +153,7 @@ pub enum OwnedReadHalf {
     Rustls(#[pin] RustlsReadHalf),
     #[cfg(feature = "native-tls")]
     NativeTls(#[pin] NativeTlsReadHalf),
+    Http(#[pin] HttpReadHalf),
 }
 
 impl AsyncRead for OwnedReadHalf {
@@ -162,6 +171,7 @@ impl AsyncRead for OwnedReadHalf {
             OwnedReadHalfProj::Rustls(half) => half.poll_read(cx, buf),
             #[cfg(feature = "native-tls")]
             OwnedReadHalfProj::NativeTls(half) => half.poll_read(cx, buf),
+            OwnedReadHalfProj::Http(half) => half.poll_read(cx, buf),
         }
     }
 }
@@ -189,6 +199,10 @@ impl ConnStream {
                 let (rh, wh) = tokio::io::split(stream);
                 (OwnedReadHalf::NativeTls(rh), OwnedWriteHalf::NativeTls(wh))
             }
+            Self::Http(stream) => {
+                let (rh, wh) = tokio::io::split(stream);
+                (OwnedReadHalf::Http(rh), OwnedWriteHalf::Http(wh))
+            }
         }
     }
 }
@@ -198,6 +212,13 @@ impl From<TcpStream> for ConnStream {
     fn from(s: TcpStream) -> Self {
         let _ = s.set_nodelay(true);
         Self::Tcp(s)
+    }
+}
+
+impl From<Http> for ConnStream {
+    #[inline]
+    fn from(value: Http) -> Self {
+        Self::Http(value)
     }
 }
 
@@ -242,6 +263,7 @@ impl AsyncRead for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_read(cx, buf),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_read(cx, buf),
+            IoStreamProj::Http(s) => s.poll_read(cx, buf),
         }
     }
 }
@@ -261,6 +283,7 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_write(cx, buf),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_write(cx, buf),
+            IoStreamProj::Http(s) => s.poll_write(cx, buf),
         }
     }
 
@@ -274,6 +297,7 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_flush(cx),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_flush(cx),
+            IoStreamProj::Http(s) => s.poll_flush(cx),
         }
     }
 
@@ -287,6 +311,7 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_shutdown(cx),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_shutdown(cx),
+            IoStreamProj::Http(s) => s.poll_shutdown(cx),
         }
     }
 
@@ -304,6 +329,7 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_write_vectored(cx, bufs),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_write_vectored(cx, bufs),
+            IoStreamProj::Http(s) => s.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -317,6 +343,7 @@ impl AsyncWrite for ConnStream {
             Self::Rustls(s) => s.is_write_vectored(),
             #[cfg(feature = "native-tls")]
             Self::NativeTls(s) => s.is_write_vectored(),
+            Self::Http(s) => s.is_write_vectored(),
         }
     }
 }
@@ -338,9 +365,13 @@ impl ConnStream {
                 .peer_addr()
                 .map(Address::from)
                 .ok(),
+            Self::Http(s) => {
+                // TOOD: should we return remote_addr?
+                s.meta.get_address()
+            }
         }
     }
-}
+}   
 pub struct Conn {
     pub stream: ConnStream,
     pub info: ConnInfo,

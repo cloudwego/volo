@@ -31,7 +31,7 @@ pilota-thrift-parser = "0.10"
 motore = "0.4"
 # motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
 
-metainfo = "0.7"
+metainfo = "0.7.7"
 
 anyhow = "1"
 async-broadcast = "0.6"
@@ -63,6 +63,7 @@ http-body-util = "0.1"
 hyper = "1"
 hyper-timeout = "0.5"
 hyper-util = "0.1.2"
+reqwest = { version = "0.11", features = ["json", "stream"] }
 itertools = "0"
 lazy_static = "1"
 libc = "0.2"

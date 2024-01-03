@@ -47,6 +47,7 @@ impl<U> ClientTransport<U> {
             rpc_config.connect_timeout,
             rpc_config.read_timeout,
             rpc_config.write_timeout,
+            None,
         );
         let mut http_client = http2::Builder::new(TokioExecutor::new());
         http_client
@@ -79,6 +80,7 @@ impl<U> ClientTransport<U> {
             rpc_config.connect_timeout,
             rpc_config.read_timeout,
             rpc_config.write_timeout,
+            None,
         );
         let mut http_client = http2::Builder::new(TokioExecutor::new());
         http_client
@@ -231,6 +233,8 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
             .path_and_query(path)
             .build()
             .expect("fail to build unix uri"),
+        Address::Http(url) => hyper::Uri::try_from(url.to_string())
+            .expect("fail to build http uri"),
     }
 }
 

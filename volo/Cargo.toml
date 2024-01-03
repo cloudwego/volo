@@ -29,6 +29,10 @@ async-broadcast.workspace = true
 dashmap.workspace = true
 faststr.workspace = true
 futures.workspace = true
+reqwest.workspace = true
+# http.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
 lazy_static.workspace = true
 libc.workspace = true
 metainfo.workspace = true
@@ -57,6 +61,6 @@ tokio-native-tls = { workspace = true, optional = true }
 
 [features]
 default = []
-
+vendored = ["tokio-native-tls/vendored"]
 rustls = ["tokio-rustls", "librustls"]
 native-tls = ["tokio-native-tls"]

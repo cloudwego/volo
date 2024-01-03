@@ -11,6 +11,7 @@ use std::{
     sync::{atomic::AtomicI32, Arc},
 };
 
+use http::{HeaderMap, header::IntoHeaderName, HeaderValue};
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{BoxCloneService, Service},
@@ -53,6 +54,7 @@ pub struct ClientBuilder<IL, OL, MkClient, Req, Resp, MkT, MkC, LB> {
     callee_name: FastStr,
     caller_name: FastStr,
     address: Option<Address>, // maybe address use Arc avoid memory alloc
+    headers: Option<HeaderMap>,
     inner_layer: IL,
     outer_layer: OL,
     make_transport: MkT,
@@ -75,6 +77,7 @@ impl<C, Req, Resp>
         Req,
         Resp,
         DefaultMakeTransport,
+
         DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>,
         LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>,
     >
@@ -86,10 +89,12 @@ impl<C, Req, Resp>
             caller_name: "".into(),
             callee_name: FastStr::new(service_name),
             address: None,
+            headers: None,
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
             mk_client: service_client,
             make_transport: DefaultMakeTransport::default(),
+
             make_codec: DefaultMakeCodec::default(),
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
@@ -115,6 +120,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -140,6 +146,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -214,6 +221,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -247,6 +255,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -274,6 +283,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -296,6 +306,30 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     /// The client will skip the discovery and loadbalance Service if this is set.
     pub fn address<A: Into<Address>>(mut self, target: A) -> Self {
         self.address = Some(target.into());
+        self
+    }
+
+    /// Add transport header
+    /// 
+    pub fn header<K: IntoHeaderName>(mut self, key: K, value: HeaderValue) -> Self {
+        if let Some(existing) = &mut self.headers {
+            existing.append(key, value);
+        } else {
+            let mut headers = HeaderMap::new();
+            headers.append(key, value);
+            self.headers = Some(headers);
+        }
+        self
+    }
+
+    /// Add transport headers
+    /// 
+    pub fn headers(mut self, headers: HeaderMap) -> Self {
+        if let Some(existing) = &mut self.headers {
+            existing.extend(headers);
+        } else {
+            self.headers = Some(headers);
+        }
         self
     }
 
@@ -322,6 +356,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -360,6 +395,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
             mk_client: self.mk_client,
@@ -398,6 +434,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
             mk_client: self.mk_client,
@@ -423,6 +460,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -529,6 +567,10 @@ where
         if let Some(timeout) = self.config.read_write_timeout() {
             self.make_transport.set_write_timeout(Some(timeout));
         }
+        if let Some(headers) = self.headers {
+            self.make_transport.set_headers(Some(headers))
+        }
+
         let msg_svc = MessageService {
             #[cfg(not(feature = "multiplex"))]
             inner: pingpong::Client::new(self.make_transport, self.pool, self.make_codec),
