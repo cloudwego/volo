@@ -95,7 +95,7 @@ pilota.workspace = true
 volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc" }
 volo-thrift = { path = "../volo-thrift" }
-volo-http = { path = "../volo-http", features = ["cookie"] }
+volo-http = { path = "../volo-http", features = ["full"] }
 
 volo-gen = { path = "./volo-gen" }
 
