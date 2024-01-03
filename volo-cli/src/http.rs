@@ -34,11 +34,6 @@ impl Init {
         let folder = cwd.as_path();
 
         // root dirs
-        crate::templates_to_target_file!(
-            folder,
-            "templates/http/rust-toolchain_toml",
-            "rust-toolchain.toml"
-        );
         crate::templates_to_target_file!(folder, "templates/http/gitignore", ".gitignore");
         crate::templates_to_target_file!(
             folder,
