@@ -41,6 +41,15 @@ pub struct Router<S = ()> {
     is_default_fallback: bool,
 }
 
+impl<S> Default for Router<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<S> Router<S>
 where
     S: Clone + Send + Sync + 'static,
@@ -207,8 +216,7 @@ impl Matcher {
         if self.matches.insert(uri.clone(), route_id).is_some() {
             return Err(MatcherError::UriConflict(uri));
         }
-        let _ = self
-            .router
+        self.router
             .insert(uri, route_id)
             .map_err(MatcherError::RouterInsertError)?;
         Ok(())
@@ -237,6 +245,15 @@ pub struct MethodRouter<S = ()> {
     connect: MethodEndpoint<S>,
     patch: MethodEndpoint<S>,
     fallback: Fallback<S>,
+}
+
+impl<S> Default for MethodRouter<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<S> MethodRouter<S>
@@ -380,6 +397,15 @@ macro_rules! impl_method_register_for_builder {
         }
         )+
     };
+}
+
+impl<S> Default for MethodRouterBuilder<S>
+where
+    S: Clone + Send + Sync + 'static,
+{
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<S> MethodRouterBuilder<S>

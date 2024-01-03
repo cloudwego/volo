@@ -348,7 +348,7 @@ impl ThriftContext for ServerContext {
 
     #[inline]
     fn msg_type(&self) -> TMessageType {
-        self.msg_type.unwrap()
+        self.msg_type.expect("`msg_type` should be set.")
     }
 
     #[inline]

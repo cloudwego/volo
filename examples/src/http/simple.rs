@@ -37,7 +37,7 @@ async fn json_get() -> Json<Person> {
 async fn json_post(Json(request): Json<Person>) -> String {
     let first_phone = request
         .phones
-        .get(0)
+        .first()
         .map(|p| p.as_str())
         .unwrap_or("no number");
     format!(
@@ -223,7 +223,7 @@ fn test_router() -> Router {
 // ```
 async fn tracing_from_fn(
     uri: Uri,
-    peer: Address,
+    peer: Option<Address>,
     cookie_jar: CookieJar,
     cx: &mut ServerContext,
     req: BodyIncoming,
@@ -237,7 +237,7 @@ async fn tracing_from_fn(
     let resp = next.run(cx, req).await;
     let elapsed = start.elapsed();
 
-    tracing::info!("seq: {count}: {peer} request {uri}, cost {elapsed:?}");
+    tracing::info!("seq: {count}: {peer:?} request {uri}, cost {elapsed:?}");
 
     (
         (

@@ -78,20 +78,19 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                 cx.transport.set_conn_reset(true);
                             }
 
-                            if cx.req_msg_type.unwrap() != TMessageType::OneWay {
+                            let req_msg_type =  cx.req_msg_type.expect("`req_msg_type` should be set.");
+
+                            if req_msg_type != TMessageType::OneWay {
                                 cx.msg_type = Some(match resp {
                                     Ok(_) => TMessageType::Reply,
                                     Err(_) => TMessageType::Exception,
                                 });
-                                let msg =
-                                    ThriftMessage::mk_server_resp(&cx, resp.map_err(|e| e.into()))
-                                        .unwrap();
+                                let msg =  ThriftMessage::mk_server_resp(&cx, resp.map_err(|e| e.into()));
                                 if let Err(e) = async {
                                     let result = encoder.encode(&mut cx, msg).await;
                                     span_provider.leave_encode(&cx);
                                     result
                                 }.instrument(span_provider.on_encode(tracing_cx)).await {
-                                    // log it
                                     error!("[VOLO] server send response error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                                     stat_tracer.iter().for_each(|f| f(&cx));
                                     return Err(());
@@ -109,8 +108,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                             error!("[VOLO] pingpong server decode error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                             cx.msg_type = Some(TMessageType::Exception);
                             if !matches!(e, Error::Transport(_)) {
-                                let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e))
-                                    .unwrap();
+                                let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e));
                                 if let Err(e) = encoder.encode(&mut cx, msg).await {
                                     error!("[VOLO] server send error error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                                 }

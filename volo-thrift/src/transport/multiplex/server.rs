@@ -114,36 +114,8 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             cx,
                             peer_addr
                         );
-                        match msg {
-                            Ok(Some(ThriftMessage { data: Ok(req), .. })) => {
-                                // if it's ok, then we need to spawn this msg to a new task
-                                let svc = service.clone();
-                                let exit_mark = exit_mark.clone();
-                                let send_tx = send_tx.clone();
-                                let mi = metainfo::METAINFO.with(|m| m.take());
-                                tokio::spawn(async  {
-                                    metainfo::METAINFO.scope(RefCell::new(mi), async move {
-                                        cx.stats.record_process_start_at();
-                                        let resp = svc.call(&mut cx, req).await;
-                                        cx.stats.record_process_end_at();
-
-                                        if exit_mark.load(Ordering::Relaxed) {
-                                            cx.transport.set_conn_reset(true);
-                                        }
-                                        if cx.req_msg_type.unwrap() != TMessageType::OneWay {
-                                            cx.msg_type = Some(match resp {
-                                                Ok(_) => TMessageType::Reply,
-                                                Err(_) => TMessageType::Exception,
-                                            });
-                                            let msg =
-                                                ThriftMessage::mk_server_resp(&cx, resp.map_err(|e| e.into()))
-                                                    .unwrap();
-                                            let mi = metainfo::METAINFO.with(|m| m.take());
-                                            send_tx.send((mi, cx, msg)).await;
-                                        }
-                                    }).await;
-                                });
-                            }
+                        let req = match msg {
+                            Ok(Some(ThriftMessage { data: Ok(req), .. })) => req,
                             Ok(Some(ThriftMessage { data: Err(_), .. })) => {
                                 volo_unreachable!();
                             }
@@ -155,13 +127,39 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 error!("[VOLO] multiplex server decode error {:?}, peer_addr: {:?}", e, peer_addr);
                                 cx.msg_type = Some(TMessageType::Exception);
                                 if !matches!(e, Error::Transport(_)) {
-                                    let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e))
-                                        .unwrap();
+                                    let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e));
                                     error_send_tx.send((cx, msg)).await;
                                 }
                                 return;
                             }
-                        }
+                        };
+
+                        // if it's ok, then we need to spawn this msg to a new task
+                        let svc = service.clone();
+                        let exit_mark = exit_mark.clone();
+                        let send_tx = send_tx.clone();
+                        let mi = metainfo::METAINFO.with(|m| m.take());
+                        tokio::spawn(async  {
+                            metainfo::METAINFO.scope(RefCell::new(mi), async move {
+                                cx.stats.record_process_start_at();
+                                let resp = svc.call(&mut cx, req).await;
+                                cx.stats.record_process_end_at();
+
+                                if exit_mark.load(Ordering::Relaxed) {
+                                    cx.transport.set_conn_reset(true);
+                                }
+                                let req_msg_type =  cx.req_msg_type.expect("`req_msg_type` should be set.");
+                                if req_msg_type != TMessageType::OneWay {
+                                    cx.msg_type = Some(match resp {
+                                        Ok(_) => TMessageType::Reply,
+                                        Err(_) => TMessageType::Exception,
+                                    });
+                                    let msg =  ThriftMessage::mk_server_resp(&cx, resp.map_err(|e| e.into()));
+                                    let mi = metainfo::METAINFO.with(|m| m.take());
+                                    send_tx.send((mi, cx, msg)).await;
+                                }
+                            }).await;
+                        });
                     }
                 }
             }

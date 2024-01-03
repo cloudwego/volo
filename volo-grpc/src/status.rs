@@ -453,7 +453,7 @@ impl Status {
                         .expect("Invalid status header, expected base64 encoded value")
                 })
                 .map(Bytes::from)
-                .unwrap_or_else(Bytes::new);
+                .unwrap_or_default();
 
             // must remove these redundant message from the header map
             let mut other_headers = header_map.clone();

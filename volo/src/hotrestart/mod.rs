@@ -29,8 +29,8 @@ use tokio::{
     sync::Mutex,
 };
 
-const HOT_RESTART_PARENT_ADDR: &'static str = "volo_hot_restart_parent.sock";
-const HOT_RESTART_CHILD_ADDR: &'static str = "volo_hot_restart_child.sock";
+const HOT_RESTART_PARENT_ADDR: &str = "volo_hot_restart_parent.sock";
+const HOT_RESTART_CHILD_ADDR: &str = "volo_hot_restart_child.sock";
 
 lazy_static! {
     pub static ref DEFAULT_HOT_RESTART: HotRestart = HotRestart::new();
@@ -101,6 +101,12 @@ pub struct HotRestart {
     parent_sock_path: OnceLock<PathBuf>,
     child_sock_path: OnceLock<PathBuf>,
     domain_sock: Arc<Mutex<Option<UnixDatagram>>>,
+}
+
+impl Default for HotRestart {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl HotRestart {
@@ -247,7 +253,7 @@ impl HotRestart {
                             let addr = unsafe {
                                 String::from_utf8_unchecked(msg[5..(5 + length)].to_vec())
                             };
-                            return Ok(HotRestartMessage::PassFdRequest(addr));
+                            Ok(HotRestartMessage::PassFdRequest(addr))
                         }
                         HotRestartMsgType::PassFdResponse => {
                             let mut raw_fd = None;
@@ -258,26 +264,22 @@ impl HotRestart {
                                 }
                             }
                             if let Some(fd) = raw_fd {
-                                return Ok(HotRestartMessage::PassFdResponse(fd));
+                                Ok(HotRestartMessage::PassFdResponse(fd))
                             } else {
-                                return Err(io::Error::new(
+                                Err(io::Error::new(
                                     io::ErrorKind::InvalidData,
                                     "PassFdResponse without fd",
-                                ));
+                                ))
                             }
                         }
                         HotRestartMsgType::TerminateParentRequest => {
-                            return Ok(HotRestartMessage::TerminateParentRequest);
+                            Ok(HotRestartMessage::TerminateParentRequest)
                         }
                     },
-                    Err(e) => {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, e.message));
-                    }
+                    Err(e) => Err(io::Error::new(io::ErrorKind::InvalidData, e.message)),
                 }
             }
-            Err(e) => {
-                return Err(e.into());
-            }
+            Err(e) => Err(e),
         }
     }
 
@@ -399,21 +401,16 @@ impl HotRestart {
                                 .await?;
                             break;
                         }
-
                         Ok::<(), io::Error>(())
                     });
                 }
-                return Ok(Some(fd));
+                Ok(Some(fd))
             }
-            Ok(_) => {
-                return Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "Not PassFdResponse",
-                ));
-            }
-            Err(e) => {
-                return Err(e);
-            }
+            Ok(_) => Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "Not PassFdResponse",
+            )),
+            Err(e) => Err(e),
         }
     }
 }

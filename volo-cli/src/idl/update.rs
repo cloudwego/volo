@@ -22,9 +22,14 @@ impl CliCommand for Update {
                 std::process::exit(1);
             }
 
-            let entry = config.entries.get_mut(&cx.entry_name).unwrap();
+            let entry = match config.entries.get_mut(&cx.entry_name) {
+                Some(entry) => entry,
+                None => {
+                    eprintln!("entry {} not found", cx.entry_name);
+                    std::process::exit(1);
+                }
+            };
             let mut exists = HashSet::new();
-
             entry.idls.iter_mut().for_each(|idl| {
                 idl.path = strip_slash_prefix(idl.path.as_path());
                 if let Source::Git(ref git) = idl.source {
@@ -46,12 +51,12 @@ impl CliCommand for Update {
                         .iter()
                         .filter_map(|repo| {
                             entry.idls.iter_mut().find_map(|config_idl| {
-                                if let Source::Git(git_source) = &mut config_idl.source {
-                                    if *repo == git_source.repo {
-                                        return Some(git_source as *mut _);
+                                match &mut config_idl.source {
+                                    Source::Git(git_source) if *repo == git_source.repo => {
+                                        Some(git_source as *mut _)
                                     }
+                                    _ => None,
                                 }
-                                None
                             })
                         })
                         .collect()
@@ -72,7 +77,14 @@ impl CliCommand for Update {
 
             should_update_gits
                 .into_iter()
-                .try_for_each(|git_source| unsafe { git_source.as_mut().unwrap().update() })?;
+                .try_for_each(|git_source| unsafe {
+                    if let Some(git_source) = git_source.as_mut() {
+                        git_source.update()
+                    } else {
+                        eprintln!("git source is null");
+                        std::process::exit(1);
+                    }
+                })?;
 
             Ok(())
         })

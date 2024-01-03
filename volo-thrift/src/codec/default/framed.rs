@@ -137,7 +137,7 @@ where
                 self.inner.decode_async(cx, reader).await
             }
         } else {
-            return self.inner.decode_async(cx, reader).await;
+            self.inner.decode_async(cx, reader).await
         }
     }
 }
