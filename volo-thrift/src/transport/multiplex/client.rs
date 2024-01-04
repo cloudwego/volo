@@ -10,7 +10,7 @@ use crate::{
     protocol::TMessageType,
     transport::{
         multiplex::thrift_transport::ThriftTransport,
-        pool::{Config, PooledMakeTransport},
+        pool::{Config, PooledMakeTransport, Ver},
     },
     EntryMessage, Error, ThriftMessage,
 };
@@ -137,7 +137,7 @@ where
         })?;
         let oneway = cx.message_type == TMessageType::OneWay;
         cx.stats.record_make_transport_start_at();
-        let transport = self.make_transport.call(target).await?;
+        let transport = self.make_transport.call((target, Ver::Multiplex)).await?;
         cx.stats.record_make_transport_end_at();
         let resp = transport.send(cx, req, oneway).await;
         if let Ok(None) = resp {
