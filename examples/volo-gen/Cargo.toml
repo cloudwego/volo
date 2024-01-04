@@ -21,4 +21,4 @@ volo-grpc = { path = "../../volo-grpc" }
 volo-thrift = { path = "../../volo-thrift" }
 
 [build-dependencies]
-volo-build = { path = "../../volo-build"}
+volo-build = { path = "../../volo-build" }

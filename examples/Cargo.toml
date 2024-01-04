@@ -47,6 +47,12 @@ path = "src/multiplex/grpc_server.rs"
 [[bin]]
 name = "multiplex-grpc-client"
 path = "src/multiplex/grpc_client.rs"
+[[bin]]
+name = "multiplex-thrift-server"
+path = "src/multiplex/thrift_server.rs"
+[[bin]]
+name = "multiplex-thrift-client"
+path = "src/multiplex/thrift_client.rs"
 
 # streaming
 [[bin]]
@@ -94,15 +100,21 @@ tracing-subscriber.workspace = true
 pilota.workspace = true
 volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc" }
-volo-thrift = { path = "../volo-thrift" }
+volo-thrift = { path = "../volo-thrift", features = ["multiplex"] }
 volo-http = { path = "../volo-http", features = ["full"] }
 
 volo-gen = { path = "./volo-gen" }
 
 # TLS dependencies
-librustls = { workspace = true, optional = true}
+librustls = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
 tokio-rustls = { workspace = true, optional = true }
 
 [features]
-tls = ["librustls", "rustls-pemfile", "tokio-rustls", "volo/rustls", "volo-grpc/rustls"]
+tls = [
+    "librustls",
+    "rustls-pemfile",
+    "tokio-rustls",
+    "volo/rustls",
+    "volo-grpc/rustls",
+]
