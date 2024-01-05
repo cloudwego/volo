@@ -20,7 +20,10 @@ use volo::{
 use crate::{
     codec::{Decoder, Encoder, MakeCodec},
     context::{ClientContext, ThriftContext},
-    transport::pool::{Poolable, Reservation},
+    transport::{
+        multiplex::utils::TxHashMap,
+        pool::{Poolable, Reservation},
+    },
     ApplicationError, ApplicationErrorKind, EntryMessage, Error, ThriftMessage,
 };
 
@@ -35,13 +38,8 @@ pub struct ThriftTransport<E, Resp> {
     dirty: Arc<AtomicBool>,
     #[allow(clippy::type_complexity)]
     tx_map: Arc<
-        Mutex<
-            fxhash::FxHashMap<
-                i32,
-                oneshot::Sender<
-                    crate::Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>>,
-                >,
-            >,
+        TxHashMap<
+            oneshot::Sender<crate::Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>>>,
         >,
     >,
     write_error: Arc<AtomicBool>,
@@ -91,12 +89,9 @@ where
         let write_half = WriteHalf { encoder, id };
         #[allow(clippy::type_complexity)]
         let tx_map: Arc<
-            Mutex<
-                fxhash::FxHashMap<
-                    i32,
-                    oneshot::Sender<
-                        crate::Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>>,
-                    >,
+            TxHashMap<
+                oneshot::Sender<
+                    crate::Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>>,
                 >,
             >,
         > = Default::default();
@@ -131,35 +126,37 @@ where
                                 e,
                                 target
                             );
-                            let mut tx_map = inner_tx_map.lock().await;
                             inner_read_error.store(true, std::sync::atomic::Ordering::Relaxed);
-                            for (_, tx) in tx_map.drain() {
-                                let _ = tx.send(Err(Error::Application(ApplicationError::new(
-                                    ApplicationErrorKind::UNKNOWN,
-                                    format!("multiplex connection error: {e}, target: {target}"),
-                                ))));
-                            }
+                            inner_tx_map
+                                .for_all_drain(|tx| {
+                                    let _ =
+                                        tx.send(Err(Error::Application(ApplicationError::new(
+                                            ApplicationErrorKind::UNKNOWN,
+                                            format!(
+                                                "multiplex connection error: {e}, target: {target}"
+                                            ),
+                                        ))));
+                                })
+                                .await;
                             return;
                         }
                         // we have checked the error above, so it's safe to unwrap here
                         let res = res.unwrap();
                         if res.is_none() {
                             // the connection is closed
-                            let mut tx_map = inner_tx_map.lock().await;
-                            if !tx_map.is_empty() {
-                                inner_read_error.store(true, std::sync::atomic::Ordering::Relaxed);
-                                for (_, tx) in tx_map.drain() {
+                            inner_read_error.store(true, std::sync::atomic::Ordering::Relaxed);
+                            inner_tx_map
+                                .for_all_drain(|tx| {
                                     let _ = tx.send(Ok(None));
-                                }
-                            }
+                                })
+                                .await;
                             inner_read_closed.store(true, std::sync::atomic::Ordering::Relaxed);
                             return;
                         }
                         // now we get ThriftMessage<Resp>
                         let res = res.unwrap();
                         let seq_id = res.meta.seq_id;
-                        let mut tx_map = inner_tx_map.lock().await;
-                        if let Some(tx) = tx_map.remove(&seq_id) {
+                        if let Some(tx) = inner_tx_map.remove(&seq_id).await {
                             metainfo::METAINFO.with(|mi| {
                                 let mi = mi.take();
                                 let _ = tx.send(Ok(Some((mi, cx, res))));
@@ -212,12 +209,10 @@ where
             )));
         }
         let (tx, rx) = oneshot::channel();
-        let mut tx_map = self.tx_map.lock().await;
         let seq_id = msg.meta.seq_id;
         if !oneway {
-            tx_map.insert(seq_id, tx);
+            self.tx_map.insert(seq_id, tx).await;
         }
-        drop(tx_map);
         let mut wh = self.write_half.lock().await;
         // check connection dirty
         if self.dirty.load(std::sync::atomic::Ordering::Relaxed) {
@@ -239,8 +234,7 @@ where
             self.write_error
                 .store(true, std::sync::atomic::Ordering::Relaxed);
             if !oneway {
-                let mut tx_map = self.tx_map.lock().await;
-                tx_map.remove(&seq_id);
+                self.tx_map.remove(&seq_id).await;
             }
             return Err(e);
         }
