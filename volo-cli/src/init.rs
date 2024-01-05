@@ -10,7 +10,7 @@ use volo_build::{
 use crate::command::CliCommand;
 
 #[derive(Parser, Debug)]
-#[command(about = "init your project")]
+#[command(about = "init your thrift or grpc project")]
 pub struct Init {
     #[arg(help = "The name of project")]
     pub name: String,
@@ -67,11 +67,6 @@ impl Init {
         let folder = cwd.as_path();
 
         // root dirs
-        crate::templates_to_target_file!(
-            folder,
-            "templates/grpc/rust-toolchain_toml",
-            "rust-toolchain.toml"
-        );
         crate::templates_to_target_file!(folder, "templates/grpc/gitignore", ".gitignore");
         crate::templates_to_target_file!(
             folder,
@@ -127,11 +122,6 @@ impl Init {
         let folder = cwd.as_path();
 
         // root dirs
-        crate::templates_to_target_file!(
-            folder,
-            "templates/thrift/rust-toolchain_toml",
-            "rust-toolchain.toml"
-        );
         crate::templates_to_target_file!(folder, "templates/thrift/gitignore", ".gitignore");
         crate::templates_to_target_file!(
             folder,

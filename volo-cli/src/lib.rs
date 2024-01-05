@@ -6,6 +6,7 @@
 #[macro_use]
 mod command;
 pub mod context;
+mod http;
 mod idl;
 mod init;
 pub mod model;

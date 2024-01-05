@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.1.5"
+version = "0.1.8"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -25,6 +25,7 @@ hyper = { version = "1", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 
 bytes.workspace = true
+cookie = { workspace = true, optional = true, features = ["percent-encode"] }
 faststr.workspace = true
 futures.workspace = true
 futures-util.workspace = true
@@ -35,9 +36,10 @@ parking_lot.workspace = true
 pin-project.workspace = true
 serde.workspace = true
 serde_html_form.workspace = true
-serde_json.workspace = true
+serde_json = { workspace = true, optional = true }
 serde_urlencoded.workspace = true
 simdutf8.workspace = true
+sonic-rs = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = [
     "time",
@@ -51,3 +53,12 @@ url.workspace = true
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
+
+[features]
+default = ["sonic_json"]
+
+full = ["cookie", "sonic_json"]
+
+cookie = ["dep:cookie"]
+sonic_json = ["dep:sonic-rs"]
+serde_json = ["dep:serde_json"]

@@ -424,6 +424,7 @@ impl BasicError {
 impl Display for BasicError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         let error_text = match self.kind {
+            BasicErrorKind::RpcTimeout => "rpc timeout error",
             BasicErrorKind::LoadBalance => "load balance error",
             BasicErrorKind::GetConn => "get connection error",
             _ => "other error",
@@ -436,6 +437,7 @@ impl Display for BasicError {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
 pub enum BasicErrorKind {
+    RpcTimeout,
     LoadBalance,
     GetConn,
 }

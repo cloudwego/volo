@@ -1,4 +1,4 @@
-name: 'CI'
+name: "CI"
 on:
   pull_request:
   push:
@@ -25,26 +25,34 @@ jobs:
   test-linux:
     runs-on: [self-hosted, X64]
 
+    strategy:
+      matrix:
+        rust: [nightly, beta, stable]
     steps:
-    - uses: actions/checkout@v3
-    - uses: dtolnay/rust-toolchain@nightly
-      with:
-        components: rustfmt
-    # - uses: Swatinem/rust-cache@v1
-    - name: Run tests
-      run: |
-        cargo check --features multiplex
-        cargo check --features rustls,native-tls,vendored
-        cargo test
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          components: rustfmt
+          toolchain: ${{matrix.rust}}
+      # - uses: Swatinem/rust-cache@v1
+      - name: Run tests
+        run: |
+          cargo check --features multiplex
+          cargo check --features rustls,native-tls,vendored
+          cargo test
 
   test-linux-aarch64:
     runs-on: [self-hosted, arm]
 
+    strategy:
+      matrix:
+        rust: [nightly, beta, stable]
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@master
         with:
           components: rustfmt
+          toolchain: ${{matrix.rust}}
       # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
@@ -55,11 +63,15 @@ jobs:
   test-macos:
     runs-on: macos-latest
 
+    strategy:
+      matrix:
+        rust: [nightly, beta, stable]
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@master
         with:
           components: rustfmt
+          toolchain: ${{matrix.rust}}
       - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
@@ -70,11 +82,15 @@ jobs:
   test-windows:
     runs-on: windows-latest
 
+    strategy:
+      matrix:
+        rust: [nightly, beta, stable]
     steps:
       - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@master
         with:
           components: rustfmt
+          toolchain: ${{matrix.rust}}
       - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
@@ -85,15 +101,19 @@ jobs:
   lint:
     runs-on: [self-hosted, X64]
 
+    strategy:
+      matrix:
+        rust: [nightly]
     steps:
-    - uses: actions/checkout@v3
-    - uses: dtolnay/rust-toolchain@nightly
-      with:
-        components: rustfmt, clippy
-    # - uses: Swatinem/rust-cache@v1
-    - uses: actions-rs/clippy-check@v1
-      with:
-        token: ${{ secrets.GITHUB_TOKEN }}
-    - name: Format check
-      run: |
-        cargo fmt -- --check
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          components: rustfmt
+          toolchain: ${{matrix.rust}}
+      # - uses: Swatinem/rust-cache@v1
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Format check
+        run: |
+          cargo fmt -- --check

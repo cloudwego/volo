@@ -1,15 +1,18 @@
-use std::{net::SocketAddr, time::Duration};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use faststr::FastStr;
 use serde::{Deserialize, Serialize};
 use volo_http::{
+    cookie,
+    extension::Extension,
     extract::{Form, Query},
+    http::header,
     layer::TimeoutLayer,
     middleware::{self, Next},
     response::IntoResponse,
     route::{get, post, MethodRouter, Router},
-    Address, BodyIncoming, Bytes, ConnectionInfo, HttpContext, Json, MaybeInvalid, Method, Params,
-    Response, Server, StatusCode, Uri,
+    Address, BodyIncoming, Bytes, ConnectionInfo, CookieJar, HttpContext, Json, MaybeInvalid,
+    Method, Params, Response, Server, StatusCode, Uri,
 };
 
 async fn hello() -> &'static str {
@@ -78,10 +81,6 @@ async fn test(
     }
 }
 
-async fn conn_show(conn: ConnectionInfo) -> String {
-    format!("{conn:?}\n")
-}
-
 async fn timeout_test() {
     tokio::time::sleep(Duration::from_secs(10)).await
 }
@@ -93,7 +92,15 @@ async fn echo(params: Params) -> Result<Bytes, StatusCode> {
     Err(StatusCode::BAD_REQUEST)
 }
 
-fn timeout_handler(uri: Uri, peer: Address) -> StatusCode {
+async fn conn_show(conn: ConnectionInfo) -> String {
+    format!("{conn:?}\n")
+}
+
+async fn extension(Extension(state): Extension<Arc<State>>) -> String {
+    format!("State {{ foo: {}, bar: {} }}\n", state.foo, state.bar)
+}
+
+async fn timeout_handler(uri: Uri, peer: Address) -> StatusCode {
     tracing::info!("Timeout on `{}`, peer: {}", uri, peer);
     StatusCode::INTERNAL_SERVER_ERROR
 }
@@ -147,25 +154,53 @@ fn test_router() -> Router {
         )
         // curl -v http://127.0.0.1:8080/test/param/114514
         .route("/test/param/:echo", get(echo))
+        // curl http://127.0.0.1:8080/test/conn_show
         .route("/test/conn_show", get(conn_show))
+        // curl http://127.0.0.1:8080/test/extension
+        .route("/test/extension", get(extension))
 }
 
+// You can use the following commands for testing cookies
+//
+// ```bash
+// # create a cookie jar for `curl`
+// TMPFILE=$(mktemp --tmpdir cookie_jar.XXXXXX)
+//
+// # access it for more than one times!
+// curl -v http://127.0.0.1:8080/ -b $TMPFILE -c $TMPFILE
+// curl -v http://127.0.0.1:8080/ -b $TMPFILE -c $TMPFILE
+// # ......
+// ```
 async fn tracing_from_fn(
     uri: Uri,
     peer: Address,
+    cookie_jar: CookieJar,
     cx: &mut HttpContext,
     req: BodyIncoming,
     next: Next,
 ) -> Response {
-    tracing::info!("Before {peer} request {uri}");
-
+    tracing::info!("{:?}", *cookie_jar);
+    let count = cookie_jar.get("count").map_or(0usize, |val| {
+        val.value().to_string().parse().unwrap_or(0usize)
+    });
     let start = std::time::Instant::now();
     let resp = next.run(cx, req).await;
     let elapsed = start.elapsed();
 
-    tracing::info!("After {peer} request {uri}, elapsed {elapsed:?}");
+    tracing::info!("seq: {count}: {peer} request {uri}, cost {elapsed:?}");
 
-    resp.into_response()
+    (
+        (
+            header::SET_COOKIE,
+            cookie::Cookie::build(("count", format!("{}", count + 1)))
+                .path("/")
+                .max_age(cookie::Duration::days(1))
+                .build()
+                .to_string(),
+        ),
+        resp,
+    )
+        .into_response()
 }
 
 async fn headers_map_response(response: Response) -> impl IntoResponse {
@@ -177,6 +212,11 @@ async fn headers_map_response(response: Response) -> impl IntoResponse {
         ],
         response,
     )
+}
+
+struct State {
+    foo: String,
+    bar: usize,
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -192,9 +232,13 @@ async fn main() {
         .merge(user_json_router())
         .merge(user_form_router())
         .merge(test_router())
+        .layer(Extension(Arc::new(State {
+            foo: "Foo".to_string(),
+            bar: 114514,
+        })))
         .layer(middleware::from_fn(tracing_from_fn))
         .layer(middleware::map_response(headers_map_response))
-        .layer(TimeoutLayer::new(Duration::from_secs(5), || {
+        .layer(TimeoutLayer::new(Duration::from_secs(5), || async {
             StatusCode::INTERNAL_SERVER_ERROR
         }));
 

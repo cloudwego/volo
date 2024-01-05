@@ -40,9 +40,7 @@ where
                             duration
                         );
                         warn!(msg);
-                        Err(crate::Error::Transport(
-                            std::io::Error::new(std::io::ErrorKind::TimedOut, msg).into(),
-                        ))
+                        Err(crate::BasicError::new(crate::BasicErrorKind::RpcTimeout, msg).into())
                     }
                 }
             }

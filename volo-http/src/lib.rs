@@ -1,6 +1,11 @@
 pub mod context;
+#[cfg(feature = "cookie")]
+pub mod cookie;
+pub mod extension;
 pub mod extract;
 pub mod handler;
+#[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+pub mod json;
 pub mod layer;
 pub mod middleware;
 pub mod param;
@@ -17,15 +22,18 @@ pub use bytes::Bytes;
 pub use hyper::{
     self,
     body::Incoming as BodyIncoming,
-    http::{
-        self, Extensions, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version,
-    },
+    http::{self, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
 };
 pub use volo::net::Address;
 
+#[cfg(feature = "cookie")]
+pub use crate::cookie::CookieJar;
+#[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+pub use crate::json::Json;
 pub use crate::{
     context::{ConnectionInfo, HttpContext},
-    extract::{Form, Json, MaybeInvalid, Query, State},
+    extension::Extension,
+    extract::{Form, MaybeInvalid, Query, State},
     param::Params,
     request::Request,
     response::Response,

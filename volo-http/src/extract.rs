@@ -53,9 +53,6 @@ pub struct Query<T>(pub T);
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Form<T>(pub T);
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Json<T>(pub T);
-
 #[derive(Debug, Default, Clone)]
 pub struct MaybeInvalid<T>(Vec<u8>, PhantomData<T>);
 
@@ -144,6 +141,13 @@ impl<S: Sync> FromContext<S> for ConnectionInfo {
     type Rejection = Infallible;
     async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
         Ok(context.get_connection_info())
+    }
+}
+
+impl<S: Sync> FromContext<S> for HeaderMap {
+    type Rejection = Infallible;
+    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(context.headers.clone())
     }
 }
 
@@ -289,35 +293,11 @@ where
     }
 }
 
-impl<T, S> FromRequest<S> for Json<T>
-where
-    T: DeserializeOwned,
-    S: Sync,
-{
-    type Rejection = RejectionError;
-
-    async fn from_request(
-        cx: &HttpContext,
-        body: Incoming,
-        state: &S,
-    ) -> Result<Self, Self::Rejection> {
-        if !json_content_type(&cx.headers) {
-            return Err(RejectionError::InvalidContentType);
-        }
-
-        let bytes = Bytes::from_request(cx, body, state).await?;
-        let json =
-            serde_json::from_slice::<T>(bytes.as_ref()).map_err(RejectionError::JsonRejection)?;
-
-        Ok(Json(json))
-    }
-}
-
 pub enum RejectionError {
     BodyCollectionError,
     InvalidContentType,
     StringRejection(simdutf8::basic::Utf8Error),
-    JsonRejection(serde_json::Error),
+    JsonRejection(crate::json::Error),
     QueryRejection(serde_urlencoded::de::Error),
     FormRejection(serde_html_form::de::Error),
 }
@@ -337,29 +317,4 @@ impl IntoResponse for RejectionError {
 
         status.into_response()
     }
-}
-
-fn json_content_type(headers: &HeaderMap) -> bool {
-    let content_type = if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
-        content_type
-    } else {
-        return false;
-    };
-
-    let content_type = if let Ok(content_type) = content_type.to_str() {
-        content_type
-    } else {
-        return false;
-    };
-
-    let mime = if let Ok(mime) = content_type.parse::<mime::Mime>() {
-        mime
-    } else {
-        return false;
-    };
-
-    let is_json_content_type = mime.type_() == "application"
-        && (mime.subtype() == "json" || mime.suffix().map_or(false, |name| name == "json"));
-
-    is_json_content_type
 }
