@@ -6,7 +6,7 @@ use futures_util::Future;
 use http_body_util::BodyExt;
 use hyper::{
     body::Incoming,
-    http::{header, HeaderMap, Method, StatusCode, Uri},
+    http::{header, Method, StatusCode, Uri},
 };
 use serde::de::DeserializeOwned;
 use volo::net::Address;
@@ -141,13 +141,6 @@ impl<S: Sync> FromContext<S> for ConnectionInfo {
     type Rejection = Infallible;
     async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
         Ok(cx.get_connection_info())
-    }
-}
-
-impl<S: Sync> FromContext<S> for HeaderMap {
-    type Rejection = Infallible;
-    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
-        Ok(cx.headers.clone())
     }
 }
 
