@@ -22,7 +22,7 @@ pub trait LayerExt {
         Self: Sized,
     {
         self.filter(Box::new(move |cx: &mut HttpContext, _: &Request| {
-            if cx.method == method {
+            if cx.method() == method {
                 Ok(())
             } else {
                 Err(StatusCode::METHOD_NOT_ALLOWED)

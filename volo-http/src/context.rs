@@ -1,28 +1,32 @@
+use std::{convert::Infallible, future::Future};
+
 use hyper::{
     header::HeaderValue,
     http::{
         header,
         uri::{Authority, Scheme},
+        request::Parts,
         Extensions, HeaderMap, HeaderName, Method, Uri, Version,
     },
 };
 use url::{Host, Url};
 use volo::net::Address;
 
-use crate::param::Params;
+use crate::{extract::FromContextExt, param::Params};
 
 static X_FORWARDED_HOST: HeaderName = HeaderName::from_static("x-forwarded-host");
 static X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-proto");
 
+#[derive(Debug)]
 pub struct HttpContext {
-    pub peer: Address,
-    pub method: Method,
-    pub uri: Uri,
-    pub version: Version,
-    pub headers: HeaderMap,
-    pub extensions: Extensions,
+    pub(crate) peer: Address,
+    pub(crate) method: Method,
+    pub(crate) uri: Uri,
+    pub(crate) version: Version,
+    pub(crate) headers: HeaderMap,
+    pub(crate) extensions: Extensions,
 
-    pub params: Params,
+    pub(crate) params: Params,
 }
 
 #[derive(Debug)]
@@ -33,6 +37,64 @@ pub struct ConnectionInfo {
 }
 
 impl HttpContext {
+    pub(crate) fn from_parts(peer: Address, parts: Parts) -> Self {
+        Self {
+            peer,
+            method: parts.method,
+            uri: parts.uri,
+            version: parts.version,
+            headers: parts.headers,
+            extensions: parts.extensions,
+            params: Params::new(),
+        }
+
+    }
+
+    #[inline]
+    pub fn peer(&self) -> &Address {
+        &self.peer
+    }
+
+    #[inline]
+    pub fn method(&self) -> &Method {
+        &self.method
+    }
+
+    #[inline]
+    pub fn uri(&self) -> &Uri {
+        &self.uri
+    }
+
+    #[inline]
+    pub fn version(&self) -> &Version {
+        &self.version
+    }
+
+    #[inline]
+    pub fn headers(&self) -> &HeaderMap {
+        &self.headers
+    }
+
+    #[inline]
+    pub fn headers_mut(&mut self) -> &mut HeaderMap {
+        &mut self.headers
+    }
+
+    #[inline]
+    pub fn extensions(&self) -> &Extensions {
+        &self.extensions
+    }
+
+    #[inline]
+    pub fn extensions_mut(&mut self) -> &mut Extensions {
+        &mut self.extensions
+    }
+
+    #[inline]
+    pub fn params(&self) -> &Params {
+        &self.params
+    }
+
     pub(crate) fn get_connection_info(&self) -> ConnectionInfo {
         let mut host = None;
         let mut scheme = None;
@@ -148,6 +210,105 @@ impl ConnectionInfo {
     #[inline]
     pub fn scheme(&self) -> &Scheme {
         &self.scheme
+    }
+}
+
+impl<'cx, S: Sync> FromContextExt<'cx, S> for &'cx Address {
+    type Rejection = Infallible;
+
+    fn from_context_ext(
+        cx: &'cx mut HttpContext,
+        _state: &'cx S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send + 'cx {
+        async { Ok(&cx.peer) }
+    }
+}
+
+impl<'cx, S: Sync> FromContextExt<'cx, S> for &'cx Method {
+    type Rejection = Infallible;
+
+    fn from_context_ext(
+        cx: &'cx mut HttpContext,
+        _state: &'cx S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send + 'cx {
+        async { Ok(&cx.method) }
+    }
+}
+
+impl<'cx, S: Sync> FromContextExt<'cx, S> for &'cx Uri {
+    type Rejection = Infallible;
+
+    fn from_context_ext(
+        cx: &'cx mut HttpContext,
+        _state: &'cx S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send + 'cx {
+        async { Ok(&cx.uri) }
+    }
+}
+
+impl<'cx, S: Sync> FromContextExt<'cx, S> for &'cx Version {
+    type Rejection = Infallible;
+
+    fn from_context_ext(
+        cx: &'cx mut HttpContext,
+        _state: &'cx S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send + 'cx {
+        async { Ok(&cx.version) }
+    }
+}
+
+impl<'cx, S: Sync> FromContextExt<'cx, S> for &'cx HeaderMap {
+    type Rejection = Infallible;
+
+    fn from_context_ext(
+        cx: &'cx mut HttpContext,
+        _state: &'cx S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send + 'cx {
+        async { Ok(&cx.headers) }
+    }
+}
+
+impl<'cx, S: Sync> FromContextExt<'cx, S> for &'cx mut HeaderMap {
+    type Rejection = Infallible;
+
+    fn from_context_ext(
+        cx: &'cx mut HttpContext,
+        _state: &'cx S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send + 'cx {
+        async { Ok(&mut cx.headers) }
+    }
+}
+
+impl<'cx, S: Sync> FromContextExt<'cx, S> for &'cx Params {
+    type Rejection = Infallible;
+
+    fn from_context_ext(
+        cx: &'cx mut HttpContext,
+        _state: &'cx S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send + 'cx {
+        async { Ok(&cx.params) }
+    }
+}
+
+impl<'cx, S: Sync> FromContextExt<'cx, S> for &'cx HttpContext {
+    type Rejection = Infallible;
+
+    fn from_context_ext(
+        cx: &'cx mut HttpContext,
+        _state: &'cx S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send + 'cx {
+        async { Ok(&*cx) }
+    }
+}
+
+impl<'cx, S: Sync> FromContextExt<'cx, S> for &'cx mut HttpContext {
+    type Rejection = Infallible;
+
+    fn from_context_ext(
+        cx: &'cx mut HttpContext,
+        _state: &'cx S,
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send + 'cx {
+        async { Ok(cx) }
     }
 }
 

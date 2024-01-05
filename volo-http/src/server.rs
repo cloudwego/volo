@@ -17,7 +17,6 @@ use tracing::{info, trace};
 use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
 
 use crate::{
-    param::Params,
     response::{IntoResponse, RespBody, Response},
     HttpContext,
 };
@@ -252,17 +251,7 @@ async fn handle_conn<S>(
             async move {
                 let (parts, req) = req.into_parts();
                 let req = req.into();
-                let mut cx = HttpContext {
-                    peer,
-                    method: parts.method,
-                    uri: parts.uri,
-                    version: parts.version,
-                    headers: parts.headers,
-                    extensions: parts.extensions,
-                    params: Params {
-                        inner: Vec::with_capacity(0),
-                    },
-                };
+                let mut cx = HttpContext::from_parts(peer, parts);
                 let resp = match service.call(&mut cx, req).await {
                     Ok(resp) => resp,
                     Err(inf) => inf.into_response(),

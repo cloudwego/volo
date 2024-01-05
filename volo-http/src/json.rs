@@ -48,11 +48,11 @@ where
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         body: Incoming,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
-        if !json_content_type(&cx.headers) {
+        if !json_content_type(cx.headers()) {
             return Err(RejectionError::InvalidContentType);
         }
 

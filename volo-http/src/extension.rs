@@ -42,7 +42,7 @@ where
         cx: &'cx mut HttpContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
-        cx.extensions.insert(self.ext.clone());
+        cx.extensions_mut().insert(self.ext.clone());
         self.inner.call(cx, req).await
     }
 }
@@ -54,9 +54,8 @@ where
 {
     type Rejection = ExtensionRejection;
 
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
-        context
-            .extensions
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        cx.extensions()
             .get::<T>()
             .map(T::clone)
             .map(Extension)

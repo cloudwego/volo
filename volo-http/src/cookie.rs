@@ -37,7 +37,7 @@ impl Deref for CookieJar {
 impl<S: Sync> FromContext<S> for CookieJar {
     type Rejection = Infallible;
 
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
-        Ok(Self::from_header(&context.headers))
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(Self::from_header(cx.headers()))
     }
 }

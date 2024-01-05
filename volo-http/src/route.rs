@@ -173,7 +173,7 @@ impl Service<HttpContext, Incoming> for Router<()> {
     ) -> Result<Self::Response, Self::Error> {
         if let Ok(matched) = self.matcher.at(cx.uri.path()) {
             if let Some(srv) = self.routes.get(matched.value) {
-                cx.params = matched.params.into();
+                cx.params.extend(matched.params);
                 return srv.call_with_state(cx, req, ()).await;
             }
         }
@@ -337,16 +337,16 @@ where
     where
         S: 'cx,
     {
-        let handler = match cx.method {
-            Method::OPTIONS => Some(&self.options),
-            Method::GET => Some(&self.get),
-            Method::POST => Some(&self.post),
-            Method::PUT => Some(&self.put),
-            Method::DELETE => Some(&self.delete),
-            Method::HEAD => Some(&self.head),
-            Method::TRACE => Some(&self.trace),
-            Method::CONNECT => Some(&self.connect),
-            Method::PATCH => Some(&self.patch),
+        let handler = match cx.method() {
+            &Method::OPTIONS => Some(&self.options),
+            &Method::GET => Some(&self.get),
+            &Method::POST => Some(&self.post),
+            &Method::PUT => Some(&self.put),
+            &Method::DELETE => Some(&self.delete),
+            &Method::HEAD => Some(&self.head),
+            &Method::TRACE => Some(&self.trace),
+            &Method::CONNECT => Some(&self.connect),
+            &Method::PATCH => Some(&self.patch),
             _ => None,
         };
 
