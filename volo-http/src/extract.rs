@@ -29,7 +29,7 @@ pub trait FromContext<S>: Sized {
     type Rejection: IntoResponse;
 
     fn from_context(
-        context: &HttpContext,
+        cx: &mut HttpContext,
         state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
@@ -38,7 +38,7 @@ pub trait FromRequest<S, M = private::ViaRequest>: Sized {
     type Rejection: IntoResponse;
 
     fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         body: Incoming,
         state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
@@ -75,40 +75,40 @@ where
 {
     type Rejection = Infallible;
 
-    async fn from_context(context: &HttpContext, state: &S) -> Result<Self, Self::Rejection> {
-        Ok(T::from_context(context, state).await.ok())
+    async fn from_context(cx: &mut HttpContext, state: &S) -> Result<Self, Self::Rejection> {
+        Ok(T::from_context(cx, state).await.ok())
     }
 }
 
 impl<S: Sync> FromContext<S> for Address {
     type Rejection = Infallible;
 
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Address, Self::Rejection> {
-        Ok(context.peer.clone())
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Address, Self::Rejection> {
+        Ok(cx.peer.clone())
     }
 }
 
 impl<S: Sync> FromContext<S> for Uri {
     type Rejection = Infallible;
 
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Uri, Self::Rejection> {
-        Ok(context.uri.clone())
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Uri, Self::Rejection> {
+        Ok(cx.uri.clone())
     }
 }
 
 impl<S: Sync> FromContext<S> for Method {
     type Rejection = Infallible;
 
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Method, Self::Rejection> {
-        Ok(context.method.clone())
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Method, Self::Rejection> {
+        Ok(cx.method.clone())
     }
 }
 
 impl<S: Sync> FromContext<S> for Params {
     type Rejection = Infallible;
 
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Params, Self::Rejection> {
-        Ok(context.params.clone())
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Params, Self::Rejection> {
+        Ok(cx.params.clone())
     }
 }
 
@@ -118,7 +118,7 @@ where
 {
     type Rejection = Infallible;
 
-    async fn from_context(_context: &HttpContext, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_context(_cx: &mut HttpContext, state: &S) -> Result<Self, Self::Rejection> {
         Ok(State(state.clone()))
     }
 }
@@ -130,8 +130,8 @@ where
 {
     type Rejection = RejectionError;
 
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
-        let query = context.uri.query().unwrap_or_default();
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        let query = cx.uri.query().unwrap_or_default();
         let param = serde_urlencoded::from_str(query).map_err(RejectionError::QueryRejection)?;
         Ok(Query(param))
     }
@@ -139,15 +139,15 @@ where
 
 impl<S: Sync> FromContext<S> for ConnectionInfo {
     type Rejection = Infallible;
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
-        Ok(context.get_connection_info())
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(cx.get_connection_info())
     }
 }
 
 impl<S: Sync> FromContext<S> for HeaderMap {
     type Rejection = Infallible;
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
-        Ok(context.headers.clone())
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        Ok(cx.headers.clone())
     }
 }
 
@@ -159,7 +159,7 @@ where
     type Rejection = T::Rejection;
 
     async fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         _body: Incoming,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
@@ -171,7 +171,7 @@ impl<S: Sync> FromRequest<S> for Incoming {
     type Rejection = Infallible;
 
     async fn from_request(
-        _cx: &HttpContext,
+        _cx: &mut HttpContext,
         body: Incoming,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
@@ -183,7 +183,7 @@ impl<S: Sync> FromRequest<S> for Vec<u8> {
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         body: Incoming,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
@@ -195,7 +195,7 @@ impl<S: Sync> FromRequest<S> for Bytes {
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         body: Incoming,
         _state: &S,
     ) -> Result<Self, Self::Rejection> {
@@ -227,7 +227,7 @@ impl<S: Sync> FromRequest<S> for String {
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         body: Incoming,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
@@ -245,7 +245,7 @@ impl<S: Sync> FromRequest<S> for FastStr {
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         body: Incoming,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
@@ -263,7 +263,7 @@ impl<T, S: Sync> FromRequest<S> for MaybeInvalid<T> {
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         body: Incoming,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
@@ -281,7 +281,7 @@ where
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         body: Incoming,
         state: &S,
     ) -> Result<Self, Self::Rejection> {
