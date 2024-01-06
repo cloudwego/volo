@@ -38,6 +38,7 @@ jobs:
       - name: Run tests
         run: |
           cargo check --features multiplex
+          cargo check --features rustls,native-tls,vendored
           cargo test
 
   test-linux-aarch64:
@@ -56,6 +57,7 @@ jobs:
       - name: Run tests
         run: |
           cargo check --features multiplex
+          cargo check --features rustls,native-tls,vendored
           cargo test
 
   test-macos:
@@ -74,6 +76,7 @@ jobs:
       - name: Run tests
         run: |
           cargo check --features multiplex
+          cargo check --features rustls,native-tls,vendored
           cargo test
 
   test-windows:
@@ -92,6 +95,7 @@ jobs:
       - name: Run tests
         run: |
           cargo check --features multiplex
+          cargo check --features rustls,native-tls,vendored
           cargo test
 
   lint:
