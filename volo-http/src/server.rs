@@ -267,7 +267,7 @@ async fn handle_conn<S>(
                     Ok(resp) => resp,
                     Err(inf) => inf.into_response(),
                 };
-                Ok::<hyper::http::Response<RespBody>, Infallible>(resp.inner())
+                Ok::<hyper::http::Response<RespBody>, Infallible>(resp)
             }
         }),
     );
