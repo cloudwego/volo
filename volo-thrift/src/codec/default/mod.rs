@@ -153,6 +153,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
                 .write_all_vectored(&mut self.writer)
                 .await
                 .map_err(TransportError::from)?;
+            // 这里
             self.writer.flush().await.map_err(TransportError::from)?;
 
             Ok::<(), crate::Error>(())
@@ -176,6 +177,17 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
             }
         }
         // write_result
+    }
+
+    async fn flush(&mut self) -> Result<(), crate::Error> {
+        match self.writer.flush().await.map_err(TransportError::from) {
+            Ok(()) => Ok(()),
+            Err(e) => Err(e.into()),
+        }
+    }
+
+    async fn reset(&mut self) {
+        self.linked_bytes.reset();
     }
 }
 

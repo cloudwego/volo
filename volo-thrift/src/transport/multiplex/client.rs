@@ -15,7 +15,7 @@ use crate::{
     EntryMessage, Error, ThriftMessage,
 };
 
-pub struct MakeClientTransport<MkT, MkC, Resp>
+pub struct MakeClientTransport<MkT, MkC, Req, Resp>
 where
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
@@ -23,21 +23,23 @@ where
     make_transport: MkT,
     make_codec: MkC,
     _phantom: PhantomData<fn() -> Resp>,
+    _phantom1: PhantomData<fn() -> Req>,
 }
 
-impl<MkT: MakeTransport, MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>, Resp> Clone
-    for MakeClientTransport<MkT, MkC, Resp>
+impl<MkT: MakeTransport, MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>, Req, Resp> Clone
+    for MakeClientTransport<MkT, MkC, Req, Resp>
 {
     fn clone(&self) -> Self {
         Self {
             make_transport: self.make_transport.clone(),
             make_codec: self.make_codec.clone(),
             _phantom: PhantomData,
+            _phantom1: PhantomData,
         }
     }
 }
 
-impl<MkT, MkC, Resp> MakeClientTransport<MkT, MkC, Resp>
+impl<MkT, MkC, Req, Resp> MakeClientTransport<MkT, MkC, Req, Resp>
 where
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
@@ -48,17 +50,19 @@ where
             make_transport,
             make_codec,
             _phantom: PhantomData,
+            _phantom1: PhantomData,
         }
     }
 }
 
-impl<MkT, MkC, Resp> UnaryService<Address> for MakeClientTransport<MkT, MkC, Resp>
+impl<MkT, MkC, Req, Resp> UnaryService<Address> for MakeClientTransport<MkT, MkC, Req, Resp>
 where
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
-    Resp: EntryMessage + Send + 'static,
+    Resp: EntryMessage + Send + 'static + Sync,
+    Req: EntryMessage + Send + 'static + Sync,
 {
-    type Response = ThriftTransport<MkC::Encoder, Resp>;
+    type Response = ThriftTransport<MkC::Encoder, Req, Resp>;
     type Error = io::Error;
 
     async fn call(&self, target: Address) -> Result<Self::Response, Self::Error> {
@@ -73,22 +77,24 @@ where
     }
 }
 
-pub struct Client<Resp, MkT, MkC>
+pub struct Client<Req, Resp, MkT, MkC>
 where
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
-    Resp: EntryMessage + Send + 'static,
+    Resp: EntryMessage + Send + 'static + Sync,
+    Req: EntryMessage + Send + 'static + Sync,
 {
     #[allow(clippy::type_complexity)]
-    make_transport: PooledMakeTransport<MakeClientTransport<MkT, MkC, Resp>, Address>,
+    make_transport: PooledMakeTransport<MakeClientTransport<MkT, MkC, Req, Resp>, Address>,
     _marker: PhantomData<Resp>,
 }
 
-impl<Resp, MkT, MkC> Clone for Client<Resp, MkT, MkC>
+impl<Req, Resp, MkT, MkC> Clone for Client<Req, Resp, MkT, MkC>
 where
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
-    Resp: EntryMessage + Send + 'static,
+    Resp: EntryMessage + Send + 'static + Sync,
+    Req: EntryMessage + Send + 'static + Sync,
 {
     fn clone(&self) -> Self {
         Self {
@@ -98,11 +104,12 @@ where
     }
 }
 
-impl<Resp, MkT, MkC> Client<Resp, MkT, MkC>
+impl<Req, Resp, MkT, MkC> Client<Req, Resp, MkT, MkC>
 where
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
-    Resp: EntryMessage + Send + 'static,
+    Resp: EntryMessage + Send + 'static + Sync,
+    Req: EntryMessage + Send + 'static + Sync,
 {
     pub fn new(make_transport: MkT, pool_cfg: Option<Config>, make_codec: MkC) -> Self {
         let make_transport = MakeClientTransport::new(make_transport, make_codec);
@@ -112,11 +119,26 @@ where
             _marker: PhantomData,
         }
     }
+
+    // pub fn write_loop(&self) -> Result<()> {
+    //     tokio::spawn(async move {
+    //         loop {
+    //             {
+    //                 let mut queue = self.batch_queue.lock();
+    //                 while queue.is_empty() {
+    //                     // yields current thread and unlock queue
+    //                     queue = db.process_batch_sem.wait(queue).unwrap();
+    //                 }
+    //                 queue.pop_front().unwrap()
+    //             }
+    //         }
+    //     })
+    // }
 }
 
-impl<Req, Resp, MkT, MkC> Service<ClientContext, ThriftMessage<Req>> for Client<Resp, MkT, MkC>
+impl<Req, Resp, MkT, MkC> Service<ClientContext, ThriftMessage<Req>> for Client<Req, Resp, MkT, MkC>
 where
-    Req: Send + 'static + EntryMessage,
+    Req: Send + 'static + EntryMessage + Sync,
     Resp: EntryMessage + Send + 'static + Sync,
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,

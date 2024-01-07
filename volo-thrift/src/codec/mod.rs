@@ -25,11 +25,14 @@ pub trait Decoder: Send + 'static {
 ///
 /// Note: [`Encoder`] should be designed to be ready for reuse.
 pub trait Encoder: Send + 'static {
+    fn reset(&mut self) -> impl Future<Output = ()> + Send;
     fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
     ) -> impl Future<Output = Result<(), crate::Error>> + Send;
+
+    fn flush(&mut self) -> impl Future<Output = Result<(), crate::Error>> + Send;
 }
 
 /// [`MakeCodec`] receives an [`AsyncRead`] and an [`AsyncWrite`] and returns a
