@@ -13,6 +13,7 @@ pub mod request;
 pub mod response;
 pub mod route;
 pub mod server;
+pub(crate) mod service_fn;
 
 mod macros;
 

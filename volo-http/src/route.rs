@@ -373,12 +373,8 @@ pub struct MethodRouterBuilder<S> {
 macro_rules! impl_method_register_for_builder {
     ($( $method:ident ),*) => {
         $(
-        pub fn $method<H, T>(mut self, handler: H) -> Self
-        where
-            for<'a> H: Handler<T, S> + Clone + Send + Sync + 'a,
-            for<'a> T: 'a,
-        {
-            self.router.$method = MethodEndpoint::Handler(DynHandler::new(handler));
+        pub fn $method(mut self, ep: MethodEndpoint<S>) -> Self {
+            self.router.$method = ep;
             self
         }
         )+
@@ -420,7 +416,7 @@ macro_rules! impl_method_register {
             for<'a> T: 'a,
             S: Clone + Send + Sync + 'static,
         {
-            MethodRouterBuilder::new().$method(h).build()
+            MethodRouterBuilder::new().$method(MethodEndpoint::from_handler(h)).build()
         }
         )+
     };
@@ -589,6 +585,13 @@ where
     S: Clone + Send + Sync + 'static,
 {
     MethodEndpoint::from_service(srv)
+}
+
+pub fn service_fn<F>(f: F) -> MethodEndpoint<()>
+where
+    F: for<'r> crate::service_fn::Callback<'r> + Clone + Send + Sync + 'static,
+{
+    MethodEndpoint::from_service(crate::service_fn::service_fn(f))
 }
 
 #[derive(Clone)]

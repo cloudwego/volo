@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
 use faststr::FastStr;
 use serde::{Deserialize, Serialize};
@@ -10,7 +10,7 @@ use volo_http::{
     layer::TimeoutLayer,
     middleware::{self, Next},
     response::IntoResponse,
-    route::{get, post, MethodRouter, Router},
+    route::{from_handler, get, post, service_fn, MethodRouter, Router},
     Address, BodyIncoming, Bytes, ConnectionInfo, CookieJar, HttpContext, Json, MaybeInvalid,
     Method, Params, Response, Server, StatusCode, Uri,
 };
@@ -68,7 +68,7 @@ async fn post_with_form(Form(info): Form<Login>) -> Result<String, StatusCode> {
     process_login(info)
 }
 
-async fn test(
+async fn get_and_post(
     u: Uri,
     m: Method,
     data: MaybeInvalid<FastStr>,
@@ -100,6 +100,10 @@ async fn extension(Extension(state): Extension<Arc<State>>) -> String {
     format!("State {{ foo: {}, bar: {} }}\n", state.foo, state.bar)
 }
 
+async fn service_fn_test(cx: &mut HttpContext, req: BodyIncoming) -> Result<Response, Infallible> {
+    Ok(format!("cx: {cx:?}, req: {req:?}").into_response())
+}
+
 async fn timeout_handler(uri: Uri, peer: Address) -> StatusCode {
     tracing::info!("Timeout on `{}`, peer: {}", uri, peer);
     StatusCode::INTERNAL_SERVER_ERROR
@@ -127,14 +131,14 @@ fn user_form_router() -> Router {
         MethodRouter::builder()
             // curl "http://localhost:8080/user/login?username=admin&password=admin"
             // curl "http://localhost:8080/user/login?username=admin&password=password"
-            .get(get_with_query)
+            .get(from_handler(get_with_query))
             // curl http://localhost:8080/user/login \
             //     -X POST \
             //     -d 'username=admin&password=admin'
             // curl http://localhost:8080/user/login \
             //     -X POST \
             //     -d 'username=admin&password=password'
-            .post(post_with_form)
+            .post(from_handler(post_with_form))
             .build(),
     )
 }
@@ -145,7 +149,10 @@ fn test_router() -> Router {
         // curl http://127.0.0.1:8080/test/extract -X POST -d "114514"
         .route(
             "/test/extract",
-            MethodRouter::builder().get(test).post(test).build(),
+            MethodRouter::builder()
+                .get(from_handler(get_and_post))
+                .post(from_handler(get_and_post))
+                .build(),
         )
         // curl http://127.0.0.1:8080/test/timeout
         .route(
@@ -158,6 +165,13 @@ fn test_router() -> Router {
         .route("/test/conn_show", get(conn_show))
         // curl http://127.0.0.1:8080/test/extension
         .route("/test/extension", get(extension))
+        // curl http://127.0.0.1:8080/test/service_fn
+        .route(
+            "/test/service_fn",
+            MethodRouter::builder()
+                .get(service_fn(service_fn_test))
+                .build(),
+        )
 }
 
 // You can use the following commands for testing cookies
