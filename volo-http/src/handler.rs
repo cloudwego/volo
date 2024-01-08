@@ -251,18 +251,17 @@ where
     }
 }
 
-pub trait HandlerWithoutRequest<T>: Sized {
-    fn call(self, cx: &mut HttpContext) -> impl Future<Output = Response> + Send;
+pub trait HandlerWithoutRequest<T, Ret>: Sized {
+    fn call(self, cx: &mut HttpContext) -> impl Future<Output = Result<Ret, Response>> + Send;
 }
 
-impl<F, Fut, Res> HandlerWithoutRequest<()> for F
+impl<F, Fut, Ret> HandlerWithoutRequest<(), Ret> for F
 where
     F: FnOnce() -> Fut + Clone + Send,
-    Fut: Future<Output = Res> + Send,
-    Res: IntoResponse,
+    Fut: Future<Output = Ret> + Send,
 {
-    async fn call(self, _context: &mut HttpContext) -> Response {
-        self().await.into_response()
+    async fn call(self, _context: &mut HttpContext) -> Result<Ret, Response> {
+        Ok(self().await)
     }
 }
 
@@ -271,21 +270,20 @@ macro_rules! impl_handler_without_request {
         $($ty:ident),* $(,)?
     ) => {
         #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<F, Fut, Res, $($ty,)*> HandlerWithoutRequest<($($ty,)*)> for F
+        impl<F, Fut, Ret, $($ty,)*> HandlerWithoutRequest<($($ty,)*), Ret> for F
         where
             F: FnOnce($($ty,)*) -> Fut + Clone + Send,
-            Fut: Future<Output = Res> + Send,
-            Res: IntoResponse,
+            Fut: Future<Output = Ret> + Send,
             $( for<'r> $ty: FromContext<()> + Send + 'r, )*
         {
-            async fn call(self, cx: &mut HttpContext) -> Response {
+            async fn call(self, cx: &mut HttpContext) -> Result<Ret, Response> {
                 $(
                     let $ty = match $ty::from_context(cx, &()).await {
                         Ok(value) => value,
-                        Err(rejection) => return rejection.into_response(),
+                        Err(rejection) => return Err(rejection.into_response()),
                     };
                 )*
-                self($($ty,)*).await.into_response()
+                Ok(self($($ty,)*).await)
             }
         }
     };

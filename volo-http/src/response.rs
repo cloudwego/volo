@@ -1,6 +1,5 @@
 use std::{
     convert::Infallible,
-    ops::{Deref, DerefMut},
     pin::Pin,
     task::{Context, Poll},
 };
@@ -10,42 +9,12 @@ use http_body_util::Full;
 use hyper::{
     body::{Body, Bytes, Frame, SizeHint},
     header::HeaderValue,
-    http::{header::IntoHeaderName, response::Builder, StatusCode},
+    http::{header::IntoHeaderName, StatusCode},
     HeaderMap,
 };
 use pin_project::pin_project;
 
-pub struct Response(hyper::http::Response<RespBody>);
-
-impl Response {
-    pub fn builder() -> Builder {
-        Builder::new()
-    }
-
-    pub(crate) fn inner(self) -> hyper::http::Response<RespBody> {
-        self.0
-    }
-}
-
-impl Deref for Response {
-    type Target = hyper::http::Response<RespBody>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for Response {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
-impl From<hyper::http::Response<RespBody>> for Response {
-    fn from(value: hyper::http::Response<RespBody>) -> Self {
-        Self(value)
-    }
-}
+pub type Response<B = RespBody> = hyper::http::Response<B>;
 
 #[pin_project]
 pub struct RespBody {
@@ -190,7 +159,7 @@ where
 {
     fn into_response(self) -> Response {
         let mut resp = self.1.into_response();
-        *resp.0.status_mut() = self.0;
+        *resp.status_mut() = self.0;
         resp
     }
 }
@@ -205,9 +174,13 @@ impl IntoResponse for StatusCode {
     }
 }
 
-impl IntoResponse for Response {
+impl<B> IntoResponse for hyper::http::Response<B>
+where
+    B: Into<RespBody>,
+{
     fn into_response(self) -> Response {
-        self
+        let (parts, body) = self.into_parts();
+        Response::from_parts(parts, body.into())
     }
 }
 
