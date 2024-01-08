@@ -77,7 +77,12 @@ fn is_false(b: &bool) -> bool {
 }
 
 fn try_open_readonly<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<()> {
-    let _ = std::fs::OpenOptions::new().read(true).open(path)?;
+    let md = std::fs::metadata(&path)?;
+    if md.is_dir() {
+        std::fs::read_dir(path)?;
+    } else {
+        std::fs::OpenOptions::new().read(true).open(path)?;
+    }
     Ok(())
 }
 
