@@ -54,9 +54,8 @@ where
 {
     type Rejection = ExtensionRejection;
 
-    async fn from_context(context: &HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
-        context
-            .extensions
+    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+        cx.extensions
             .get::<T>()
             .map(T::clone)
             .map(Extension)

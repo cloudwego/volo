@@ -204,8 +204,8 @@ cfg_rustls_or_native_tls! {
                     match &self.tls_config.connector {
                         #[cfg(feature = "rustls")]
                         TlsConnector::Rustls(connector) => {
-                            let server_name = librustls::ServerName::try_from(&self.tls_config.server_name[..])
-                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
+                            let server_name = librustls::pki_types::ServerName::try_from(&self.tls_config.server_name[..])
+                                .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?.to_owned();
                             connector
                                 .connect(server_name, tcp)
                                 .await

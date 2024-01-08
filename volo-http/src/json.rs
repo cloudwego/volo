@@ -48,7 +48,7 @@ where
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &HttpContext,
+        cx: &mut HttpContext,
         body: Incoming,
         state: &S,
     ) -> Result<Self, Self::Rejection> {

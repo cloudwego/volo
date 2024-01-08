@@ -2,6 +2,7 @@
 
 use std::{borrow::Cow, error::Error, fmt, sync::Arc};
 
+use base64::Engine;
 use bytes::Bytes;
 use http::header::{HeaderMap, HeaderValue};
 use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
@@ -9,7 +10,7 @@ use tower::BoxError;
 use tracing::{debug, trace, warn};
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
-use crate::{body::Body, metadata::MetadataMap};
+use crate::{body::Body, metadata::MetadataMap, BASE64_ENGINE};
 
 pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, Status>;
 
@@ -447,7 +448,8 @@ impl Status {
             let details = header_map
                 .get(GRPC_STATUS_DETAILS_HEADER)
                 .map(|h| {
-                    base64::decode(h.as_bytes())
+                    BASE64_ENGINE
+                        .decode(h.as_bytes())
                         .expect("Invalid status header, expected base64 encoded value")
                 })
                 .map(Bytes::from)
@@ -576,7 +578,7 @@ impl Status {
 
         // if exists, add 'grpc-status-details-bin'
         if !self.details.is_empty() {
-            let details = base64::encode_config(&self.details[..], base64::STANDARD_NO_PAD);
+            let details = BASE64_ENGINE.encode(&self.details[..]);
 
             header_map.insert(
                 GRPC_STATUS_DETAILS_HEADER,
@@ -1027,7 +1029,7 @@ mod tests {
 
         let header_map = status.to_header_map().unwrap();
 
-        let b64_details = base64::encode_config(DETAILS, base64::STANDARD_NO_PAD);
+        let b64_details = BASE64_ENGINE.encode(DETAILS);
 
         assert_eq!(header_map[GRPC_STATUS_DETAILS_HEADER], b64_details);
 
