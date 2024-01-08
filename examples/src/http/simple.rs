@@ -7,7 +7,7 @@ use volo_http::{
     extension::Extension,
     extract::{Form, Query},
     http::header,
-    layer::TimeoutLayer,
+    layer::{FilterLayer, TimeoutLayer},
     middleware::{self, Next},
     response::IntoResponse,
     route::{from_handler, get, post, service_fn, MethodRouter, Router},
@@ -172,6 +172,14 @@ fn test_router() -> Router {
                 .get(service_fn(service_fn_test))
                 .build(),
         )
+        // curl -v http://127.0.0.1:8080/test/anyaddr?reject_me
+        .layer(FilterLayer::new(|uri: Uri| async move {
+            if uri.query().is_some() && uri.query().unwrap() == "reject_me" {
+                Err(StatusCode::INTERNAL_SERVER_ERROR)
+            } else {
+                Ok(())
+            }
+        }))
 }
 
 // You can use the following commands for testing cookies
