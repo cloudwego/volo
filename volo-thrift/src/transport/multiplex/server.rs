@@ -52,7 +52,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         msg = send_rx.recv() => {
                             match msg {
                                 Some((mi, mut cx, msg)) => {
-                                    if let Err(e) = metainfo::METAINFO.scope(RefCell::new(mi), encoder.encode::<Resp, ServerContext>(&mut cx, msg)).await {
+                                    if let Err(e) = metainfo::METAINFO.scope(RefCell::new(mi), encoder.send::<Resp, ServerContext>(&mut cx, msg)).await {
                                         // log it
                                         error!("[VOLO] server send response error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                                         stat_tracer.iter().for_each(|f| f(&cx));
@@ -71,7 +71,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         error_msg = error_send_rx.recv() => {
                             match error_msg {
                                 Some((mut cx, msg)) => {
-                                    if let Err(e) = encoder.encode::<DummyMessage, ServerContext>(&mut cx, msg).await {
+                                    if let Err(e) = encoder.send::<DummyMessage, ServerContext>(&mut cx, msg).await {
                                         // log it
                                         error!("[VOLO] server send error error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                                     }

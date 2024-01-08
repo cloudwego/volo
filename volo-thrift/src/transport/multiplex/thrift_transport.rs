@@ -50,7 +50,7 @@ pub struct ThriftTransport<E, Req, Resp> {
     read_error: Arc<AtomicBool>,
     // read connection is closed
     read_closed: Arc<AtomicBool>,
-
+    // TODO make this to lockless
     batch_queue: Arc<Mutex<VecDeque<ThriftMessage<Req>>>>,
     queue_cv: Arc<Condvar>,
 }
@@ -79,52 +79,77 @@ where
     pub fn write_loop(&self, mut write_half: WriteHalf<E>) {
         let batch_queu = self.batch_queue.clone();
         let inner_tx_map = self.tx_map.clone();
+        let inner_write_error = self.write_error.clone();
         let queue_cv = self.queue_cv.clone();
         tokio::spawn(async move {
+            let mut resolved = Vec::with_capacity(128);
+            let mut has_error = false;
             loop {
                 {
+                    resolved.clear();
+                    write_half.reset().await;
+                    has_error = false;
                     let mut queue = batch_queu.lock().await;
-                    let mut has_error = false;
                     if queue.is_empty() {
                         queue = queue_cv.wait(queue).await;
                     }
-                    // push data to
+
                     while !queue.is_empty() {
                         let current = queue.pop_front().unwrap();
                         let seq = current.meta.seq_id;
+                        resolved.push(seq);
                         let mut cx = ClientContext::new(
                             seq,
                             RpcInfo::with_role(Role::Client),
                             pilota::thrift::TMessageType::Call,
                         );
-                        let res = write_half.send(&mut cx, current).await;
+                        let res = write_half.encode(&mut cx, current).await;
                         match res {
                             Ok(_) => {}
                             Err(_) => {
-                                let _ = inner_tx_map.remove(&seq).await.unwrap().send(Err(
-                                    Error::Application(ApplicationError::new(
-                                        ApplicationErrorKind::UNKNOWN,
-                                        format!("write error"),
-                                    )),
-                                ));
+                                inner_write_error.store(true, std::sync::atomic::Ordering::Relaxed);
+                                has_error = true;
                                 while !queue.is_empty() {
                                     let current = queue.pop_front().unwrap();
-                                    let _ = inner_tx_map
-                                        .remove(&current.meta.seq_id)
-                                        .await
-                                        .unwrap()
-                                        .send(Err(Error::Application(ApplicationError::new(
-                                            ApplicationErrorKind::UNKNOWN,
-                                            format!("write error"),
-                                        ))));
+                                    resolved.push(current.meta.seq_id);
                                 }
-                                has_error = true;
                                 break;
                             }
                         }
                     }
                     if has_error {
+                        for seq in resolved.iter() {
+                            let _ = inner_tx_map.remove(seq).await.unwrap().send(Err(
+                                Error::Application(ApplicationError::new(
+                                    ApplicationErrorKind::UNKNOWN,
+                                    format!("write error"),
+                                )),
+                            ));
+                        }
                         return;
+                    }
+                    drop(queue);
+                    let res = write_half.flush().await;
+                    match res {
+                        Ok(_) => {}
+                        Err(err) => {
+                            inner_write_error.store(true, std::sync::atomic::Ordering::Relaxed);
+                            let mut queue = batch_queu.lock().await;
+                            while !queue.is_empty() {
+                                let current = queue.pop_front().unwrap();
+                                resolved.push(current.meta.seq_id);
+                            }
+
+                            for seq in resolved.iter() {
+                                let _ = inner_tx_map.remove(&seq).await.unwrap().send(Err(
+                                    Error::Application(ApplicationError::new(
+                                        ApplicationErrorKind::UNKNOWN,
+                                        err.to_string(),
+                                    )),
+                                ));
+                            }
+                            return;
+                        }
                     }
                 }
             }
@@ -279,6 +304,13 @@ where
                 "multiplex connection closed".to_string(),
             )));
         }
+        if self.write_error.load(std::sync::atomic::Ordering::Relaxed) {
+            return Err(Error::Application(ApplicationError::new(
+                ApplicationErrorKind::UNKNOWN,
+                "multiplex connection error".to_string(),
+            )));
+        }
+
         let (tx, rx) = oneshot::channel();
         let seq_id = msg.meta.seq_id;
         if !oneway {
@@ -388,13 +420,30 @@ where
         cx: &mut impl ThriftContext,
         msg: ThriftMessage<T>,
     ) -> Result<(), Error> {
+        self.encoder.send(cx, msg).await.map_err(|mut e| {
+            e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
+            tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
+            e
+        })
+    }
+    pub async fn reset(&mut self) {
+        self.encoder.reset().await;
+    }
+
+    pub async fn encode<T: EntryMessage>(
+        &mut self,
+        cx: &mut impl ThriftContext,
+        msg: ThriftMessage<T>,
+    ) -> Result<(), Error> {
         self.encoder.encode(cx, msg).await.map_err(|mut e| {
             e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
             tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
             e
-        })?;
+        })
+    }
 
-        Ok(())
+    pub async fn flush(&mut self) -> Result<(), Error> {
+        self.encoder.flush().await
     }
 }
 

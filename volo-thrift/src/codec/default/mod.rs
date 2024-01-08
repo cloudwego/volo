@@ -116,8 +116,7 @@ pub struct DefaultEncoder<E, W> {
 impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
     for DefaultEncoder<E, W>
 {
-    #[inline]
-    async fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
+    async fn send<Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
@@ -179,11 +178,49 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         // write_result
     }
 
+    #[inline]
+    async fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
+        &mut self,
+        cx: &mut Cx,
+        msg: ThriftMessage<Req>,
+    ) -> Result<(), crate::Error> {
+        cx.stats_mut().record_encode_start_at();
+
+        // first, we need to get the size of the message
+        let (real_size, malloc_size) = self.encoder.size(cx, &msg)?;
+        trace!(
+            "[VOLO] codec encode message real size: {}, malloc size: {}",
+            real_size,
+            malloc_size
+        );
+        cx.stats_mut().set_write_size(real_size);
+
+        // then we reserve the size of the message in the linked bytes
+        self.linked_bytes.reserve(malloc_size);
+        // after that, we encode the message into the linked bytes
+        self.encoder
+            .encode(cx, &mut self.linked_bytes, msg)
+            .map_err(|e| {
+                // record the error time
+                cx.stats_mut().record_encode_end_at();
+                e
+            })?;
+
+        cx.stats_mut().record_encode_end_at();
+        Ok(())
+    }
+
     async fn flush(&mut self) -> Result<(), crate::Error> {
-        match self.writer.flush().await.map_err(TransportError::from) {
+        self.linked_bytes
+            .write_all_vectored(&mut self.writer)
+            .await
+            .map_err(TransportError::from)?;
+
+        let res = match self.writer.flush().await.map_err(TransportError::from) {
             Ok(()) => Ok(()),
             Err(e) => Err(e.into()),
-        }
+        };
+        res
     }
 
     async fn reset(&mut self) {

@@ -87,7 +87,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                     ThriftMessage::mk_server_resp(&cx, resp.map_err(|e| e.into()))
                                         .unwrap();
                                 if let Err(e) = async {
-                                    let result = encoder.encode(&mut cx, msg).await;
+                                    let result = encoder.send(&mut cx, msg).await;
                                     span_provider.leave_encode(&cx);
                                     result
                                 }.instrument(span_provider.on_encode(tracing_cx)).await {
@@ -111,7 +111,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                             if !matches!(e, Error::Transport(_)) {
                                 let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e))
                                     .unwrap();
-                                if let Err(e) = encoder.encode(&mut cx, msg).await {
+                                if let Err(e) = encoder.send(&mut cx, msg).await {
                                     error!("[VOLO] server send error error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                                 }
                             }
