@@ -19,7 +19,7 @@ pub(crate) mod service_fn;
 mod macros;
 
 #[doc(hidden)]
-mod prelude {
+pub mod prelude {
     pub use bytes::Bytes;
     pub use hyper::{
         self,
