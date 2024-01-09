@@ -13,33 +13,38 @@ pub mod request;
 pub mod response;
 pub mod route;
 pub mod server;
+
 pub(crate) mod service_fn;
 
 mod macros;
 
-use std::convert::Infallible;
+#[doc(hidden)]
+mod prelude {
+    pub use bytes::Bytes;
+    pub use hyper::{
+        self,
+        body::Incoming as BodyIncoming,
+        http::{self, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
+    };
+    pub use volo::net::Address;
 
-pub use bytes::Bytes;
-pub use hyper::{
-    self,
-    body::Incoming as BodyIncoming,
-    http::{self, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
-};
-pub use volo::net::Address;
+    #[cfg(feature = "cookie")]
+    pub use crate::cookie::CookieJar;
+    #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+    pub use crate::json::Json;
+    pub use crate::{
+        context::{ConnectionInfo, HttpContext},
+        extension::Extension,
+        extract::{Form, MaybeInvalid, Query, State},
+        param::Params,
+        request::Request,
+        response::Response,
+        route::Router,
+        server::Server,
+    };
 
-#[cfg(feature = "cookie")]
-pub use crate::cookie::CookieJar;
-#[cfg(any(feature = "serde_json", feature = "sonic_json"))]
-pub use crate::json::Json;
-pub use crate::{
-    context::{ConnectionInfo, HttpContext},
-    extension::Extension,
-    extract::{Form, MaybeInvalid, Query, State},
-    param::Params,
-    request::Request,
-    response::Response,
-    route::Router,
-    server::Server,
-};
+    pub type DynService =
+        motore::BoxCloneService<HttpContext, BodyIncoming, Response, std::convert::Infallible>;
+}
 
-pub type DynService = motore::BoxCloneService<HttpContext, BodyIncoming, Response, Infallible>;
+pub use prelude::*;
