@@ -160,6 +160,22 @@ where
     }
 }
 
+impl<T, S> FromRequest<S> for Option<T>
+where
+    T: FromRequest<S, private::ViaRequest> + Sync,
+    S: Clone + Send + Sync,
+{
+    type Rejection = Infallible;
+
+    async fn from_request(
+        cx: &mut HttpContext,
+        body: Incoming,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(T::from_request(cx, body, state).await.ok())
+    }
+}
+
 impl<S: Sync> FromRequest<S> for Incoming {
     type Rejection = Infallible;
 
