@@ -46,6 +46,24 @@ async fn json_post(Json(request): Json<Person>) -> String {
     )
 }
 
+async fn json_post_with_check(request: Option<Json<Person>>) -> Result<String, StatusCode> {
+    let request = match request {
+        Some(Json(req)) => req,
+        None => {
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+    let first_phone = request
+        .phones
+        .get(0)
+        .map(|p| p.as_str())
+        .unwrap_or("no number");
+    Ok(format!(
+        "{} is {} years old, {}'s first phone number is `{}`\n",
+        request.name, request.age, request.name, first_phone
+    ))
+}
+
 #[derive(Deserialize, Debug)]
 struct Login {
     username: String,
@@ -123,6 +141,13 @@ fn user_json_router() -> Router {
         //     -H "Content-Type: application/json" \
         //     -d '{"name":"Foo", "age": 25, "phones":["Bar", "114514"]}'
         .route("/user/json_post", post(json_post))
+        // curl http://localhost:8080/user/json_post_with_check \
+        //     -X POST \
+        //     -H "Content-Type: application/json" \
+        //     -d '{"name":"Foo", "age": -1, "phones":["Bar", "114514"]}'
+        //
+        // Note that this is an invalid json
+        .route("/user/json_post_with_check", post(json_post_with_check))
 }
 
 fn user_form_router() -> Router {
