@@ -130,9 +130,9 @@ where
         cx: &mut impl ThriftContext,
         msg: ThriftMessage<T>,
     ) -> Result<(), Error> {
-        self.encoder.encode(cx, msg).await.map_err(|mut e| {
+        self.encoder.send(cx, msg).await.map_err(|mut e| {
             e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
-            tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
+            tracing::error!("[VOLO] transport[{}] send error: {:?}", self.id, e);
             e
         })?;
 

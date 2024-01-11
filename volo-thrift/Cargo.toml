@@ -44,6 +44,7 @@ tokio = { workspace = true, features = [
     "parking_lot",
 ] }
 tracing.workspace = true
+tokio-condvar = "0.1.0"
 
 [features]
 default = []
