@@ -65,6 +65,7 @@ where
 
         self.ignore_unused(!config.touch_all)
             .dedup(config.dedup_list)
+            .nonstandard_snake_case(config.nonstandard_snake_case)
             .pilota_builder
             .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
     }
@@ -81,6 +82,13 @@ where
 
     pub fn dedup(mut self, dedup_list: Vec<FastStr>) -> Self {
         self.pilota_builder = self.pilota_builder.dedup(dedup_list);
+        self
+    }
+
+    pub fn nonstandard_snake_case(mut self, nonstandard_snake_case: bool) -> Self {
+        self.pilota_builder = self
+            .pilota_builder
+            .nonstandard_snake_case(nonstandard_snake_case);
         self
     }
 }
