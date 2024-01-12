@@ -21,6 +21,8 @@ pub struct Entry {
     pub idls: Vec<Idl>,
     #[serde(default)]
     pub touch_all: bool,
+    #[serde(default)]
+    pub nonstandard_snake_case: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]

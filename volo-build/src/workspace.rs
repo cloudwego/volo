@@ -29,6 +29,8 @@ pub struct WorkspaceConfig {
     pub(crate) touch_all: bool,
     #[serde(default)]
     pub(crate) dedup_list: Vec<FastStr>,
+    #[serde(default)]
+    pub(crate) nonstandard_snake_case: bool,
     pub(crate) services: Vec<Service>,
 }
 

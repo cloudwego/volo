@@ -349,7 +349,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ///
     /// After we call `.layer_outer(baz)`, we will get: foo -> bar -> baz.
     ///
-    /// The overall order for layers is: Timeout -> [outer] -> LoadBalance -> inner -> transport.
+    /// The overall order for layers is: [outer] -> Timeout -> LoadBalance -> inner -> transport.
     pub fn layer_outer<Outer>(
         self,
         layer: Outer,

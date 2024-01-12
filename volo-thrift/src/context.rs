@@ -366,7 +366,7 @@ const DEFAULT_RPC_TIMEOUT: Duration = Duration::from_secs(1);
 const DEFAULT_CONNECT_TIMEOUT: Duration = Duration::from_millis(50);
 const DEFAULT_READ_WRITE_TIMEOUT: Duration = Duration::from_secs(1);
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub struct Config {
     rpc_timeout: Option<Duration>,
     connect_timeout: Option<Duration>,
@@ -453,16 +453,6 @@ impl Reusable for Config {
         self.rpc_timeout = None;
         self.connect_timeout = None;
         self.read_write_timeout = None;
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            rpc_timeout: None,
-            connect_timeout: None,
-            read_write_timeout: None,
-        }
     }
 }
 

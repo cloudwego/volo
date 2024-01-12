@@ -200,6 +200,7 @@ impl CliCommand for Init {
                 filename: PathBuf::from(DEFAULT_FILENAME),
                 idls: vec![idl.clone()],
                 touch_all: false,
+                nonstandard_snake_case: false,
             };
             if self.is_grpc_project() {
                 self.copy_grpc_template(entry.clone())?;

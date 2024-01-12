@@ -150,6 +150,7 @@ impl CliCommand for Add {
                         filename: PathBuf::from(&self.filename),
                         idls: vec![new_idl],
                         touch_all: false,
+                        nonstandard_snake_case: false,
                     },
                 );
             }
