@@ -104,6 +104,17 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.keep_unknown_fields(keep)),
         }
     }
+
+    pub fn nonstandard_snake_case(self, nonstandard_snake_case: bool) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.nonstandard_snake_case(nonstandard_snake_case))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(inner.nonstandard_snake_case(nonstandard_snake_case))
+            }
+        }
+    }
 }
 
 impl ConfigBuilder {
@@ -153,7 +164,10 @@ impl ConfigBuilder {
                 }
             }
 
-            builder.ignore_unused(!entry.touch_all).write()?;
+            builder
+                .ignore_unused(!entry.touch_all)
+                .nonstandard_snake_case(entry.nonstandard_snake_case)
+                .write()?;
 
             Ok(())
         })?;

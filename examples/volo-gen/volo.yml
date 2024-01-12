@@ -3,6 +3,7 @@ entries:
     protocol: protobuf
     filename: proto_gen.rs
     touch_all: false
+    nonstandard_snake_case: false
     idls:
       - source: local
         path: ../proto/hello.proto
@@ -20,6 +21,7 @@ entries:
     protocol: thrift
     filename: thrift_gen.rs
     touch_all: false
+    nonstandard_snake_case: false
     idls:
       - source: local
         path: ../thrift_idl/hello.thrift
