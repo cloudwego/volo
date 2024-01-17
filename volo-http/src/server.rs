@@ -259,9 +259,7 @@ async fn handle_conn<S>(
                     version: parts.version,
                     headers: parts.headers,
                     extensions: parts.extensions,
-                    params: Params {
-                        inner: Vec::with_capacity(0),
-                    },
+                    params: Params::default(),
                 };
                 let resp = match service.call(&mut cx, req).await {
                     Ok(resp) => resp,

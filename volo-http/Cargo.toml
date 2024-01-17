@@ -24,6 +24,7 @@ http-body-util = "0.1"
 hyper = { version = "1", features = ["server", "http1", "http2"] }
 hyper-util = { version = "0.1", features = ["tokio"] }
 
+ahash.workspace = true
 bytes.workspace = true
 cookie = { workspace = true, optional = true, features = ["percent-encode"] }
 faststr.workspace = true

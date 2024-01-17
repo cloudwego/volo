@@ -173,7 +173,7 @@ impl Service<HttpContext, Incoming> for Router<()> {
     ) -> Result<Self::Response, Self::Error> {
         if let Ok(matched) = self.matcher.at(cx.uri.path()) {
             if let Some(srv) = self.routes.get(matched.value) {
-                cx.params = matched.params.into();
+                cx.params.extend(matched.params);
                 return srv.call_with_state(cx, req, ()).await;
             }
         }
