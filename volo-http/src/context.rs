@@ -14,7 +14,7 @@ use crate::param::Params;
 static X_FORWARDED_HOST: HeaderName = HeaderName::from_static("x-forwarded-host");
 static X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-proto");
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct HttpContext {
     pub peer: Address,
     pub method: Method,

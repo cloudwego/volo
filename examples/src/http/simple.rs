@@ -11,8 +11,8 @@ use volo_http::{
     middleware::{self, Next},
     response::IntoResponse,
     route::{from_handler, get, post, service_fn, MethodRouter, Router},
-    Address, BodyIncoming, Bytes, ConnectionInfo, CookieJar, HttpContext, Json, MaybeInvalid,
-    Method, Params, Response, Server, StatusCode, Uri,
+    Address, BodyIncoming, ConnectionInfo, CookieJar, HttpContext, Json, MaybeInvalid, Method,
+    Params, Response, Server, StatusCode, Uri,
 };
 
 async fn hello() -> &'static str {
@@ -103,9 +103,9 @@ async fn timeout_test() {
     tokio::time::sleep(Duration::from_secs(10)).await
 }
 
-async fn echo(params: Params) -> Result<Bytes, StatusCode> {
+async fn echo(params: Params) -> Result<FastStr, StatusCode> {
     if let Some(echo) = params.get("echo") {
-        return Ok(echo.clone());
+        return Ok(echo.to_owned());
     }
     Err(StatusCode::BAD_REQUEST)
 }
