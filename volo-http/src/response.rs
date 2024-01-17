@@ -4,6 +4,7 @@ use std::{
     task::{Context, Poll},
 };
 
+use faststr::FastStr;
 use futures_util::ready;
 use http_body_util::Full;
 use hyper::{
@@ -53,6 +54,14 @@ impl From<Bytes> for RespBody {
     fn from(value: Bytes) -> Self {
         Self {
             inner: Full::new(value),
+        }
+    }
+}
+
+impl From<FastStr> for RespBody {
+    fn from(value: FastStr) -> Self {
+        Self {
+            inner: Full::new(value.into()),
         }
     }
 }
