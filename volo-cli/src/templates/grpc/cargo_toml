@@ -13,7 +13,6 @@ volo-grpc.workspace = true
 pilota.workspace = true
 
 anyhow.workspace = true
-async-trait.workspace = true
 tokio = {{ workspace = true, features = ["full"] }}
 
 [profile.release]
@@ -42,6 +41,5 @@ volo-grpc = "*"
 pilota = "*"
 
 anyhow = "1"
-async-trait = "0.1"
 futures = "0.3"
 tokio = "1"
