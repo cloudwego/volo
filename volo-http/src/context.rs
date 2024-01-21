@@ -1,14 +1,16 @@
 use std::ops::{Deref, DerefMut};
 
+use chrono::{DateTime, Local};
 use hyper::{
     header::HeaderValue,
     http::{
         header,
         request::Parts,
         uri::{Authority, Scheme},
-        HeaderMap, HeaderName,
+        HeaderMap, HeaderName, StatusCode,
     },
 };
+use paste::paste;
 use url::{Host, Url};
 use volo::{
     context::{Reusable, Role, RpcCx, RpcInfo},
@@ -23,6 +25,31 @@ static X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-prot
 
 pub type HttpContext = ServerContext;
 
+macro_rules! stat_impl {
+    ($t: ident) => {
+        paste! {
+            /// This is unstable now and may be changed in the future.
+            #[inline]
+            pub fn $t(&self) -> Option<DateTime<Local>> {
+                self.$t
+            }
+
+            /// This is unstable now and may be changed in the future.
+            #[doc(hidden)]
+            #[inline]
+            pub fn [<set_$t>](&mut self, t: DateTime<Local>) {
+                self.$t = Some(t)
+            }
+
+            /// This is unstable now and may be changed in the future.
+            #[inline]
+            pub fn [<record_ $t>](&mut self) {
+                self.$t = Some(Local::now())
+            }
+        }
+    };
+}
+
 #[derive(Debug)]
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
@@ -34,6 +61,8 @@ impl ServerContext {
                 parts,
                 peer,
                 params: Params::default(),
+                stats: ServerStats::default(),
+                common_stats: CommonStats::default(),
             },
         ))
     }
@@ -61,6 +90,11 @@ pub struct ServerCxInner {
     pub parts: Parts,
     pub peer: Address,
     pub params: Params,
+
+    /// This is unstable now and may be changed in the future.
+    pub stats: ServerStats,
+    /// This is unstable now and may be changed in the future.
+    pub common_stats: CommonStats,
 }
 
 impl ServerCxInner {
@@ -168,6 +202,64 @@ impl Deref for ServerCxInner {
 impl DerefMut for ServerCxInner {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.parts
+    }
+}
+
+/// This is unstable now and may be changed in the future.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct CommonStats {
+    req_size: Option<u64>,
+    resp_size: Option<u64>,
+}
+
+impl CommonStats {
+    #[inline]
+    pub fn req_size(&self) -> Option<u64> {
+        self.req_size
+    }
+
+    #[inline]
+    pub fn set_req_size(&mut self, size: u64) {
+        self.req_size = Some(size)
+    }
+
+    #[inline]
+    pub fn resp_size(&self) -> Option<u64> {
+        self.resp_size
+    }
+
+    #[inline]
+    pub fn set_resp_size(&mut self, size: u64) {
+        self.resp_size = Some(size)
+    }
+
+    #[inline]
+    pub fn reset(&mut self) {
+        *self = Self { ..Self::default() }
+    }
+}
+
+/// This is unstable now and may be changed in the future.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ServerStats {
+    process_start_at: Option<DateTime<Local>>,
+    process_end_at: Option<DateTime<Local>>,
+
+    status_code: Option<StatusCode>,
+}
+
+impl ServerStats {
+    stat_impl!(process_start_at);
+    stat_impl!(process_end_at);
+
+    #[inline]
+    pub fn status_code(&self) -> Option<StatusCode> {
+        self.status_code
+    }
+
+    #[inline]
+    pub fn set_status_code(&mut self, status: StatusCode) {
+        self.status_code = Some(status);
     }
 }
 
