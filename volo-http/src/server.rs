@@ -18,7 +18,8 @@ use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
 
 use crate::{
     context::ServerContext,
-    response::{IntoResponse, RespBody, Response},
+    request::Request,
+    response::Response,
 };
 
 pub struct Server<S, L> {
@@ -250,19 +251,7 @@ async fn handle_conn<S>(
 
     let mut http_conn = http1::Builder::new().serve_connection(
         TokioIo::new(conn),
-        hyper::service::service_fn(move |req: hyper::http::Request<BodyIncoming>| {
-            let service = service.clone();
-            let peer = peer.clone();
-            async move {
-                let (parts, req) = req.into_parts();
-                let mut cx = ServerContext::new(peer, parts);
-                let resp = match service.call(&mut cx, req).await {
-                    Ok(resp) => resp,
-                    Err(inf) => inf.into_response(),
-                };
-                Ok::<hyper::http::Response<RespBody>, Infallible>(resp)
-            }
-        }),
+        hyper::service::service_fn(|req| serve(service.clone(), peer.clone(), req)),
     );
     tokio::select! {
         _ = &mut notified => {
@@ -284,4 +273,19 @@ async fn handle_conn<S>(
         },
     }
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
+}
+
+async fn serve<S>(service: S, peer: Address, request: Request) -> Result<Response, Infallible>
+where
+    S: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+{
+    let service = service.clone();
+    let peer = peer.clone();
+    let (parts, req) = request.into_parts();
+    let mut cx = ServerContext::new(peer, parts);
+    service.call(&mut cx, req).await
 }
