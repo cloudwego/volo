@@ -4,9 +4,10 @@ use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service};
 
 use crate::{
+    context::ServerContext,
     handler::{MiddlewareHandlerFromFn, MiddlewareHandlerMapResponse},
     response::{IntoResponse, Response},
-    DynService, HttpContext,
+    DynService,
 };
 
 pub struct FromFnLayer<F, S, T> {
@@ -81,9 +82,9 @@ where
     }
 }
 
-impl<I, F, S, T> Service<HttpContext, Incoming> for FromFn<I, F, S, T>
+impl<I, F, S, T> Service<ServerContext, Incoming> for FromFn<I, F, S, T>
 where
-    I: Service<HttpContext, Incoming, Response = Response, Error = Infallible>
+    I: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
         + Clone
         + Send
         + Sync
@@ -96,7 +97,7 @@ where
 
     async fn call<'s, 'cx>(
         &'s self,
-        cx: &'cx mut HttpContext,
+        cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
         let next = Next {
@@ -113,7 +114,7 @@ pub struct Next {
 }
 
 impl Next {
-    pub async fn run(self, cx: &mut HttpContext, req: Incoming) -> Result<Response, Infallible> {
+    pub async fn run(self, cx: &mut ServerContext, req: Incoming) -> Result<Response, Infallible> {
         self.inner.call(cx, req).await
     }
 }
@@ -190,9 +191,9 @@ where
     }
 }
 
-impl<I, F, S, T> Service<HttpContext, Incoming> for MapResponse<I, F, S, T>
+impl<I, F, S, T> Service<ServerContext, Incoming> for MapResponse<I, F, S, T>
 where
-    I: Service<HttpContext, Incoming, Response = Response, Error = Infallible>
+    I: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
         + Clone
         + Send
         + Sync
@@ -205,7 +206,7 @@ where
 
     async fn call<'s, 'cx>(
         &'s self,
-        cx: &'cx mut HttpContext,
+        cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
         let response = match self.inner.call(cx, req).await {

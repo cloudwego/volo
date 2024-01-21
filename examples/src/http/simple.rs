@@ -11,8 +11,8 @@ use volo_http::{
     middleware::{self, Next},
     response::IntoResponse,
     route::{from_handler, get, post, service_fn, MethodRouter, Router},
-    Address, BodyIncoming, ConnectionInfo, CookieJar, HttpContext, Json, MaybeInvalid, Method,
-    Params, Response, Server, StatusCode, Uri,
+    Address, BodyIncoming, ConnectionInfo, CookieJar, Json, MaybeInvalid, Method, Params, Response,
+    Server, ServerContext, StatusCode, Uri,
 };
 
 async fn hello() -> &'static str {
@@ -118,7 +118,10 @@ async fn extension(Extension(state): Extension<Arc<State>>) -> String {
     format!("State {{ foo: {}, bar: {} }}\n", state.foo, state.bar)
 }
 
-async fn service_fn_test(cx: &mut HttpContext, req: BodyIncoming) -> Result<Response, Infallible> {
+async fn service_fn_test(
+    cx: &mut ServerContext,
+    req: BodyIncoming,
+) -> Result<Response, Infallible> {
     Ok(format!("cx: {cx:?}, req: {req:?}").into_response())
 }
 
@@ -222,7 +225,7 @@ async fn tracing_from_fn(
     uri: Uri,
     peer: Address,
     cookie_jar: CookieJar,
-    cx: &mut HttpContext,
+    cx: &mut ServerContext,
     req: BodyIncoming,
     next: Next,
 ) -> Response {

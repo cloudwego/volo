@@ -11,17 +11,18 @@ use hyper::body::Incoming;
 use motore::Service;
 
 use crate::{
+    context::ServerContext,
     extract::{FromContext, FromRequest},
     macros::{all_the_tuples, all_the_tuples_no_last_special_case},
     middleware::Next,
     response::{IntoResponse, Response},
-    DynService, HttpContext,
+    DynService,
 };
 
 pub trait Handler<T, S>: Sized {
     fn call(
         self,
-        cx: &mut HttpContext,
+        cx: &mut ServerContext,
         req: Incoming,
         state: &S,
     ) -> impl Future<Output = Response> + Send;
@@ -45,7 +46,7 @@ where
     Res: IntoResponse,
     S: Send + Sync,
 {
-    async fn call(self, _context: &mut HttpContext, _req: Incoming, _state: &S) -> Response {
+    async fn call(self, _context: &mut ServerContext, _req: Incoming, _state: &S) -> Response {
         self().await.into_response()
     }
 }
@@ -64,7 +65,7 @@ macro_rules! impl_handler {
             $( for<'r> $ty: FromContext<S> + Send + 'r, )*
             for<'r> $last: FromRequest<S, M> + Send + 'r,
         {
-            async fn call(self, cx: &mut HttpContext, req: Incoming, state: &S) -> Response {
+            async fn call(self, cx: &mut ServerContext, req: Incoming, state: &S) -> Response {
                 $(
                     let $ty = match $ty::from_context(cx, state).await {
                         Ok(value) => value,
@@ -130,7 +131,7 @@ where
 
     pub(crate) async fn call_with_state(
         self,
-        cx: &mut HttpContext,
+        cx: &mut ServerContext,
         req: Incoming,
         state: S,
     ) -> Result<Response, Infallible> {
@@ -234,7 +235,7 @@ where
     }
 }
 
-impl<H, S, T> motore::Service<HttpContext, Incoming> for HandlerService<H, S, T>
+impl<H, S, T> motore::Service<ServerContext, Incoming> for HandlerService<H, S, T>
 where
     for<'r> H: Handler<T, S> + Clone + Send + Sync + 'r,
     S: Sync,
@@ -244,7 +245,7 @@ where
 
     async fn call<'s, 'cx>(
         &'s self,
-        cx: &'cx mut HttpContext,
+        cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
         Ok(self.handler.clone().call(cx, req, &self.state).await)
@@ -252,7 +253,7 @@ where
 }
 
 pub trait HandlerWithoutRequest<T, Ret>: Sized {
-    fn call(self, cx: &mut HttpContext) -> impl Future<Output = Result<Ret, Response>> + Send;
+    fn call(self, cx: &mut ServerContext) -> impl Future<Output = Result<Ret, Response>> + Send;
 }
 
 impl<F, Fut, Ret> HandlerWithoutRequest<(), Ret> for F
@@ -260,7 +261,7 @@ where
     F: FnOnce() -> Fut + Clone + Send,
     Fut: Future<Output = Ret> + Send,
 {
-    async fn call(self, _context: &mut HttpContext) -> Result<Ret, Response> {
+    async fn call(self, _context: &mut ServerContext) -> Result<Ret, Response> {
         Ok(self().await)
     }
 }
@@ -276,7 +277,7 @@ macro_rules! impl_handler_without_request {
             Fut: Future<Output = Ret> + Send,
             $( for<'r> $ty: FromContext<()> + Send + 'r, )*
         {
-            async fn call(self, cx: &mut HttpContext) -> Result<Ret, Response> {
+            async fn call(self, cx: &mut ServerContext) -> Result<Ret, Response> {
                 $(
                     let $ty = match $ty::from_context(cx, &()).await {
                         Ok(value) => value,
@@ -297,7 +298,7 @@ pub trait MiddlewareHandlerFromFn<'r, T, S>: Sized {
 
     fn call(
         &self,
-        cx: &'r mut HttpContext,
+        cx: &'r mut ServerContext,
         req: Incoming,
         state: &'r S,
         next: Next,
@@ -311,7 +312,7 @@ macro_rules! impl_middleware_handler_from_fn {
         #[allow(non_snake_case, unused_mut, unused_variables)]
         impl<'r, F, Fut, Res, M, S, $($ty,)* $last> MiddlewareHandlerFromFn<'r, (M, $($ty,)* $last), S> for F
         where
-            F: Fn($($ty,)* &'r mut HttpContext, $last, Next) -> Fut + Copy + Send + Sync + 'static,
+            F: Fn($($ty,)* &'r mut ServerContext, $last, Next) -> Fut + Copy + Send + Sync + 'static,
             Fut: Future<Output = Res> + Send + 'r,
             Res: IntoResponse + 'r,
             S: Send + Sync + 'r,
@@ -323,7 +324,7 @@ macro_rules! impl_middleware_handler_from_fn {
 
             fn call(
                 &self,
-                cx: &'r mut HttpContext,
+                cx: &'r mut ServerContext,
                 req: Incoming,
                 state: &'r S,
                 next: Next,
@@ -358,7 +359,7 @@ pub trait MiddlewareHandlerMapResponse<'r, T, S>: Sized {
     // type Response: IntoResponse;
     type Future: Future<Output = Response> + Send + 'r;
 
-    fn call(&self, cx: &'r mut HttpContext, state: &'r S, response: Response) -> Self::Future;
+    fn call(&self, cx: &'r mut ServerContext, state: &'r S, response: Response) -> Self::Future;
 }
 
 impl<'r, F, Fut, Res, S> MiddlewareHandlerMapResponse<'r, ((),), S> for F
@@ -373,7 +374,7 @@ where
 
     fn call(
         &self,
-        _context: &'r mut HttpContext,
+        _context: &'r mut ServerContext,
         _state: &'r S,
         response: Response,
     ) -> Self::Future {
@@ -403,7 +404,7 @@ macro_rules! impl_middleware_handler_map_response {
 
             fn call(
                 &self,
-                cx: &'r mut HttpContext,
+                cx: &'r mut ServerContext,
                 state: &'r S,
                 response: Response,
             ) -> Self::Future {
