@@ -171,7 +171,7 @@ impl Service<HttpContext, Incoming> for Router<()> {
         cx: &'cx mut HttpContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
-        if let Ok(matched) = self.matcher.at(cx.uri.path()) {
+        if let Ok(matched) = self.matcher.at(cx.uri.clone().path()) {
             if let Some(srv) = self.routes.get(matched.value) {
                 cx.params.extend(matched.params);
                 return srv.call_with_state(cx, req, ()).await;
