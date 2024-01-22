@@ -1,17 +1,19 @@
 use std::{io, marker::PhantomData};
 
+use bytes::Bytes;
 use http::{
     header::{CONTENT_TYPE, TE},
     HeaderValue,
 };
-use hyper::client::conn::http2;
-use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
+use http_body::Frame;
+use http_body_util::StreamBody;
+use hyper_util::rt::{TokioExecutor, TokioTimer};
 use motore::Service;
+use tower::{util::ServiceExt, Service as TowerService};
 use volo::net::Address;
 
 use super::connect::Connector;
 use crate::{
-    body::Body,
     client::Http2Config,
     codec::{
         compression::{CompressionEncoding, ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
@@ -23,9 +25,12 @@ use crate::{
 
 /// A simple wrapper of [`hyper::client::client`] that implements [`Service`]
 /// to make outgoing requests.
+#[allow(clippy::type_complexity)]
 pub struct ClientTransport<U> {
-    http_client: http2::Builder<TokioExecutor>,
-    connector: Connector,
+    http_client: hyper_util::client::legacy::Client<
+        Connector,
+        StreamBody<crate::BoxStream<'static, Result<Frame<Bytes>, crate::Status>>>,
+    >,
     _marker: PhantomData<fn(U)>,
 }
 
@@ -33,7 +38,6 @@ impl<U> Clone for ClientTransport<U> {
     fn clone(&self) -> Self {
         Self {
             http_client: self.http_client.clone(),
-            connector: self.connector.clone(),
             _marker: self._marker,
         }
     }
@@ -48,23 +52,22 @@ impl<U> ClientTransport<U> {
             rpc_config.read_timeout,
             rpc_config.write_timeout,
         );
-        let mut http_client = http2::Builder::new(TokioExecutor::new());
-        http_client
+        let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
-            .initial_stream_window_size(http2_config.init_stream_window_size)
-            .initial_connection_window_size(http2_config.init_connection_window_size)
-            .max_frame_size(http2_config.max_frame_size)
-            .adaptive_window(http2_config.adaptive_window)
-            .keep_alive_interval(http2_config.http2_keepalive_interval)
-            .keep_alive_timeout(http2_config.http2_keepalive_timeout)
-            .keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
-            .max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
-            .max_send_buf_size(http2_config.max_send_buf_size);
-        let connector = Connector::new(Some(config));
+            .http2_only(true)
+            .http2_initial_stream_window_size(http2_config.init_stream_window_size)
+            .http2_initial_connection_window_size(http2_config.init_connection_window_size)
+            .http2_max_frame_size(http2_config.max_frame_size)
+            .http2_adaptive_window(http2_config.adaptive_window)
+            .http2_keep_alive_interval(http2_config.http2_keepalive_interval)
+            .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
+            .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
+            .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
+            .http2_max_send_buf_size(http2_config.max_send_buf_size)
+            .build(Connector::new(Some(config)));
 
         ClientTransport {
             http_client,
-            connector,
             _marker: PhantomData,
         }
     }
@@ -80,23 +83,22 @@ impl<U> ClientTransport<U> {
             rpc_config.read_timeout,
             rpc_config.write_timeout,
         );
-        let mut http_client = http2::Builder::new(TokioExecutor::new());
-        http_client
+        let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
-            .initial_stream_window_size(http2_config.init_stream_window_size)
-            .initial_connection_window_size(http2_config.init_connection_window_size)
-            .max_frame_size(http2_config.max_frame_size)
-            .adaptive_window(http2_config.adaptive_window)
-            .keep_alive_interval(http2_config.http2_keepalive_interval)
-            .keep_alive_timeout(http2_config.http2_keepalive_timeout)
-            .keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
-            .max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
-            .max_send_buf_size(http2_config.max_send_buf_size);
-        let connector = Connector::new_with_tls(Some(config), tls_config);
+            .http2_only(true)
+            .http2_initial_stream_window_size(http2_config.init_stream_window_size)
+            .http2_initial_connection_window_size(http2_config.init_connection_window_size)
+            .http2_max_frame_size(http2_config.max_frame_size)
+            .http2_adaptive_window(http2_config.adaptive_window)
+            .http2_keep_alive_interval(http2_config.http2_keepalive_interval)
+            .http2_keep_alive_timeout(http2_config.http2_keepalive_timeout)
+            .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
+            .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
+            .http2_max_send_buf_size(http2_config.max_send_buf_size)
+            .build(Connector::new_with_tls(Some(config), tls_config));
 
         ClientTransport {
             http_client,
-            connector,
             _marker: PhantomData,
         }
     }
@@ -116,7 +118,7 @@ where
         cx: &'cx mut ClientContext,
         volo_req: Request<T>,
     ) -> Result<Self::Response, Self::Error> {
-        let http_client = self.http_client.clone();
+        let mut http_client = self.http_client.clone();
         // SAFETY: parameters controlled by volo-grpc are guaranteed to be valid.
         // get the call address from the context
         let target = cx.rpc_info.callee().address().ok_or_else(|| {
@@ -134,7 +136,7 @@ where
             .as_ref()
             .map(|config| config[0]);
 
-        let body = Body::new(message.into_body(send_compression));
+        let body = http_body_util::StreamBody::new(message.into_body(send_compression));
 
         let mut req = http::Request::builder()
             .version(http::Version::HTTP_2)
@@ -165,31 +167,13 @@ where
             }
         }
 
-        // wrap io stream
-        let io = TokioIo::new(
-            self.connector
-                .connect(target)
-                .await
-                .map_err(|err| Status::from_error(err.into()))?,
-        );
-
-        // call the service through hyper client
-        let (mut sender, conn) = http_client
-            .handshake(io)
+        let resp = http_client
+            .ready()
+            .await
+            .map_err(|err| Status::from_error(err.into()))?
+            .call(req)
             .await
             .map_err(|err| Status::from_error(err.into()))?;
-
-        let resp = tokio::select! {
-            resp = sender.send_request(req) => {
-                resp.map_err(|err| Status::from_error(err.into()))?
-            }
-            status = conn => {
-                status.map_err(|err| Status::from_error(err.into()))?;
-                // **unreachable** because the connect cannot be broken without error before
-                // receiving response.
-                return Err(Status::new(Code::Internal, "Early broken of connection."));
-            }
-        };
 
         let status_code = resp.status();
         let headers = resp.headers();
@@ -236,6 +220,7 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
 
 #[cfg(test)]
 mod tests {
+
     #[test]
     fn test_build_uri_ip() {
         let addr = "127.0.0.1:8000".parse::<std::net::SocketAddr>().unwrap();
@@ -260,5 +245,12 @@ mod tests {
             super::build_uri(volo::net::Address::from(Cow::from(addr)), path),
             uri
         );
+    }
+
+    fn is_unpin<T: Unpin>() {}
+
+    #[test]
+    fn test_is_unpin() {
+        is_unpin::<super::ClientTransport<()>>();
     }
 }

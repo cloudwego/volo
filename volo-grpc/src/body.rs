@@ -18,13 +18,13 @@ use crate::{BoxStream, Code, Status};
 #[pin_project]
 pub struct Body {
     #[pin]
-    bytes_stream: BoxStream<'static, Result<Bytes, Status>>,
+    bytes_stream: BoxStream<'static, Result<Frame<Bytes>, Status>>,
     is_end_stream: bool,
 }
 
 impl Body {
     /// Creates a new [`Body`].
-    pub fn new(bytes_stream: BoxStream<'static, Result<Bytes, Status>>) -> Self {
+    pub fn new(bytes_stream: BoxStream<'static, Result<Frame<Bytes>, Status>>) -> Self {
         Self {
             bytes_stream,
             is_end_stream: false,
@@ -44,12 +44,12 @@ impl HttpBody for Body {
     fn poll_frame(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<http_body::Frame<Self::Data>, Self::Error>>> {
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
         let mut self_proj = self.project();
 
         if !*self_proj.is_end_stream {
             match ready!(self_proj.bytes_stream.try_poll_next_unpin(cx)) {
-                Some(Ok(data)) => Poll::Ready(Some(Ok(Frame::data(data)))),
+                Some(Ok(data)) => Poll::Ready(Some(Ok(data))),
                 Some(Err(status)) => {
                     tracing::debug!("[VOLO] failed to poll stream");
                     *self_proj.is_end_stream = true;
