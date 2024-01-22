@@ -1,32 +1,32 @@
-//! Run with `cargo run --example hello-tls-grpc-client --features tls`
+//! Run with `cargo run --bin hello-tls-grpc-client --features tls`
 
 use std::{net::SocketAddr, path::Path, sync::Arc};
 
-use librustls::{Certificate, ClientConfig, RootCertStore}; /* crate `rustls` is renamed to `librustls` in this example */
+use librustls::{ClientConfig, RootCertStore}; /* crate `rustls` is renamed to `librustls`
+                                                * in this example */
 use pilota::FastStr;
 use rustls_pemfile::certs;
+use rustls_pki_types::CertificateDer;
 use volo::net::dial::ClientTlsConfig;
 
-fn load_certs(path: impl AsRef<Path>) -> std::io::Result<Vec<Certificate>> {
-    certs(&mut std::io::BufReader::new(std::fs::File::open(path)?))
-        .map(|v| v.into_iter().map(Certificate).collect())
-        .map_err(|_| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid cert").into())
+fn load_certs(path: impl AsRef<Path>) -> std::io::Result<Vec<CertificateDer<'static>>> {
+    Ok(
+        certs(&mut std::io::BufReader::new(std::fs::File::open(path)?))
+            .map(|v| v.unwrap())
+            .collect::<Vec<_>>(),
+    )
 }
 
 #[volo::main]
 async fn main() {
-    // The key and certificate are copied from
+    // The key and CertificateDer are copied from
     // https://github.com/hyperium/tonic/tree/master/examples/data/tls
     let data_dir = std::path::PathBuf::from_iter([std::env!("CARGO_MANIFEST_DIR"), "data"]);
-    let root_cert = load_certs(data_dir.join("tls/ca.pem")).unwrap();
+    let mut root_cert = load_certs(data_dir.join("tls/ca.pem")).unwrap();
     let mut root_certs = RootCertStore::empty();
-    root_certs.add(&root_cert[0]).unwrap();
+    root_certs.add(root_cert.remove(0)).unwrap();
 
     let client_config = ClientConfig::builder()
-        .with_safe_default_cipher_suites()
-        .with_safe_default_kx_groups()
-        .with_safe_default_protocol_versions()
-        .unwrap()
         .with_root_certificates(root_certs)
         .with_no_client_auth();
     let client_config = Arc::new(client_config);
