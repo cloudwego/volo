@@ -255,7 +255,6 @@ async fn handle_conn<S>(
             let peer = peer.clone();
             async move {
                 let (parts, req) = req.into_parts();
-                let req = req.into();
                 let mut cx = ServerContext::new(peer, parts);
                 let resp = match service.call(&mut cx, req).await {
                     Ok(resp) => resp,

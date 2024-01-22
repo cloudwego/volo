@@ -145,7 +145,6 @@ where
             .status(StatusCode::OK)
             .body(self.into())
             .unwrap()
-            .into()
     }
 }
 
@@ -179,7 +178,6 @@ impl IntoResponse for StatusCode {
             .status(self)
             .body(String::new().into())
             .unwrap()
-            .into()
     }
 }
 

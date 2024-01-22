@@ -55,7 +55,7 @@ async fn json_post_with_check(request: Option<Json<Person>>) -> Result<String, S
     };
     let first_phone = request
         .phones
-        .get(0)
+        .first()
         .map(|p| p.as_str())
         .unwrap_or("no number");
     Ok(format!(

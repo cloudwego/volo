@@ -81,7 +81,7 @@ where
 }
 
 impl<S: Sync> FromContext<S> for Address {
-    type Rejection = RejectionError;
+    type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Address, Self::Rejection> {
         Ok(cx.peer.clone())
@@ -309,7 +309,6 @@ pub enum RejectionError {
     JsonRejection(crate::json::Error),
     QueryRejection(serde_urlencoded::de::Error),
     FormRejection(serde_html_form::de::Error),
-    EmptyAddressError,
 }
 
 unsafe impl Send for RejectionError {}
@@ -323,7 +322,6 @@ impl IntoResponse for RejectionError {
             Self::JsonRejection(_) => StatusCode::BAD_REQUEST,
             Self::QueryRejection(_) => StatusCode::BAD_REQUEST,
             Self::FormRejection(_) => StatusCode::BAD_REQUEST,
-            Self::EmptyAddressError => StatusCode::BAD_REQUEST,
         };
 
         status.into_response()

@@ -46,15 +46,9 @@ where
     type Error = S::Error;
 
     #[inline]
-    fn call(
-        self,
-        cx: &mut Cx,
-        req: Req,
-    ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
-        async move {
-            self.opt.apply(cx)?;
-            self.inner.call(cx, req).await
-        }
+    async fn call(self, cx: &mut Cx, req: Req) -> Result<Self::Response, Self::Error> {
+        self.opt.apply(cx)?;
+        self.inner.call(cx, req).await
     }
 }
 
