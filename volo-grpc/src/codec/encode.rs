@@ -1,5 +1,6 @@
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::{Stream, StreamExt};
+use http_body::Frame;
 use pilota::prost::Message;
 
 use super::{DefaultEncoder, PREFIX_LEN};
@@ -14,7 +15,7 @@ use crate::{
 pub fn encode<T, S>(
     source: S,
     compression_encoding: Option<CompressionEncoding>,
-) -> BoxStream<'static, Result<Bytes, Status>>
+) -> BoxStream<'static, Result<Frame<Bytes>, Status>>
 where
     S: Stream<Item = Result<T, Status>> + Send + Sync + 'static,
     T: Message + 'static,
@@ -56,7 +57,7 @@ where
                         buf.put_u32(len as u32);
                     }
 
-                    yield Ok(buf.split_to(len + PREFIX_LEN).freeze());
+                    yield Ok(Frame::data(buf.split_to(len + PREFIX_LEN).freeze()));
                 },
                 Some(Err(status)) => yield Err(status),
                 None => break,

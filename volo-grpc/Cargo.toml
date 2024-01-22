@@ -1,6 +1,6 @@
 [package]
 name = "volo-grpc"
-version = "0.9.1"
+version = "0.9.2"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -41,7 +41,12 @@ http-body.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["client", "server", "http2"] }
 hyper-timeout.workspace = true
-hyper-util = { workspace = true, features = ["tokio"] }
+hyper-util = { workspace = true, features = [
+    "tokio",
+    "client",
+    "client-legacy",
+    "http2",
+] }
 matchit.workspace = true
 percent-encoding.workspace = true
 pin-project.workspace = true
