@@ -48,9 +48,20 @@ where
 {
     pub fn gen(self) {
         let work_dir = std::env::current_dir().unwrap();
-        let config = std::fs::read(work_dir.join("volo.workspace.yml")).unwrap();
-        let config = serde_yaml::from_slice::<WorkspaceConfig>(&config).unwrap();
-
+        let config = match std::fs::read(work_dir.join("volo.workspace.yml")) {
+            Ok(config) => config,
+            Err(e) => {
+                eprintln!("failed to read volo.workspace.yml file, err: {}", e);
+                std::process::exit(1);
+            }
+        };
+        let config = match serde_yaml::from_slice::<WorkspaceConfig>(&config) {
+            Ok(config) => config,
+            Err(e) => {
+                eprintln!("failed to parse volo.workspace.yml, err: {}", e);
+                std::process::exit(1);
+            }
+        };
         let services = config
             .services
             .into_iter()
@@ -60,14 +71,19 @@ where
                     config: s.config,
                 })
             })
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-
-        self.ignore_unused(!config.touch_all)
-            .dedup(config.dedup_list)
-            .nonstandard_snake_case(config.nonstandard_snake_case)
-            .pilota_builder
-            .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
+            .collect::<Result<Vec<_>, _>>();
+        match services {
+            Ok(services) => {
+                self.ignore_unused(!config.touch_all)
+                    .dedup(config.dedup_list)
+                    .pilota_builder
+                    .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
+            }
+            Err(e) => {
+                eprintln!("failed to get or download idl, err: {}", e);
+                std::process::exit(1);
+            }
+        }
     }
 
     pub fn plugin(mut self, plugin: impl Plugin + 'static) -> Self {

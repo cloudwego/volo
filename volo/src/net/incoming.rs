@@ -269,7 +269,7 @@ mod unix_helper {
         #[cfg(target_os = "linux")]
         let backlog = max_listener_backlog();
         #[cfg(not(target_os = "linux"))]
-        let backlog = libc::SOMAXCONN as i32;
+        let backlog = libc::SOMAXCONN;
         socket.listen(backlog)?;
 
         DEFAULT_HOT_RESTART.register_listener_fd(addr.to_string(), socket.as_raw_fd());
@@ -279,36 +279,42 @@ mod unix_helper {
     pub async fn create_unix_listener_with_max_backlog<P: AsRef<Path>>(
         path: P,
     ) -> std::io::Result<UnixListener> {
-        if let Ok(Some(raw_fd)) = DEFAULT_HOT_RESTART
-            .dup_parent_listener_sock(path.as_ref().to_str().unwrap().to_string())
-            .await
-        {
-            DEFAULT_HOT_RESTART
-                .register_listener_fd(path.as_ref().to_str().unwrap().to_string(), raw_fd);
+        if let Some(path_str) = path.as_ref().to_str() {
+            if let Ok(Some(raw_fd)) = DEFAULT_HOT_RESTART
+                .dup_parent_listener_sock(path_str.to_string())
+                .await
+            {
+                DEFAULT_HOT_RESTART.register_listener_fd(path_str.to_string(), raw_fd);
+                let unix_listener = unsafe { UnixListener::from_raw_fd(raw_fd) };
+                return Ok(unix_listener);
+            }
+
+            let socket = Socket::new(Domain::UNIX, Type::STREAM, None)?;
+            socket.set_nonblocking(true)?;
+            socket.set_cloexec(true)?;
+
+            let path = path.as_ref();
+            if path.exists() {
+                std::fs::remove_file(path)?;
+            }
+            socket.bind(&socket2::SockAddr::unix(path)?)?;
+            #[cfg(target_os = "linux")]
+            let backlog = max_listener_backlog();
+            #[cfg(not(target_os = "linux"))]
+            let backlog = libc::SOMAXCONN;
+            socket.listen(backlog)?;
+
+            // Convert the socket into a UnixListener
+            let raw_fd = socket.into_raw_fd();
+            DEFAULT_HOT_RESTART.register_listener_fd(path_str.to_string(), raw_fd);
             let unix_listener = unsafe { UnixListener::from_raw_fd(raw_fd) };
-            return Ok(unix_listener);
+
+            Ok(unix_listener)
+        } else {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "invalid path",
+            ))
         }
-
-        let socket = Socket::new(Domain::UNIX, Type::STREAM, None)?;
-        socket.set_nonblocking(true)?;
-        socket.set_cloexec(true)?;
-
-        let path = path.as_ref();
-        if path.exists() {
-            std::fs::remove_file(&path)?;
-        }
-        socket.bind(&socket2::SockAddr::unix(path)?)?;
-        #[cfg(target_os = "linux")]
-        let backlog = max_listener_backlog();
-        #[cfg(not(target_os = "linux"))]
-        let backlog = libc::SOMAXCONN as i32;
-        socket.listen(backlog)?;
-
-        // Convert the socket into a UnixListener
-        let raw_fd = socket.into_raw_fd();
-        DEFAULT_HOT_RESTART.register_listener_fd(path.to_str().unwrap().to_string(), raw_fd);
-        let unix_listener = unsafe { UnixListener::from_raw_fd(raw_fd) };
-
-        Ok(unix_listener)
     }
 }

@@ -475,7 +475,7 @@ where
         cx: &'cx mut ClientContext,
         req: Req,
     ) -> Result<Self::Response, Self::Error> {
-        let msg = ThriftMessage::mk_client_msg(cx, Ok(req))?;
+        let msg = ThriftMessage::mk_client_msg(cx, Ok(req));
         let resp = self.inner.call(cx, msg).await;
         match resp {
             Ok(Some(ThriftMessage { data: Ok(data), .. })) => Ok(Some(data)),
@@ -598,7 +598,7 @@ impl<S> Client<S> {
             let mut cache = cache.borrow_mut();
             cache
                 .pop()
-                .and_then(|mut cx| {
+                .map(|mut cx| {
                     // The generated code only push the cx to the cache, we need to reset
                     // it after we pop it from the cache.
                     cx.reset(
@@ -624,7 +624,7 @@ impl<S> Client<S> {
                     cx.rpc_info_mut().set_config(self.inner.config);
                     cx.rpc_info_mut()
                         .set_method(FastStr::from_static_str(method));
-                    Some(cx)
+                    cx
                 })
                 .unwrap_or_else(|| {
                     ClientContext::new(

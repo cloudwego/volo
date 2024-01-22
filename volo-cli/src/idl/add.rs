@@ -119,23 +119,36 @@ impl CliCommand for Add {
                     if idl.path != self.idl {
                         continue;
                     }
-                    match idl.source {
-                        Source::Git(ref mut source) if self.git.as_ref() == Some(&source.repo) => {
-                            if let Some(r#ref) = self.r#ref.as_ref() {
-                                let _ = source.r#ref.insert(r#ref.clone());
-                                if let Source::Git(ref git) = new_idl.source {
-                                    let _ = source.lock.insert(git.lock.clone().unwrap());
-                                }
-                            }
+
+                    let git_source = match idl.source {
+                        Source::Git(ref mut git_source)
+                            if self.git.as_ref() == Some(&git_source.repo) =>
+                        {
+                            has_found_idl = true;
+                            git_source
+                        }
+                        Source::Git(_) => continue,
+                        Source::Local => {
                             has_found_idl = true;
                             break;
                         }
-                        Source::Local if self.git.is_none() => {
-                            has_found_idl = true;
-                            break;
-                        }
-                        _ => {}
+                    };
+
+                    if let Some(r#ref) = self.r#ref.as_ref() {
+                        let _ = git_source.r#ref.insert(r#ref.clone());
+                    } else {
+                        unreachable!("git ref should be Some if git source is git")
                     }
+                    let git = match new_idl.source {
+                        Source::Git(ref git) => git,
+                        _ => unreachable!("git source should be git if idl source is git"),
+                    };
+                    if let Some(lock) = git.lock.clone() {
+                        let _ = git_source.lock.insert(lock);
+                    } else {
+                        unreachable!("git lock should be Some if idl source is git")
+                    }
+                    break;
                 }
 
                 if !has_found_idl {

@@ -53,23 +53,17 @@ impl EntryMessage for DummyMessage {
 
 impl<M> ThriftMessage<M> {
     #[inline]
-    pub fn mk_client_msg(
-        cx: &ClientContext,
-        msg: Result<M, crate::Error>,
-    ) -> Result<Self, crate::Error> {
+    pub fn mk_client_msg(cx: &ClientContext, msg: Result<M, crate::Error>) -> Self {
         let meta = MessageMeta {
             msg_type: cx.message_type,
             method: cx.rpc_info.method().clone(),
             seq_id: cx.seq_id,
         };
-        Ok(Self { data: msg, meta })
+        Self { data: msg, meta }
     }
 
     #[inline]
-    pub fn mk_server_resp(
-        cx: &ServerContext,
-        msg: Result<M, crate::Error>,
-    ) -> Result<Self, crate::Error> {
+    pub fn mk_server_resp(cx: &ServerContext, msg: Result<M, crate::Error>) -> Self {
         let meta = MessageMeta {
             msg_type: match msg {
                 Ok(_) => TMessageType::Reply,
@@ -78,7 +72,7 @@ impl<M> ThriftMessage<M> {
             method: cx.rpc_info.method().clone(),
             seq_id: cx.seq_id.unwrap_or(0),
         };
-        Ok(Self { data: msg, meta })
+        Self { data: msg, meta }
     }
 }
 

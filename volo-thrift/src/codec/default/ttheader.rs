@@ -129,7 +129,7 @@ where
                 self.inner.decode_async(cx, reader).await
             }
         } else {
-            return self.inner.decode_async(cx, reader).await;
+            self.inner.decode_async(cx, reader).await
         }
     }
 }
@@ -467,24 +467,36 @@ pub(crate) fn encode<Cx: ThriftContext>(
         let header_size = dst.len() - zero_index;
         let mut buf = &mut dst[zero_index + 12..zero_index + 12 + 2];
         let written_header_size = (header_size - 14) / 4;
-        if written_header_size > u16::MAX as usize {
+
+        if let Ok(written_header_size) = written_header_size.try_into() {
+            buf.put_u16(written_header_size);
+            trace!(
+                "[VOLO] encode ttheader write header size: {}",
+                written_header_size
+            );
+        } else {
             return Err(pilota::thrift::new_protocol_error(
                 ProtocolErrorKind::SizeLimit,
                 format!("ttheader header size {written_header_size} overflows u16"),
             ));
         }
-        buf.put_u16(written_header_size.try_into().unwrap());
-        trace!(
-            "[VOLO] encode ttheader write header size: {}",
-            written_header_size
-        );
 
         let size = header_size + size;
 
         // fill length
         let mut buf = &mut dst[zero_index..zero_index + 4];
-        buf.put_u32((size - 4).try_into().unwrap());
-        trace!("[VOLO] encode ttheader write length size: {}", size - 4);
+        if let Ok(ttheader_size) = (size - 4).try_into() {
+            buf.put_u32(ttheader_size);
+            trace!(
+                "[VOLO] encode ttheader write length size: {}",
+                ttheader_size
+            );
+        } else {
+            return Err(pilota::thrift::new_protocol_error(
+                ProtocolErrorKind::SizeLimit,
+                format!("ttheader size {size} overflows u32"),
+            ));
+        }
         Ok(())
     })?;
     Ok(())
@@ -795,12 +807,6 @@ pub(crate) fn decode<Cx: ThriftContext>(
                             let addr = ad.parse::<SocketAddr>();
                             if let Ok(addr) = addr {
                                 caller.set_address(volo::net::Address::from(addr));
-                            }
-                        }
-
-                        if caller.address.is_none() {
-                            if let Some(v) = caller.address() {
-                                caller.set_address(v);
                             }
                         }
                     }

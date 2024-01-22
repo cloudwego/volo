@@ -105,10 +105,10 @@ impl<T: Message + Default> RecvStream<T> {
                 Err(_frame) => {
                     // **unreachable** because the `frame` cannot be `Frame::Data` here
                     debug!("[VOLO] unexpected data from stream");
-                    return Err(Status::new(
+                    Err(Status::new(
                         Code::Internal,
                         "Unexpected data from stream.".to_string(),
-                    ));
+                    ))
                 }
             },
             Some(Err(err)) => Err(Status::from_error(Box::new(err))),

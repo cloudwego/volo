@@ -187,6 +187,7 @@ impl CliCommand for Init {
                     lock,
                 });
             }
+
             if self.git.is_some() {
                 idl.path = strip_slash_prefix(&self.idl);
             } else {
@@ -202,6 +203,7 @@ impl CliCommand for Init {
                 touch_all: false,
                 nonstandard_snake_case: false,
             };
+
             if self.is_grpc_project() {
                 self.copy_grpc_template(entry.clone())?;
             } else {
@@ -210,17 +212,18 @@ impl CliCommand for Init {
 
             if self.git.as_ref().is_none() {
                 // we will move volo.yml to volo-gen, so we need to add .. to includes and idl path
-                let idl = entry.idls.get_mut(0).unwrap();
-                if let Some(includes) = &mut idl.includes {
-                    for i in includes {
-                        if i.is_absolute() {
-                            continue;
+                if let Some(idl) = entry.idls.get_mut(0) {
+                    if let Some(includes) = &mut idl.includes {
+                        for i in includes {
+                            if i.is_absolute() {
+                                continue;
+                            }
+                            *i = PathBuf::new().join("../").join(i.clone());
                         }
-                        *i = PathBuf::new().join("../").join(i.clone());
                     }
-                }
-                if !idl.path.is_absolute() {
-                    idl.path = PathBuf::new().join("../").join(self.idl.clone());
+                    if !idl.path.is_absolute() {
+                        idl.path = PathBuf::new().join("../").join(self.idl.clone());
+                    }
                 }
             }
 
@@ -233,24 +236,28 @@ impl CliCommand for Init {
                         if self.idl != idl.path {
                             continue;
                         }
-                        match idl.source {
+                        let (repo, r#ref) = match idl.source {
                             Source::Git(GitSource {
                                 ref mut repo,
                                 ref mut r#ref,
                                 ..
-                            }) if self.git.is_some() => {
+                            }) => {
                                 // found the desired idl, update it
                                 found = true;
-                                if self.git.is_some() {
-                                    *repo = self.git.as_ref().unwrap().clone();
-                                    if self.r#ref.is_some() {
-                                        *r#ref = self.r#ref.clone();
-                                    }
-                                }
-                                break;
+                                (repo, r#ref)
                             }
-                            _ => {}
+                            _ => continue,
+                        };
+
+                        if let Some(git) = self.git.as_ref() {
+                            *repo = git.clone();
+                            if self.r#ref.is_some() {
+                                *r#ref = self.r#ref.clone();
+                            }
+                        } else {
+                            unreachable!()
                         }
+                        break;
                     }
 
                     if !found {

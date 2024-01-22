@@ -8,6 +8,7 @@ use std::{
 use anyhow::{bail, Context};
 use itertools::Itertools;
 use lazy_static::lazy_static;
+use serde::de::Error;
 
 use crate::model::{Config, GitSource, Idl, Source};
 
@@ -30,10 +31,24 @@ pub fn ensure_cache_path() -> std::io::Result<()> {
 }
 
 pub fn read_config_from_file(f: &File) -> Result<Config, serde_yaml::Error> {
-    if f.metadata().unwrap().len() != 0 {
-        serde_yaml::from_reader(f)
-    } else {
-        Ok(Config::new())
+    match f.metadata() {
+        Ok(metadata) => {
+            if metadata.len() == 0 {
+                Ok(Config::new())
+            } else {
+                serde_yaml::from_reader(f)
+            }
+        }
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Ok(Config::new())
+            } else {
+                Err(serde_yaml::Error::custom(format!(
+                    "failed to read config file, err: {}",
+                    e
+                )))
+            }
+        }
     }
 }
 
@@ -206,16 +221,16 @@ impl Task {
 }
 
 pub fn get_repo_latest_commit_id(repo: &str, r#ref: &str) -> anyhow::Result<String> {
-    let commit_list = unsafe {
-        String::from_utf8_unchecked(
-            Command::new("git")
-                .arg("ls-remote")
-                .arg(repo)
-                .arg(r#ref)
-                .output()
-                .unwrap()
-                .stdout,
-        )
+    let commit_list = match Command::new("git")
+        .arg("ls-remote")
+        .arg(repo)
+        .arg(r#ref)
+        .output()
+    {
+        Ok(output) => unsafe { String::from_utf8_unchecked(output.stdout) },
+        Err(e) => {
+            bail!("git ls-remote {} {} err:{}", repo, r#ref, e);
+        }
     };
     let commit_list: Vec<_> = commit_list
         .split('\n')
@@ -300,11 +315,9 @@ pub fn git_repo_init(path: &Path) -> anyhow::Result<()> {
 }
 
 pub fn strip_slash_prefix(p: &Path) -> PathBuf {
-    if p.starts_with("/") {
-        // remove the "/" prefix to the start of idl path
-        p.strip_prefix("/").unwrap().to_path_buf()
-    } else {
-        p.to_path_buf()
+    match p.strip_prefix("/") {
+        Ok(p) => p.to_path_buf(),
+        Err(_) => p.to_path_buf(),
     }
 }
 

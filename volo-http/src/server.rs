@@ -125,7 +125,12 @@ impl<S, L> Server<S, L> {
                 }
                 match incoming.accept().await {
                     Ok(Some(conn)) => {
-                        let peer = conn.info.peer_addr.clone().unwrap();
+                        let peer = conn
+                            .info
+                            .peer_addr
+                            .clone()
+                            .expect("http address should have one");
+
                         trace!("[VOLO] accept connection from: {:?}", peer);
                         conn_cnt.fetch_add(1, Ordering::Relaxed);
 
@@ -250,7 +255,6 @@ async fn handle_conn<S>(
             let peer = peer.clone();
             async move {
                 let (parts, req) = req.into_parts();
-                let req = req.into();
                 let mut cx = ServerContext::new(peer, parts);
                 let resp = match service.call(&mut cx, req).await {
                     Ok(resp) => resp,

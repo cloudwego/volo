@@ -27,9 +27,9 @@ pub trait OneShotService<Cx, Request> {
     type Error;
 
     /// Process the request and return the response asynchronously.
-    fn call<'cx>(
+    fn call(
         self,
-        cx: &'cx mut Cx,
+        cx: &mut Cx,
         req: Request,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send;
 }
@@ -46,15 +46,9 @@ where
     type Error = S::Error;
 
     #[inline]
-    fn call<'cx>(
-        self,
-        cx: &'cx mut Cx,
-        req: Req,
-    ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
-        async move {
-            self.opt.apply(cx)?;
-            self.inner.call(cx, req).await
-        }
+    async fn call(self, cx: &mut Cx, req: Req) -> Result<Self::Response, Self::Error> {
+        self.opt.apply(cx)?;
+        self.inner.call(cx, req).await
     }
 }
 

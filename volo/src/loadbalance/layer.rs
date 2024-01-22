@@ -1,4 +1,4 @@
-use std::{fmt::Debug, future::Future, sync::Arc};
+use std::{fmt::Debug, sync::Arc};
 
 use motore::Service;
 use tracing::warn;
@@ -57,46 +57,44 @@ where
 
     type Error = S::Error;
 
-    fn call<'s, 'cx>(
+    async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut Cx,
         req: Req,
-    ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
-        async move {
-            let callee = cx.rpc_info().callee();
+    ) -> Result<Self::Response, Self::Error> {
+        let callee = cx.rpc_info().callee();
 
-            let picker = match &callee.address {
-                None => self
-                    .load_balance
-                    .get_picker(callee, &self.discover)
-                    .await
-                    .map_err(|err| err.into())?,
-                _ => {
-                    return self.service.call(cx, req).await;
+        let picker = match &callee.address {
+            None => self
+                .load_balance
+                .get_picker(callee, &self.discover)
+                .await
+                .map_err(|err| err.into())?,
+            _ => {
+                return self.service.call(cx, req).await;
+            }
+        };
+        let mut call_count = 0;
+        for (addr, _) in picker.zip(0..self.retry + 1) {
+            call_count += 1;
+            cx.rpc_info_mut().callee_mut().address = Some(addr.clone());
+
+            match self.service.call(cx, req.clone()).await {
+                Ok(resp) => {
+                    return Ok(resp);
                 }
-            };
-            let mut call_count = 0;
-            for (addr, _) in picker.zip(0..self.retry + 1) {
-                call_count += 1;
-                cx.rpc_info_mut().callee_mut().address = Some(addr.clone());
-
-                match self.service.call(cx, req.clone()).await {
-                    Ok(resp) => {
-                        return Ok(resp);
-                    }
-                    Err(err) => {
-                        warn!("[VOLO] call rpcinfo: {:?}, error: {:?}", cx.rpc_info(), err);
-                        if !err.retryable() {
-                            return Err(err);
-                        }
+                Err(err) => {
+                    warn!("[VOLO] call rpcinfo: {:?}, error: {:?}", cx.rpc_info(), err);
+                    if !err.retryable() {
+                        return Err(err);
                     }
                 }
             }
-            if call_count == 0 {
-                warn!("[VOLO] zero call count, call rpcinfo: {:?}", cx.rpc_info());
-            }
-            Err(LoadBalanceError::Retry.into())
         }
+        if call_count == 0 {
+            warn!("[VOLO] zero call count, call rpcinfo: {:?}", cx.rpc_info());
+        }
+        Err(LoadBalanceError::Retry.into())
     }
 }
 
