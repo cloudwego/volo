@@ -17,7 +17,7 @@ pub use sonic_rs::Error;
 use crate::{
     extract::{FromRequest, RejectionError},
     response::IntoResponse,
-    HttpContext, Response,
+    Response, ServerContext,
 };
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -48,7 +48,7 @@ where
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &mut HttpContext,
+        cx: &mut ServerContext,
         body: Incoming,
         state: &S,
     ) -> Result<Self, Self::Rejection> {

@@ -1,39 +1,69 @@
+use std::ops::{Deref, DerefMut};
+
 use hyper::{
     header::HeaderValue,
     http::{
         header,
+        request::Parts,
         uri::{Authority, Scheme},
-        Extensions, HeaderMap, HeaderName, Method, Uri, Version,
+        HeaderMap, HeaderName,
     },
 };
 use url::{Host, Url};
-use volo::net::Address;
+use volo::{
+    context::{Reusable, Role, RpcCx, RpcInfo},
+    net::Address,
+    newtype_impl_context,
+};
 
 use crate::param::Params;
 
 static X_FORWARDED_HOST: HeaderName = HeaderName::from_static("x-forwarded-host");
 static X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-proto");
 
-#[derive(Clone, Debug)]
-pub struct HttpContext {
-    pub peer: Address,
-    pub method: Method,
-    pub uri: Uri,
-    pub version: Version,
-    pub headers: HeaderMap,
-    pub extensions: Extensions,
+pub type HttpContext = ServerContext;
 
+#[derive(Debug)]
+pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
+
+impl ServerContext {
+    pub(crate) fn new(peer: Address, parts: Parts) -> Self {
+        Self(RpcCx::new(
+            RpcInfo::with_role(Role::Server),
+            ServerCxInner {
+                parts,
+                peer,
+                params: Params::default(),
+            },
+        ))
+    }
+}
+
+newtype_impl_context!(ServerContext, Config, 0);
+
+impl Deref for ServerContext {
+    type Target = RpcCx<ServerCxInner, Config>;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for ServerContext {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ServerCxInner {
+    pub parts: Parts,
+    pub peer: Address,
     pub params: Params,
 }
 
-#[derive(Debug)]
-pub struct ConnectionInfo {
-    scheme: Scheme,
-    host: Option<Host>,
-    port: Option<u16>,
-}
-
-impl HttpContext {
+impl ServerCxInner {
     pub(crate) fn get_connection_info(&self) -> ConnectionInfo {
         let mut host = None;
         let mut scheme = None;
@@ -127,6 +157,27 @@ impl HttpContext {
     }
 }
 
+impl Deref for ServerCxInner {
+    type Target = Parts;
+
+    fn deref(&self) -> &Self::Target {
+        &self.parts
+    }
+}
+
+impl DerefMut for ServerCxInner {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.parts
+    }
+}
+
+#[derive(Debug)]
+pub struct ConnectionInfo {
+    scheme: Scheme,
+    host: Option<Host>,
+    port: Option<u16>,
+}
+
 impl ConnectionInfo {
     /// Hostname and port of the request.
     ///
@@ -150,6 +201,13 @@ impl ConnectionInfo {
     pub fn scheme(&self) -> &Scheme {
         &self.scheme
     }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Config {}
+
+impl Reusable for Config {
+    fn clear(&mut self) {}
 }
 
 fn unquote(val: &str) -> &str {

@@ -4,9 +4,9 @@ use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service};
 
 use crate::{
+    context::ServerContext,
     handler::HandlerWithoutRequest,
     response::{IntoResponse, Response},
-    HttpContext,
 };
 
 #[derive(Clone)]
@@ -48,9 +48,9 @@ pub struct Filter<S, H, R, T> {
     _marker: PhantomData<(R, T)>,
 }
 
-impl<S, H, R, T> Service<HttpContext, Incoming> for Filter<S, H, R, T>
+impl<S, H, R, T> Service<ServerContext, Incoming> for Filter<S, H, R, T>
 where
-    S: Service<HttpContext, Incoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
         + Send
         + Sync
         + 'static,
@@ -64,7 +64,7 @@ where
 
     async fn call<'s, 'cx>(
         &'s self,
-        cx: &'cx mut HttpContext,
+        cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
         match self.handler.clone().call(cx).await {
@@ -128,9 +128,9 @@ pub struct Timeout<S, H, R, T> {
     _marker: PhantomData<(R, T)>,
 }
 
-impl<S, H, R, T> Service<HttpContext, Incoming> for Timeout<S, H, R, T>
+impl<S, H, R, T> Service<ServerContext, Incoming> for Timeout<S, H, R, T>
 where
-    S: Service<HttpContext, Incoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
         + Send
         + Sync
         + 'static,
@@ -144,7 +144,7 @@ where
 
     async fn call<'s, 'cx>(
         &'s self,
-        cx: &'cx mut HttpContext,
+        cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
         let fut_service = self.service.call(cx, req);

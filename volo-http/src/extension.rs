@@ -3,14 +3,14 @@ use std::convert::Infallible;
 use hyper::{body::Incoming, StatusCode};
 use motore::{layer::Layer, service::Service};
 
-use crate::{extract::FromContext, response::IntoResponse, HttpContext, Response};
+use crate::{context::ServerContext, extract::FromContext, response::IntoResponse, Response};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Extension<T>(pub T);
 
 impl<S, T> Layer<S> for Extension<T>
 where
-    S: Service<HttpContext, Incoming, Response = Response> + Send + Sync + 'static,
+    S: Service<ServerContext, Incoming, Response = Response> + Send + Sync + 'static,
     T: Sync,
 {
     type Service = ExtensionService<S, T>;
@@ -26,9 +26,9 @@ pub struct ExtensionService<I, T> {
     ext: T,
 }
 
-impl<S, T> Service<HttpContext, Incoming> for ExtensionService<S, T>
+impl<S, T> Service<ServerContext, Incoming> for ExtensionService<S, T>
 where
-    S: Service<HttpContext, Incoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
         + Send
         + Sync
         + 'static,
@@ -39,7 +39,7 @@ where
 
     async fn call<'s, 'cx>(
         &'s self,
-        cx: &'cx mut HttpContext,
+        cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
         cx.extensions.insert(self.ext.clone());
@@ -54,7 +54,7 @@ where
 {
     type Rejection = ExtensionRejection;
 
-    async fn from_context(cx: &mut HttpContext, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Self, Self::Rejection> {
         cx.extensions
             .get::<T>()
             .map(T::clone)

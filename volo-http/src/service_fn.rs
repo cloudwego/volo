@@ -3,7 +3,7 @@ use std::{convert::Infallible, fmt, future::Future};
 use hyper::body::Incoming;
 use motore::service::Service;
 
-use crate::{HttpContext, Response};
+use crate::{context::ServerContext, Response};
 
 /// Returns a new [`ServiceFn`] with the given closure.
 ///
@@ -18,7 +18,7 @@ pub struct ServiceFn<F> {
     f: F,
 }
 
-impl<F> Service<HttpContext, Incoming> for ServiceFn<F>
+impl<F> Service<ServerContext, Incoming> for ServiceFn<F>
 where
     F: for<'r> Callback<'r>,
 {
@@ -27,7 +27,7 @@ where
 
     fn call<'s, 'cx>(
         &'s self,
-        cx: &'cx mut HttpContext,
+        cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> {
         (self.f).call(cx, req)
@@ -50,17 +50,17 @@ impl<F> fmt::Debug for ServiceFn<F> {
 pub trait Callback<'r> {
     type Future: Future<Output = Result<Response, Infallible>> + Send + 'r;
 
-    fn call(&self, cx: &'r mut HttpContext, req: Incoming) -> Self::Future;
+    fn call(&self, cx: &'r mut ServerContext, req: Incoming) -> Self::Future;
 }
 
 impl<'r, F, Fut> Callback<'r> for F
 where
-    F: Fn(&'r mut HttpContext, Incoming) -> Fut,
+    F: Fn(&'r mut ServerContext, Incoming) -> Fut,
     Fut: Future<Output = Result<Response, Infallible>> + Send + 'r,
 {
     type Future = Fut;
 
-    fn call(&self, cx: &'r mut HttpContext, req: Incoming) -> Self::Future {
+    fn call(&self, cx: &'r mut ServerContext, req: Incoming) -> Self::Future {
         self(cx, req)
     }
 }

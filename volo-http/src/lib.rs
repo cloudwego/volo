@@ -33,7 +33,7 @@ pub mod prelude {
     #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
     pub use crate::json::Json;
     pub use crate::{
-        context::{ConnectionInfo, HttpContext},
+        context::{ConnectionInfo, HttpContext, ServerContext},
         extension::Extension,
         extract::{Form, MaybeInvalid, Query, State},
         param::Params,
@@ -44,7 +44,7 @@ pub mod prelude {
     };
 
     pub type DynService =
-        motore::BoxCloneService<HttpContext, BodyIncoming, Response, std::convert::Infallible>;
+        motore::BoxCloneService<ServerContext, BodyIncoming, Response, std::convert::Infallible>;
 }
 
 pub use prelude::*;
