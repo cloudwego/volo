@@ -533,6 +533,7 @@ dependencies = [
  "pilota",
  "rustls 0.22.2",
  "rustls-pemfile 2.0.0",
+ "rustls-pki-types",
  "serde",
  "tokio",
  "tokio-rustls 0.25.0",
