@@ -58,7 +58,7 @@ where
         let config = match serde_yaml::from_slice::<WorkspaceConfig>(&config) {
             Ok(config) => config,
             Err(e) => {
-                eprintln!("failed to make serde yaml file, err: {}", e);
+                eprintln!("failed to parse volo.workspace.yml, err: {}", e);
                 std::process::exit(1);
             }
         };

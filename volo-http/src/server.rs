@@ -125,7 +125,11 @@ impl<S, L> Server<S, L> {
                 }
                 match incoming.accept().await {
                     Ok(Some(conn)) => {
-                        let peer = conn.info.peer_addr.clone();
+                        let peer = conn
+                            .info
+                            .peer_addr
+                            .clone()
+                            .expect("http address should have one");
 
                         trace!("[VOLO] accept connection from: {:?}", peer);
                         conn_cnt.fetch_add(1, Ordering::Relaxed);
@@ -233,7 +237,7 @@ async fn handle_conn<S>(
     exit_notify: Arc<Notify>,
     _exit_mark: Arc<std::sync::atomic::AtomicBool>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
-    peer: Option<Address>,
+    peer: Address,
 ) where
     S: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>
         + Clone

@@ -221,20 +221,16 @@ impl Task {
 }
 
 pub fn get_repo_latest_commit_id(repo: &str, r#ref: &str) -> anyhow::Result<String> {
-    let commit_list = unsafe {
-        String::from_utf8_unchecked(
-            match Command::new("git")
-                .arg("ls-remote")
-                .arg(repo)
-                .arg(r#ref)
-                .output()
-            {
-                Ok(output) => output.stdout,
-                Err(e) => {
-                    bail!("git ls-remote {} {} err:{}", repo, r#ref, e);
-                }
-            },
-        )
+    let commit_list = match Command::new("git")
+        .arg("ls-remote")
+        .arg(repo)
+        .arg(r#ref)
+        .output()
+    {
+        Ok(output) => unsafe { String::from_utf8_unchecked(output.stdout) },
+        Err(e) => {
+            bail!("git ls-remote {} {} err:{}", repo, r#ref, e);
+        }
     };
     let commit_list: Vec<_> = commit_list
         .split('\n')
