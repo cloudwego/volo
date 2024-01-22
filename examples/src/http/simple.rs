@@ -223,7 +223,7 @@ fn test_router() -> Router {
 // ```
 async fn tracing_from_fn(
     uri: Uri,
-    peer: Option<Address>,
+    peer: Address,
     cookie_jar: CookieJar,
     cx: &mut ServerContext,
     req: BodyIncoming,
@@ -237,7 +237,7 @@ async fn tracing_from_fn(
     let resp = next.run(cx, req).await;
     let elapsed = start.elapsed();
 
-    tracing::info!("seq: {count}: {peer:?} request {uri}, cost {elapsed:?}");
+    tracing::info!("seq: {count}: {peer} request {uri}, cost {elapsed:?}");
 
     (
         (
