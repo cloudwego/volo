@@ -15,6 +15,7 @@ use motore::{
     service::Service,
     BoxError,
 };
+use scopeguard::defer;
 use tokio::sync::Notify;
 use tracing::{info, trace};
 use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
@@ -144,7 +145,6 @@ impl<S, L> Server<S, L> {
                             .expect("http address should have one");
 
                         trace!("[VOLO] accept connection from: {:?}", peer);
-                        conn_cnt.fetch_add(1, Ordering::Relaxed);
 
                         tokio::task::spawn(handle_conn(
                             conn,
@@ -256,6 +256,10 @@ async fn handle_conn<S>(
         + Sync
         + 'static,
 {
+    conn_cnt.fetch_add(1, Ordering::Relaxed);
+    defer! {
+        conn_cnt.fetch_sub(1, Ordering::Relaxed);
+    }
     let notified = exit_notify.notified();
     tokio::pin!(notified);
 
@@ -284,7 +288,6 @@ async fn handle_conn<S>(
             }
         },
     }
-    conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }
 
 async fn serve<S>(
