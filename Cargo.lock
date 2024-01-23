@@ -2991,10 +2991,11 @@ dependencies = [
 
 [[package]]
 name = "volo-http"
-version = "0.1.13"
+version = "0.1.14"
 dependencies = [
  "ahash",
  "bytes",
+ "chrono",
  "cookie",
  "faststr",
  "futures",
@@ -3006,6 +3007,7 @@ dependencies = [
  "mime",
  "motore",
  "parking_lot 0.12.1",
+ "paste",
  "pin-project",
  "serde",
  "serde_html_form",

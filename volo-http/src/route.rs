@@ -227,6 +227,9 @@ impl Matcher {
     }
 }
 
+// The fields may be warned by compiler with "field `0` is never read", but those fields will be
+// used in `expect` with `Debug`. To fix the warning, just allow it.
+#[allow(dead_code)]
 #[derive(Debug)]
 enum MatcherError {
     UriConflict(String),

@@ -5,7 +5,10 @@ use std::{
 };
 
 use futures::future::BoxFuture;
-use hyper::{body::Incoming as BodyIncoming, server::conn::http1};
+use hyper::{
+    body::{Body, Incoming as BodyIncoming},
+    server::conn::http1,
+};
 use hyper_util::rt::TokioIo;
 use motore::{
     layer::{Identity, Layer, Stack},
@@ -18,12 +21,18 @@ use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
 
 use crate::{
     context::ServerContext,
-    response::{IntoResponse, RespBody, Response},
+    request::Request,
+    response::{IntoResponse, Response},
 };
+
+/// This is unstable now and may be changed in the future.
+#[doc(hidden)]
+type TraceFn = fn(&ServerContext);
 
 pub struct Server<S, L> {
     service: S,
     layer: L,
+    stat_tracer: Vec<TraceFn>,
     shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>>,
 }
 
@@ -35,6 +44,7 @@ impl<S> Server<S, Identity> {
         Self {
             service,
             layer: Identity::new(),
+            stat_tracer: Vec::new(),
             shutdown_hooks: Vec::new(),
         }
     }
@@ -68,6 +78,7 @@ impl<S, L> Server<S, L> {
         Server {
             service: self.service,
             layer: Stack::new(layer, self.layer),
+            stat_tracer: self.stat_tracer,
             shutdown_hooks: self.shutdown_hooks,
         }
     }
@@ -87,6 +98,7 @@ impl<S, L> Server<S, L> {
         Server {
             service: self.service,
             layer: Stack::new(self.layer, layer),
+            stat_tracer: self.stat_tracer,
             shutdown_hooks: self.shutdown_hooks,
         }
     }
@@ -102,19 +114,19 @@ impl<S, L> Server<S, L> {
     {
         // init server
         let service = Arc::new(self.layer.layer(self.service));
+        // TODO(lyf1999): type annotation is needed here, figure out why
+        let stat_tracer: Arc<[TraceFn]> = Arc::from(self.stat_tracer);
 
         let mut incoming = mk_incoming.make_incoming().await?;
         info!("[VOLO] server start at: {:?}", incoming);
 
         let conn_cnt = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let gconn_cnt = conn_cnt.clone();
-        let (exit_notify, exit_flag, exit_mark) = (
+        let (exit_notify, exit_flag) = (
             Arc::new(Notify::const_new()),
             Arc::new(parking_lot::RwLock::new(false)),
-            Arc::new(std::sync::atomic::AtomicBool::default()),
         );
-        let (exit_notify_inner, exit_flag_inner, exit_mark_inner) =
-            (exit_notify.clone(), exit_flag.clone(), exit_mark.clone());
+        let (exit_notify_inner, exit_flag_inner) = (exit_notify.clone(), exit_flag.clone());
 
         // spawn accept loop
         let handler = tokio::spawn(async move {
@@ -137,8 +149,8 @@ impl<S, L> Server<S, L> {
                         tokio::task::spawn(handle_conn(
                             conn,
                             service.clone(),
+                            stat_tracer.clone(),
                             exit_notify_inner.clone(),
-                            exit_mark_inner.clone(),
                             conn_cnt.clone(),
                             peer,
                         ));
@@ -206,7 +218,6 @@ impl<S, L> Server<S, L> {
         // received signal, graceful shutdown now
         info!("[VOLO] received signal, gracefully exiting now");
         *exit_flag.write() = true;
-        exit_mark.store(true, Ordering::Relaxed);
 
         // Now we won't accept new connections.
         // And we want to send crrst reply to the peers in the short future.
@@ -234,8 +245,8 @@ impl<S, L> Server<S, L> {
 async fn handle_conn<S>(
     conn: Conn,
     service: S,
+    stat_tracer: Arc<[TraceFn]>,
     exit_notify: Arc<Notify>,
-    _exit_mark: Arc<std::sync::atomic::AtomicBool>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer: Address,
 ) where
@@ -250,18 +261,8 @@ async fn handle_conn<S>(
 
     let mut http_conn = http1::Builder::new().serve_connection(
         TokioIo::new(conn),
-        hyper::service::service_fn(move |req: hyper::http::Request<BodyIncoming>| {
-            let service = service.clone();
-            let peer = peer.clone();
-            async move {
-                let (parts, req) = req.into_parts();
-                let mut cx = ServerContext::new(peer, parts);
-                let resp = match service.call(&mut cx, req).await {
-                    Ok(resp) => resp,
-                    Err(inf) => inf.into_response(),
-                };
-                Ok::<hyper::http::Response<RespBody>, Infallible>(resp)
-            }
+        hyper::service::service_fn(|req| {
+            serve(service.clone(), peer.clone(), stat_tracer.clone(), req)
         }),
     );
     tokio::select! {
@@ -284,4 +285,39 @@ async fn handle_conn<S>(
         },
     }
     conn_cnt.fetch_sub(1, Ordering::Relaxed);
+}
+
+async fn serve<S>(
+    service: S,
+    peer: Address,
+    stat_tracer: Arc<[TraceFn]>,
+    request: Request,
+) -> Result<Response, Infallible>
+where
+    S: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+{
+    let service = service.clone();
+    let peer = peer.clone();
+    let (parts, req) = request.into_parts();
+    let mut cx = ServerContext::new(peer, parts);
+
+    if let Some(req_size) = req.size_hint().exact() {
+        cx.common_stats.set_req_size(req_size);
+    }
+    cx.stats.record_process_start_at();
+
+    let resp = service.call(&mut cx, req).await.into_response();
+
+    cx.stats.record_process_end_at();
+    cx.stats.set_status_code(resp.status());
+    if let Some(resp_size) = resp.size_hint().exact() {
+        cx.common_stats.set_resp_size(resp_size);
+    }
+
+    stat_tracer.iter().for_each(|f| f(&cx));
+    Ok(resp)
 }
