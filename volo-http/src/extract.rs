@@ -302,6 +302,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum RejectionError {
     BodyCollectionError,
     InvalidContentType,
