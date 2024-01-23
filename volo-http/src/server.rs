@@ -1,4 +1,5 @@
 use std::{
+    cell::RefCell,
     convert::Infallible,
     sync::{atomic::Ordering, Arc},
     time::Duration,
@@ -10,6 +11,7 @@ use hyper::{
     server::conn::http1,
 };
 use hyper_util::rt::TokioIo;
+use metainfo::{MetaInfo, METAINFO};
 use motore::{
     layer::{Identity, Layer, Stack},
     service::Service,
@@ -17,27 +19,29 @@ use motore::{
 };
 use scopeguard::defer;
 use tokio::sync::Notify;
-use tracing::{info, trace};
+use tracing::{info, trace, Instrument};
 use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
 
 use crate::{
     context::ServerContext,
     request::Request,
     response::{IntoResponse, Response},
+    tracing::{DefaultProvider, SpanProvider},
 };
 
 /// This is unstable now and may be changed in the future.
 #[doc(hidden)]
 type TraceFn = fn(&ServerContext);
 
-pub struct Server<S, L> {
+pub struct Server<S, L, SP> {
     service: S,
     layer: L,
     stat_tracer: Vec<TraceFn>,
+    span_provider: SP,
     shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>>,
 }
 
-impl<S> Server<S, Identity> {
+impl<S> Server<S, Identity, DefaultProvider> {
     pub fn new(service: S) -> Self
     where
         S: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>,
@@ -46,12 +50,13 @@ impl<S> Server<S, Identity> {
             service,
             layer: Identity::new(),
             stat_tracer: Vec::new(),
+            span_provider: DefaultProvider {},
             shutdown_hooks: Vec::new(),
         }
     }
 }
 
-impl<S, L> Server<S, L> {
+impl<S, L, SP> Server<S, L, SP> {
     /// Register shutdown hook.
     ///
     /// Hook functions will be called just before volo's own gracefull existing code starts,
@@ -75,11 +80,12 @@ impl<S, L> Server<S, L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<Inner>(self, layer: Inner) -> Server<S, Stack<Inner, L>> {
+    pub fn layer<Inner>(self, layer: Inner) -> Server<S, Stack<Inner, L>, SP> {
         Server {
             service: self.service,
             layer: Stack::new(layer, self.layer),
             stat_tracer: self.stat_tracer,
+            span_provider: self.span_provider,
             shutdown_hooks: self.shutdown_hooks,
         }
     }
@@ -95,11 +101,29 @@ impl<S, L> Server<S, L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>> {
+    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>, SP> {
         Server {
             service: self.service,
             layer: Stack::new(self.layer, layer),
             stat_tracer: self.stat_tracer,
+            span_provider: self.span_provider,
+            shutdown_hooks: self.shutdown_hooks,
+        }
+    }
+
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn stat_tracer(mut self, trace_fn: TraceFn) -> Self {
+        self.stat_tracer.push(trace_fn);
+        self
+    }
+
+    pub fn span_provider<P: SpanProvider>(self, provider: P) -> Server<S, L, P> {
+        Server {
+            service: self.service,
+            layer: self.layer,
+            stat_tracer: self.stat_tracer,
+            span_provider: provider,
             shutdown_hooks: self.shutdown_hooks,
         }
     }
@@ -112,6 +136,7 @@ impl<S, L> Server<S, L> {
             + Send
             + Sync
             + 'static,
+        SP: SpanProvider,
     {
         // init server
         let service = Arc::new(self.layer.layer(self.service));
@@ -150,6 +175,7 @@ impl<S, L> Server<S, L> {
                             conn,
                             service.clone(),
                             stat_tracer.clone(),
+                            self.span_provider.clone(),
                             exit_notify_inner.clone(),
                             conn_cnt.clone(),
                             peer,
@@ -242,10 +268,11 @@ impl<S, L> Server<S, L> {
     }
 }
 
-async fn handle_conn<S>(
+async fn handle_conn<S, SP>(
     conn: Conn,
     service: S,
     stat_tracer: Arc<[TraceFn]>,
+    span_provider: SP,
     exit_notify: Arc<Notify>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer: Address,
@@ -255,6 +282,7 @@ async fn handle_conn<S>(
         + Send
         + Sync
         + 'static,
+    SP: SpanProvider,
 {
     conn_cnt.fetch_add(1, Ordering::Relaxed);
     defer! {
@@ -265,8 +293,14 @@ async fn handle_conn<S>(
 
     let mut http_conn = http1::Builder::new().serve_connection(
         TokioIo::new(conn),
-        hyper::service::service_fn(|req| {
-            serve(service.clone(), peer.clone(), stat_tracer.clone(), req)
+        hyper::service::service_fn(move |req| {
+            serve(
+                service.clone(),
+                peer.clone(),
+                stat_tracer.clone(),
+                span_provider.clone(),
+                req,
+            )
         }),
     );
     tokio::select! {
@@ -290,10 +324,11 @@ async fn handle_conn<S>(
     }
 }
 
-async fn serve<S>(
+async fn serve<S, SP>(
     service: S,
     peer: Address,
     stat_tracer: Arc<[TraceFn]>,
+    span_provider: SP,
     request: Request,
 ) -> Result<Response, Infallible>
 where
@@ -302,25 +337,35 @@ where
         + Send
         + Sync
         + 'static,
+    SP: SpanProvider,
 {
-    let service = service.clone();
-    let peer = peer.clone();
-    let (parts, req) = request.into_parts();
-    let mut cx = ServerContext::new(peer, parts);
+    METAINFO
+        .scope(RefCell::new(MetaInfo::default()), async {
+            let service = service.clone();
+            let peer = peer.clone();
+            let (parts, req) = request.into_parts();
+            let mut cx = ServerContext::new(peer, parts);
 
-    if let Some(req_size) = req.size_hint().exact() {
-        cx.common_stats.set_req_size(req_size);
-    }
-    cx.stats.record_process_start_at();
+            if let Some(req_size) = req.size_hint().exact() {
+                cx.common_stats.set_req_size(req_size);
+            }
+            cx.stats.record_process_start_at();
 
-    let resp = service.call(&mut cx, req).await.into_response();
+            // SAFETY: it is promised safe here, because span only reads cx before handling polling
+            let tracing_cx = unsafe { std::mem::transmute(&cx) };
 
-    cx.stats.record_process_end_at();
-    cx.stats.set_status_code(resp.status());
-    if let Some(resp_size) = resp.size_hint().exact() {
-        cx.common_stats.set_resp_size(resp_size);
-    }
+            let resp = async { service.call(&mut cx, req).await.into_response() }
+                .instrument(span_provider.on_serve(tracing_cx))
+                .await;
 
-    stat_tracer.iter().for_each(|f| f(&cx));
-    Ok(resp)
+            cx.stats.record_process_end_at();
+            cx.stats.set_status_code(resp.status());
+            if let Some(resp_size) = resp.size_hint().exact() {
+                cx.common_stats.set_resp_size(resp_size);
+            }
+
+            stat_tracer.iter().for_each(|f| f(&cx));
+            Ok(resp)
+        })
+        .await
 }

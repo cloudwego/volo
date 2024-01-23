@@ -64,7 +64,8 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     peer_addr
                 );
 
-                // it is promised safe here, because span only reads cx before handling polling
+                // SAFETY: it is promised safe here, because span only reads cx before handling
+                // polling
                 let tracing_cx = unsafe { std::mem::transmute(&cx) };
 
                 let result = async {

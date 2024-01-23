@@ -32,6 +32,7 @@ faststr.workspace = true
 futures.workspace = true
 futures-util.workspace = true
 matchit.workspace = true
+metainfo.workspace = true
 mime.workspace = true
 motore.workspace = true
 parking_lot.workspace = true
