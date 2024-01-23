@@ -35,6 +35,7 @@ num_enum.workspace = true
 parking_lot.workspace = true
 paste.workspace = true
 pin-project.workspace = true
+scopeguard.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = [
     "time",

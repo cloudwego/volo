@@ -10,6 +10,7 @@ use motore::{
     service::Service,
     BoxError,
 };
+use scopeguard::defer;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync::Notify,
@@ -212,7 +213,6 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
                         let peer_addr = conn.info.peer_addr;
                         trace!("[VOLO] accept connection from: {:?}", peer_addr);
                         let (rh, wh) = conn.stream.into_split();
-                        conn_cnt.fetch_add(1, Ordering::Relaxed);
 
                         #[cfg(feature = "multiplex")]
                         if self.multiplex {
@@ -398,6 +398,11 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
     MkC: MakeCodec<R, W>,
     SP: SpanProvider,
 {
+    conn_cnt.fetch_add(1, Ordering::Relaxed);
+    defer! {
+        conn_cnt.fetch_sub(1, Ordering::Relaxed);
+    }
+
     let (encoder, decoder) = make_codec.make_codec(rh, wh);
 
     tracing::trace!(
@@ -415,7 +420,6 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
         span_provider,
     )
     .await;
-    conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }
 
 #[cfg(feature = "multiplex")]
@@ -439,6 +443,10 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
     Resp: EntryMessage + Send + 'static,
     MkC: MakeCodec<R, W>,
 {
+    conn_cnt.fetch_add(1, Ordering::Relaxed);
+    defer! {
+        conn_cnt.fetch_sub(1, Ordering::Relaxed);
+    }
     let (encoder, decoder) = make_codec.make_codec(rh, wh);
 
     info!(
