@@ -3004,6 +3004,7 @@ dependencies = [
  "hyper 1.1.0",
  "hyper-util",
  "matchit",
+ "metainfo",
  "mime",
  "motore",
  "parking_lot 0.12.1",
