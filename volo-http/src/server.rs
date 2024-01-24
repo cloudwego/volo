@@ -104,6 +104,13 @@ impl<S, L> Server<S, L> {
         }
     }
 
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn stat_tracer(mut self, trace_fn: TraceFn) -> Self {
+        self.stat_tracer.push(trace_fn);
+        self
+    }
+
     pub async fn run<MI: MakeIncoming>(self, mk_incoming: MI) -> Result<(), BoxError>
     where
         S: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>,
