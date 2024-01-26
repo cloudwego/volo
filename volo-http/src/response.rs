@@ -50,6 +50,14 @@ impl From<Full<Bytes>> for RespBody {
     }
 }
 
+impl From<Vec<u8>> for RespBody {
+    fn from(value: Vec<u8>) -> Self {
+        Self {
+            inner: Full::new(value.into()),
+        }
+    }
+}
+
 impl From<Bytes> for RespBody {
     fn from(value: Bytes) -> Self {
         Self {
