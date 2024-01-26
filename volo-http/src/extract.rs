@@ -84,7 +84,7 @@ impl<S: Sync> FromContext<S> for Address {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Address, Self::Rejection> {
-        Ok(cx.peer.clone())
+        Ok(cx.peer().clone())
     }
 }
 
@@ -92,7 +92,7 @@ impl<S: Sync> FromContext<S> for Uri {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Uri, Self::Rejection> {
-        Ok(cx.uri.clone())
+        Ok(cx.uri().clone())
     }
 }
 
@@ -100,7 +100,7 @@ impl<S: Sync> FromContext<S> for Method {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Method, Self::Rejection> {
-        Ok(cx.method.clone())
+        Ok(cx.method().clone())
     }
 }
 
@@ -108,7 +108,7 @@ impl<S: Sync> FromContext<S> for Params {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Params, Self::Rejection> {
-        Ok(cx.params.clone())
+        Ok(cx.params().clone())
     }
 }
 
@@ -131,7 +131,7 @@ where
     type Rejection = RejectionError;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Self, Self::Rejection> {
-        let query = cx.uri.query().unwrap_or_default();
+        let query = cx.uri().query().unwrap_or_default();
         let param = serde_urlencoded::from_str(query).map_err(RejectionError::QueryRejection)?;
         Ok(Query(param))
     }
