@@ -7,7 +7,7 @@ use hyper::{
         header,
         request::Parts,
         uri::{Authority, Scheme},
-        HeaderMap, HeaderName, StatusCode,
+        HeaderMap, HeaderName, Method, StatusCode, Uri, Version,
     },
 };
 use paste::paste;
@@ -24,31 +24,6 @@ static X_FORWARDED_HOST: HeaderName = HeaderName::from_static("x-forwarded-host"
 static X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-proto");
 
 pub type HttpContext = ServerContext;
-
-macro_rules! stat_impl {
-    ($t: ident) => {
-        paste! {
-            /// This is unstable now and may be changed in the future.
-            #[inline]
-            pub fn $t(&self) -> Option<DateTime<Local>> {
-                self.$t
-            }
-
-            /// This is unstable now and may be changed in the future.
-            #[doc(hidden)]
-            #[inline]
-            pub fn [<set_$t>](&mut self, t: DateTime<Local>) {
-                self.$t = Some(t)
-            }
-
-            /// This is unstable now and may be changed in the future.
-            #[inline]
-            pub fn [<record_ $t>](&mut self) {
-                self.$t = Some(Local::now())
-            }
-        }
-    };
-}
 
 #[derive(Debug)]
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
@@ -97,7 +72,43 @@ pub struct ServerCxInner {
     pub common_stats: CommonStats,
 }
 
+macro_rules! impl_getter {
+    ($name: ident, $type: ty, $($path: tt).+) => {
+        paste! {
+            #[inline]
+            pub fn $name(&self) -> &$type {
+                &self.$($path).+
+            }
+
+            #[inline]
+            pub fn [<$name _mut>](&mut self) -> &mut $type {
+                &mut self.$($path).+
+            }
+        }
+    };
+    ($name: ident, $type: ty) => {
+        paste! {
+            #[inline]
+            pub fn $name(&self) -> &$type {
+                &self.$name
+            }
+
+            #[inline]
+            pub fn [<$name _mut>](&mut self) -> &mut $type {
+                &mut self.$name
+            }
+        }
+    };
+}
+
 impl ServerCxInner {
+    impl_getter!(method, Method, parts.method);
+    impl_getter!(uri, Uri, parts.uri);
+    impl_getter!(version, Version, parts.version);
+    impl_getter!(headers, HeaderMap, parts.headers);
+    impl_getter!(peer, Address);
+    impl_getter!(params, Params);
+
     pub(crate) fn get_connection_info(&self) -> ConnectionInfo {
         let mut host = None;
         let mut scheme = None;
@@ -246,6 +257,31 @@ pub struct ServerStats {
     process_end_at: Option<DateTime<Local>>,
 
     status_code: Option<StatusCode>,
+}
+
+macro_rules! stat_impl {
+    ($t: ident) => {
+        paste! {
+            /// This is unstable now and may be changed in the future.
+            #[inline]
+            pub fn $t(&self) -> Option<DateTime<Local>> {
+                self.$t
+            }
+
+            /// This is unstable now and may be changed in the future.
+            #[doc(hidden)]
+            #[inline]
+            pub fn [<set_$t>](&mut self, t: DateTime<Local>) {
+                self.$t = Some(t)
+            }
+
+            /// This is unstable now and may be changed in the future.
+            #[inline]
+            pub fn [<record_ $t>](&mut self) {
+                self.$t = Some(Local::now())
+            }
+        }
+    };
 }
 
 impl ServerStats {
