@@ -8,7 +8,7 @@ use std::{
 
 use futures_util::future::BoxFuture;
 use hyper::body::Incoming;
-use motore::Service;
+use motore::service::Service;
 
 use crate::{
     context::ServerContext,
@@ -16,37 +16,27 @@ use crate::{
     macros::{all_the_tuples, all_the_tuples_no_last_special_case},
     middleware::Next,
     response::{IntoResponse, Response},
-    DynService,
 };
 
-pub trait Handler<T, S>: Sized {
-    fn call(
-        self,
-        cx: &mut ServerContext,
-        req: Incoming,
-        state: &S,
-    ) -> impl Future<Output = Response> + Send;
+pub trait Handler<T>: Sized {
+    fn handle(self, cx: &mut ServerContext, req: Incoming)
+        -> impl Future<Output = Response> + Send;
 
-    fn with_state(self, state: S) -> HandlerService<Self, S, T>
-    where
-        S: Clone,
-    {
+    fn into_service(self) -> HandlerService<Self, T> {
         HandlerService {
             handler: self,
-            state,
             _marker: PhantomData,
         }
     }
 }
 
-impl<F, Fut, Res, S> Handler<((),), S> for F
+impl<F, Fut, Res> Handler<((),)> for F
 where
     F: FnOnce() -> Fut + Clone + Send,
     Fut: Future<Output = Res> + Send,
     Res: IntoResponse,
-    S: Send + Sync,
 {
-    async fn call(self, _context: &mut ServerContext, _req: Incoming, _state: &S) -> Response {
+    async fn handle(self, _cx: &mut ServerContext, _req: Incoming) -> Response {
         self().await.into_response()
     }
 }
@@ -56,23 +46,22 @@ macro_rules! impl_handler {
         [$($ty:ident),*], $last:ident
     ) => {
         #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<F, Fut, Res, M, S, $($ty,)* $last> Handler<(M, $($ty,)* $last,), S> for F
+        impl<F, Fut, Res, M, $($ty,)* $last> Handler<(M, $($ty,)* $last,)> for F
         where
             F: FnOnce($($ty,)* $last) -> Fut + Clone + Send,
             Fut: Future<Output = Res> + Send,
             Res: IntoResponse,
-            S: Send + Sync,
-            $( for<'r> $ty: FromContext<S> + Send + 'r, )*
-            for<'r> $last: FromRequest<S, M> + Send + 'r,
+            $( for<'r> $ty: FromContext + Send + 'r, )*
+            for<'r> $last: FromRequest<(), M> + Send + 'r,
         {
-            async fn call(self, cx: &mut ServerContext, req: Incoming, state: &S) -> Response {
+            async fn handle(self, cx: &mut ServerContext, req: Incoming) -> Response {
                 $(
-                    let $ty = match $ty::from_context(cx, state).await {
+                    let $ty = match $ty::from_context(cx, &()).await {
                         Ok(value) => value,
                         Err(rejection) => return rejection.into_response(),
                     };
                 )*
-                let $last = match $last::from_request(cx, req, state).await {
+                let $last = match $last::from_request(cx, req, &()).await {
                     Ok(value) => value,
                     Err(rejection) => return rejection.into_response(),
                 };
@@ -84,176 +73,41 @@ macro_rules! impl_handler {
 
 all_the_tuples!(impl_handler);
 
-// Use an extra trait with less generic types for hiding the type of handler
-pub struct DynHandler<S>(Box<dyn ErasedIntoRoute<S>>);
-
-unsafe impl<S> Send for DynHandler<S> {}
-unsafe impl<S> Sync for DynHandler<S> {}
-
-impl<S> DynHandler<S>
-where
-    S: Clone + Send + Sync + 'static,
-{
-    pub(crate) fn new<H, T>(handler: H) -> Self
-    where
-        H: Handler<T, S> + Clone + Send + Sync + 'static,
-        T: 'static,
-    {
-        // The anonymous function should ensure that the `handler` must be an impl of `Handler`,
-        // but the `ErasedIntoRoute::into_route` does not need to care it.
-        Self(Box::new(MakeErasedHandler {
-            handler,
-            into_route: |handler, state| {
-                DynService::new(HandlerService {
-                    handler,
-                    state,
-                    _marker: PhantomData,
-                })
-            },
-        }))
-    }
-
-    // State can only be injected into handler because route does not have such a field, so before
-    // injected a state, a handler should keep being a handler.
-    pub(crate) fn map<F>(self, f: F) -> DynHandler<S>
-    where
-        F: FnOnce(DynService) -> DynService + Clone + 'static,
-    {
-        DynHandler(Box::new(LayerMap {
-            inner: self.0,
-            layer: Box::new(f),
-        }))
-    }
-
-    pub(crate) fn into_route(self, state: S) -> DynService {
-        self.0.into_route(state)
-    }
-
-    pub(crate) async fn call_with_state(
-        self,
-        cx: &mut ServerContext,
-        req: Incoming,
-        state: S,
-    ) -> Result<Response, Infallible> {
-        self.0.into_route(state).call(cx, req).await
-    }
-}
-
-impl<S> Clone for DynHandler<S> {
-    fn clone(&self) -> Self {
-        Self(self.0.clone_box())
-    }
-}
-
-pub(crate) trait ErasedIntoRoute<S> {
-    fn clone_box(&self) -> Box<dyn ErasedIntoRoute<S>>;
-    fn into_route(self: Box<Self>, state: S) -> DynService;
-}
-
-pub(crate) struct MakeErasedHandler<H, S> {
+pub struct HandlerService<H, T> {
     handler: H,
-    into_route: fn(H, S) -> DynService,
-}
-
-impl<H, S> ErasedIntoRoute<S> for MakeErasedHandler<H, S>
-where
-    H: Clone + 'static,
-    S: 'static,
-{
-    fn clone_box(&self) -> Box<dyn ErasedIntoRoute<S>> {
-        Box::new(self.clone())
-    }
-
-    fn into_route(self: Box<Self>, state: S) -> DynService {
-        motore::BoxCloneService::new((self.into_route)(self.handler, state))
-    }
-}
-
-impl<H, S> Clone for MakeErasedHandler<H, S>
-where
-    H: Clone,
-{
-    fn clone(&self) -> Self {
-        Self {
-            handler: self.handler.clone(),
-            into_route: self.into_route,
-        }
-    }
-}
-
-struct LayerMap<S> {
-    inner: Box<dyn ErasedIntoRoute<S>>,
-    layer: Box<dyn LayerFn>,
-}
-
-trait LayerFn: FnOnce(DynService) -> DynService {
-    fn clone_box(&self) -> Box<dyn LayerFn>;
-}
-
-impl<F> LayerFn for F
-where
-    F: FnOnce(DynService) -> DynService + Clone + 'static,
-{
-    fn clone_box(&self) -> Box<dyn LayerFn> {
-        Box::new(self.clone())
-    }
-}
-
-impl<S> ErasedIntoRoute<S> for LayerMap<S>
-where
-    S: 'static,
-{
-    fn clone_box(&self) -> Box<dyn ErasedIntoRoute<S>> {
-        Box::new(Self {
-            inner: self.inner.clone_box(),
-            layer: self.layer.clone_box(),
-        })
-    }
-
-    fn into_route(self: Box<Self>, state: S) -> DynService {
-        (self.layer)(self.inner.into_route(state))
-    }
-}
-
-pub struct HandlerService<H, S, T> {
-    handler: H,
-    state: S,
     _marker: PhantomData<fn(T)>,
 }
 
-impl<H, S, T> Clone for HandlerService<H, S, T>
+impl<H, T> Clone for HandlerService<H, T>
 where
     H: Clone,
-    S: Clone,
 {
     fn clone(&self) -> Self {
         Self {
             handler: self.handler.clone(),
-            state: self.state.clone(),
-            _marker: PhantomData,
+            _marker: self._marker,
         }
     }
 }
 
-impl<H, S, T> motore::Service<ServerContext, Incoming> for HandlerService<H, S, T>
+impl<H, T> Service<ServerContext, Incoming> for HandlerService<H, T>
 where
-    for<'r> H: Handler<T, S> + Clone + Send + Sync + 'r,
-    S: Sync,
+    H: Handler<T> + Clone + Send + Sync,
 {
     type Response = Response;
     type Error = Infallible;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ServerContext,
+    fn call(
+        &self,
+        cx: &mut ServerContext,
         req: Incoming,
-    ) -> Result<Self::Response, Self::Error> {
-        Ok(self.handler.clone().call(cx, req, &self.state).await)
+    ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
+        async { Ok(self.handler.clone().handle(cx, req).await) }
     }
 }
 
 pub trait HandlerWithoutRequest<T, Ret>: Sized {
-    fn call(self, cx: &mut ServerContext) -> impl Future<Output = Result<Ret, Response>> + Send;
+    fn handle(self, cx: &mut ServerContext) -> impl Future<Output = Result<Ret, Response>> + Send;
 }
 
 impl<F, Fut, Ret> HandlerWithoutRequest<(), Ret> for F
@@ -261,7 +115,7 @@ where
     F: FnOnce() -> Fut + Clone + Send,
     Fut: Future<Output = Ret> + Send,
 {
-    async fn call(self, _context: &mut ServerContext) -> Result<Ret, Response> {
+    async fn handle(self, _context: &mut ServerContext) -> Result<Ret, Response> {
         Ok(self().await)
     }
 }
@@ -275,9 +129,9 @@ macro_rules! impl_handler_without_request {
         where
             F: FnOnce($($ty,)*) -> Fut + Clone + Send,
             Fut: Future<Output = Ret> + Send,
-            $( for<'r> $ty: FromContext<()> + Send + 'r, )*
+            $( for<'r> $ty: FromContext + Send + 'r, )*
         {
-            async fn call(self, cx: &mut ServerContext) -> Result<Ret, Response> {
+            async fn handle(self, cx: &mut ServerContext) -> Result<Ret, Response> {
                 $(
                     let $ty = match $ty::from_context(cx, &()).await {
                         Ok(value) => value,
@@ -292,17 +146,10 @@ macro_rules! impl_handler_without_request {
 
 all_the_tuples_no_last_special_case!(impl_handler_without_request);
 
-pub trait MiddlewareHandlerFromFn<'r, T, S>: Sized {
-    // type Response: IntoResponse;
+pub trait MiddlewareHandlerFromFn<'r, T>: Sized {
     type Future: Future<Output = Response> + Send + 'r;
 
-    fn call(
-        &self,
-        cx: &'r mut ServerContext,
-        req: Incoming,
-        state: &'r S,
-        next: Next,
-    ) -> Self::Future;
+    fn handle(&self, cx: &'r mut ServerContext, req: Incoming, next: Next) -> Self::Future;
 }
 
 macro_rules! impl_middleware_handler_from_fn {
@@ -310,35 +157,32 @@ macro_rules! impl_middleware_handler_from_fn {
         [$($ty:ident),*], $last:ident
     ) => {
         #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<'r, F, Fut, Res, M, S, $($ty,)* $last> MiddlewareHandlerFromFn<'r, (M, $($ty,)* $last), S> for F
+        impl<'r, F, Fut, Res, M, $($ty,)* $last> MiddlewareHandlerFromFn<'r, (M, $($ty,)* $last)> for F
         where
             F: Fn($($ty,)* &'r mut ServerContext, $last, Next) -> Fut + Copy + Send + Sync + 'static,
             Fut: Future<Output = Res> + Send + 'r,
             Res: IntoResponse + 'r,
-            S: Send + Sync + 'r,
-            $( $ty: FromContext<S> + Send + 'r, )*
-            $last: FromRequest<S, M> + Send + 'r,
+            $( $ty: FromContext + Send + 'r, )*
+            $last: FromRequest<(), M> + Send + 'r,
         {
-            // type Response = Response;
             type Future = ResponseFuture<'r, Response>;
 
-            fn call(
+            fn handle(
                 &self,
                 cx: &'r mut ServerContext,
                 req: Incoming,
-                state: &'r S,
                 next: Next,
             ) -> Self::Future {
                 let f = *self;
 
                 let future = Box::pin(async move {
                     $(
-                        let $ty = match $ty::from_context(cx, state).await {
+                        let $ty = match $ty::from_context(cx, &()).await {
                             Ok(value) => value,
                             Err(rejection) => return rejection.into_response(),
                         };
                     )*
-                    let $last = match $last::from_request(cx, req, state).await {
+                    let $last = match $last::from_request(cx, req, &()).await {
                         Ok(value) => value,
                         Err(rejection) => return rejection.into_response(),
                     };
@@ -355,29 +199,21 @@ macro_rules! impl_middleware_handler_from_fn {
 
 all_the_tuples!(impl_middleware_handler_from_fn);
 
-pub trait MiddlewareHandlerMapResponse<'r, T, S>: Sized {
-    // type Response: IntoResponse;
+pub trait MiddlewareHandlerMapResponse<'r, T>: Sized {
     type Future: Future<Output = Response> + Send + 'r;
 
-    fn call(&self, cx: &'r mut ServerContext, state: &'r S, response: Response) -> Self::Future;
+    fn handle(&self, cx: &'r mut ServerContext, response: Response) -> Self::Future;
 }
 
-impl<'r, F, Fut, Res, S> MiddlewareHandlerMapResponse<'r, ((),), S> for F
+impl<'r, F, Fut, Res> MiddlewareHandlerMapResponse<'r, ((),)> for F
 where
     F: Fn(Response) -> Fut + Copy + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'r,
     Res: IntoResponse + 'r,
-    S: Send + Sync + 'r,
 {
-    // type Response = Response;
     type Future = ResponseFuture<'r, Response>;
 
-    fn call(
-        &self,
-        _context: &'r mut ServerContext,
-        _state: &'r S,
-        response: Response,
-    ) -> Self::Future {
+    fn handle(&self, _context: &'r mut ServerContext, response: Response) -> Self::Future {
         let f = *self;
 
         let future = Box::pin(async move { f(response).await.into_response() });
@@ -391,28 +227,25 @@ macro_rules! impl_middleware_handler_map_response {
         $($ty:ident),* $(,)?
     ) => {
         #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<'r, F, Fut, Res, M, S, $($ty,)*> MiddlewareHandlerMapResponse<'r, (M, $($ty,)*), S> for F
+        impl<'r, F, Fut, Res, M, $($ty,)*> MiddlewareHandlerMapResponse<'r, (M, $($ty,)*)> for F
         where
             F: Fn($($ty,)* Response) -> Fut + Copy + Send + Sync + 'static,
             Fut: Future<Output = Res> + Send + 'r,
             Res: IntoResponse + 'r,
-            S: Send + Sync + 'r,
-            $( $ty: FromContext<S> + Send + 'r, )*
+            $( $ty: FromContext + Send + 'r, )*
         {
-            // type Response = Response;
             type Future = ResponseFuture<'r, Response>;
 
-            fn call(
+            fn handle(
                 &self,
                 cx: &'r mut ServerContext,
-                state: &'r S,
                 response: Response,
             ) -> Self::Future {
                 let f = *self;
 
                 let future = Box::pin(async move {
                     $(
-                        let $ty = match $ty::from_context(cx, state).await {
+                        let $ty = match $ty::from_context(cx, &()).await {
                             Ok(value) => value,
                             Err(rejection) => return rejection.into_response(),
                         };
