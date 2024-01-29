@@ -10,90 +10,76 @@ use crate::{
     DynService,
 };
 
-pub struct FromFnLayer<F, S, T> {
+pub struct FromFnLayer<F, T> {
     f: F,
-    state: S,
     _marker: PhantomData<fn(T)>,
 }
 
-impl<F, S, T> Clone for FromFnLayer<F, S, T>
+impl<F, T> Clone for FromFnLayer<F, T>
 where
     F: Clone,
-    S: Clone,
 {
     fn clone(&self) -> Self {
         Self {
             f: self.f.clone(),
-            state: self.state.clone(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-pub fn from_fn<F, T>(f: F) -> FromFnLayer<F, (), T> {
-    from_fn_with_state(f, ())
-}
-
-fn from_fn_with_state<F, S, T>(f: F, state: S) -> FromFnLayer<F, S, T> {
-    FromFnLayer {
-        f,
-        state,
-        _marker: PhantomData,
-    }
-}
-
-impl<I, F, S, T> Layer<I> for FromFnLayer<F, S, T>
-where
-    F: Clone,
-    S: Clone,
-{
-    type Service = FromFn<I, F, S, T>;
-
-    fn layer(self, inner: I) -> Self::Service {
-        FromFn {
-            inner,
-            f: self.f.clone(),
-            state: self.state.clone(),
             _marker: self._marker,
         }
     }
 }
 
-pub struct FromFn<I, F, S, T> {
-    inner: I,
-    f: F,
-    state: S,
-    _marker: PhantomData<fn(T)>,
+pub fn from_fn<F, T>(f: F) -> FromFnLayer<F, T> {
+    FromFnLayer {
+        f,
+        _marker: PhantomData,
+    }
 }
 
-impl<I, F, S, T> Clone for FromFn<I, F, S, T>
+impl<S, F, T> Layer<S> for FromFnLayer<F, T>
 where
-    I: Clone,
     F: Clone,
-    S: Clone,
 {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
+    type Service = FromFn<S, F, T>;
+
+    fn layer(self, service: S) -> Self::Service {
+        FromFn {
+            service,
             f: self.f.clone(),
-            state: self.state.clone(),
-            _marker: PhantomData,
+            _marker: self._marker,
         }
     }
 }
 
-impl<I, F, S, T> Service<ServerContext, Incoming> for FromFn<I, F, S, T>
+pub struct FromFn<S, F, T> {
+    service: S,
+    f: F,
+    _marker: PhantomData<fn(T)>,
+}
+
+impl<S, F, T> Clone for FromFn<S, F, T>
 where
-    I: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
+    S: Clone,
+    F: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            f: self.f.clone(),
+            _marker: self._marker,
+        }
+    }
+}
+
+impl<S, F, T> Service<ServerContext, Incoming> for FromFn<S, F, T>
+where
+    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
         + Clone
         + Send
         + Sync
         + 'static,
-    F: for<'r> MiddlewareHandlerFromFn<'r, T, S> + Clone + Sync,
-    S: Clone + Sync,
+    F: for<'r> MiddlewareHandlerFromFn<'r, T> + Clone + Sync,
 {
-    type Response = I::Response;
-    type Error = I::Error;
+    type Response = S::Response;
+    type Error = S::Error;
 
     async fn call<'s, 'cx>(
         &'s self,
@@ -101,119 +87,103 @@ where
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
         let next = Next {
-            inner: DynService::new(self.inner.clone()),
+            service: DynService::new(self.service.clone()),
         };
-        Ok(
-            self.f.call(cx, req, &self.state, next).await, // .into_response()
-        )
+        Ok(self.f.handle(cx, req, next).await)
     }
 }
 
 pub struct Next {
-    inner: DynService,
+    service: DynService,
 }
 
 impl Next {
     pub async fn run(self, cx: &mut ServerContext, req: Incoming) -> Result<Response, Infallible> {
-        self.inner.call(cx, req).await
+        self.service.call(cx, req).await
     }
 }
 
-pub struct MapResponseLayer<F, S, T> {
+pub struct MapResponseLayer<F, T> {
     f: F,
-    state: S,
     _marker: PhantomData<fn(T)>,
 }
 
-impl<F, S, T> Clone for MapResponseLayer<F, S, T>
+impl<F, T> Clone for MapResponseLayer<F, T>
 where
     F: Clone,
-    S: Clone,
 {
     fn clone(&self) -> Self {
         Self {
             f: self.f.clone(),
-            state: self.state.clone(),
-            _marker: PhantomData,
-        }
-    }
-}
-
-pub fn map_response<F, T>(f: F) -> MapResponseLayer<F, (), T> {
-    map_response_with_state(f, ())
-}
-
-fn map_response_with_state<F, S, T>(f: F, state: S) -> MapResponseLayer<F, S, T> {
-    MapResponseLayer {
-        f,
-        state,
-        _marker: PhantomData,
-    }
-}
-
-impl<I, F, S, T> Layer<I> for MapResponseLayer<F, S, T>
-where
-    F: Clone,
-    S: Clone,
-{
-    type Service = MapResponse<I, F, S, T>;
-
-    fn layer(self, inner: I) -> Self::Service {
-        MapResponse {
-            inner,
-            f: self.f.clone(),
-            state: self.state.clone(),
             _marker: self._marker,
         }
     }
 }
 
-pub struct MapResponse<I, F, S, T> {
-    inner: I,
-    f: F,
-    state: S,
-    _marker: PhantomData<fn(T)>,
+pub fn map_response<F, T>(f: F) -> MapResponseLayer<F, T> {
+    MapResponseLayer {
+        f,
+        _marker: PhantomData,
+    }
 }
 
-impl<I, F, S, T> Clone for MapResponse<I, F, S, T>
+impl<S, F, T> Layer<S> for MapResponseLayer<F, T>
 where
-    I: Clone,
     F: Clone,
-    S: Clone,
 {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
+    type Service = MapResponse<S, F, T>;
+
+    fn layer(self, service: S) -> Self::Service {
+        MapResponse {
+            service,
             f: self.f.clone(),
-            state: self.state.clone(),
-            _marker: PhantomData,
+            _marker: self._marker,
         }
     }
 }
 
-impl<I, F, S, T> Service<ServerContext, Incoming> for MapResponse<I, F, S, T>
+pub struct MapResponse<S, F, T> {
+    service: S,
+    f: F,
+    _marker: PhantomData<fn(T)>,
+}
+
+impl<S, F, T> Clone for MapResponse<S, F, T>
 where
-    I: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
+    S: Clone,
+    F: Clone,
+{
+    fn clone(&self) -> Self {
+        Self {
+            service: self.service.clone(),
+            f: self.f.clone(),
+            _marker: self._marker,
+        }
+    }
+}
+
+impl<S, F, T> Service<ServerContext, Incoming> for MapResponse<S, F, T>
+where
+    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
         + Clone
         + Send
         + Sync
         + 'static,
-    F: for<'r> MiddlewareHandlerMapResponse<'r, T, S> + Clone + Sync,
-    S: Clone + Sync,
+    F: for<'r> MiddlewareHandlerMapResponse<'r, T> + Clone + Sync,
 {
-    type Response = I::Response;
-    type Error = I::Error;
+    type Response = S::Response;
+    type Error = S::Error;
 
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
-        let response = match self.inner.call(cx, req).await {
+        let response = match self.service.call(cx, req).await {
             Ok(resp) => resp,
             Err(e) => e.into_response(),
         };
 
-        Ok(self.f.call(cx, &self.state, response).await)
+        Ok(self.f.handle(cx, response).await)
     }
 }

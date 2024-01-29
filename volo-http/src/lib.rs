@@ -23,7 +23,7 @@ pub mod prelude {
     pub use bytes::Bytes;
     pub use hyper::{
         self,
-        body::Incoming as BodyIncoming,
+        body::Incoming,
         http::{self, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
     };
     pub use volo::net::Address;
@@ -35,7 +35,7 @@ pub mod prelude {
     pub use crate::{
         context::{ConnectionInfo, HttpContext, ServerContext},
         extension::Extension,
-        extract::{Form, MaybeInvalid, Query, State},
+        extract::{Form, MaybeInvalid, Query},
         param::Params,
         request::Request,
         response::Response,
@@ -43,8 +43,13 @@ pub mod prelude {
         server::Server,
     };
 
-    pub type DynService =
-        motore::BoxCloneService<ServerContext, BodyIncoming, Response, std::convert::Infallible>;
+    pub type BodyIncoming = Incoming;
+    pub type DynService = motore::service::BoxCloneService<
+        ServerContext,
+        Incoming,
+        Response,
+        std::convert::Infallible,
+    >;
 }
 
 pub use prelude::*;

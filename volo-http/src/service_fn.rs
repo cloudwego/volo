@@ -13,7 +13,7 @@ pub fn service_fn<F>(f: F) -> ServiceFn<F> {
 }
 
 /// A [`Service`] implemented by a closure. See the docs for [`service_fn`] for more details.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct ServiceFn<F> {
     f: F,
 }
