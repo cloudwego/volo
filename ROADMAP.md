@@ -9,10 +9,6 @@ refused! We are always happy to receive patches for new cool features we haven't
 or didn't judge to be a priority. Please however understand that such patches might take longer
 for us to review.
 
-## Runtime
-
-- [ ] #2 Use `monoio` as an opt-in runtime
-
 ## Service Governence
 
 - [ ] Support OpenSergo
@@ -28,7 +24,7 @@ for us to review.
 
 ### Load Balancer
 
-- [ ] #7 Support consistent hash load balancing
+- [x] #7 Support consistent hash load balancing
 
 ### Proxyless
 
@@ -36,8 +32,8 @@ for us to review.
 
 ## TLS
 
-- [ ] #6 Support TLS for `volo-grpc`
+- [x] #6 Support TLS for `volo-grpc`
 
 ## Cli
 
-- [ ] #5 Support auto generate service code in lib.rs
+- [x] #5 Support auto generate service code in lib.rs
