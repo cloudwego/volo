@@ -4,10 +4,14 @@ use http::{
     header::{HeaderValue, IntoHeaderName},
     HeaderMap, StatusCode,
 };
+use hyper::body::Incoming;
 
 use crate::body::Body;
 
 pub type Response<B = Body> = http::Response<B>;
+
+pub type ClientResponse<B = Incoming> = http::Response<B>;
+pub type ServerResponse<B = Body> = http::Response<B>;
 
 pub trait TryIntoResponseHeaders {
     type Error;
