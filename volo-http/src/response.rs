@@ -4,18 +4,18 @@ use std::{
     task::{Context, Poll},
 };
 
+use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::ready;
-use http_body_util::Full;
-use hyper::{
-    body::{Body, Bytes, Frame, SizeHint},
-    header::HeaderValue,
-    http::{header::IntoHeaderName, StatusCode},
-    HeaderMap,
+use http::{
+    header::{HeaderValue, IntoHeaderName},
+    HeaderMap, StatusCode,
 };
+use http_body::{Body, Frame, SizeHint};
+use http_body_util::Full;
 use pin_project::pin_project;
 
-pub type Response<B = RespBody> = hyper::http::Response<B>;
+pub type Response<B = RespBody> = http::Response<B>;
 
 #[pin_project]
 pub struct RespBody {
@@ -189,7 +189,7 @@ impl IntoResponse for StatusCode {
     }
 }
 
-impl<B> IntoResponse for hyper::http::Response<B>
+impl<B> IntoResponse for http::Response<B>
 where
     B: Into<RespBody>,
 {

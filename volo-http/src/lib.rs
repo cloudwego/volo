@@ -21,11 +21,8 @@ mod macros;
 #[doc(hidden)]
 pub mod prelude {
     pub use bytes::Bytes;
-    pub use hyper::{
-        self,
-        body::Incoming,
-        http::{self, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version},
-    };
+    pub use http::{self, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version};
+    pub use hyper::{self, body::Incoming};
     pub use volo::net::Address;
 
     #[cfg(feature = "cookie")]

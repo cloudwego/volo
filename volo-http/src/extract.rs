@@ -3,11 +3,9 @@ use std::{convert::Infallible, marker::PhantomData};
 use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::Future;
+use http::{header, Method, StatusCode, Uri};
 use http_body_util::BodyExt;
-use hyper::{
-    body::Incoming,
-    http::{header, Method, StatusCode, Uri},
-};
+use hyper::body::Incoming;
 use serde::de::DeserializeOwned;
 use volo::net::Address;
 

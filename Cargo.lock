@@ -3000,6 +3000,8 @@ dependencies = [
  "faststr",
  "futures",
  "futures-util",
+ "http 1.0.0",
+ "http-body 1.0.0",
  "http-body-util",
  "hyper 1.1.0",
  "hyper-util",

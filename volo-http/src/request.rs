@@ -1,1 +1,1 @@
-pub type Request<B = hyper::body::Incoming> = hyper::http::Request<B>;
+pub type Request<B = hyper::body::Incoming> = http::Request<B>;
