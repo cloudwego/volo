@@ -1,102 +1,13 @@
-use std::{
-    convert::Infallible,
-    pin::Pin,
-    task::{Context, Poll},
-};
+use std::convert::Infallible;
 
-use bytes::Bytes;
-use faststr::FastStr;
-use futures_util::ready;
 use http::{
     header::{HeaderValue, IntoHeaderName},
     HeaderMap, StatusCode,
 };
-use http_body::{Body, Frame, SizeHint};
-use http_body_util::Full;
-use pin_project::pin_project;
 
-pub type Response<B = RespBody> = http::Response<B>;
+use crate::body::Body;
 
-#[pin_project]
-pub struct RespBody {
-    #[pin]
-    inner: Full<Bytes>,
-}
-
-impl Body for RespBody {
-    type Data = Bytes;
-
-    type Error = Infallible;
-
-    fn poll_frame(
-        self: Pin<&mut Self>,
-        cx: &mut Context<'_>,
-    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        Poll::Ready(ready!(self.project().inner.poll_frame(cx)).map(|result| Ok(result.unwrap())))
-    }
-
-    fn is_end_stream(&self) -> bool {
-        self.inner.is_end_stream()
-    }
-
-    fn size_hint(&self) -> SizeHint {
-        self.inner.size_hint()
-    }
-}
-
-impl From<Full<Bytes>> for RespBody {
-    fn from(value: Full<Bytes>) -> Self {
-        Self { inner: value }
-    }
-}
-
-impl From<Vec<u8>> for RespBody {
-    fn from(value: Vec<u8>) -> Self {
-        Self {
-            inner: Full::new(value.into()),
-        }
-    }
-}
-
-impl From<Bytes> for RespBody {
-    fn from(value: Bytes) -> Self {
-        Self {
-            inner: Full::new(value),
-        }
-    }
-}
-
-impl From<FastStr> for RespBody {
-    fn from(value: FastStr) -> Self {
-        Self {
-            inner: Full::new(value.into()),
-        }
-    }
-}
-
-impl From<String> for RespBody {
-    fn from(value: String) -> Self {
-        Self {
-            inner: Full::new(value.into()),
-        }
-    }
-}
-
-impl From<&'static str> for RespBody {
-    fn from(value: &'static str) -> Self {
-        Self {
-            inner: Full::new(value.into()),
-        }
-    }
-}
-
-impl From<()> for RespBody {
-    fn from(_: ()) -> Self {
-        Self {
-            inner: Full::new(Bytes::new()),
-        }
-    }
-}
+pub type Response<B = Body> = http::Response<B>;
 
 pub trait TryIntoResponseHeaders {
     type Error;
@@ -146,7 +57,7 @@ impl IntoResponse for Infallible {
 
 impl<T> IntoResponse for T
 where
-    T: Into<RespBody>,
+    T: Into<Body>,
 {
     fn into_response(self) -> Response {
         Response::builder()
@@ -191,7 +102,7 @@ impl IntoResponse for StatusCode {
 
 impl<B> IntoResponse for http::Response<B>
 where
-    B: Into<RespBody>,
+    B: Into<Body>,
 {
     fn into_response(self) -> Response {
         let (parts, body) = self.into_parts();

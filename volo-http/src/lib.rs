@@ -1,3 +1,4 @@
+pub mod body;
 pub mod context;
 #[cfg(feature = "cookie")]
 pub mod cookie;
