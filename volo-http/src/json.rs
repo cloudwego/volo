@@ -1,11 +1,9 @@
 use bytes::Bytes;
-use hyper::{
-    body::Incoming,
-    http::{
-        header::{self, HeaderMap},
-        StatusCode,
-    },
+use http::{
+    header::{self, HeaderMap},
+    StatusCode,
 };
+use hyper::body::Incoming;
 use serde::{de::DeserializeOwned, ser::Serialize};
 #[cfg(all(feature = "serde_json", feature = "sonic_json"))]
 compile_error!("features `serde_json` and `sonic_json` cannot be enabled at the same time.");

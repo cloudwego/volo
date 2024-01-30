@@ -1,9 +1,7 @@
 use std::{collections::HashMap, convert::Infallible};
 
-use hyper::{
-    body::Incoming,
-    http::{Method, StatusCode},
-};
+use http::{Method, StatusCode};
+use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service};
 
 use crate::{

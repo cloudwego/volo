@@ -1,7 +1,7 @@
 use std::{convert::Infallible, ops::Deref};
 
 pub use cookie::{time::Duration, Cookie};
-use hyper::http::{header, HeaderMap};
+use http::{header, HeaderMap};
 
 use crate::{context::ServerContext, extract::FromContext};
 

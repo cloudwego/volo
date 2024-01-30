@@ -1,15 +1,13 @@
 use std::ops::{Deref, DerefMut};
 
 use chrono::{DateTime, Local};
-use hyper::{
-    header::HeaderValue,
-    http::{
-        header,
-        request::Parts,
-        uri::{Authority, Scheme},
-        HeaderMap, HeaderName, Method, StatusCode, Uri, Version,
-    },
+use http::{
+    header,
+    request::Parts,
+    uri::{Authority, Scheme},
+    HeaderMap, HeaderName, Method, StatusCode, Uri, Version,
 };
+use hyper::header::HeaderValue;
 use paste::paste;
 use url::{Host, Url};
 use volo::{

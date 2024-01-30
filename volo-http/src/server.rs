@@ -6,10 +6,8 @@ use std::{
 };
 
 use futures::future::BoxFuture;
-use hyper::{
-    body::{Body, Incoming as BodyIncoming},
-    server::conn::http1,
-};
+use http_body::Body;
+use hyper::{body::Incoming as BodyIncoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
 use metainfo::{MetaInfo, METAINFO};
 use motore::{
