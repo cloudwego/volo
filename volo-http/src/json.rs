@@ -13,28 +13,55 @@ pub use serde_json::Error;
 pub use sonic_rs::Error;
 
 use crate::{
+    body::Body,
+    context::ServerContext,
     extract::{FromRequest, RejectionError},
-    response::IntoResponse,
-    Response, ServerContext,
+    response::{IntoResponse, ServerResponse},
 };
+
+pub(crate) fn serialize<T>(data: &T) -> Result<Vec<u8>, Error>
+where
+    T: Serialize,
+{
+    #[cfg(feature = "sonic_json")]
+    let res = sonic_rs::to_vec(data);
+
+    #[cfg(feature = "serde_json")]
+    let res = serde_json::to_vec(data);
+
+    res
+}
+
+pub(crate) fn deserialize<T>(data: &[u8]) -> Result<T, Error>
+where
+    T: DeserializeOwned,
+{
+    #[cfg(feature = "sonic_json")]
+    let res = sonic_rs::from_slice(data);
+
+    #[cfg(feature = "serde_json")]
+    let res = serde_json::from_slice(data);
+
+    res
+}
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Json<T>(pub T);
 
-impl<T> IntoResponse for Json<T>
+impl<T> TryFrom<Json<T>> for Body
 where
     T: Serialize,
 {
-    fn into_response(self) -> Response {
-        #[cfg(feature = "sonic_json")]
-        let ser = sonic_rs::to_string(&self.0);
-        #[cfg(feature = "serde_json")]
-        let ser = serde_json::to_string(&self.0);
+    type Error = Error;
 
-        match ser {
-            Ok(s) => s.into_response(),
-            Err(_) => StatusCode::INTERNAL_SERVER_ERROR.into_response(),
-        }
+    fn try_from(value: Json<T>) -> Result<Self, Self::Error> {
+        serialize(&value.0).map(Body::from)
+    }
+}
+
+impl IntoResponse for Error {
+    fn into_response(self) -> ServerResponse {
+        StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }
 }
 
@@ -55,11 +82,7 @@ where
         }
 
         let bytes = Bytes::from_request(cx, body, state).await?;
-        #[cfg(feature = "sonic_json")]
-        let json = sonic_rs::from_slice(&bytes).map_err(RejectionError::JsonRejection)?;
-        #[cfg(feature = "serde_json")]
-        let json =
-            serde_json::from_slice::<T>(bytes.as_ref()).map_err(RejectionError::JsonRejection)?;
+        let json = deserialize(&bytes).map_err(RejectionError::JsonRejection)?;
 
         Ok(Json(json))
     }

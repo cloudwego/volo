@@ -1,5 +1,3 @@
-use std::ops::{Deref, DerefMut};
-
 use chrono::{DateTime, Local};
 use http::{
     header,
@@ -16,12 +14,11 @@ use volo::{
     newtype_impl_context,
 };
 
+use super::CommonStats;
 use crate::param::Params;
 
 static X_FORWARDED_HOST: HeaderName = HeaderName::from_static("x-forwarded-host");
 static X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-proto");
-
-pub type HttpContext = ServerContext;
 
 #[derive(Debug)]
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
@@ -41,22 +38,9 @@ impl ServerContext {
     }
 }
 
+impl_deref_and_deref_mut!(ServerContext, RpcCx<ServerCxInner, Config>, 0);
+
 newtype_impl_context!(ServerContext, Config, 0);
-
-impl Deref for ServerContext {
-    type Target = RpcCx<ServerCxInner, Config>;
-
-    #[inline]
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl DerefMut for ServerContext {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct ServerCxInner {
@@ -70,35 +54,6 @@ pub struct ServerCxInner {
     pub common_stats: CommonStats,
 }
 
-macro_rules! impl_getter {
-    ($name: ident, $type: ty, $($path: tt).+) => {
-        paste! {
-            #[inline]
-            pub fn $name(&self) -> &$type {
-                &self.$($path).+
-            }
-
-            #[inline]
-            pub fn [<$name _mut>](&mut self) -> &mut $type {
-                &mut self.$($path).+
-            }
-        }
-    };
-    ($name: ident, $type: ty) => {
-        paste! {
-            #[inline]
-            pub fn $name(&self) -> &$type {
-                &self.$name
-            }
-
-            #[inline]
-            pub fn [<$name _mut>](&mut self) -> &mut $type {
-                &mut self.$name
-            }
-        }
-    };
-}
-
 impl ServerCxInner {
     impl_getter!(method, Method, parts.method);
     impl_getter!(uri, Uri, parts.uri);
@@ -106,7 +61,74 @@ impl ServerCxInner {
     impl_getter!(headers, HeaderMap, parts.headers);
     impl_getter!(peer, Address);
     impl_getter!(params, Params);
+}
 
+impl_deref_and_deref_mut!(ServerCxInner, Parts, parts);
+
+/// This is unstable now and may be changed in the future.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ServerStats {
+    process_start_at: Option<DateTime<Local>>,
+    process_end_at: Option<DateTime<Local>>,
+
+    status_code: Option<StatusCode>,
+}
+
+impl ServerStats {
+    stat_impl!(process_start_at);
+    stat_impl!(process_end_at);
+
+    #[inline]
+    pub fn status_code(&self) -> Option<StatusCode> {
+        self.status_code
+    }
+
+    #[inline]
+    pub fn set_status_code(&mut self, status: StatusCode) {
+        self.status_code = Some(status);
+    }
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Config {}
+
+impl Reusable for Config {
+    fn clear(&mut self) {}
+}
+
+#[derive(Debug)]
+pub struct ConnectionInfo {
+    scheme: Scheme,
+    host: Option<Host>,
+    port: Option<u16>,
+}
+
+impl ConnectionInfo {
+    /// Hostname and port of the request.
+    ///
+    /// Hostname is resolved through the following, in order:
+    /// - `Forwarded` header
+    /// - `X-Forwarded-Host` header
+    /// - `Host` header
+    /// - request target / URI
+    #[inline]
+    pub fn hostport(&self) -> (Option<&Host>, Option<u16>) {
+        (self.host.as_ref(), self.port)
+    }
+
+    /// Scheme of the request.
+    ///
+    /// Scheme is resolved through the following, in order:
+    /// - `Forwarded` header
+    /// - `X-Forwarded-Proto` header
+    /// - request target / URI
+    #[inline]
+    pub fn scheme(&self) -> &Scheme {
+        &self.scheme
+    }
+}
+
+impl ServerCxInner {
     pub(crate) fn get_connection_info(&self) -> ConnectionInfo {
         let mut host = None;
         let mut scheme = None;
@@ -198,142 +220,6 @@ impl ServerCxInner {
 
         ConnectionInfo { host, port, scheme }
     }
-}
-
-impl Deref for ServerCxInner {
-    type Target = Parts;
-
-    fn deref(&self) -> &Self::Target {
-        &self.parts
-    }
-}
-
-impl DerefMut for ServerCxInner {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.parts
-    }
-}
-
-/// This is unstable now and may be changed in the future.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct CommonStats {
-    req_size: Option<u64>,
-    resp_size: Option<u64>,
-}
-
-impl CommonStats {
-    #[inline]
-    pub fn req_size(&self) -> Option<u64> {
-        self.req_size
-    }
-
-    #[inline]
-    pub fn set_req_size(&mut self, size: u64) {
-        self.req_size = Some(size)
-    }
-
-    #[inline]
-    pub fn resp_size(&self) -> Option<u64> {
-        self.resp_size
-    }
-
-    #[inline]
-    pub fn set_resp_size(&mut self, size: u64) {
-        self.resp_size = Some(size)
-    }
-
-    #[inline]
-    pub fn reset(&mut self) {
-        *self = Self { ..Self::default() }
-    }
-}
-
-/// This is unstable now and may be changed in the future.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct ServerStats {
-    process_start_at: Option<DateTime<Local>>,
-    process_end_at: Option<DateTime<Local>>,
-
-    status_code: Option<StatusCode>,
-}
-
-macro_rules! stat_impl {
-    ($t: ident) => {
-        paste! {
-            /// This is unstable now and may be changed in the future.
-            #[inline]
-            pub fn $t(&self) -> Option<DateTime<Local>> {
-                self.$t
-            }
-
-            /// This is unstable now and may be changed in the future.
-            #[doc(hidden)]
-            #[inline]
-            pub fn [<set_$t>](&mut self, t: DateTime<Local>) {
-                self.$t = Some(t)
-            }
-
-            /// This is unstable now and may be changed in the future.
-            #[inline]
-            pub fn [<record_ $t>](&mut self) {
-                self.$t = Some(Local::now())
-            }
-        }
-    };
-}
-
-impl ServerStats {
-    stat_impl!(process_start_at);
-    stat_impl!(process_end_at);
-
-    #[inline]
-    pub fn status_code(&self) -> Option<StatusCode> {
-        self.status_code
-    }
-
-    #[inline]
-    pub fn set_status_code(&mut self, status: StatusCode) {
-        self.status_code = Some(status);
-    }
-}
-
-#[derive(Debug)]
-pub struct ConnectionInfo {
-    scheme: Scheme,
-    host: Option<Host>,
-    port: Option<u16>,
-}
-
-impl ConnectionInfo {
-    /// Hostname and port of the request.
-    ///
-    /// Hostname is resolved through the following, in order:
-    /// - `Forwarded` header
-    /// - `X-Forwarded-Host` header
-    /// - `Host` header
-    /// - request target / URI
-    #[inline]
-    pub fn hostport(&self) -> (Option<&Host>, Option<u16>) {
-        (self.host.as_ref(), self.port)
-    }
-
-    /// Scheme of the request.
-    ///
-    /// Scheme is resolved through the following, in order:
-    /// - `Forwarded` header
-    /// - `X-Forwarded-Proto` header
-    /// - request target / URI
-    #[inline]
-    pub fn scheme(&self) -> &Scheme {
-        &self.scheme
-    }
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Config {}
-
-impl Reusable for Config {
-    fn clear(&mut self) {}
 }
 
 fn unquote(val: &str) -> &str {
