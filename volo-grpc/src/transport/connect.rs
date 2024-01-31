@@ -8,6 +8,7 @@ use std::{
 use futures_util::future::BoxFuture;
 use hyper::rt::ReadBufCursor;
 use hyper_util::client::legacy::connect::{Connected, Connection};
+use motore::make::MakeConnection;
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use volo::net::{
     conn::Conn,

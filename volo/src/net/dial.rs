@@ -1,5 +1,6 @@
 use std::{future::Future, io, net::SocketAddr};
 
+use motore::{make::MakeConnection, service::UnaryService};
 use socket2::{Domain, Protocol, Socket, Type};
 #[cfg(target_family = "unix")]
 use tokio::net::UnixStream;
@@ -126,8 +127,11 @@ async fn make_tcp_connection(cfg: &Config, addr: SocketAddr) -> Result<TcpStream
     }
 }
 
-impl DefaultMakeTransport {
-    pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
+impl UnaryService<Address> for DefaultMakeTransport {
+    type Response = Conn;
+    type Error = io::Error;
+
+    async fn call(&self, addr: Address) -> Result<Self::Response, Self::Error> {
         match addr {
             Address::Ip(addr) => {
                 let stream = make_tcp_connection(&self.cfg, addr).await?;
@@ -195,8 +199,13 @@ cfg_rustls_or_native_tls! {
                 tls_config,
             }
         }
+    }
 
-        pub async fn make_connection(&self, addr: Address) -> Result<Conn, io::Error> {
+    impl UnaryService<Address> for TlsMakeTransport {
+        type Response = Conn;
+        type Error = io::Error;
+
+        async fn call(&self, addr: Address) -> Result<Self::Response, Self::Error> {
             match addr {
                 Address::Ip(addr) => {
                     let tcp = make_tcp_connection(&self.cfg, addr).await?;
