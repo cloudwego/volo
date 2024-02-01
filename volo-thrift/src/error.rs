@@ -3,9 +3,13 @@ use std::{
     io,
 };
 
-use pilota::thrift::{
-    DecodeError, EncodeError, Error as PilotaError, Message, ProtocolError, TAsyncInputProtocol,
-    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
+use pilota::{
+    thrift::{
+        DecodeError, EncodeError, Error as PilotaError, Message, ProtocolError,
+        TAsyncInputProtocol, TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier,
+        TType, TransportError,
+    },
+    AHashMap, FastStr,
 };
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
@@ -480,6 +484,53 @@ pub enum ResponseError<T> {
     Protocol(ProtocolError),
     #[error("basic error: {0}")]
     Basic(BasicError),
+    #[error("biz error: {0}")]
+    BizError(BizError),
+}
+
+#[derive(Debug, thiserror::Error, Clone)]
+pub struct BizError {
+    pub status_code: i32,
+    pub status_message: FastStr,
+    pub extra: Option<AHashMap<FastStr, FastStr>>,
+}
+
+impl Display for BizError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut extra_str = String::new();
+        if let Some(extra) = &self.extra {
+            for (k, v) in extra {
+                extra_str.push_str(&format!("{}: {},", k, v));
+            }
+        }
+        write!(
+            f,
+            "status_code: {}, status_message: {}, extra: {}",
+            self.status_code, self.status_message, extra_str
+        )
+    }
+}
+
+impl BizError {
+    pub fn new(status_code: i32, status_message: FastStr) -> Self {
+        Self {
+            status_code,
+            status_message,
+            extra: None,
+        }
+    }
+
+    pub fn with_extra(
+        status_code: i32,
+        status_message: FastStr,
+        extra: AHashMap<FastStr, FastStr>,
+    ) -> Self {
+        Self {
+            status_code,
+            status_message,
+            extra: Some(extra),
+        }
+    }
 }
 
 impl<T> From<Error> for ResponseError<T> {
