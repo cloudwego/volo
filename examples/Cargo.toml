@@ -80,14 +80,19 @@ path = "src/unknown/thrift_client.rs"
 
 # http
 [[bin]]
-name = "http-simple"
-path = "src/http/simple.rs"
+name = "example-http-server"
+path = "src/http/example-http-server.rs"
+
+[[bin]]
+name = "example-http-client"
+path = "src/http/example-http-client.rs"
 
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
 bytes.workspace = true
 faststr.workspace = true
+http-body-util.workspace = true
 lazy_static.workspace = true
 metainfo.workspace = true
 motore.workspace = true

@@ -311,12 +311,11 @@ fn tracer(cx: &ServerContext) {
     );
 }
 
-#[tokio::main(flavor = "multi_thread")]
+#[volo::main]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
         .with_max_level(tracing::Level::TRACE)
         .finish();
-
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     let app = Router::new()
