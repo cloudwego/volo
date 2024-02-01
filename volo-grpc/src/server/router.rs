@@ -3,10 +3,10 @@ use std::{
     sync::atomic::{AtomicU32, Ordering},
 };
 
-use fxhash::FxHashMap;
 use http_body::Body as HttpBody;
 use hyper::body::Incoming;
 use motore::{BoxCloneService, Service};
+use rustc_hash::FxHashMap;
 use volo::Unwrap;
 
 use super::NamedService;

@@ -8,6 +8,7 @@ use std::{
 
 use metainfo::MetaInfo;
 use pin_project::pin_project;
+use rustc_hash;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync::{oneshot, Mutex},
@@ -36,7 +37,7 @@ pub struct ThriftTransport<E, Resp> {
     #[allow(clippy::type_complexity)]
     tx_map: Arc<
         Mutex<
-            fxhash::FxHashMap<
+            rustc_hash::FxHashMap<
                 i32,
                 oneshot::Sender<
                     crate::Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>>,
@@ -92,7 +93,7 @@ where
         #[allow(clippy::type_complexity)]
         let tx_map: Arc<
             Mutex<
-                fxhash::FxHashMap<
+                rustc_hash::FxHashMap<
                     i32,
                     oneshot::Sender<
                         crate::Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>>,
