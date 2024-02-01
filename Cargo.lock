@@ -3006,7 +3006,7 @@ dependencies = [
 
 [[package]]
 name = "volo-http"
-version = "0.1.14"
+version = "0.1.17"
 dependencies = [
  "ahash",
  "bytes",
@@ -3015,10 +3015,13 @@ dependencies = [
  "faststr",
  "futures",
  "futures-util",
+ "http 1.0.0",
+ "http-body 1.0.0",
  "http-body-util",
  "hyper 1.1.0",
  "hyper-util",
  "matchit",
+ "metainfo",
  "mime",
  "motore",
  "parking_lot 0.12.1",

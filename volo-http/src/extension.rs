@@ -2,6 +2,7 @@ use std::convert::Infallible;
 
 use hyper::{body::Incoming, StatusCode};
 use motore::{layer::Layer, service::Service};
+use volo::context::Context;
 
 use crate::{context::ServerContext, extract::FromContext, response::IntoResponse, Response};
 
@@ -42,7 +43,7 @@ where
         cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
-        cx.extensions.insert(self.ext.clone());
+        cx.extensions_mut().insert(self.ext.clone());
         self.inner.call(cx, req).await
     }
 }
@@ -55,7 +56,7 @@ where
     type Rejection = ExtensionRejection;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Self, Self::Rejection> {
-        cx.extensions
+        cx.extensions()
             .get::<T>()
             .map(T::clone)
             .map(Extension)

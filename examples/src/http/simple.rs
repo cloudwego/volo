@@ -114,6 +114,11 @@ async fn conn_show(conn: ConnectionInfo) -> String {
     format!("{conn:?}\n")
 }
 
+struct State {
+    foo: String,
+    bar: usize,
+}
+
 async fn extension(Extension(state): Extension<Arc<State>>) -> String {
     format!("State {{ foo: {}, bar: {} }}\n", state.foo, state.bar)
 }
@@ -264,9 +269,15 @@ async fn headers_map_response(response: Response) -> impl IntoResponse {
     )
 }
 
-struct State {
-    foo: String,
-    bar: usize,
+fn tracer(cx: &ServerContext) {
+    tracing::info!(
+        "process start at {:?}, end at {:?}, req size: {:?}, resp size: {:?}, resp status: {:?}",
+        cx.stats.process_start_at().unwrap(),
+        cx.stats.process_end_at().unwrap(),
+        cx.common_stats.req_size().unwrap(),
+        cx.common_stats.resp_size().unwrap(),
+        cx.stats.status_code().unwrap(),
+    );
 }
 
 #[tokio::main(flavor = "multi_thread")]
@@ -297,5 +308,9 @@ async fn main() {
 
     println!("Listening on {addr}");
 
-    Server::new(app).run(addr).await.unwrap();
+    Server::new(app)
+        .stat_tracer(tracer)
+        .run(addr)
+        .await
+        .unwrap();
 }

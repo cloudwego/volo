@@ -1,7 +1,7 @@
 use std::{convert::Infallible, ops::Deref};
 
 pub use cookie::{time::Duration, Cookie};
-use hyper::http::{header, HeaderMap};
+use http::{header, HeaderMap};
 
 use crate::{context::ServerContext, extract::FromContext};
 
@@ -38,6 +38,6 @@ impl<S: Sync> FromContext<S> for CookieJar {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Self, Self::Rejection> {
-        Ok(Self::from_header(&cx.headers))
+        Ok(Self::from_header(cx.headers()))
     }
 }

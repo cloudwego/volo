@@ -1,15 +1,15 @@
 use std::{
+    cell::RefCell,
     convert::Infallible,
     sync::{atomic::Ordering, Arc},
     time::Duration,
 };
 
 use futures::future::BoxFuture;
-use hyper::{
-    body::{Body, Incoming as BodyIncoming},
-    server::conn::http1,
-};
+use http_body::Body;
+use hyper::{body::Incoming as BodyIncoming, server::conn::http1};
 use hyper_util::rt::TokioIo;
+use metainfo::{MetaInfo, METAINFO};
 use motore::{
     layer::{Identity, Layer, Stack},
     service::Service,
@@ -102,6 +102,13 @@ impl<S, L> Server<S, L> {
             stat_tracer: self.stat_tracer,
             shutdown_hooks: self.shutdown_hooks,
         }
+    }
+
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn stat_tracer(mut self, trace_fn: TraceFn) -> Self {
+        self.stat_tracer.push(trace_fn);
+        self
     }
 
     pub async fn run<MI: MakeIncoming>(self, mk_incoming: MI) -> Result<(), BoxError>
@@ -303,24 +310,28 @@ where
         + Sync
         + 'static,
 {
-    let service = service.clone();
-    let peer = peer.clone();
-    let (parts, req) = request.into_parts();
-    let mut cx = ServerContext::new(peer, parts);
+    METAINFO
+        .scope(RefCell::new(MetaInfo::default()), async {
+            let service = service.clone();
+            let peer = peer.clone();
+            let (parts, req) = request.into_parts();
+            let mut cx = ServerContext::new(peer, parts);
 
-    if let Some(req_size) = req.size_hint().exact() {
-        cx.common_stats.set_req_size(req_size);
-    }
-    cx.stats.record_process_start_at();
+            if let Some(req_size) = req.size_hint().exact() {
+                cx.common_stats.set_req_size(req_size);
+            }
+            cx.stats.record_process_start_at();
 
-    let resp = service.call(&mut cx, req).await.into_response();
+            let resp = service.call(&mut cx, req).await.into_response();
 
-    cx.stats.record_process_end_at();
-    cx.stats.set_status_code(resp.status());
-    if let Some(resp_size) = resp.size_hint().exact() {
-        cx.common_stats.set_resp_size(resp_size);
-    }
+            cx.stats.record_process_end_at();
+            cx.stats.set_status_code(resp.status());
+            if let Some(resp_size) = resp.size_hint().exact() {
+                cx.common_stats.set_resp_size(resp_size);
+            }
 
-    stat_tracer.iter().for_each(|f| f(&cx));
-    Ok(resp)
+            stat_tracer.iter().for_each(|f| f(&cx));
+            Ok(resp)
+        })
+        .await
 }

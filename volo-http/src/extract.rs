@@ -3,11 +3,9 @@ use std::{convert::Infallible, marker::PhantomData};
 use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::Future;
+use http::{header, Method, StatusCode, Uri};
 use http_body_util::BodyExt;
-use hyper::{
-    body::Incoming,
-    http::{header, Method, StatusCode, Uri},
-};
+use hyper::body::Incoming;
 use serde::de::DeserializeOwned;
 use volo::net::Address;
 
@@ -25,7 +23,7 @@ mod private {
     pub enum ViaRequest {}
 }
 
-pub trait FromContext<S>: Sized {
+pub trait FromContext<S = ()>: Sized {
     type Rejection: IntoResponse;
 
     fn from_context(
@@ -34,7 +32,7 @@ pub trait FromContext<S>: Sized {
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
-pub trait FromRequest<S, M = private::ViaRequest>: Sized {
+pub trait FromRequest<S = (), M = private::ViaRequest>: Sized {
     type Rejection: IntoResponse;
 
     fn from_request(
@@ -43,9 +41,6 @@ pub trait FromRequest<S, M = private::ViaRequest>: Sized {
         state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
-
-#[derive(Debug, Default, Clone, Copy)]
-pub struct State<S>(pub S);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Query<T>(pub T);
@@ -71,7 +66,7 @@ impl MaybeInvalid<FastStr> {
 impl<T, S> FromContext<S> for Option<T>
 where
     T: FromContext<S>,
-    S: Clone + Send + Sync,
+    S: Sync,
 {
     type Rejection = Infallible;
 
@@ -84,7 +79,7 @@ impl<S: Sync> FromContext<S> for Address {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Address, Self::Rejection> {
-        Ok(cx.peer.clone())
+        Ok(cx.peer().clone())
     }
 }
 
@@ -92,7 +87,7 @@ impl<S: Sync> FromContext<S> for Uri {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Uri, Self::Rejection> {
-        Ok(cx.uri.clone())
+        Ok(cx.uri().clone())
     }
 }
 
@@ -100,7 +95,7 @@ impl<S: Sync> FromContext<S> for Method {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Method, Self::Rejection> {
-        Ok(cx.method.clone())
+        Ok(cx.method().clone())
     }
 }
 
@@ -108,30 +103,19 @@ impl<S: Sync> FromContext<S> for Params {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Params, Self::Rejection> {
-        Ok(cx.params.clone())
-    }
-}
-
-impl<S> FromContext<S> for State<S>
-where
-    S: Clone + Sync,
-{
-    type Rejection = Infallible;
-
-    async fn from_context(_cx: &mut ServerContext, state: &S) -> Result<Self, Self::Rejection> {
-        Ok(State(state.clone()))
+        Ok(cx.params().clone())
     }
 }
 
 impl<T, S> FromContext<S> for Query<T>
 where
     T: DeserializeOwned,
-    S: Clone + Sync,
+    S: Sync,
 {
     type Rejection = RejectionError;
 
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Self, Self::Rejection> {
-        let query = cx.uri.query().unwrap_or_default();
+        let query = cx.uri().query().unwrap_or_default();
         let param = serde_urlencoded::from_str(query).map_err(RejectionError::QueryRejection)?;
         Ok(Query(param))
     }
@@ -147,7 +131,7 @@ impl<S: Sync> FromContext<S> for ConnectionInfo {
 impl<T, S> FromRequest<S, private::ViaContext> for T
 where
     T: FromContext<S> + Sync,
-    S: Clone + Send + Sync,
+    S: Sync,
 {
     type Rejection = T::Rejection;
 
@@ -163,7 +147,7 @@ where
 impl<T, S> FromRequest<S> for Option<T>
 where
     T: FromRequest<S, private::ViaRequest> + Sync,
-    S: Clone + Send + Sync,
+    S: Sync,
 {
     type Rejection = Infallible;
 
@@ -176,7 +160,10 @@ where
     }
 }
 
-impl<S: Sync> FromRequest<S> for Incoming {
+impl<S> FromRequest<S> for Incoming
+where
+    S: Sync,
+{
     type Rejection = Infallible;
 
     async fn from_request(
@@ -268,7 +255,10 @@ impl<S: Sync> FromRequest<S> for FastStr {
     }
 }
 
-impl<T, S: Sync> FromRequest<S> for MaybeInvalid<T> {
+impl<T, S> FromRequest<S> for MaybeInvalid<T>
+where
+    S: Sync,
+{
     type Rejection = RejectionError;
 
     async fn from_request(
@@ -311,8 +301,6 @@ pub enum RejectionError {
     QueryRejection(serde_urlencoded::de::Error),
     FormRejection(serde_html_form::de::Error),
 }
-
-unsafe impl Send for RejectionError {}
 
 impl IntoResponse for RejectionError {
     fn into_response(self) -> crate::Response {

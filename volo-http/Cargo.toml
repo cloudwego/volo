@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.1.14"
+version = "0.1.17"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -20,10 +20,6 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 volo = { version = "0.9", path = "../volo" }
 
-http-body-util = "0.1"
-hyper = { version = "1", features = ["server", "http1", "http2"] }
-hyper-util = { version = "0.1", features = ["tokio"] }
-
 ahash.workspace = true
 bytes.workspace = true
 chrono.workspace = true
@@ -31,7 +27,13 @@ cookie = { workspace = true, optional = true, features = ["percent-encode"] }
 faststr.workspace = true
 futures.workspace = true
 futures-util.workspace = true
+http.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["server", "http1", "http2"] }
+hyper-util = { workspace = true, features = ["tokio"] }
 matchit.workspace = true
+metainfo.workspace = true
 mime.workspace = true
 motore.workspace = true
 parking_lot.workspace = true

@@ -59,7 +59,6 @@ where
     T: Sync,
 {
     type Response = S::Response;
-
     type Error = S::Error;
 
     async fn call<'s, 'cx>(
@@ -67,7 +66,7 @@ where
         cx: &'cx mut ServerContext,
         req: Incoming,
     ) -> Result<Self::Response, Self::Error> {
-        match self.handler.clone().call(cx).await {
+        match self.handler.clone().handle(cx).await {
             // do not filter it, call the service
             Ok(Ok(())) => self.service.call(cx, req).await,
             // filter it and return the specified response
@@ -139,7 +138,6 @@ where
     T: Sync,
 {
     type Response = S::Response;
-
     type Error = S::Error;
 
     async fn call<'s, 'cx>(
@@ -153,7 +151,7 @@ where
         tokio::select! {
             resp = fut_service => resp,
             _ = fut_timeout => {
-                Ok(self.handler.clone().call(cx).await.into_response())
+                Ok(self.handler.clone().handle(cx).await.into_response())
             },
         }
     }
