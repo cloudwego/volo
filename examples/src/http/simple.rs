@@ -1,12 +1,17 @@
 use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 
+use async_stream::stream;
+use bytes::Bytes;
 use faststr::FastStr;
 use serde::{Deserialize, Serialize};
+use tokio_stream::StreamExt;
 use volo_http::{
+    body::Body,
     cookie,
     extension::Extension,
     extract::{Form, Query},
     http::header,
+    hyper::body::Frame,
     layer::{FilterLayer, TimeoutLayer},
     middleware::{self, Next},
     response::IntoResponse,
@@ -114,6 +119,28 @@ async fn conn_show(conn: ConnectionInfo) -> String {
     format!("{conn:?}\n")
 }
 
+async fn stream_test() -> Body {
+    // build a `Vec<u8>` by a string
+    let resp = "Hello, this is a stream.\n"
+        .as_bytes()
+        .iter()
+        .map(|&ch| ch)
+        .collect::<Vec<u8>>();
+    // convert each byte to a `Bytes`
+    let stream = stream! {
+        for ch in resp.into_iter() {
+            yield Bytes::from(vec![ch]);
+        }
+    };
+    // map `Stream<Item = Bytes>` to `Steram<Item = Result<Frame<Bytes>, BoxError>>`
+    Body::from_stream(stream.map(|b| Ok(Frame::data(b))))
+}
+
+async fn box_body_test() -> Body {
+    let body = stream_test().await;
+    Body::from_body(body)
+}
+
 struct State {
     foo: String,
     bar: usize,
@@ -205,6 +232,10 @@ fn test_router() -> Router {
                 .get(service_fn(service_fn_test))
                 .build(),
         )
+        // curl -v http://127.0.0.1:8080/test/stream
+        .route("/test/stream", get(stream_test))
+        // curl -v http://127.0.0.1:8080/test/body
+        .route("/test/body", get(box_body_test))
         // curl -v http://127.0.0.1:8080/test/anyaddr?reject_me
         .layer(FilterLayer::new(|uri: Uri| async move {
             if uri.query().is_some() && uri.query().unwrap() == "reject_me" {
@@ -274,8 +305,8 @@ fn tracer(cx: &ServerContext) {
         "process start at {:?}, end at {:?}, req size: {:?}, resp size: {:?}, resp status: {:?}",
         cx.stats.process_start_at().unwrap(),
         cx.stats.process_end_at().unwrap(),
-        cx.common_stats.req_size().unwrap(),
-        cx.common_stats.resp_size().unwrap(),
+        cx.common_stats.req_size().unwrap_or(0),
+        cx.common_stats.resp_size().unwrap_or(0),
         cx.stats.status_code().unwrap(),
     );
 }
