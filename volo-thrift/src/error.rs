@@ -488,7 +488,7 @@ pub enum ResponseError<T> {
     BizError(BizError),
 }
 
-#[derive(Debug, thiserror::Error, Clone)]
+#[derive(Debug, thiserror::Error, Clone, Default)]
 pub struct BizError {
     pub status_code: i32,
     pub status_message: FastStr,
