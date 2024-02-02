@@ -146,6 +146,12 @@ where
                     );
                     e.encode(protocol)?;
                 }
+                crate::Error::Anyhow(e) => {
+                    protocol.write_message_begin(&ident)?;
+                    let e =
+                        ApplicationError::new(ApplicationErrorKind::INTERNAL_ERROR, e.to_string());
+                    e.encode(protocol)?;
+                }
             },
         }
         protocol.write_message_end()?;

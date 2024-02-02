@@ -507,7 +507,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     format! {
                         r#"match self.inner.{name}({args}).await {{
                         Ok(resp) => {method_result_path}::Ok(resp),
-                        Err(err) => return Err(::volo_thrift::error::ApplicationError::new(::volo_thrift::error::ApplicationErrorKind::INTERNAL_ERROR, err.to_string())),
+                        Err(err) => return Err(::volo_thrift::Error::Anyhow(anyhow::anyhow!(err))),
                     }}"#
                     }
                 }
@@ -586,7 +586,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
             impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, {req_recv_name}> for {server_name}<T> where T: {service_name} + Send + Sync + 'static {{
                 type Response = {res_send_name};
-                type Error = ::volo_thrift::error::ApplicationError;
+                type Error = ::volo_thrift::Error;
 
                 async fn call<'s, 'cx>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> ::std::result::Result<Self::Response, Self::Error> {{
                     match req {{

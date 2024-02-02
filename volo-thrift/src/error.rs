@@ -39,6 +39,7 @@ pub enum Error {
     /// Basic error types, will be converted to `ApplicationError::INTERNAL_ERROR`
     /// when encoding.
     Basic(BasicError),
+    Anyhow(AnyhowError),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -73,6 +74,11 @@ impl Error {
             }
             Error::Application(e) => e.message.push_str(msg),
             Error::Basic(e) => e.message.push_str(msg),
+            Error::Anyhow(e) => {
+                let mut err_str = e.to_string();
+                err_str.push_str(msg);
+                *self = Self::Anyhow(anyhow::anyhow!(err_str));
+            }
         }
     }
 }
@@ -165,13 +171,13 @@ impl Retryable for Error {
 
 impl From<AnyhowError> for Error {
     fn from(err: AnyhowError) -> Self {
-        new_application_error(ApplicationErrorKind::UNKNOWN, err.to_string())
+        Error::Anyhow(err)
     }
 }
 
 impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
     fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
-        new_application_error(ApplicationErrorKind::UNKNOWN, err.to_string())
+        Error::Anyhow(anyhow::anyhow!(err))
     }
 }
 
@@ -540,6 +546,10 @@ impl<T> From<Error> for ResponseError<T> {
             Error::Protocol(e) => ResponseError::Protocol(e),
             Error::Application(e) => ResponseError::Application(e),
             Error::Basic(e) => ResponseError::Basic(e),
+            Error::Anyhow(e) => ResponseError::Application(ApplicationError::new(
+                ApplicationErrorKind::INTERNAL_ERROR,
+                e.to_string(),
+            )),
         }
     }
 }
