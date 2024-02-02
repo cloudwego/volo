@@ -507,7 +507,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     format! {
                         r#"match self.inner.{name}({args}).await {{
                         Ok(resp) => {method_result_path}::Ok(resp),
-                        Err(err) => return Err(::volo_thrift::Error::Anyhow(anyhow::anyhow!(err))),
+                        Err(err) => return Err(::volo_thrift::Error::Anyhow(err)),
                     }}"#
                     }
                 }
