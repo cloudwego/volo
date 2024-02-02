@@ -546,10 +546,13 @@ impl<T> From<Error> for ResponseError<T> {
             Error::Protocol(e) => ResponseError::Protocol(e),
             Error::Application(e) => ResponseError::Application(e),
             Error::Basic(e) => ResponseError::Basic(e),
-            Error::Anyhow(e) => ResponseError::Application(ApplicationError::new(
-                ApplicationErrorKind::INTERNAL_ERROR,
-                e.to_string(),
-            )),
+            Error::Anyhow(e) => match e.downcast::<BizError>() {
+                Ok(e) => ResponseError::BizError(e),
+                Err(e) => ResponseError::Application(ApplicationError::new(
+                    ApplicationErrorKind::INTERNAL_ERROR,
+                    e.to_string(),
+                )),
+            },
         }
     }
 }
