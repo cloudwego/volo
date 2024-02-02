@@ -500,7 +500,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                         r#"match self.inner.{name}({args}).await {{
                         Ok(resp) => {method_result_path}::Ok(resp),
                         {convert_exceptions}
-                        Err(::volo_thrift::error::UserError::Other(err)) => return Err(::volo_thrift::error::ApplicationError::new(::volo_thrift::error::ApplicationErrorKind::INTERNAL_ERROR, err.to_string())),
+                        Err(::volo_thrift::error::UserError::Other(err)) => return Err(::volo_thrift::Error::Application(::volo_thrift::error::ApplicationError::new(::volo_thrift::error::ApplicationErrorKind::INTERNAL_ERROR, err.to_string()))),
                     }}"#
                     }
                 } else {
