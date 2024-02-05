@@ -97,12 +97,12 @@ where
     type Response = Response;
     type Error = Infallible;
 
-    fn call(
+    async fn call(
         &self,
         cx: &mut ServerContext,
         req: Incoming,
-    ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
-        async { Ok(self.handler.clone().handle(cx, req).await) }
+    ) -> Result<Self::Response, Self::Error> {
+        Ok(self.handler.clone().handle(cx, req).await)
     }
 }
 

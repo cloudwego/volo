@@ -18,6 +18,7 @@ use crate::{
     DummyMessage, EntryMessage, Error, ThriftMessage,
 };
 
+#[allow(clippy::too_many_arguments)]
 pub async fn serve<Svc, Req, Resp, E, D, SP>(
     mut encoder: E,
     mut decoder: D,

@@ -281,8 +281,7 @@ impl Message for ApplicationError {
                 }
                 2 => {
                     let remote_type_as_int = protocol.read_i32()?;
-                    let remote_kind: ApplicationErrorKind = TryFrom::try_from(remote_type_as_int)
-                        .unwrap_or(ApplicationErrorKind::UNKNOWN);
+                    let remote_kind: ApplicationErrorKind = From::from(remote_type_as_int);
                     protocol.read_field_end()?;
                     kind = remote_kind;
                 }
@@ -322,8 +321,7 @@ impl Message for ApplicationError {
                 }
                 2 => {
                     let remote_type_as_int = protocol.read_i32().await?;
-                    let remote_kind: ApplicationErrorKind = TryFrom::try_from(remote_type_as_int)
-                        .unwrap_or(ApplicationErrorKind::UNKNOWN);
+                    let remote_kind: ApplicationErrorKind = From::from(remote_type_as_int);
                     protocol.read_field_end().await?;
                     kind = remote_kind;
                 }

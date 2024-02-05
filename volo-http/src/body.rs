@@ -120,6 +120,10 @@ where
         }
     }
 
+    /// # Safety
+    ///
+    /// It is up to the caller to guarantee that the value really is valid. Using this when the
+    /// content is invalid causes immediate undefined behavior.
     unsafe fn into_string_unchecked(
         self,
     ) -> impl Future<Output = Result<String, ResponseConvertError>> + Send {
@@ -141,6 +145,10 @@ where
         }
     }
 
+    /// # Safety
+    ///
+    /// It is up to the caller to guarantee that the value really is valid. Using this when the
+    /// content is invalid causes immediate undefined behavior.
     unsafe fn into_faststr_unchecked(
         self,
     ) -> impl Future<Output = Result<FastStr, ResponseConvertError>> + Send {

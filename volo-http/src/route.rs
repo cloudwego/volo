@@ -237,16 +237,16 @@ impl Service<ServerContext, Incoming> for MethodRouter {
     type Error = Infallible;
 
     async fn call(&self, cx: &mut ServerContext, req: Incoming) -> Result<Response, Infallible> {
-        let handler = match cx.method() {
-            &Method::OPTIONS => Some(&self.options),
-            &Method::GET => Some(&self.get),
-            &Method::POST => Some(&self.post),
-            &Method::PUT => Some(&self.put),
-            &Method::DELETE => Some(&self.delete),
-            &Method::HEAD => Some(&self.head),
-            &Method::TRACE => Some(&self.trace),
-            &Method::CONNECT => Some(&self.connect),
-            &Method::PATCH => Some(&self.patch),
+        let handler = match *cx.method() {
+            Method::OPTIONS => Some(&self.options),
+            Method::GET => Some(&self.get),
+            Method::POST => Some(&self.post),
+            Method::PUT => Some(&self.put),
+            Method::DELETE => Some(&self.delete),
+            Method::HEAD => Some(&self.head),
+            Method::TRACE => Some(&self.trace),
+            Method::CONNECT => Some(&self.connect),
+            Method::PATCH => Some(&self.patch),
             _ => None,
         };
 

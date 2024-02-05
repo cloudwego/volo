@@ -58,7 +58,7 @@ where
     async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Self, Self::Rejection> {
         cx.extensions()
             .get::<T>()
-            .map(T::clone)
+            .cloned()
             .map(Extension)
             .ok_or(ExtensionRejection::NotExist)
     }

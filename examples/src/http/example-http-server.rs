@@ -121,11 +121,7 @@ async fn conn_show(conn: ConnectionInfo) -> String {
 
 async fn stream_test() -> Body {
     // build a `Vec<u8>` by a string
-    let resp = "Hello, this is a stream.\n"
-        .as_bytes()
-        .iter()
-        .map(|&ch| ch)
-        .collect::<Vec<u8>>();
+    let resp = "Hello, this is a stream.\n".as_bytes().iter().copied();
     // convert each byte to a `Bytes`
     let stream = stream! {
         for ch in resp.into_iter() {

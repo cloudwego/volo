@@ -73,7 +73,7 @@ where
             }
         }
 
-        let target = cx.rpc_info.callee().address().ok_or_else(|| no_address())?;
+        let target = cx.rpc_info.callee().address().ok_or_else(no_address)?;
 
         cx.stats.record_transport_start_at();
         let resp = self.request(target, req).await;

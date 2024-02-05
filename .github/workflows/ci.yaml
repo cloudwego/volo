@@ -34,7 +34,6 @@ jobs:
         with:
           components: rustfmt
           toolchain: ${{matrix.rust}}
-      # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
           cargo check --features multiplex
@@ -53,7 +52,6 @@ jobs:
         with:
           components: rustfmt
           toolchain: ${{matrix.rust}}
-      # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
           cargo check --features multiplex
@@ -110,10 +108,10 @@ jobs:
         with:
           components: rustfmt
           toolchain: ${{matrix.rust}}
-      # - uses: Swatinem/rust-cache@v1
       - uses: actions-rs/clippy-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Format check
         run: |
           cargo fmt -- --check
+          cargo clippy -- --deny warnings
