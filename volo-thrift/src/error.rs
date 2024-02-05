@@ -3,9 +3,13 @@ use std::{
     io,
 };
 
-use pilota::thrift::{
-    DecodeError, EncodeError, Error as PilotaError, Message, ProtocolError, TAsyncInputProtocol,
-    TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier, TType, TransportError,
+use pilota::{
+    thrift::{
+        DecodeError, EncodeError, Error as PilotaError, Message, ProtocolError,
+        TAsyncInputProtocol, TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier,
+        TType, TransportError,
+    },
+    AHashMap, FastStr,
 };
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
@@ -35,6 +39,7 @@ pub enum Error {
     /// Basic error types, will be converted to `ApplicationError::INTERNAL_ERROR`
     /// when encoding.
     Basic(BasicError),
+    Anyhow(AnyhowError),
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -69,6 +74,11 @@ impl Error {
             }
             Error::Application(e) => e.message.push_str(msg),
             Error::Basic(e) => e.message.push_str(msg),
+            Error::Anyhow(e) => {
+                let mut err_str = e.to_string();
+                err_str.push_str(msg);
+                *self = Self::Anyhow(anyhow::anyhow!(err_str));
+            }
         }
     }
 }
@@ -161,13 +171,13 @@ impl Retryable for Error {
 
 impl From<AnyhowError> for Error {
     fn from(err: AnyhowError) -> Self {
-        new_application_error(ApplicationErrorKind::UNKNOWN, err.to_string())
+        Error::Anyhow(err)
     }
 }
 
 impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
     fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
-        new_application_error(ApplicationErrorKind::UNKNOWN, err.to_string())
+        Error::Anyhow(anyhow::anyhow!(err))
     }
 }
 
@@ -480,6 +490,53 @@ pub enum ResponseError<T> {
     Protocol(ProtocolError),
     #[error("basic error: {0}")]
     Basic(BasicError),
+    #[error("biz error: {0}")]
+    BizError(BizError),
+}
+
+#[derive(Debug, thiserror::Error, Clone, Default)]
+pub struct BizError {
+    pub status_code: i32,
+    pub status_message: FastStr,
+    pub extra: Option<AHashMap<FastStr, FastStr>>,
+}
+
+impl Display for BizError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut extra_str = String::new();
+        if let Some(extra) = &self.extra {
+            for (k, v) in extra {
+                extra_str.push_str(&format!("{}: {},", k, v));
+            }
+        }
+        write!(
+            f,
+            "status_code: {}, status_message: {}, extra: {}",
+            self.status_code, self.status_message, extra_str
+        )
+    }
+}
+
+impl BizError {
+    pub fn new(status_code: i32, status_message: FastStr) -> Self {
+        Self {
+            status_code,
+            status_message,
+            extra: None,
+        }
+    }
+
+    pub fn with_extra(
+        status_code: i32,
+        status_message: FastStr,
+        extra: AHashMap<FastStr, FastStr>,
+    ) -> Self {
+        Self {
+            status_code,
+            status_message,
+            extra: Some(extra),
+        }
+    }
 }
 
 impl<T> From<Error> for ResponseError<T> {
@@ -489,6 +546,13 @@ impl<T> From<Error> for ResponseError<T> {
             Error::Protocol(e) => ResponseError::Protocol(e),
             Error::Application(e) => ResponseError::Application(e),
             Error::Basic(e) => ResponseError::Basic(e),
+            Error::Anyhow(e) => match e.downcast::<BizError>() {
+                Ok(e) => ResponseError::BizError(e),
+                Err(e) => ResponseError::Application(ApplicationError::new(
+                    ApplicationErrorKind::INTERNAL_ERROR,
+                    e.to_string(),
+                )),
+            },
         }
     }
 }
