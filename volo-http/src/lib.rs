@@ -1,7 +1,9 @@
 pub mod body;
+pub mod client;
 pub mod context;
 #[cfg(feature = "cookie")]
 pub mod cookie;
+pub mod error;
 pub mod extension;
 pub mod extract;
 pub mod handler;

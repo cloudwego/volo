@@ -1,4 +1,7 @@
 use std::{
+    error::Error,
+    fmt,
+    future::Future,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -7,9 +10,10 @@ use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::{ready, Stream};
 use http_body::{Frame, SizeHint};
-use http_body_util::{combinators::BoxBody, Full, StreamBody};
+use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
 use motore::BoxError;
 use pin_project::pin_project;
+use serde::de::DeserializeOwned;
 
 // The `futures_util::stream::BoxStream` does not have `Sync`
 type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + Send + Sync + 'a>>;
@@ -22,6 +26,10 @@ pub enum Body {
 }
 
 impl Body {
+    pub fn empty() -> Self {
+        Self::Full(Full::new(Bytes::new()))
+    }
+
     pub fn from_stream<S>(stream: S) -> Self
     where
         S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + Sync + 'static,
@@ -72,9 +80,120 @@ impl http_body::Body for Body {
     }
 }
 
+impl fmt::Debug for Body {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Full(_) => f.write_str("Body::Full"),
+            Self::Stream(_) => f.write_str("Body::Stream"),
+            Self::Body(_) => f.write_str("Body::Body"),
+        }
+    }
+}
+
+pub trait BodyConversion
+where
+    Self: http_body::Body + Sized + Send,
+    Self::Data: Send,
+{
+    fn into_bytes(self) -> impl Future<Output = Result<Bytes, ResponseConvertError>> + Send {
+        async {
+            Ok(self
+                .collect()
+                .await
+                .map_err(|_| ResponseConvertError::BodyCollectionError)?
+                .to_bytes())
+        }
+    }
+
+    fn into_vec(self) -> impl Future<Output = Result<Vec<u8>, ResponseConvertError>> + Send {
+        async { Ok(self.into_bytes().await?.into()) }
+    }
+
+    fn into_string(self) -> impl Future<Output = Result<String, ResponseConvertError>> + Send {
+        async {
+            let vec = self.into_vec().await?;
+
+            // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
+            let _ = simdutf8::basic::from_utf8(&vec)
+                .map_err(|_| ResponseConvertError::StringUtf8Error)?;
+            Ok(unsafe { String::from_utf8_unchecked(vec) })
+        }
+    }
+
+    unsafe fn into_string_unchecked(
+        self,
+    ) -> impl Future<Output = Result<String, ResponseConvertError>> + Send {
+        async {
+            let vec = self.into_vec().await?;
+
+            Ok(String::from_utf8_unchecked(vec))
+        }
+    }
+
+    fn into_faststr(self) -> impl Future<Output = Result<FastStr, ResponseConvertError>> + Send {
+        async {
+            let bytes = self.into_bytes().await?;
+
+            // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
+            let _ = simdutf8::basic::from_utf8(&bytes)
+                .map_err(|_| ResponseConvertError::StringUtf8Error)?;
+            Ok(unsafe { FastStr::from_bytes_unchecked(bytes) })
+        }
+    }
+
+    unsafe fn into_faststr_unchecked(
+        self,
+    ) -> impl Future<Output = Result<FastStr, ResponseConvertError>> + Send {
+        async {
+            let bytes = self.into_bytes().await?;
+
+            Ok(FastStr::from_bytes_unchecked(bytes))
+        }
+    }
+
+    #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+    fn into_json<T>(self) -> impl Future<Output = Result<T, ResponseConvertError>> + Send
+    where
+        T: DeserializeOwned,
+    {
+        async {
+            let bytes = self.into_bytes().await?;
+            crate::json::deserialize(&bytes).map_err(ResponseConvertError::JsonDeserializeError)
+        }
+    }
+}
+
+impl<T> BodyConversion for T
+where
+    T: http_body::Body + Send,
+    T::Data: Send,
+{
+}
+
+#[derive(Debug)]
+pub enum ResponseConvertError {
+    BodyCollectionError,
+    StringUtf8Error,
+    #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+    JsonDeserializeError(crate::json::Error),
+}
+
+impl fmt::Display for ResponseConvertError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::BodyCollectionError => f.write_str("failed to collect body"),
+            Self::StringUtf8Error => f.write_str("body is not a valid string"),
+            #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+            Self::JsonDeserializeError(e) => write!(f, "failed to deserialize body: {e}"),
+        }
+    }
+}
+
+impl Error for ResponseConvertError {}
+
 impl From<()> for Body {
     fn from(_: ()) -> Self {
-        Self::Full(Full::new(Bytes::new()))
+        Self::empty()
     }
 }
 
