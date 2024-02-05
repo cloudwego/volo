@@ -133,31 +133,39 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         );
         cx.stats_mut().set_write_size(real_size);
 
-        let write_result = (|| async {
-            self.linked_bytes.reset();
-            // then we reserve the size of the message in the linked bytes
-            self.linked_bytes.reserve(malloc_size);
-            // after that, we encode the message into the linked bytes
-            self.encoder
-                .encode(cx, &mut self.linked_bytes, msg)
-                .map_err(|e| {
-                    // record the error time
-                    cx.stats_mut().record_encode_end_at();
-                    e
-                })?;
-
+        self.linked_bytes.reset();
+        // then we reserve the size of the message in the linked bytes
+        self.linked_bytes.reserve(malloc_size);
+        // after that, we encode the message into the linked bytes
+        let mut write_result: Result<(), crate::Error> = self
+            .encoder
+            .encode(cx, &mut self.linked_bytes, msg)
+            .map_err(|e| {
+                // record the error time
+                cx.stats_mut().record_encode_end_at();
+                crate::Error::from(e)
+            });
+        if write_result.is_ok() {
             cx.stats_mut().record_encode_end_at();
-            cx.stats_mut().record_write_start_at(); // encode end is also write start
+            // encode end is also write start
+            cx.stats_mut().record_write_start_at();
 
-            self.linked_bytes
+            write_result = self
+                .linked_bytes
                 .write_all_vectored(&mut self.writer)
                 .await
-                .map_err(TransportError::from)?;
-            self.writer.flush().await.map_err(TransportError::from)?;
+                .map_err(TransportError::from)
+                .map_err(crate::Error::Transport);
+        }
+        if write_result.is_ok() {
+            write_result = self
+                .writer
+                .flush()
+                .await
+                .map_err(TransportError::from)
+                .map_err(crate::Error::Transport);
+        }
 
-            Ok::<(), crate::Error>(())
-        })()
-        .await;
         // put write end here so we can also record the time of encode error
         cx.stats_mut().record_write_end_at();
 

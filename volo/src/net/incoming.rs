@@ -153,7 +153,7 @@ mod unix_helper {
         let mut vi = 0;
 
         for &c in release.as_bytes() {
-            if b'0' <= c && c <= b'9' {
+            if c.is_ascii_digit() {
                 value = (value * 10) + ((c - b'0') as i32);
             } else {
                 values[vi] = value;
@@ -219,14 +219,14 @@ mod unix_helper {
         let file = File::open("/proc/sys/net/core/somaxconn");
         let file = match file {
             Ok(file) => file,
-            Err(_) => return libc::SOMAXCONN as i32,
+            Err(_) => return libc::SOMAXCONN,
         };
         let mut reader = BufReader::new(file);
         let mut line = String::new();
 
         let read_result = reader.read_line(&mut line);
         if read_result.is_err() || line.is_empty() {
-            return libc::SOMAXCONN as i32;
+            return libc::SOMAXCONN;
         }
         let fields = get_fields(&line);
         if let Ok(n) = fields[0].parse() {
@@ -236,7 +236,7 @@ mod unix_helper {
                 n
             }
         } else {
-            libc::SOMAXCONN as i32
+            libc::SOMAXCONN
         }
     }
 

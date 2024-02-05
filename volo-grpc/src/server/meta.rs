@@ -62,7 +62,7 @@ where
 
                 let metadata = volo_req.metadata_mut();
 
-                status_to_http!(metainfo::METAINFO.with(|metainfo| {
+                let status = metainfo::METAINFO.with(|metainfo| {
                     let mut metainfo = metainfo.borrow_mut();
 
                     // caller
@@ -118,7 +118,8 @@ where
                     }
 
                     Ok::<(), Status>(())
-                }));
+                });
+                status_to_http!(status);
 
                 let volo_resp = match self.inner.call(cx, volo_req).await {
                     Ok(resp) => resp,
@@ -129,7 +130,7 @@ where
 
                 let (mut metadata, extensions, message) = volo_resp.into_parts();
 
-                status_to_http!(metainfo::METAINFO.with(|metainfo| {
+                let status = metainfo::METAINFO.with(|metainfo| {
                     let metainfo = metainfo.borrow_mut();
 
                     // backward
@@ -141,7 +142,8 @@ where
                     }
 
                     Ok::<(), Status>(())
-                }));
+                });
+                status_to_http!(status);
 
                 let mut resp = hyper::Response::new(message);
                 *resp.headers_mut() = metadata.into_headers();

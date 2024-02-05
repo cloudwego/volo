@@ -79,10 +79,10 @@ pub fn parse_address(uri: &Uri) -> Result<Address> {
 }
 
 pub async fn resolve(uri: &Uri) -> Result<impl Iterator<Item = Address>> {
-    let host = uri.host().ok_or_else(|| uri_without_host())?.to_owned();
+    let host = uri.host().ok_or_else(uri_without_host)?.to_owned();
     let port = get_port(uri)?;
     match lookup_host((host, port)).await {
-        Ok(addrs) => Ok(addrs.map(move |addr| Address::from(addr))),
+        Ok(addrs) => Ok(addrs.map(Address::from)),
         Err(e) => Err(builder_error(e)),
     }
 }

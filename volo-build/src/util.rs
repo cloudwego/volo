@@ -61,6 +61,7 @@ pub fn ensure_file(filename: &Path) -> std::io::Result<File> {
         .read(true)
         .write(true)
         .create(true)
+        .truncate(false)
         .open(filename)
 }
 

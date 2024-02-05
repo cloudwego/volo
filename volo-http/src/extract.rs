@@ -52,12 +52,20 @@ pub struct Form<T>(pub T);
 pub struct MaybeInvalid<T>(Vec<u8>, PhantomData<T>);
 
 impl MaybeInvalid<String> {
+    /// # Safety
+    ///
+    /// It is up to the caller to guarantee that the value really is valid. Using this when the
+    /// content is invalid causes immediate undefined behavior.
     pub unsafe fn assume_valid(self) -> String {
         String::from_utf8_unchecked(self.0)
     }
 }
 
 impl MaybeInvalid<FastStr> {
+    /// # Safety
+    ///
+    /// It is up to the caller to guarantee that the value really is valid. Using this when the
+    /// content is invalid causes immediate undefined behavior.
     pub unsafe fn assume_valid(self) -> FastStr {
         FastStr::from_vec_u8_unchecked(self.0)
     }

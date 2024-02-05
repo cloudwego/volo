@@ -69,6 +69,12 @@ impl ClientBuilder<Identity, DefaultMkClient, DefaultMakeTransport> {
     }
 }
 
+impl Default for ClientBuilder<Identity, DefaultMkClient, DefaultMakeTransport> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
     pub fn client_maker<MkC2>(self, new_mk_client: MkC2) -> ClientBuilder<L, MkC2, MkT> {
         ClientBuilder {
@@ -244,11 +250,7 @@ impl<S> Client<S> {
     where
         U: IntoUri,
     {
-        Ok(RequestBuilder::new_with_method_and_uri(
-            self,
-            method,
-            uri.into_uri()?,
-        )?)
+        RequestBuilder::new_with_method_and_uri(self, method, uri.into_uri()?)
     }
 
     method_requests!(options);

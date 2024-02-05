@@ -143,7 +143,7 @@ impl<'a, S> RequestBuilder<'a, S> {
     }
 
     pub fn body_ref(&self) -> &Body {
-        &self.request.body()
+        self.request.body()
     }
 }
 
@@ -155,7 +155,7 @@ where
         + 'static,
 {
     pub async fn send(self) -> Result<ClientResponse> {
-        let uri = self.uri.ok_or_else(|| no_uri())?;
+        let uri = self.uri.ok_or_else(no_uri)?;
         let request = self.request;
         let target = match self.target {
             Some(target) => target,
@@ -168,7 +168,7 @@ where
                     ) {
                         return Err(err);
                     }
-                    resolve(&uri).await?.next().ok_or_else(|| bad_host_name())?
+                    resolve(&uri).await?.next().ok_or_else(bad_host_name)?
                 }
             },
         };

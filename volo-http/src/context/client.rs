@@ -62,17 +62,9 @@ impl ClientStats {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Config {
     pub(crate) host: Host,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            host: Host::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, Default)]
