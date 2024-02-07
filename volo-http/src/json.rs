@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use http::{
     header::{self, HeaderMap},
+    request::Parts,
     StatusCode,
 };
 use hyper::body::Incoming;
@@ -65,23 +66,22 @@ impl IntoResponse for Error {
     }
 }
 
-impl<T, S> FromRequest<S> for Json<T>
+impl<T> FromRequest for Json<T>
 where
     T: DeserializeOwned,
-    S: Sync,
 {
     type Rejection = RejectionError;
 
     async fn from_request(
         cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        state: &S,
     ) -> Result<Self, Self::Rejection> {
-        if !json_content_type(cx.headers()) {
+        if !json_content_type(&parts.headers) {
             return Err(RejectionError::InvalidContentType);
         }
 
-        let bytes = Bytes::from_request(cx, body, state).await?;
+        let bytes = Bytes::from_request(cx, parts, body).await?;
         let json = deserialize(&bytes).map_err(RejectionError::JsonRejection)?;
 
         Ok(Json(json))

@@ -7,17 +7,18 @@ use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use volo_http::{
     body::Body,
+    context::{ConnectionInfo, ServerContext},
     cookie,
     extension::Extension,
-    extract::{Form, Query},
-    http::header,
+    extract::{Form, MaybeInvalid, Query},
+    http::{header, Method, StatusCode, Uri},
     hyper::body::Frame,
     layer::{FilterLayer, TimeoutLayer},
     middleware::{self, Next},
-    response::IntoResponse,
+    request::ServerRequest,
+    response::{IntoResponse, ServerResponse},
     route::{from_handler, get, post, service_fn, MethodRouter, Router},
-    Address, BodyIncoming, ConnectionInfo, CookieJar, Json, MaybeInvalid, Method, Params, Response,
-    Server, ServerContext, StatusCode, Uri,
+    Address, CookieJar, Json, Params, Server,
 };
 
 async fn hello() -> &'static str {
@@ -148,14 +149,9 @@ async fn extension(Extension(state): Extension<Arc<State>>) -> String {
 
 async fn service_fn_test(
     cx: &mut ServerContext,
-    req: BodyIncoming,
-) -> Result<Response, Infallible> {
+    req: ServerRequest,
+) -> Result<ServerResponse, Infallible> {
     Ok(format!("cx: {cx:?}, req: {req:?}").into_response())
-}
-
-async fn timeout_handler(uri: Uri, peer: Address) -> StatusCode {
-    tracing::info!("Timeout on `{}`, peer: {}", uri, peer);
-    StatusCode::INTERNAL_SERVER_ERROR
 }
 
 fn index_router() -> Router {
@@ -213,7 +209,7 @@ fn test_router() -> Router {
         // curl http://127.0.0.1:8080/test/timeout
         .route(
             "/test/timeout",
-            get(timeout_test).layer(TimeoutLayer::new(Duration::from_secs(1), timeout_handler)),
+            get(timeout_test).layer(TimeoutLayer::new(Duration::from_secs(1))),
         )
         // curl -v http://127.0.0.1:8080/test/param/114514
         .route("/test/param/:echo", get(echo))
@@ -258,9 +254,9 @@ async fn tracing_from_fn(
     peer: Address,
     cookie_jar: CookieJar,
     cx: &mut ServerContext,
-    req: BodyIncoming,
+    req: ServerRequest,
     next: Next,
-) -> Response {
+) -> ServerResponse {
     tracing::info!("{:?}", *cookie_jar);
     let count = cookie_jar.get("count").map_or(0usize, |val| {
         val.value().to_string().parse().unwrap_or(0usize)
@@ -285,7 +281,7 @@ async fn tracing_from_fn(
         .into_response()
 }
 
-async fn headers_map_response(response: Response) -> impl IntoResponse {
+async fn headers_map_response(response: ServerResponse) -> impl IntoResponse {
     (
         [
             ("Access-Control-Allow-Origin", "*"),
@@ -325,9 +321,7 @@ async fn main() {
         })))
         .layer(middleware::from_fn(tracing_from_fn))
         .layer(middleware::map_response(headers_map_response))
-        .layer(TimeoutLayer::new(Duration::from_secs(5), || async {
-            StatusCode::INTERNAL_SERVER_ERROR
-        }));
+        .layer(TimeoutLayer::new(Duration::from_secs(5)));
 
     let addr: SocketAddr = "[::]:8080".parse().unwrap();
     let addr = volo::net::Address::from(addr);

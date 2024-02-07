@@ -30,7 +30,7 @@ futures-util.workspace = true
 http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
-hyper = { workspace = true, features = ["server", "http1", "http2"] }
+hyper = { workspace = true, features = ["client", "server", "http1"] }
 hyper-util = { workspace = true, features = ["tokio"] }
 matchit.workspace = true
 metainfo.workspace = true

@@ -1,12 +1,13 @@
 use std::{convert::Infallible, marker::PhantomData, time::Duration};
 
-use hyper::body::Incoming;
+use http::StatusCode;
 use motore::{layer::Layer, service::Service};
 
 use crate::{
     context::ServerContext,
     handler::HandlerWithoutRequest,
-    response::{IntoResponse, Response},
+    request::ServerRequest,
+    response::{IntoResponse, ServerResponse},
 };
 
 #[derive(Clone)]
@@ -48,9 +49,9 @@ pub struct Filter<S, H, R, T> {
     _marker: PhantomData<(R, T)>,
 }
 
-impl<S, H, R, T> Service<ServerContext, Incoming> for Filter<S, H, R, T>
+impl<S, H, R, T> Service<ServerContext, ServerRequest> for Filter<S, H, R, T>
 where
-    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
         + Send
         + Sync
         + 'static,
@@ -64,9 +65,12 @@ where
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: Incoming,
+        req: ServerRequest,
     ) -> Result<Self::Response, Self::Error> {
-        match self.handler.clone().handle(cx).await {
+        let (mut parts, body) = req.into_parts();
+        let res = self.handler.clone().handle(cx, &mut parts).await;
+        let req = ServerRequest::from_parts(parts, body);
+        match res {
             // do not filter it, call the service
             Ok(Ok(())) => self.service.call(cx, req).await,
             // filter it and return the specified response
@@ -81,61 +85,42 @@ where
 }
 
 #[derive(Clone)]
-pub struct TimeoutLayer<H, R, T> {
+pub struct TimeoutLayer {
     duration: Duration,
-    handler: H,
-    _marker: PhantomData<(R, T)>,
 }
 
-impl<H, R, T> TimeoutLayer<H, R, T> {
-    pub fn new(duration: Duration, handler: H) -> Self
-    where
-        H: Send + Sync + 'static,
-    {
-        Self {
-            duration,
-            handler,
-            _marker: PhantomData,
-        }
+impl TimeoutLayer {
+    pub fn new(duration: Duration) -> Self {
+        Self { duration }
     }
 }
 
-impl<S, H, R, T> Layer<S> for TimeoutLayer<H, R, T>
+impl<S> Layer<S> for TimeoutLayer
 where
     S: Send + Sync + 'static,
-    H: Clone + Send + Sync + 'static,
-    R: Sync,
-    T: Sync,
 {
-    type Service = Timeout<S, H, R, T>;
+    type Service = Timeout<S>;
 
     fn layer(self, inner: S) -> Self::Service {
         Timeout {
             service: inner,
             duration: self.duration,
-            handler: self.handler,
-            _marker: PhantomData,
         }
     }
 }
 
 #[derive(Clone)]
-pub struct Timeout<S, H, R, T> {
+pub struct Timeout<S> {
     service: S,
     duration: Duration,
-    handler: H,
-    _marker: PhantomData<(R, T)>,
 }
 
-impl<S, H, R, T> Service<ServerContext, Incoming> for Timeout<S, H, R, T>
+impl<S> Service<ServerContext, ServerRequest> for Timeout<S>
 where
-    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
         + Send
         + Sync
         + 'static,
-    H: HandlerWithoutRequest<T, R> + Clone + Send + Sync + 'static,
-    R: IntoResponse + Sync,
-    T: Sync,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -143,7 +128,7 @@ where
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: Incoming,
+        req: ServerRequest,
     ) -> Result<Self::Response, Self::Error> {
         let fut_service = self.service.call(cx, req);
         let fut_timeout = tokio::time::sleep(self.duration);
@@ -151,7 +136,7 @@ where
         tokio::select! {
             resp = fut_service => resp,
             _ = fut_timeout => {
-                Ok(self.handler.clone().handle(cx).await.into_response())
+                Ok(StatusCode::REQUEST_TIMEOUT.into_response())
             },
         }
     }
