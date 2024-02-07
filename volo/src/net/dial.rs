@@ -139,7 +139,14 @@ impl UnaryService<Address> for DefaultMakeTransport {
                 Ok(Conn::from(stream))
             }
             #[cfg(target_family = "unix")]
-            Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
+            Address::Unix(addr) => UnixStream::connect(addr.as_pathname().ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::AddrNotAvailable,
+                    "cannot connect to unnamed socket",
+                )
+            })?)
+            .await
+            .map(Conn::from),
         }
     }
 }
@@ -233,7 +240,14 @@ cfg_rustls_or_native_tls! {
                     }
                 }
                 #[cfg(target_family = "unix")]
-                Address::Unix(addr) => UnixStream::connect(addr).await.map(Conn::from),
+                Address::Unix(addr) => UnixStream::connect(
+                    addr.as_pathname().ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::AddrNotAvailable,
+                            "cannot connect to unnamed socket",
+                        )
+                    })?
+                ).await.map(Conn::from),
             }
         }
     }

@@ -77,7 +77,15 @@ impl MakeIncoming for Address {
                 TcpListener::from_std(listener?).map(DefaultIncoming::from)
             }
             Address::Unix(addr) => {
-                let listener = unix_helper::create_unix_listener_with_max_backlog(addr).await;
+                let listener = unix_helper::create_unix_listener_with_max_backlog(
+                    addr.as_pathname().ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::AddrNotAvailable,
+                            "cannot create unnamed socket",
+                        )
+                    })?,
+                )
+                .await;
                 UnixListener::from_std(listener?).map(DefaultIncoming::from)
             }
         }
