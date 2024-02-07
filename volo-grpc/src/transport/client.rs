@@ -211,7 +211,12 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
         #[cfg(target_family = "unix")]
         Address::Unix(unix) => hyper::Uri::builder()
             .scheme("http+unix")
-            .authority(hex::encode(unix.to_string_lossy().as_bytes()))
+            .authority(hex::encode(
+                unix.as_pathname()
+                    .expect("target address is an invalid unix socket")
+                    .to_string_lossy()
+                    .as_bytes(),
+            ))
             .path_and_query(path)
             .build()
             .expect("fail to build unix uri"),
@@ -234,15 +239,18 @@ mod tests {
     #[cfg(target_family = "unix")]
     #[test]
     fn test_build_uri_unix() {
-        use std::borrow::Cow;
-
         let addr = "/tmp/rpc.sock".parse::<std::path::PathBuf>().unwrap();
         let path = "/path?query=1";
         let uri = "http+unix://2f746d702f7270632e736f636b/path?query=1"
             .parse::<hyper::Uri>()
             .unwrap();
         assert_eq!(
-            super::build_uri(volo::net::Address::from(Cow::from(addr)), path),
+            super::build_uri(
+                volo::net::Address::from(
+                    std::os::unix::net::SocketAddr::from_pathname(addr).unwrap()
+                ),
+                path
+            ),
             uri
         );
     }

@@ -1,3 +1,5 @@
+#[cfg(target_family = "unix")]
+use std::os::unix::net::SocketAddr as UnixSocketAddr;
 use std::{
     io,
     net::SocketAddr,
@@ -101,16 +103,14 @@ impl tower::Service<hyper::Uri> for Connector {
                             "authority must be hex-encoded path",
                         )
                     })?;
-                    Address::Unix(std::borrow::Cow::Owned(
-                        String::from_utf8(bytes)
-                            .map_err(|_| {
-                                io::Error::new(
-                                    io::ErrorKind::InvalidInput,
-                                    "authority must be valid UTF-8",
-                                )
-                            })?
-                            .into(),
-                    ))
+                    Address::Unix(UnixSocketAddr::from_pathname(
+                        String::from_utf8(bytes).map_err(|_| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "authority must be valid UTF-8",
+                            )
+                        })?,
+                    )?)
                 }
                 _ => unimplemented!(),
             };

@@ -327,7 +327,7 @@ impl ConnStream {
         match self {
             Self::Tcp(s) => s.peer_addr().map(Address::from).ok(),
             #[cfg(target_family = "unix")]
-            Self::Unix(s) => s.peer_addr().ok().and_then(|s| Address::try_from(s).ok()),
+            Self::Unix(s) => s.peer_addr().map(Address::from).ok(),
             #[cfg(feature = "rustls")]
             Self::Rustls(s) => s.get_ref().0.peer_addr().map(Address::from).ok(),
             #[cfg(feature = "native-tls")]
