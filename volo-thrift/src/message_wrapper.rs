@@ -100,7 +100,34 @@ where
                         + e.size(protocol)
                         + protocol.message_end_len()
                 }
-                _ => 0,
+                crate::Error::Transport(e) => {
+                    panic!("should not call send when there is a transport error: {e:?}")
+                }
+                crate::Error::Protocol(e) => {
+                    let e = ApplicationError::new(
+                        ApplicationErrorKind::PROTOCOL_ERROR,
+                        e.message.clone(),
+                    );
+                    protocol.message_begin_len(&ident)
+                        + e.size(protocol)
+                        + protocol.message_end_len()
+                }
+                crate::Error::Basic(e) => {
+                    let e = ApplicationError::new(
+                        ApplicationErrorKind::INTERNAL_ERROR,
+                        e.message.clone(),
+                    );
+                    protocol.message_begin_len(&ident)
+                        + e.size(protocol)
+                        + protocol.message_end_len()
+                }
+                crate::Error::Anyhow(e) => {
+                    let e =
+                        ApplicationError::new(ApplicationErrorKind::INTERNAL_ERROR, e.to_string());
+                    protocol.message_begin_len(&ident)
+                        + e.size(protocol)
+                        + protocol.message_end_len()
+                }
             },
         }
     }
