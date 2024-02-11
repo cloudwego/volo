@@ -35,7 +35,7 @@ metainfo = "0.7"
 
 ahash = "0.8"
 anyhow = "1"
-async-broadcast = "0.6"
+async-broadcast = "0.7"
 async-stream = "0.3"
 base64 = "0.21"
 bytes = "1"

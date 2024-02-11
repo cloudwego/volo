@@ -12,7 +12,7 @@ use http::StatusCode;
 use http_body::Body;
 use hyper::body::Incoming;
 use pilota::prost::Message;
-use tracing::debug;
+use tracing::{debug, trace};
 
 use super::{DefaultDecoder, BUFFER_SIZE, PREFIX_LEN};
 use crate::{
@@ -122,6 +122,7 @@ impl<T: Message + Default> RecvStream<T> {
             if self.buf.remaining() < PREFIX_LEN {
                 return Ok(None);
             }
+            trace!("[VOLO-GRPC] streaming received buf: {:?}", self.buf);
 
             let compression_encoding = match self.buf.get_u8() {
                 0 => None,
@@ -157,9 +158,11 @@ impl<T: Message + Default> RecvStream<T> {
             if self.buf.remaining() < *len || self.buf.len() < *len {
                 return Ok(None);
             }
+            trace!("[VOLO-GRPC] streaming reading body: {:?}", self.buf);
+            let mut buf = self.buf.split_to(*len);
             let decode_result = if let Some(encoding) = compression_encoding {
                 self.decompress_buf.clear();
-                if let Err(err) = decompress(*encoding, &mut self.buf, &mut self.decompress_buf) {
+                if let Err(err) = decompress(*encoding, &mut buf, &mut self.decompress_buf) {
                     let message = if let Kind::Response(status) = self.kind {
                         format!(
                             "Error decompressing: {err}, while receiving response with status: \
@@ -172,7 +175,7 @@ impl<T: Message + Default> RecvStream<T> {
                 }
                 DefaultDecoder::<T>::decode(&mut self.decoder, &mut self.decompress_buf)
             } else {
-                DefaultDecoder::<T>::decode(&mut self.decoder, &mut self.buf)
+                DefaultDecoder::<T>::decode(&mut self.decoder, &mut buf)
             };
 
             return match decode_result {
