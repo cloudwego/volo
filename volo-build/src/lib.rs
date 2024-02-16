@@ -141,6 +141,11 @@ where
         self
     }
 
+    pub fn common_crate_name(mut self, name: FastStr) -> Self {
+        self.pilota_builder = self.pilota_builder.common_crate_name(name);
+        self
+    }
+
     pub fn write(self) -> anyhow::Result<()> {
         let out_dir = self.get_out_dir()?;
 
@@ -184,3 +189,4 @@ macro_rules! join_multi_strs {
 }
 
 pub(crate) use join_multi_strs;
+use volo::FastStr;
