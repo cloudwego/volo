@@ -1,7 +1,7 @@
-use std::{collections::HashMap, convert::Infallible};
+use std::{collections::HashMap, convert::Infallible, marker::PhantomData};
 
 use http::{Method, StatusCode};
-use motore::{layer::Layer, service::Service};
+use motore::{layer::Layer, service::Service, ServiceExt};
 
 use crate::{
     context::ServerContext,
@@ -10,12 +10,8 @@ use crate::{
     response::{IntoResponse, ServerResponse},
 };
 
-pub type Route = motore::service::BoxCloneService<
-    crate::context::ServerContext,
-    crate::request::ServerRequest,
-    crate::response::ServerResponse,
-    std::convert::Infallible,
->;
+pub type Route<E = Infallible> =
+    motore::service::BoxCloneService<ServerContext, ServerRequest, ServerResponse, E>;
 
 // The `matchit::Router` cannot be converted to `Iterator`, so using
 // `matchit::Router<MethodRouter>` is not convenient enough.
@@ -38,15 +34,27 @@ impl RouteId {
     }
 }
 
-pub struct Router {
+pub struct Router<E = Infallible> {
     matcher: Matcher,
-    routes: HashMap<RouteId, MethodRouter>,
-    fallback: Fallback,
+    routes: HashMap<RouteId, MethodRouter<E>>,
+    fallback: Fallback<E>,
     is_default_fallback: bool,
 }
 
-impl Default for Router {
+impl<E> Default for Router<E>
+where
+    E: 'static,
+{
     fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<E> Router<E> {
+    pub fn new() -> Self
+    where
+        E: 'static,
+    {
         Self {
             matcher: Default::default(),
             routes: Default::default(),
@@ -54,14 +62,8 @@ impl Default for Router {
             is_default_fallback: true,
         }
     }
-}
 
-impl Router {
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    pub fn route<R>(mut self, uri: R, route: MethodRouter) -> Self
+    pub fn route<R>(mut self, uri: R, route: MethodRouter<E>) -> Self
     where
         R: Into<String>,
     {
@@ -75,12 +77,12 @@ impl Router {
         self
     }
 
-    pub fn fallback_for_all(mut self, fallback: Fallback) -> Self {
+    pub fn fallback_for_all(mut self, fallback: Fallback<E>) -> Self {
         self.fallback = fallback;
         self
     }
 
-    pub fn merge(mut self, other: Router) -> Self {
+    pub fn merge(mut self, other: Self) -> Self {
         let Router {
             mut matcher,
             mut routes,
@@ -117,14 +119,12 @@ impl Router {
         self
     }
 
-    pub fn layer<L>(self, l: L) -> Self
+    pub fn layer<L, E2>(self, l: L) -> Router<E2>
     where
-        L: Layer<Route> + Clone + Send + Sync + 'static,
-        L::Service: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-            + Clone
-            + Send
-            + Sync
-            + 'static,
+        L: Layer<Route<E>> + Clone + Send + Sync + 'static,
+        L::Service:
+            Service<ServerContext, ServerRequest, Error = E2> + Clone + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
     {
         let routes = self
             .routes
@@ -146,7 +146,10 @@ impl Router {
     }
 }
 
-impl Service<ServerContext, ServerRequest> for Router {
+impl<E> Service<ServerContext, ServerRequest> for Router<E>
+where
+    E: IntoResponse,
+{
     type Response = ServerResponse;
     type Error = Infallible;
 
@@ -158,11 +161,11 @@ impl Service<ServerContext, ServerRequest> for Router {
         if let Ok(matched) = self.matcher.at(req.uri().clone().path()) {
             if let Some(route) = self.routes.get(matched.value) {
                 cx.params_mut().extend(matched.params);
-                return route.call(cx, req).await;
+                return Ok(route.call(cx, req).await.into_response());
             }
         }
 
-        self.fallback.call(cx, req).await
+        Ok(self.fallback.call(cx, req).await.into_response())
     }
 }
 
@@ -211,39 +214,22 @@ enum MatcherError {
     RouterMatchError(matchit::MatchError),
 }
 
-pub struct MethodRouter {
-    options: MethodEndpoint,
-    get: MethodEndpoint,
-    post: MethodEndpoint,
-    put: MethodEndpoint,
-    delete: MethodEndpoint,
-    head: MethodEndpoint,
-    trace: MethodEndpoint,
-    connect: MethodEndpoint,
-    patch: MethodEndpoint,
-    fallback: Fallback,
+pub struct MethodRouter<E = Infallible> {
+    options: MethodEndpoint<E>,
+    get: MethodEndpoint<E>,
+    post: MethodEndpoint<E>,
+    put: MethodEndpoint<E>,
+    delete: MethodEndpoint<E>,
+    head: MethodEndpoint<E>,
+    trace: MethodEndpoint<E>,
+    connect: MethodEndpoint<E>,
+    patch: MethodEndpoint<E>,
+    fallback: Fallback<E>,
 }
 
-impl Default for MethodRouter {
-    fn default() -> Self {
-        Self {
-            options: MethodEndpoint::None,
-            get: MethodEndpoint::None,
-            post: MethodEndpoint::None,
-            put: MethodEndpoint::None,
-            delete: MethodEndpoint::None,
-            head: MethodEndpoint::None,
-            trace: MethodEndpoint::None,
-            connect: MethodEndpoint::None,
-            patch: MethodEndpoint::None,
-            fallback: Fallback::from_status_code(StatusCode::METHOD_NOT_ALLOWED),
-        }
-    }
-}
-
-impl Service<ServerContext, ServerRequest> for MethodRouter {
+impl<E> Service<ServerContext, ServerRequest> for MethodRouter<E> {
     type Response = ServerResponse;
-    type Error = Infallible;
+    type Error = E;
 
     async fn call(
         &self,
@@ -270,23 +256,49 @@ impl Service<ServerContext, ServerRequest> for MethodRouter {
     }
 }
 
-impl MethodRouter {
-    pub fn new() -> Self {
-        Default::default()
+impl<E> Default for MethodRouter<E>
+where
+    E: 'static,
+{
+    fn default() -> Self {
+        Self::new()
     }
+}
 
-    pub fn builder() -> MethodRouterBuilder {
-        Default::default()
-    }
-
-    pub fn layer<L>(self, l: L) -> Self
+impl<E> MethodRouter<E> {
+    pub fn new() -> Self
     where
-        L: Layer<Route> + Clone + Send + Sync + 'static,
-        L::Service: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-            + Clone
-            + Send
-            + Sync
-            + 'static,
+        E: 'static,
+    {
+        Self {
+            options: MethodEndpoint::None,
+            get: MethodEndpoint::None,
+            post: MethodEndpoint::None,
+            put: MethodEndpoint::None,
+            delete: MethodEndpoint::None,
+            head: MethodEndpoint::None,
+            trace: MethodEndpoint::None,
+            connect: MethodEndpoint::None,
+            patch: MethodEndpoint::None,
+            fallback: Fallback::from_status_code(StatusCode::METHOD_NOT_ALLOWED),
+        }
+    }
+
+    pub fn builder() -> MethodRouterBuilder<E>
+    where
+        E: 'static,
+    {
+        MethodRouterBuilder {
+            router: Self::new(),
+        }
+    }
+
+    pub fn layer<L, E2>(self, l: L) -> MethodRouter<E2>
+    where
+        L: Layer<Route<E>> + Clone + Send + Sync + 'static,
+        L::Service:
+            Service<ServerContext, ServerRequest, Error = E2> + Clone + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
     {
         let Self {
             options,
@@ -301,7 +313,13 @@ impl MethodRouter {
             fallback,
         } = self;
 
-        let layer_fn = move |route: Route| Route::new(l.clone().layer(route));
+        let layer_fn = move |route: Route<E>| {
+            Route::new(
+                l.clone()
+                    .layer(route)
+                    .map_response(IntoResponse::into_response),
+            )
+        };
 
         let options = options.map(layer_fn.clone());
         let get = get.map(layer_fn.clone());
@@ -315,7 +333,7 @@ impl MethodRouter {
 
         let fallback = fallback.map(layer_fn);
 
-        Self {
+        MethodRouter {
             options,
             get,
             post,
@@ -336,15 +354,14 @@ macro_rules! for_all_methods {
     };
 }
 
-#[derive(Default)]
-pub struct MethodRouterBuilder {
-    router: MethodRouter,
+pub struct MethodRouterBuilder<E> {
+    router: MethodRouter<E>,
 }
 
 macro_rules! impl_method_register_for_builder {
     ($( $method:ident ),*) => {
         $(
-        pub fn $method(mut self, ep: MethodEndpoint) -> Self {
+        pub fn $method(mut self, ep: MethodEndpoint<E>) -> Self {
             self.router.$method = ep;
             self
         }
@@ -352,23 +369,38 @@ macro_rules! impl_method_register_for_builder {
     };
 }
 
-impl MethodRouterBuilder {
-    pub fn new() -> Self {
-        Default::default()
+impl<E> Default for MethodRouterBuilder<E>
+where
+    E: 'static,
+{
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<E> MethodRouterBuilder<E> {
+    pub fn new() -> Self
+    where
+        E: 'static,
+    {
+        Self {
+            router: MethodRouter::new(),
+        }
     }
 
     for_all_methods!(impl_method_register_for_builder);
 
     pub fn fallback<H, T>(mut self, handler: H) -> Self
     where
-        for<'a> H: Handler<T> + Clone + Send + Sync + 'a,
+        for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
         for<'a> T: 'a,
+        for<'a> E: 'a,
     {
         self.router.fallback = Fallback::from_handler(handler);
         self
     }
 
-    pub fn build(self) -> MethodRouter {
+    pub fn build(self) -> MethodRouter<E> {
         self.router
     }
 }
@@ -376,10 +408,11 @@ impl MethodRouterBuilder {
 macro_rules! impl_method_register {
     ($( $method:ident ),*) => {
         $(
-        pub fn $method<H, T>(handler: H) -> MethodRouter
+        pub fn $method<H, T, E>(handler: H) -> MethodRouter<E>
         where
-            for<'a> H: Handler<T> + Clone + Send + Sync + 'a,
+            for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
             for<'a> T: 'a,
+            for<'a> E: IntoResponse + 'a,
         {
             MethodRouterBuilder::new().$method(MethodEndpoint::from_handler(handler)).build()
         }
@@ -389,65 +422,60 @@ macro_rules! impl_method_register {
 
 for_all_methods!(impl_method_register);
 
-pub fn any<H, T>(handler: H) -> MethodRouter
+pub fn any<H, T, E>(handler: H) -> MethodRouter<E>
 where
-    for<'a> H: Handler<T> + Clone + Send + Sync + 'a,
+    for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
     for<'a> T: 'a,
+    for<'a> E: IntoResponse + 'a,
 {
     MethodRouterBuilder::new().fallback(handler).build()
 }
 
 #[derive(Default)]
-pub enum MethodEndpoint {
+pub enum MethodEndpoint<E = Infallible> {
     #[default]
     None,
-    Route(Route),
+    Route(Route<E>),
 }
 
-impl MethodEndpoint {
+impl<E> MethodEndpoint<E> {
     pub fn from_handler<H, T>(handler: H) -> Self
     where
-        for<'a> H: Handler<T> + Clone + Send + Sync + 'a,
+        for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
         for<'a> T: 'a,
+        for<'a> E: 'a,
     {
         Self::from_service(handler.into_service())
     }
 
     pub fn from_service<S>(service: S) -> Self
     where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-            + Clone
-            + Send
-            + Sync
-            + 'static,
+        S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'static,
+        S::Response: IntoResponse,
     {
-        Self::Route(Route::new(service))
+        Self::Route(Route::new(
+            service.map_response(IntoResponse::into_response),
+        ))
     }
 
-    pub(crate) fn map<F>(self, f: F) -> Self
+    pub(crate) fn map<F, E2>(self, f: F) -> MethodEndpoint<E2>
     where
-        F: FnOnce(Route) -> Route + Clone + 'static,
+        F: FnOnce(Route<E>) -> Route<E2> + Clone + 'static,
     {
         match self {
-            Self::None => Self::None,
-            Self::Route(route) => Self::Route(f(route)),
+            Self::None => MethodEndpoint::None,
+            Self::Route(route) => MethodEndpoint::Route(f(route)),
         }
     }
 }
 
-pub enum Fallback {
-    Route(Route),
+pub enum Fallback<E = Infallible> {
+    Route(Route<E>),
 }
 
-impl Default for Fallback {
-    fn default() -> Self {
-        Self::from_status_code(StatusCode::INTERNAL_SERVER_ERROR)
-    }
-}
-
-impl Service<ServerContext, ServerRequest> for Fallback {
+impl<E> Service<ServerContext, ServerRequest> for Fallback<E> {
     type Response = ServerResponse;
-    type Error = Infallible;
+    type Error = E;
 
     async fn call(
         &self,
@@ -460,90 +488,126 @@ impl Service<ServerContext, ServerRequest> for Fallback {
     }
 }
 
-impl Fallback {
-    pub(crate) fn from_status_code(status: StatusCode) -> Self {
-        Self::from_service(RouteForStatusCode(status))
+impl<E> Fallback<E> {
+    pub(crate) fn from_status_code(status: StatusCode) -> Self
+    where
+        E: 'static,
+    {
+        Self::from_service(RouteForStatusCode::new(status))
     }
 
     pub fn from_handler<H, T>(handler: H) -> Self
     where
-        for<'a> H: Handler<T> + Clone + Send + Sync + 'a,
+        for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
         for<'a> T: 'a,
+        for<'a> E: 'a,
     {
         Self::from_service(handler.into_service())
     }
 
     pub fn from_service<S>(service: S) -> Self
     where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-            + Clone
-            + Send
-            + Sync
-            + 'static,
+        S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'static,
+        S::Response: IntoResponse,
     {
-        Self::Route(Route::new(service))
+        Self::Route(Route::new(
+            service.map_response(IntoResponse::into_response),
+        ))
     }
 
-    pub(crate) fn map<F>(self, f: F) -> Self
+    pub(crate) fn map<F, E2>(self, f: F) -> Fallback<E2>
     where
-        F: FnOnce(Route) -> Route + Clone + 'static,
+        F: FnOnce(Route<E>) -> Route<E2> + Clone + 'static,
     {
         match self {
-            Self::Route(route) => Self::Route(f(route)),
+            Self::Route(route) => Fallback::Route(f(route)),
         }
     }
 
-    pub(crate) fn layer<L>(self, l: L) -> Self
+    pub(crate) fn layer<L, E2>(self, l: L) -> Fallback<E2>
     where
-        L: Layer<Route> + Clone + Send + Sync + 'static,
-        L::Service: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-            + Clone
-            + Send
-            + Sync
-            + 'static,
+        L: Layer<Route<E>> + Clone + Send + Sync + 'static,
+        L::Service:
+            Service<ServerContext, ServerRequest, Error = E2> + Clone + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
     {
-        self.map(move |route: Route| Route::new(l.clone().layer(route)))
+        self.map(move |route: Route<E>| {
+            Route::new(
+                l.clone()
+                    .layer(route)
+                    .map_response(IntoResponse::into_response),
+            )
+        })
     }
 }
 
-pub fn from_handler<H, T>(handler: H) -> MethodEndpoint
+pub fn from_handler<H, T, E>(handler: H) -> MethodEndpoint<E>
 where
-    for<'a> H: Handler<T> + Clone + Send + Sync + 'a,
+    for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
     for<'a> T: 'a,
+    for<'a> E: 'a,
 {
     MethodEndpoint::from_handler(handler)
 }
 
-pub fn from_service<S>(service: S) -> MethodEndpoint
+pub fn from_service<S, E>(service: S) -> MethodEndpoint<E>
 where
-    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'static,
+    S::Response: IntoResponse,
 {
     MethodEndpoint::from_service(service)
 }
 
-pub fn service_fn<F>(f: F) -> MethodEndpoint
+pub fn service_fn<F, R, E>(f: F) -> MethodEndpoint<E>
 where
-    F: for<'r> crate::service_fn::Callback<'r> + Clone + Send + Sync + 'static,
+    F: for<'r> crate::service_fn::Callback<
+            'r,
+            ServerContext,
+            ServerRequest,
+            Response = R,
+            Error = E,
+        > + Clone
+        + Send
+        + Sync
+        + 'static,
+    for<'r> R: IntoResponse + 'r,
+    for<'r> E: 'r,
 {
     MethodEndpoint::from_service(crate::service_fn::service_fn(f))
 }
 
-#[derive(Clone)]
-struct RouteForStatusCode(StatusCode);
+struct RouteForStatusCode<E> {
+    status: StatusCode,
+    _marker: PhantomData<fn(E)>,
+}
 
-impl Service<ServerContext, ServerRequest> for RouteForStatusCode {
+impl<E> Clone for RouteForStatusCode<E> {
+    fn clone(&self) -> Self {
+        Self {
+            status: self.status,
+            _marker: self._marker,
+        }
+    }
+}
+
+impl<E> RouteForStatusCode<E> {
+    fn new(status: StatusCode) -> Self {
+        Self {
+            status,
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<E> Service<ServerContext, ServerRequest> for RouteForStatusCode<E> {
     type Response = ServerResponse;
-    type Error = Infallible;
+    type Error = E;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        _cx: &'cx mut ServerContext,
+    async fn call(
+        &self,
+        _cx: &mut ServerContext,
         _req: ServerRequest,
     ) -> Result<Self::Response, Self::Error> {
-        Ok(self.0.into_response())
+        Ok(self.status.into_response())
     }
 }

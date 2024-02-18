@@ -1,4 +1,4 @@
-use std::{convert::Infallible, marker::PhantomData, time::Duration};
+use std::{marker::PhantomData, time::Duration};
 
 use http::StatusCode;
 use motore::{layer::Layer, service::Service};
@@ -51,15 +51,14 @@ pub struct Filter<S, H, R, T> {
 
 impl<S, H, R, T> Service<ServerContext, ServerRequest> for Filter<S, H, R, T>
 where
-    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ServerContext, ServerRequest> + Send + Sync + 'static,
+    S::Response: IntoResponse,
+    S::Error: IntoResponse,
     H: HandlerWithoutRequest<T, Result<(), R>> + Clone + Send + Sync + 'static,
     R: IntoResponse + Send + Sync,
     T: Sync,
 {
-    type Response = S::Response;
+    type Response = ServerResponse;
     type Error = S::Error;
 
     async fn call<'s, 'cx>(
@@ -72,7 +71,11 @@ where
         let req = ServerRequest::from_parts(parts, body);
         match res {
             // do not filter it, call the service
-            Ok(Ok(())) => self.service.call(cx, req).await,
+            Ok(Ok(())) => self
+                .service
+                .call(cx, req)
+                .await
+                .map(IntoResponse::into_response),
             // filter it and return the specified response
             Ok(Err(res)) => Ok(res.into_response()),
             // something wrong while extracting
@@ -117,12 +120,11 @@ pub struct Timeout<S> {
 
 impl<S> Service<ServerContext, ServerRequest> for Timeout<S>
 where
-    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ServerContext, ServerRequest> + Send + Sync + 'static,
+    S::Response: IntoResponse,
+    S::Error: IntoResponse,
 {
-    type Response = S::Response;
+    type Response = ServerResponse;
     type Error = S::Error;
 
     async fn call<'s, 'cx>(
@@ -134,7 +136,7 @@ where
         let fut_timeout = tokio::time::sleep(self.duration);
 
         tokio::select! {
-            resp = fut_service => resp,
+            resp = fut_service => resp.map(IntoResponse::into_response),
             _ = fut_timeout => {
                 Ok(StatusCode::REQUEST_TIMEOUT.into_response())
             },
