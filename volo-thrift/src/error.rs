@@ -39,6 +39,47 @@ impl From<anyhow::Error> for ServerError {
     }
 }
 
+impl From<ClientError> for ServerError {
+    fn from(e: ClientError) -> Self {
+        match e {
+            ClientError::Application(e) => ServerError::Application(e),
+            ClientError::Transport(e) => ServerError::Application(ApplicationException::new(
+                ApplicationExceptionKind::INTERNAL_ERROR,
+                e.to_string(),
+            )),
+            ClientError::Protocol(e) => ServerError::Application(ApplicationException::new(
+                ApplicationExceptionKind::PROTOCOL_ERROR,
+                e.to_string(),
+            )),
+            ClientError::Biz(e) => ServerError::Biz(e),
+        }
+    }
+}
+
+impl From<ThriftException> for ServerError {
+    fn from(e: ThriftException) -> Self {
+        thrift_exception_to_application_exception(e).into()
+    }
+}
+
+impl From<ProtocolException> for ServerError {
+    fn from(e: ProtocolException) -> Self {
+        ServerError::Application(ApplicationException::new(
+            ApplicationExceptionKind::PROTOCOL_ERROR,
+            e.to_string(),
+        ))
+    }
+}
+
+impl From<TransportException> for ServerError {
+    fn from(e: TransportException) -> Self {
+        ServerError::Application(ApplicationException::new(
+            ApplicationExceptionKind::INTERNAL_ERROR,
+            e.to_string(),
+        ))
+    }
+}
+
 impl ServerError {
     pub fn append_msg(&mut self, msg: &str) {
         match self {
