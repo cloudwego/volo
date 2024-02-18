@@ -1,7 +1,4 @@
-use std::{
-    fmt::{self, Display, Formatter},
-    io,
-};
+use std::{fmt::Display, io};
 
 use pilota::{AHashMap, FastStr};
 
@@ -15,61 +12,51 @@ use volo::loadbalance::error::{LoadBalanceError, Retryable};
 pub type ServerResult<T> = Result<T, ServerError>;
 pub type ClientResult<T> = Result<T, ClientError>;
 
-#[derive(Debug)]
-pub struct AnyhowProxy(anyhow::Error);
-
-impl From<anyhow::Error> for AnyhowProxy {
-    fn from(e: anyhow::Error) -> Self {
-        AnyhowProxy(e)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum ServerError {
-    Application(ApplicationException),
-    Biz(BizError),
+    #[error("application exception: {0}")]
+    Application(#[from] ApplicationException),
+    #[error("biz error: {0}")]
+    Biz(#[from] BizError),
 }
 
-impl From<AnyhowProxy> for ServerError {
-    fn from(e: AnyhowProxy) -> Self {
-        ServerError::Application(ApplicationException::new(
-            ApplicationExceptionKind::INTERNAL_ERROR,
-            e.0.to_string(),
-        ))
+impl From<anyhow::Error> for ServerError {
+    fn from(e: anyhow::Error) -> Self {
+        ApplicationException::new(ApplicationExceptionKind::INTERNAL_ERROR, e.to_string()).into()
     }
 }
 
-impl<E> From<E> for ServerError
-where
-    E: std::error::Error + Send + Sync + 'static,
-{
-    #[cold]
-    fn from(error: E) -> Self {
-        // First convert `E` to a boxed trait object so we can attempt downcasting.
-        let error_boxed = Box::new(error) as Box<dyn std::error::Error + Send + Sync>;
+// impl<E> From<E> for ServerError
+// where
+//     E: std::error::Error + Send + Sync + 'static,
+// {
+//     #[cold]
+//     fn from(error: E) -> Self {
+//         // First convert `E` to a boxed trait object so we can attempt downcasting.
+//         let error_boxed = Box::new(error) as Box<dyn std::error::Error + Send + Sync>;
 
-        // Use if let to try downcasting to ApplicationException.
-        match error_boxed.downcast::<ApplicationException>() {
-            Ok(application_error) => ServerError::Application(*application_error),
-            Err(e) => match e.downcast::<BizError>() {
-                Ok(biz_error) => ServerError::Biz(*biz_error),
-                Err(e) => ServerError::Application(ApplicationException::new(
-                    ApplicationExceptionKind::INTERNAL_ERROR,
-                    e.to_string(),
-                )),
-            },
-        }
-    }
-}
+//         // Use if let to try downcasting to ApplicationException.
+//         match error_boxed.downcast::<ApplicationException>() {
+//             Ok(application_error) => ServerError::Application(*application_error),
+//             Err(e) => match e.downcast::<BizError>() {
+//                 Ok(biz_error) => ServerError::Biz(*biz_error),
+//                 Err(e) => ServerError::Application(ApplicationException::new(
+//                     ApplicationExceptionKind::INTERNAL_ERROR,
+//                     e.to_string(),
+//                 )),
+//             },
+//         }
+//     }
+// }
 
-impl Display for ServerError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            ServerError::Application(e) => write!(f, "application exception: {}", e),
-            ServerError::Biz(e) => write!(f, "biz error: {}", e),
-        }
-    }
-}
+// impl Display for ServerError {
+//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+//         match self {
+//             ServerError::Application(e) => write!(f, "application exception: {}", e),
+//             ServerError::Biz(e) => write!(f, "biz error: {}", e),
+//         }
+//     }
+// }
 
 impl ServerError {
     pub fn append_msg(&mut self, msg: &str) {
