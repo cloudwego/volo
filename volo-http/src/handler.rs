@@ -7,7 +7,7 @@ use std::{
 };
 
 use futures_util::future::BoxFuture;
-use hyper::body::Incoming;
+use http::request::Parts;
 use motore::service::Service;
 
 use crate::{
@@ -15,12 +15,16 @@ use crate::{
     extract::{FromContext, FromRequest},
     macros::{all_the_tuples, all_the_tuples_no_last_special_case},
     middleware::Next,
-    response::{IntoResponse, Response},
+    request::ServerRequest,
+    response::{IntoResponse, ServerResponse},
 };
 
 pub trait Handler<T>: Sized {
-    fn handle(self, cx: &mut ServerContext, req: Incoming)
-        -> impl Future<Output = Response> + Send;
+    fn handle(
+        self,
+        cx: &mut ServerContext,
+        req: ServerRequest,
+    ) -> impl Future<Output = ServerResponse> + Send;
 
     fn into_service(self) -> HandlerService<Self, T> {
         HandlerService {
@@ -36,7 +40,7 @@ where
     Fut: Future<Output = Res> + Send,
     Res: IntoResponse,
 {
-    async fn handle(self, _cx: &mut ServerContext, _req: Incoming) -> Response {
+    async fn handle(self, _cx: &mut ServerContext, _req: ServerRequest) -> ServerResponse {
         self().await.into_response()
     }
 }
@@ -52,16 +56,17 @@ macro_rules! impl_handler {
             Fut: Future<Output = Res> + Send,
             Res: IntoResponse,
             $( for<'r> $ty: FromContext + Send + 'r, )*
-            for<'r> $last: FromRequest<(), M> + Send + 'r,
+            for<'r> $last: FromRequest<M> + Send + 'r,
         {
-            async fn handle(self, cx: &mut ServerContext, req: Incoming) -> Response {
+            async fn handle(self, cx: &mut ServerContext, req: ServerRequest) -> ServerResponse {
+                let (mut parts, body) = req.into_parts();
                 $(
-                    let $ty = match $ty::from_context(cx, &()).await {
+                    let $ty = match $ty::from_context(cx, &mut parts).await {
                         Ok(value) => value,
                         Err(rejection) => return rejection.into_response(),
                     };
                 )*
-                let $last = match $last::from_request(cx, req, &()).await {
+                let $last = match $last::from_request(cx, parts, body).await {
                     Ok(value) => value,
                     Err(rejection) => return rejection.into_response(),
                 };
@@ -90,24 +95,28 @@ where
     }
 }
 
-impl<H, T> Service<ServerContext, Incoming> for HandlerService<H, T>
+impl<H, T> Service<ServerContext, ServerRequest> for HandlerService<H, T>
 where
     H: Handler<T> + Clone + Send + Sync,
 {
-    type Response = Response;
+    type Response = ServerResponse;
     type Error = Infallible;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: Incoming,
+        req: ServerRequest,
     ) -> Result<Self::Response, Self::Error> {
         Ok(self.handler.clone().handle(cx, req).await)
     }
 }
 
 pub trait HandlerWithoutRequest<T, Ret>: Sized {
-    fn handle(self, cx: &mut ServerContext) -> impl Future<Output = Result<Ret, Response>> + Send;
+    fn handle(
+        self,
+        cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> impl Future<Output = Result<Ret, ServerResponse>> + Send;
 }
 
 impl<F, Fut, Ret> HandlerWithoutRequest<(), Ret> for F
@@ -115,7 +124,11 @@ where
     F: FnOnce() -> Fut + Clone + Send,
     Fut: Future<Output = Ret> + Send,
 {
-    async fn handle(self, _context: &mut ServerContext) -> Result<Ret, Response> {
+    async fn handle(
+        self,
+        _context: &mut ServerContext,
+        _parts: &mut Parts,
+    ) -> Result<Ret, ServerResponse> {
         Ok(self().await)
     }
 }
@@ -131,9 +144,9 @@ macro_rules! impl_handler_without_request {
             Fut: Future<Output = Ret> + Send,
             $( for<'r> $ty: FromContext + Send + 'r, )*
         {
-            async fn handle(self, cx: &mut ServerContext) -> Result<Ret, Response> {
+            async fn handle(self, cx: &mut ServerContext, parts: &mut Parts) -> Result<Ret, ServerResponse> {
                 $(
-                    let $ty = match $ty::from_context(cx, &()).await {
+                    let $ty = match $ty::from_context(cx, parts).await {
                         Ok(value) => value,
                         Err(rejection) => return Err(rejection.into_response()),
                     };
@@ -147,9 +160,9 @@ macro_rules! impl_handler_without_request {
 all_the_tuples_no_last_special_case!(impl_handler_without_request);
 
 pub trait MiddlewareHandlerFromFn<'r, T>: Sized {
-    type Future: Future<Output = Response> + Send + 'r;
+    type Future: Future<Output = ServerResponse> + Send + 'r;
 
-    fn handle(&self, cx: &'r mut ServerContext, req: Incoming, next: Next) -> Self::Future;
+    fn handle(&self, cx: &'r mut ServerContext, req: ServerRequest, next: Next) -> Self::Future;
 }
 
 macro_rules! impl_middleware_handler_from_fn {
@@ -163,26 +176,27 @@ macro_rules! impl_middleware_handler_from_fn {
             Fut: Future<Output = Res> + Send + 'r,
             Res: IntoResponse + 'r,
             $( $ty: FromContext + Send + 'r, )*
-            $last: FromRequest<(), M> + Send + 'r,
+            $last: FromRequest<M> + Send + 'r,
         {
-            type Future = ResponseFuture<'r, Response>;
+            type Future = ResponseFuture<'r, ServerResponse>;
 
             fn handle(
                 &self,
                 cx: &'r mut ServerContext,
-                req: Incoming,
+                req: ServerRequest,
                 next: Next,
             ) -> Self::Future {
                 let f = *self;
 
                 let future = Box::pin(async move {
+                    let (mut parts, body) = req.into_parts();
                     $(
-                        let $ty = match $ty::from_context(cx, &()).await {
+                        let $ty = match $ty::from_context(cx, &mut parts).await {
                             Ok(value) => value,
                             Err(rejection) => return rejection.into_response(),
                         };
                     )*
-                    let $last = match $last::from_request(cx, req, &()).await {
+                    let $last = match $last::from_request(cx, parts, body).await {
                         Ok(value) => value,
                         Err(rejection) => return rejection.into_response(),
                     };
@@ -200,20 +214,20 @@ macro_rules! impl_middleware_handler_from_fn {
 all_the_tuples!(impl_middleware_handler_from_fn);
 
 pub trait MiddlewareHandlerMapResponse<'r, T>: Sized {
-    type Future: Future<Output = Response> + Send + 'r;
+    type Future: Future<Output = ServerResponse> + Send + 'r;
 
-    fn handle(&self, cx: &'r mut ServerContext, response: Response) -> Self::Future;
+    fn handle(&self, cx: &'r mut ServerContext, response: ServerResponse) -> Self::Future;
 }
 
 impl<'r, F, Fut, Res> MiddlewareHandlerMapResponse<'r, ((),)> for F
 where
-    F: Fn(Response) -> Fut + Copy + Send + Sync + 'static,
+    F: Fn(ServerResponse) -> Fut + Copy + Send + Sync + 'static,
     Fut: Future<Output = Res> + Send + 'r,
     Res: IntoResponse + 'r,
 {
-    type Future = ResponseFuture<'r, Response>;
+    type Future = ResponseFuture<'r, ServerResponse>;
 
-    fn handle(&self, _context: &'r mut ServerContext, response: Response) -> Self::Future {
+    fn handle(&self, _context: &'r mut ServerContext, response: ServerResponse) -> Self::Future {
         let f = *self;
 
         let future = Box::pin(async move { f(response).await.into_response() });
@@ -222,48 +236,23 @@ where
     }
 }
 
-macro_rules! impl_middleware_handler_map_response {
-    (
-        $($ty:ident),* $(,)?
-    ) => {
-        #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<'r, F, Fut, Res, M, $($ty,)*> MiddlewareHandlerMapResponse<'r, (M, $($ty,)*)> for F
-        where
-            F: Fn($($ty,)* Response) -> Fut + Copy + Send + Sync + 'static,
-            Fut: Future<Output = Res> + Send + 'r,
-            Res: IntoResponse + 'r,
-            $( $ty: FromContext + Send + 'r, )*
-        {
-            type Future = ResponseFuture<'r, Response>;
+impl<'r, F, Fut, Res> MiddlewareHandlerMapResponse<'r, (ServerContext,)> for F
+where
+    F: Fn(&mut ServerContext, ServerResponse) -> Fut + Copy + Send + Sync + 'static,
+    Fut: Future<Output = Res> + Send + 'r,
+    Res: IntoResponse + 'r,
+{
+    type Future = ResponseFuture<'r, ServerResponse>;
 
-            fn handle(
-                &self,
-                cx: &'r mut ServerContext,
-                response: Response,
-            ) -> Self::Future {
-                let f = *self;
+    fn handle(&self, context: &'r mut ServerContext, response: ServerResponse) -> Self::Future {
+        let f = *self;
 
-                let future = Box::pin(async move {
-                    $(
-                        let $ty = match $ty::from_context(cx, &()).await {
-                            Ok(value) => value,
-                            Err(rejection) => return rejection.into_response(),
-                        };
-                    )*
-                    f($($ty,)* response).await.into_response()
-                });
+        let future = Box::pin(async move { f(context, response).await.into_response() });
 
-                ResponseFuture {
-                    inner: future,
-                }
-            }
-        }
-    };
+        ResponseFuture { inner: future }
+    }
 }
 
-all_the_tuples_no_last_special_case!(impl_middleware_handler_map_response);
-
-/// Response future for [`MapResponse`].
 pub struct ResponseFuture<'r, Res> {
     inner: BoxFuture<'r, Res>,
 }

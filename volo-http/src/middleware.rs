@@ -1,13 +1,13 @@
 use std::{convert::Infallible, marker::PhantomData};
 
-use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service};
 
 use crate::{
     context::ServerContext,
     handler::{MiddlewareHandlerFromFn, MiddlewareHandlerMapResponse},
-    response::{IntoResponse, Response},
-    DynService,
+    request::ServerRequest,
+    response::{IntoResponse, ServerResponse},
+    route::Route,
 };
 
 pub struct FromFnLayer<F, T> {
@@ -69,9 +69,9 @@ where
     }
 }
 
-impl<S, F, T> Service<ServerContext, Incoming> for FromFn<S, F, T>
+impl<S, F, T> Service<ServerContext, ServerRequest> for FromFn<S, F, T>
 where
-    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
         + Clone
         + Send
         + Sync
@@ -84,21 +84,25 @@ where
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: Incoming,
+        req: ServerRequest,
     ) -> Result<Self::Response, Self::Error> {
         let next = Next {
-            service: DynService::new(self.service.clone()),
+            service: Route::new(self.service.clone()),
         };
         Ok(self.f.handle(cx, req, next).await)
     }
 }
 
 pub struct Next {
-    service: DynService,
+    service: Route,
 }
 
 impl Next {
-    pub async fn run(self, cx: &mut ServerContext, req: Incoming) -> Result<Response, Infallible> {
+    pub async fn run(
+        self,
+        cx: &mut ServerContext,
+        req: ServerRequest,
+    ) -> Result<ServerResponse, Infallible> {
         self.service.call(cx, req).await
     }
 }
@@ -162,9 +166,9 @@ where
     }
 }
 
-impl<S, F, T> Service<ServerContext, Incoming> for MapResponse<S, F, T>
+impl<S, F, T> Service<ServerContext, ServerRequest> for MapResponse<S, F, T>
 where
-    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
         + Clone
         + Send
         + Sync
@@ -177,7 +181,7 @@ where
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: Incoming,
+        req: ServerRequest,
     ) -> Result<Self::Response, Self::Error> {
         let response = match self.service.call(cx, req).await {
             Ok(resp) => resp,

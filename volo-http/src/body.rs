@@ -11,8 +11,10 @@ use faststr::FastStr;
 use futures_util::{ready, Stream};
 use http_body::{Frame, SizeHint};
 use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
+pub use hyper::body::Incoming;
 use motore::BoxError;
 use pin_project::pin_project;
+#[cfg(any(feature = "serde_json", feature = "sonic_json"))]
 use serde::de::DeserializeOwned;
 
 // The `futures_util::stream::BoxStream` does not have `Sync`

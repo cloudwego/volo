@@ -1,9 +1,8 @@
 use std::{convert::Infallible, fmt, future::Future};
 
-use hyper::body::Incoming;
 use motore::service::Service;
 
-use crate::{context::ServerContext, Response};
+use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
 /// Returns a new [`ServiceFn`] with the given closure.
 ///
@@ -18,17 +17,17 @@ pub struct ServiceFn<F> {
     f: F,
 }
 
-impl<F> Service<ServerContext, Incoming> for ServiceFn<F>
+impl<F> Service<ServerContext, ServerRequest> for ServiceFn<F>
 where
     F: for<'r> Callback<'r>,
 {
-    type Response = Response;
+    type Response = ServerResponse;
     type Error = Infallible;
 
     fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: Incoming,
+        req: ServerRequest,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> {
         (self.f).call(cx, req)
     }
@@ -48,19 +47,19 @@ impl<F> fmt::Debug for ServiceFn<F> {
 /// Related issue: https://github.com/rust-lang/rust/issues/70263.
 /// Related RFC: https://github.com/rust-lang/rfcs/pull/3216.
 pub trait Callback<'r> {
-    type Future: Future<Output = Result<Response, Infallible>> + Send + 'r;
+    type Future: Future<Output = Result<ServerResponse, Infallible>> + Send + 'r;
 
-    fn call(&self, cx: &'r mut ServerContext, req: Incoming) -> Self::Future;
+    fn call(&self, cx: &'r mut ServerContext, req: ServerRequest) -> Self::Future;
 }
 
 impl<'r, F, Fut> Callback<'r> for F
 where
-    F: Fn(&'r mut ServerContext, Incoming) -> Fut,
-    Fut: Future<Output = Result<Response, Infallible>> + Send + 'r,
+    F: Fn(&'r mut ServerContext, ServerRequest) -> Fut,
+    Fut: Future<Output = Result<ServerResponse, Infallible>> + Send + 'r,
 {
     type Future = Fut;
 
-    fn call(&self, cx: &'r mut ServerContext, req: Incoming) -> Self::Future {
+    fn call(&self, cx: &'r mut ServerContext, req: ServerRequest) -> Self::Future {
         self(cx, req)
     }
 }

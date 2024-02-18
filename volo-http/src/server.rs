@@ -7,7 +7,7 @@ use std::{
 
 use futures::future::BoxFuture;
 use http_body::Body;
-use hyper::{body::Incoming as BodyIncoming, server::conn::http1};
+use hyper::server::conn::http1;
 use hyper_util::rt::TokioIo;
 use metainfo::{MetaInfo, METAINFO};
 use motore::{
@@ -22,8 +22,8 @@ use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
 
 use crate::{
     context::ServerContext,
-    request::Request,
-    response::{IntoResponse, Response},
+    request::ServerRequest,
+    response::{IntoResponse, ServerResponse},
 };
 
 /// This is unstable now and may be changed in the future.
@@ -40,7 +40,7 @@ pub struct Server<S, L> {
 impl<S> Server<S, Identity> {
     pub fn new(service: S) -> Self
     where
-        S: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>,
+        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>,
     {
         Self {
             service,
@@ -113,9 +113,9 @@ impl<S, L> Server<S, L> {
 
     pub async fn run<MI: MakeIncoming>(self, mk_incoming: MI) -> Result<(), BoxError>
     where
-        S: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>,
+        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>,
         L: Layer<S>,
-        L::Service: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>
+        L::Service: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
             + Send
             + Sync
             + 'static,
@@ -257,7 +257,7 @@ async fn handle_conn<S>(
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer: Address,
 ) where
-    S: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
         + Clone
         + Send
         + Sync
@@ -301,10 +301,10 @@ async fn serve<S>(
     service: S,
     peer: Address,
     stat_tracer: Arc<[TraceFn]>,
-    request: Request,
-) -> Result<Response, Infallible>
+    request: ServerRequest,
+) -> Result<ServerResponse, Infallible>
 where
-    S: Service<ServerContext, BodyIncoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
         + Clone
         + Send
         + Sync
@@ -314,15 +314,14 @@ where
         .scope(RefCell::new(MetaInfo::default()), async {
             let service = service.clone();
             let peer = peer.clone();
-            let (parts, req) = request.into_parts();
-            let mut cx = ServerContext::new(peer, parts);
+            let mut cx = ServerContext::new(peer);
 
-            if let Some(req_size) = req.size_hint().exact() {
+            if let Some(req_size) = request.size_hint().exact() {
                 cx.common_stats.set_req_size(req_size);
             }
             cx.stats.record_process_start_at();
 
-            let resp = service.call(&mut cx, req).await.into_response();
+            let resp = service.call(&mut cx, request).await.into_response();
 
             cx.stats.record_process_end_at();
             cx.stats.set_status_code(resp.status());

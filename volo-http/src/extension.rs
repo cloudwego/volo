@@ -1,17 +1,22 @@
 use std::convert::Infallible;
 
-use hyper::{body::Incoming, StatusCode};
+use http::{request::Parts, StatusCode};
 use motore::{layer::Layer, service::Service};
 use volo::context::Context;
 
-use crate::{context::ServerContext, extract::FromContext, response::IntoResponse, Response};
+use crate::{
+    context::ServerContext,
+    extract::FromContext,
+    request::ServerRequest,
+    response::{IntoResponse, ServerResponse},
+};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Extension<T>(pub T);
 
 impl<S, T> Layer<S> for Extension<T>
 where
-    S: Service<ServerContext, Incoming, Response = Response> + Send + Sync + 'static,
+    S: Service<ServerContext, ServerRequest, Response = ServerResponse> + Send + Sync + 'static,
     T: Sync,
 {
     type Service = ExtensionService<S, T>;
@@ -27,9 +32,9 @@ pub struct ExtensionService<I, T> {
     ext: T,
 }
 
-impl<S, T> Service<ServerContext, Incoming> for ExtensionService<S, T>
+impl<S, T> Service<ServerContext, ServerRequest> for ExtensionService<S, T>
 where
-    S: Service<ServerContext, Incoming, Response = Response, Error = Infallible>
+    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
         + Send
         + Sync
         + 'static,
@@ -41,21 +46,23 @@ where
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: Incoming,
+        req: ServerRequest,
     ) -> Result<Self::Response, Self::Error> {
         cx.extensions_mut().insert(self.ext.clone());
         self.inner.call(cx, req).await
     }
 }
 
-impl<T, S> FromContext<S> for Extension<T>
+impl<T> FromContext for Extension<T>
 where
     T: Clone + Send + Sync + 'static,
-    S: Sync,
 {
     type Rejection = ExtensionRejection;
 
-    async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_context(
+        cx: &mut ServerContext,
+        _parts: &mut Parts,
+    ) -> Result<Self, Self::Rejection> {
         cx.extensions()
             .get::<T>()
             .cloned()
@@ -69,7 +76,7 @@ pub enum ExtensionRejection {
 }
 
 impl IntoResponse for ExtensionRejection {
-    fn into_response(self) -> Response {
+    fn into_response(self) -> ServerResponse {
         StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }
 }

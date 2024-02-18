@@ -24,32 +24,15 @@ mod macros;
 #[doc(hidden)]
 pub mod prelude {
     pub use bytes::Bytes;
-    pub use http::{self, HeaderMap, HeaderName, HeaderValue, Method, StatusCode, Uri, Version};
-    pub use hyper::{self, body::Incoming};
+    pub use http;
+    pub use hyper;
     pub use volo::net::Address;
 
     #[cfg(feature = "cookie")]
     pub use crate::cookie::CookieJar;
     #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
     pub use crate::json::Json;
-    pub use crate::{
-        context::{ConnectionInfo, HttpContext, ServerContext},
-        extension::Extension,
-        extract::{Form, MaybeInvalid, Query},
-        param::Params,
-        request::Request,
-        response::Response,
-        route::Router,
-        server::Server,
-    };
-
-    pub type BodyIncoming = Incoming;
-    pub type DynService = motore::service::BoxCloneService<
-        ServerContext,
-        Incoming,
-        Response,
-        std::convert::Infallible,
-    >;
+    pub use crate::{extension::Extension, param::Params, route::Router, server::Server};
 }
 
-pub use prelude::*;
+pub use self::prelude::*;

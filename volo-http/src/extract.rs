@@ -3,16 +3,17 @@ use std::{convert::Infallible, marker::PhantomData};
 use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::Future;
-use http::{header, Method, StatusCode, Uri};
+use http::{header, request::Parts, Method, StatusCode, Uri};
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use serde::de::DeserializeOwned;
-use volo::net::Address;
+use volo::{context::Context, net::Address};
 
 use crate::{
-    context::{ConnectionInfo, ServerContext},
+    context::{server::get_connection_info, ConnectionInfo, ServerContext},
     param::Params,
-    response::IntoResponse,
+    request::ServerRequest,
+    response::{IntoResponse, ServerResponse},
 };
 
 mod private {
@@ -23,22 +24,22 @@ mod private {
     pub enum ViaRequest {}
 }
 
-pub trait FromContext<S = ()>: Sized {
+pub trait FromContext: Sized {
     type Rejection: IntoResponse;
 
     fn from_context(
         cx: &mut ServerContext,
-        state: &S,
+        parts: &mut Parts,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
-pub trait FromRequest<S = (), M = private::ViaRequest>: Sized {
+pub trait FromRequest<M = private::ViaRequest>: Sized {
     type Rejection: IntoResponse;
 
     fn from_request(
         cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        state: &S,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
@@ -71,137 +72,155 @@ impl MaybeInvalid<FastStr> {
     }
 }
 
-impl<T, S> FromContext<S> for Option<T>
+impl<T> FromContext for Option<T>
 where
-    T: FromContext<S>,
-    S: Sync,
+    T: FromContext,
 {
     type Rejection = Infallible;
 
-    async fn from_context(cx: &mut ServerContext, state: &S) -> Result<Self, Self::Rejection> {
-        Ok(T::from_context(cx, state).await.ok())
+    async fn from_context(
+        cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(T::from_context(cx, parts).await.ok())
     }
 }
 
-impl<S: Sync> FromContext<S> for Address {
+impl FromContext for Address {
     type Rejection = Infallible;
 
-    async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Address, Self::Rejection> {
-        Ok(cx.peer().clone())
+    async fn from_context(
+        cx: &mut ServerContext,
+        _parts: &mut Parts,
+    ) -> Result<Address, Self::Rejection> {
+        Ok(cx
+            .rpc_info()
+            .caller()
+            .address()
+            .expect("server context does not have caller address"))
     }
 }
 
-impl<S: Sync> FromContext<S> for Uri {
+impl FromContext for Uri {
     type Rejection = Infallible;
 
-    async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Uri, Self::Rejection> {
-        Ok(cx.uri().clone())
+    async fn from_context(
+        _cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> Result<Uri, Self::Rejection> {
+        Ok(parts.uri.to_owned())
     }
 }
 
-impl<S: Sync> FromContext<S> for Method {
+impl FromContext for Method {
     type Rejection = Infallible;
 
-    async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Method, Self::Rejection> {
-        Ok(cx.method().clone())
+    async fn from_context(
+        _cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> Result<Method, Self::Rejection> {
+        Ok(parts.method.to_owned())
     }
 }
 
-impl<S: Sync> FromContext<S> for Params {
+impl FromContext for Params {
     type Rejection = Infallible;
 
-    async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Params, Self::Rejection> {
+    async fn from_context(
+        cx: &mut ServerContext,
+        _parts: &mut Parts,
+    ) -> Result<Params, Self::Rejection> {
         Ok(cx.params().clone())
     }
 }
 
-impl<T, S> FromContext<S> for Query<T>
+impl<T> FromContext for Query<T>
 where
     T: DeserializeOwned,
-    S: Sync,
 {
     type Rejection = RejectionError;
 
-    async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Self, Self::Rejection> {
-        let query = cx.uri().query().unwrap_or_default();
+    async fn from_context(
+        _cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> Result<Self, Self::Rejection> {
+        let query = parts.uri.query().unwrap_or_default();
         let param = serde_urlencoded::from_str(query).map_err(RejectionError::QueryRejection)?;
         Ok(Query(param))
     }
 }
 
-impl<S: Sync> FromContext<S> for ConnectionInfo {
+impl FromContext for ConnectionInfo {
     type Rejection = Infallible;
-    async fn from_context(cx: &mut ServerContext, _state: &S) -> Result<Self, Self::Rejection> {
-        Ok(cx.get_connection_info())
+    async fn from_context(
+        _cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(get_connection_info(parts))
     }
 }
 
-impl<T, S> FromRequest<S, private::ViaContext> for T
+impl<T> FromRequest<private::ViaContext> for T
 where
-    T: FromContext<S> + Sync,
-    S: Sync,
+    T: FromContext + Sync,
 {
     type Rejection = T::Rejection;
 
     async fn from_request(
         cx: &mut ServerContext,
+        mut parts: Parts,
         _body: Incoming,
-        state: &S,
     ) -> Result<Self, Self::Rejection> {
-        T::from_context(cx, state).await
+        T::from_context(cx, &mut parts).await
     }
 }
 
-impl<T, S> FromRequest<S> for Option<T>
+impl<T> FromRequest for Option<T>
 where
-    T: FromRequest<S, private::ViaRequest> + Sync,
-    S: Sync,
+    T: FromRequest<private::ViaRequest> + Sync,
 {
     type Rejection = Infallible;
 
     async fn from_request(
         cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        state: &S,
     ) -> Result<Self, Self::Rejection> {
-        Ok(T::from_request(cx, body, state).await.ok())
+        Ok(T::from_request(cx, parts, body).await.ok())
     }
 }
 
-impl<S> FromRequest<S> for Incoming
-where
-    S: Sync,
-{
+impl FromRequest for ServerRequest {
     type Rejection = Infallible;
 
     async fn from_request(
         _cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        _state: &S,
     ) -> Result<Self, Self::Rejection> {
-        Ok(body)
+        Ok(ServerRequest::from_parts(parts, body))
     }
 }
 
-impl<S: Sync> FromRequest<S> for Vec<u8> {
+impl FromRequest for Vec<u8> {
     type Rejection = RejectionError;
 
     async fn from_request(
         cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        state: &S,
     ) -> Result<Self, Self::Rejection> {
-        Ok(Bytes::from_request(cx, body, state).await?.into())
+        Ok(Bytes::from_request(cx, parts, body).await?.into())
     }
 }
 
-impl<S: Sync> FromRequest<S> for Bytes {
+impl FromRequest for Bytes {
     type Rejection = RejectionError;
 
     async fn from_request(
-        cx: &mut ServerContext,
+        _cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        _state: &S,
     ) -> Result<Self, Self::Rejection> {
         let bytes = body
             .collect()
@@ -209,7 +228,7 @@ impl<S: Sync> FromRequest<S> for Bytes {
             .map_err(|_| RejectionError::BodyCollectionError)?
             .to_bytes();
 
-        if let Some(Ok(Ok(cap))) = cx
+        if let Some(Ok(Ok(cap))) = parts
             .headers
             .get(header::CONTENT_LENGTH)
             .map(|v| v.to_str().map(|c| c.parse::<usize>()))
@@ -227,15 +246,15 @@ impl<S: Sync> FromRequest<S> for Bytes {
     }
 }
 
-impl<S: Sync> FromRequest<S> for String {
+impl FromRequest for String {
     type Rejection = RejectionError;
 
     async fn from_request(
         cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let vec = Vec::<u8>::from_request(cx, body, state).await?;
+        let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
         // Check if the &[u8] is a valid string
         let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::StringRejection)?;
@@ -245,15 +264,15 @@ impl<S: Sync> FromRequest<S> for String {
     }
 }
 
-impl<S: Sync> FromRequest<S> for FastStr {
+impl FromRequest for FastStr {
     type Rejection = RejectionError;
 
     async fn from_request(
         cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let vec = Vec::<u8>::from_request(cx, body, state).await?;
+        let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
         // Check if the &[u8] is a valid string
         let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::StringRejection)?;
@@ -263,36 +282,32 @@ impl<S: Sync> FromRequest<S> for FastStr {
     }
 }
 
-impl<T, S> FromRequest<S> for MaybeInvalid<T>
-where
-    S: Sync,
-{
+impl<T> FromRequest for MaybeInvalid<T> {
     type Rejection = RejectionError;
 
     async fn from_request(
         cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let vec = Vec::<u8>::from_request(cx, body, state).await?;
+        let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
         Ok(MaybeInvalid(vec, PhantomData))
     }
 }
 
-impl<T, S> FromRequest<S> for Form<T>
+impl<T> FromRequest for Form<T>
 where
     T: DeserializeOwned,
-    S: Sync,
 {
     type Rejection = RejectionError;
 
     async fn from_request(
         cx: &mut ServerContext,
+        parts: Parts,
         body: Incoming,
-        state: &S,
     ) -> Result<Self, Self::Rejection> {
-        let bytes = Bytes::from_request(cx, body, state).await?;
+        let bytes = Bytes::from_request(cx, parts, body).await?;
         let form = serde_html_form::from_bytes::<T>(bytes.as_ref())
             .map_err(RejectionError::FormRejection)?;
 
@@ -305,17 +320,19 @@ pub enum RejectionError {
     BodyCollectionError,
     InvalidContentType,
     StringRejection(simdutf8::basic::Utf8Error),
+    #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
     JsonRejection(crate::json::Error),
     QueryRejection(serde_urlencoded::de::Error),
     FormRejection(serde_html_form::de::Error),
 }
 
 impl IntoResponse for RejectionError {
-    fn into_response(self) -> crate::Response {
+    fn into_response(self) -> ServerResponse {
         let status = match self {
             Self::BodyCollectionError => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InvalidContentType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::StringRejection(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
+            #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
             Self::JsonRejection(_) => StatusCode::BAD_REQUEST,
             Self::QueryRejection(_) => StatusCode::BAD_REQUEST,
             Self::FormRejection(_) => StatusCode::BAD_REQUEST,
