@@ -22,41 +22,22 @@ pub enum ServerError {
 
 impl From<anyhow::Error> for ServerError {
     fn from(e: anyhow::Error) -> Self {
-        ApplicationException::new(ApplicationExceptionKind::INTERNAL_ERROR, e.to_string()).into()
+        e.downcast::<ServerError>().unwrap_or_else(|e| {
+            e.downcast::<ApplicationException>()
+                .map(Into::into)
+                .unwrap_or_else(|e| {
+                    e.downcast::<BizError>()
+                        .map(Into::into)
+                        .unwrap_or_else(|e| {
+                            ServerError::Application(ApplicationException::new(
+                                ApplicationExceptionKind::INTERNAL_ERROR,
+                                e.to_string(),
+                            ))
+                        })
+                })
+        })
     }
 }
-
-// impl<E> From<E> for ServerError
-// where
-//     E: std::error::Error + Send + Sync + 'static,
-// {
-//     #[cold]
-//     fn from(error: E) -> Self {
-//         // First convert `E` to a boxed trait object so we can attempt downcasting.
-//         let error_boxed = Box::new(error) as Box<dyn std::error::Error + Send + Sync>;
-
-//         // Use if let to try downcasting to ApplicationException.
-//         match error_boxed.downcast::<ApplicationException>() {
-//             Ok(application_error) => ServerError::Application(*application_error),
-//             Err(e) => match e.downcast::<BizError>() {
-//                 Ok(biz_error) => ServerError::Biz(*biz_error),
-//                 Err(e) => ServerError::Application(ApplicationException::new(
-//                     ApplicationExceptionKind::INTERNAL_ERROR,
-//                     e.to_string(),
-//                 )),
-//             },
-//         }
-//     }
-// }
-
-// impl Display for ServerError {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-//         match self {
-//             ServerError::Application(e) => write!(f, "application exception: {}", e),
-//             ServerError::Biz(e) => write!(f, "biz error: {}", e),
-//         }
-//     }
-// }
 
 impl ServerError {
     pub fn append_msg(&mut self, msg: &str) {
