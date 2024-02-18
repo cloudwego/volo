@@ -402,7 +402,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 match &*e {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
                         let name = self.cx().rust_name(v.did);
-                        format!("Some({res_recv_name}::{enum_variant}({result_path}::{name}(ex))) => Err(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))),")
+                        format!("Some({res_recv_name}::{enum_variant}({result_path}::{name}(ex))) => Ok(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))),")
                     }).collect::<Vec<_>>(),
                     _ => panic!()
                 }
