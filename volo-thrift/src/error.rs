@@ -12,11 +12,12 @@ pub use pilota::thrift::{
 };
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
+pub type ServerResult<T> = Result<T, ServerError>;
+pub type ClientResult<T> = Result<T, ClientError>;
+
 #[derive(Debug)]
 pub enum ServerError {
-    // #[error("application exception: {0}")]
     Application(ApplicationException),
-    // #[error("biz error: {0}")]
     Biz(BizError),
 }
 
