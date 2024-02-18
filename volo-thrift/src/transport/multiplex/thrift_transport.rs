@@ -136,13 +136,14 @@ where
                             let mut tx_map = inner_tx_map.lock().await;
                             inner_read_error.store(true, std::sync::atomic::Ordering::Relaxed);
                             for (_, tx) in tx_map.drain() {
-                                let _ =
-                                    tx.send(Err(ClientError::Application(ApplicationException::new(
+                                let _ = tx.send(Err(ClientError::Application(
+                                    ApplicationException::new(
                                         ApplicationExceptionKind::UNKNOWN,
                                         format!(
                                             "multiplex connection error: {e}, target: {target}"
                                         ),
-                                    ))));
+                                    ),
+                                )));
                             }
                             return;
                         }

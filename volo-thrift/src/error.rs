@@ -1,12 +1,11 @@
 use std::{fmt::Display, io};
 
-use pilota::{AHashMap, FastStr};
-
 pub use pilota::thrift::{
     new_application_exception, new_protocol_exception, ApplicationException,
     ApplicationExceptionKind, ProtocolException, ProtocolExceptionKind, ThriftException,
     TransportException,
 };
+use pilota::{AHashMap, FastStr};
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
 pub type ServerResult<T> = Result<T, ServerError>;

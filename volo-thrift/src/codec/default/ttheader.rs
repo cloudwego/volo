@@ -12,7 +12,9 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use linkedbytes::LinkedBytes;
 use metainfo::{Backward, Forward};
 use num_enum::TryFromPrimitive;
-use pilota::thrift::{new_protocol_exception, ProtocolException, ProtocolExceptionKind, ThriftException};
+use pilota::thrift::{
+    new_protocol_exception, ProtocolException, ProtocolExceptionKind, ThriftException,
+};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
 use tracing::{trace, warn};
 use volo::{context::Role, util::buf_reader::BufReader, FastStr};
