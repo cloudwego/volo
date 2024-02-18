@@ -3,12 +3,8 @@ use std::{marker::PhantomData, time::Duration};
 use http::StatusCode;
 use motore::{layer::Layer, service::Service};
 
-use crate::{
-    context::ServerContext,
-    handler::HandlerWithoutRequest,
-    request::ServerRequest,
-    response::{IntoResponse, ServerResponse},
-};
+use super::{handler::HandlerWithoutRequest, IntoResponse};
+use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
 #[derive(Clone)]
 pub struct FilterLayer<H, R, T> {

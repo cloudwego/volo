@@ -6,14 +6,15 @@ use futures_util::Future;
 use http::{header, request::Parts, Method, StatusCode, Uri};
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
+#[cfg(feature = "__serde")]
 use serde::de::DeserializeOwned;
 use volo::{context::Context, net::Address};
 
+use super::{param::Params, IntoResponse};
 use crate::{
     context::{server::get_connection_info, ConnectionInfo, ServerContext},
-    param::Params,
     request::ServerRequest,
-    response::{IntoResponse, ServerResponse},
+    response::ServerResponse,
 };
 
 mod private {
@@ -134,6 +135,7 @@ impl FromContext for Params {
     }
 }
 
+#[cfg(feature = "query")]
 impl<T> FromContext for Query<T>
 where
     T: DeserializeOwned,
@@ -296,6 +298,7 @@ impl<T> FromRequest for MaybeInvalid<T> {
     }
 }
 
+#[cfg(feature = "form")]
 impl<T> FromRequest for Form<T>
 where
     T: DeserializeOwned,
@@ -320,9 +323,11 @@ pub enum RejectionError {
     BodyCollectionError,
     InvalidContentType,
     StringRejection(simdutf8::basic::Utf8Error),
-    #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+    #[cfg(feature = "__json")]
     JsonRejection(crate::json::Error),
+    #[cfg(feature = "query")]
     QueryRejection(serde_urlencoded::de::Error),
+    #[cfg(feature = "form")]
     FormRejection(serde_html_form::de::Error),
 }
 
@@ -332,9 +337,11 @@ impl IntoResponse for RejectionError {
             Self::BodyCollectionError => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InvalidContentType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::StringRejection(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+            #[cfg(feature = "__json")]
             Self::JsonRejection(_) => StatusCode::BAD_REQUEST,
+            #[cfg(feature = "query")]
             Self::QueryRejection(_) => StatusCode::BAD_REQUEST,
+            #[cfg(feature = "form")]
             Self::FormRejection(_) => StatusCode::BAD_REQUEST,
         };
 

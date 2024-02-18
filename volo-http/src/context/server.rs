@@ -15,7 +15,10 @@ use volo::{
 };
 
 use super::CommonStats;
-use crate::param::Params;
+use crate::{
+    server::param::Params,
+    utils::macros::{impl_deref_and_deref_mut, impl_getter},
+};
 
 static X_FORWARDED_HOST: HeaderName = HeaderName::from_static("x-forwarded-host");
 static X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-proto");

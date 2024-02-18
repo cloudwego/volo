@@ -9,13 +9,16 @@ use futures_util::future::BoxFuture;
 use http::request::Parts;
 use motore::service::Service;
 
+use super::{
+    extract::{FromContext, FromRequest},
+    middleware::Next,
+    IntoResponse,
+};
 use crate::{
     context::ServerContext,
-    extract::{FromContext, FromRequest},
-    macros::{all_the_tuples, all_the_tuples_no_last_special_case},
-    middleware::Next,
     request::ServerRequest,
-    response::{IntoResponse, ServerResponse},
+    response::ServerResponse,
+    utils::macros::{all_the_tuples, all_the_tuples_no_last_special_case},
 };
 
 pub trait Handler<T, E>: Sized {

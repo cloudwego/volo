@@ -23,7 +23,6 @@ volo = { version = "0.9", path = "../volo" }
 ahash.workspace = true
 bytes.workspace = true
 chrono.workspace = true
-cookie = { workspace = true, optional = true, features = ["percent-encode"] }
 faststr.workspace = true
 futures.workspace = true
 futures-util.workspace = true
@@ -32,7 +31,6 @@ http-body.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["client", "server", "http1"] }
 hyper-util = { workspace = true, features = ["tokio"] }
-matchit.workspace = true
 metainfo.workspace = true
 mime.workspace = true
 motore.workspace = true
@@ -40,12 +38,7 @@ parking_lot.workspace = true
 paste.workspace = true
 pin-project.workspace = true
 scopeguard.workspace = true
-serde.workspace = true
-serde_html_form.workspace = true
-serde_json = { workspace = true, optional = true }
-serde_urlencoded.workspace = true
 simdutf8.workspace = true
-sonic-rs = { workspace = true, optional = true }
 thiserror.workspace = true
 tokio = { workspace = true, features = [
     "time",
@@ -55,16 +48,43 @@ tokio = { workspace = true, features = [
     "parking_lot",
 ] }
 tracing.workspace = true
-url.workspace = true
+
+# server optional
+matchit = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
+
+# cookie support
+cookie = { workspace = true, optional = true, features = ["percent-encode"] }
+
+# serde and form, query, json
+serde = { workspace = true, optional = true }
+serde_html_form = { workspace = true, optional = true }
+serde_urlencoded = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
+# sonic is a better replacement for json
+sonic-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
 
 [features]
-default = ["sonic_json"]
+default = []
 
-full = ["cookie", "sonic_json"]
+default_client = ["client", "json"]
+default_server = ["server", "query", "form", "json"]
+
+full = ["client", "server", "cookie", "query", "form", "json"]
+
+client = ["hyper/client"] # client core
+server = ["hyper/server", "dep:matchit", "dep:url"] # server core
 
 cookie = ["dep:cookie"]
-sonic_json = ["dep:sonic-rs"]
-serde_json = ["dep:serde_json"]
+
+__serde = ["dep:serde"] # a private feature for enabling `serde` by `serde_xxx`
+query = ["__serde", "dep:serde_urlencoded"]
+form = ["__serde", "dep:serde_html_form"]
+json = ["sonic_json"] # use `sonic_json` by default
+
+__json = [] # an empty and private feature for avoiding too many `cfg(any)`
+sonic_json = ["__serde", "dep:sonic-rs", "__json"]
+serde_json = ["__serde", "dep:serde_json", "__json"]

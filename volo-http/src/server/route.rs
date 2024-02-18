@@ -3,12 +3,8 @@ use std::{collections::HashMap, convert::Infallible, marker::PhantomData};
 use http::{Method, StatusCode};
 use motore::{layer::Layer, service::Service, ServiceExt};
 
-use crate::{
-    context::ServerContext,
-    handler::Handler,
-    request::ServerRequest,
-    response::{IntoResponse, ServerResponse},
-};
+use super::{handler::Handler, IntoResponse};
+use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
 pub type Route<E = Infallible> =
     motore::service::BoxCloneService<ServerContext, ServerRequest, ServerResponse, E>;
@@ -560,20 +556,15 @@ where
 
 pub fn service_fn<F, R, E>(f: F) -> MethodEndpoint<E>
 where
-    F: for<'r> crate::service_fn::Callback<
-            'r,
-            ServerContext,
-            ServerRequest,
-            Response = R,
-            Error = E,
-        > + Clone
+    F: for<'r> crate::utils::Callback<'r, ServerContext, ServerRequest, Response = R, Error = E>
+        + Clone
         + Send
         + Sync
         + 'static,
     for<'r> R: IntoResponse + 'r,
     for<'r> E: 'r,
 {
-    MethodEndpoint::from_service(crate::service_fn::service_fn(f))
+    MethodEndpoint::from_service(crate::utils::service_fn(f))
 }
 
 struct RouteForStatusCode<E> {
