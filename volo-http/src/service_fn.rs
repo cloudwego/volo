@@ -1,8 +1,6 @@
-use std::{convert::Infallible, fmt, future::Future};
+use std::{fmt, future::Future};
 
 use motore::service::Service;
-
-use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
 /// Returns a new [`ServiceFn`] with the given closure.
 ///
@@ -12,22 +10,25 @@ pub fn service_fn<F>(f: F) -> ServiceFn<F> {
 }
 
 /// A [`Service`] implemented by a closure. See the docs for [`service_fn`] for more details.
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct ServiceFn<F> {
     f: F,
 }
 
-impl<F> Service<ServerContext, ServerRequest> for ServiceFn<F>
+impl<Cx, F, Request, R, E> Service<Cx, Request> for ServiceFn<F>
 where
-    F: for<'r> Callback<'r>,
+    F: for<'r> Callback<'r, Cx, Request, Response = R, Error = E>,
+    Request: 'static,
+    R: 'static,
+    E: 'static,
 {
-    type Response = ServerResponse;
-    type Error = Infallible;
+    type Response = R;
+    type Error = E;
 
     fn call<'s, 'cx>(
         &'s self,
-        cx: &'cx mut ServerContext,
-        req: ServerRequest,
+        cx: &'cx mut Cx,
+        req: Request,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> {
         (self.f).call(cx, req)
     }
@@ -46,20 +47,25 @@ impl<F> fmt::Debug for ServiceFn<F> {
 ///
 /// Related issue: https://github.com/rust-lang/rust/issues/70263.
 /// Related RFC: https://github.com/rust-lang/rfcs/pull/3216.
-pub trait Callback<'r> {
-    type Future: Future<Output = Result<ServerResponse, Infallible>> + Send + 'r;
+pub trait Callback<'r, Cx, Request> {
+    type Response;
+    type Error;
+    type Future: Future<Output = Result<Self::Response, Self::Error>> + Send + 'r;
 
-    fn call(&self, cx: &'r mut ServerContext, req: ServerRequest) -> Self::Future;
+    fn call(&self, cx: &'r mut Cx, req: Request) -> Self::Future;
 }
 
-impl<'r, F, Fut> Callback<'r> for F
+impl<'r, F, Fut, Cx, Request, R, E> Callback<'r, Cx, Request> for F
 where
-    F: Fn(&'r mut ServerContext, ServerRequest) -> Fut,
-    Fut: Future<Output = Result<ServerResponse, Infallible>> + Send + 'r,
+    F: Fn(&'r mut Cx, Request) -> Fut,
+    Fut: Future<Output = Result<R, E>> + Send + 'r,
+    Cx: 'r,
 {
+    type Response = R;
+    type Error = E;
     type Future = Fut;
 
-    fn call(&self, cx: &'r mut ServerContext, req: ServerRequest) -> Self::Future {
+    fn call(&self, cx: &'r mut Cx, req: Request) -> Self::Future {
         self(cx, req)
     }
 }

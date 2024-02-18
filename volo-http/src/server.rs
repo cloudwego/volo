@@ -38,10 +38,7 @@ pub struct Server<S, L> {
 }
 
 impl<S> Server<S, Identity> {
-    pub fn new(service: S) -> Self
-    where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>,
-    {
+    pub fn new(service: S) -> Self {
         Self {
             service,
             layer: Identity::new(),
@@ -111,14 +108,15 @@ impl<S, L> Server<S, L> {
         self
     }
 
-    pub async fn run<MI: MakeIncoming>(self, mk_incoming: MI) -> Result<(), BoxError>
+    pub async fn run<MI>(self, mk_incoming: MI) -> Result<(), BoxError>
     where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>,
+        S: Service<ServerContext, ServerRequest, Error = Infallible>,
+        S::Response: IntoResponse,
         L: Layer<S>,
-        L::Service: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-            + Send
-            + Sync
-            + 'static,
+        L::Service:
+            Service<ServerContext, ServerRequest, Error = Infallible> + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
+        MI: MakeIncoming,
     {
         // init server
         let service = Arc::new(self.layer.layer(self.service));
@@ -257,11 +255,8 @@ async fn handle_conn<S>(
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer: Address,
 ) where
-    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ServerContext, ServerRequest, Error = Infallible> + Clone + Send + Sync + 'static,
+    S::Response: IntoResponse,
 {
     conn_cnt.fetch_add(1, Ordering::Relaxed);
     defer! {
@@ -304,11 +299,8 @@ async fn serve<S>(
     request: ServerRequest,
 ) -> Result<ServerResponse, Infallible>
 where
-    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ServerContext, ServerRequest, Error = Infallible> + Clone + Send + Sync + 'static,
+    S::Response: IntoResponse,
 {
     METAINFO
         .scope(RefCell::new(MetaInfo::default()), async {

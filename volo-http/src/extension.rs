@@ -1,5 +1,3 @@
-use std::convert::Infallible;
-
 use http::{request::Parts, StatusCode};
 use motore::{layer::Layer, service::Service};
 use volo::context::Context;
@@ -16,7 +14,9 @@ pub struct Extension<T>(pub T);
 
 impl<S, T> Layer<S> for Extension<T>
 where
-    S: Service<ServerContext, ServerRequest, Response = ServerResponse> + Send + Sync + 'static,
+    S: Service<ServerContext, ServerRequest> + Send + Sync + 'static,
+    S::Response: IntoResponse,
+    S::Error: IntoResponse,
     T: Sync,
 {
     type Service = ExtensionService<S, T>;
@@ -34,10 +34,9 @@ pub struct ExtensionService<I, T> {
 
 impl<S, T> Service<ServerContext, ServerRequest> for ExtensionService<S, T>
 where
-    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ServerContext, ServerRequest> + Send + Sync + 'static,
+    S::Response: IntoResponse,
+    S::Error: IntoResponse,
     T: Clone + Send + Sync + 'static,
 {
     type Response = S::Response;
