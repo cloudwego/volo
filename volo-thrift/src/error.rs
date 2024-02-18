@@ -12,8 +12,6 @@ pub use pilota::thrift::{
 };
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
-// pub type Result<T, E = Error> = core::result::Result<T, E>;
-
 #[derive(Debug)]
 pub enum ServerError {
     // #[error("application exception: {0}")]
@@ -198,4 +196,9 @@ pub(crate) fn thrift_exception_to_application_exception(
             ApplicationException::new(ApplicationExceptionKind::PROTOCOL_ERROR, e.to_string())
         }
     }
+}
+
+pub enum MaybeException<T, E> {
+    Ok(T),
+    Exception(E),
 }
