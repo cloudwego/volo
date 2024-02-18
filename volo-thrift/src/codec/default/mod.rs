@@ -143,7 +143,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
             .map_err(|e| {
                 // record the error time
                 cx.stats_mut().record_encode_end_at();
-                ThriftException::from(e)
+                e
             });
         if write_result.is_ok() {
             cx.stats_mut().record_encode_end_at();
@@ -219,7 +219,7 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
         cx.stats_mut().record_decode_end_at();
         trace!("[VOLO] thrift codec decode message cost: {:?}", end - start);
 
-        Ok(res?)
+        res
     }
 }
 
