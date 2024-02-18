@@ -22,6 +22,7 @@ use futures::{
 use linked_hash_map::LinkedHashMap;
 pub use make_transport::PooledMakeTransport;
 use motore::service::UnaryService;
+use pilota::thrift::TransportException;
 use pin_project::pin_project;
 use started::Started as _;
 use tokio::{
@@ -259,11 +260,11 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
         key: K,
         ver: Ver,
         mt: MT,
-    ) -> Result<Pooled<K, T>, crate::error::Error>
+    ) -> Result<Pooled<K, T>, crate::ClientError>
     where
         T: Poolable + Send + 'static,
         MT: UnaryService<K, Response = T> + Send + 'static + Sync,
-        MT::Error: Into<crate::error::Error> + Send,
+        MT::Error: Into<crate::ClientError> + Send,
     {
         let (rx, _waiter_token) = {
             let mut inner = self.inner.lock().volo_unwrap();
@@ -335,10 +336,10 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
             // means connection pool is dropped
             Either::Left((Err(e), _)) => {
                 tracing::error!("[VOLO] wait a idle connection error: {:?}", e);
-                Err(crate::error::BasicError::new(
-                    crate::error::BasicErrorKind::GetConn,
+                Err(TransportException::from(std::io::Error::new(
+                    std::io::ErrorKind::Other,
                     format!("wait a idle connection error: {:?}", e),
-                )
+                ))
                 .into())
             }
             // maybe there is no more connection put back into pool and waiter will block forever,

@@ -3,493 +3,122 @@ use std::{
     io,
 };
 
-use pilota::{
-    thrift::{
-        DecodeError, EncodeError, Error as PilotaError, Message, ProtocolError,
-        TAsyncInputProtocol, TInputProtocol, TLengthProtocol, TOutputProtocol, TStructIdentifier,
-        TType, TransportError,
-    },
-    AHashMap, FastStr,
+use pilota::{AHashMap, FastStr};
+
+pub use pilota::thrift::{
+    new_application_exception, new_protocol_exception, ApplicationException,
+    ApplicationExceptionKind, ProtocolException, ProtocolExceptionKind, ThriftException,
+    TransportException,
 };
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
-use crate::AnyhowError;
-
-pub type Result<T, E = Error> = core::result::Result<T, E>;
-
-const TAPPLICATION_EXCEPTION: TStructIdentifier = TStructIdentifier {
-    name: "TApplicationException",
-};
+// pub type Result<T, E = Error> = core::result::Result<T, E>;
 
 #[derive(Debug)]
-pub enum Error {
-    Transport(pilota::thrift::TransportError),
-    Protocol(pilota::thrift::ProtocolError),
-
-    /// Errors encountered within auto-generated code, or when incoming
-    /// or outgoing messages violate the Thrift spec.
-    ///
-    /// These include *out-of-order messages* and *missing required struct
-    /// fields*.
-    ///
-    /// This variant also functions as a catch-all: errors from handler
-    /// functions are automatically returned as an `ApplicationError`.
-    Application(ApplicationError),
-
-    /// Basic error types, will be converted to `ApplicationError::INTERNAL_ERROR`
-    /// when encoding.
-    Basic(BasicError),
-    Anyhow(AnyhowError),
+pub enum ServerError {
+    // #[error("application exception: {0}")]
+    Application(ApplicationException),
+    // #[error("biz error: {0}")]
+    Biz(BizError),
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct DummyError;
+impl<E> From<E> for ServerError
+where
+    E: std::error::Error + Send + Sync + 'static,
+{
+    #[cold]
+    fn from(error: E) -> Self {
+        // First convert `E` to a boxed trait object so we can attempt downcasting.
+        let error_boxed = Box::new(error) as Box<dyn std::error::Error + Send + Sync>;
 
-impl Message for DummyError {
-    fn encode<T: TOutputProtocol>(&self, _protocol: &mut T) -> Result<(), EncodeError> {
-        panic!()
-    }
-
-    fn decode<T: TInputProtocol>(_protocol: &mut T) -> Result<Self, DecodeError> {
-        panic!()
-    }
-
-    async fn decode_async<T: TAsyncInputProtocol>(_protocol: &mut T) -> Result<Self, DecodeError> {
-        panic!()
-    }
-
-    fn size<T: TLengthProtocol>(&self, _protocol: &mut T) -> usize {
-        panic!()
+        // Use if let to try downcasting to ApplicationException.
+        match error_boxed.downcast::<ApplicationException>() {
+            Ok(application_error) => ServerError::Application(*application_error),
+            Err(e) => match e.downcast::<BizError>() {
+                Ok(biz_error) => ServerError::Biz(*biz_error),
+                Err(e) => ServerError::Application(ApplicationException::new(
+                    ApplicationExceptionKind::INTERNAL_ERROR,
+                    e.to_string(),
+                )),
+            },
+        }
     }
 }
 
-impl Error {
+impl Display for ServerError {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ServerError::Application(e) => write!(f, "application exception: {}", e),
+            ServerError::Biz(e) => write!(f, "biz error: {}", e),
+        }
+    }
+}
+
+impl ServerError {
     pub fn append_msg(&mut self, msg: &str) {
         match self {
-            Error::Transport(e) => {
-                e.message.push_str(msg);
-            }
-            Error::Protocol(e) => {
-                e.message.push_str(msg);
-            }
-            Error::Application(e) => e.message.push_str(msg),
-            Error::Basic(e) => e.message.push_str(msg),
-            Error::Anyhow(e) => {
-                let mut err_str = e.to_string();
-                err_str.push_str(msg);
-                *self = Self::Anyhow(anyhow::anyhow!(err_str));
-            }
+            ServerError::Application(e) => e.append_msg(msg),
+            ServerError::Biz(e) => e.append_msg(msg),
         }
     }
 }
 
-impl From<TransportError> for Error {
-    fn from(value: TransportError) -> Self {
-        Error::Transport(value)
-    }
+#[derive(Debug, thiserror::Error)]
+pub enum ClientError {
+    #[error("application exception: {0}")]
+    Application(#[from] ApplicationException),
+    #[error("transport exception: {0}")]
+    Transport(#[from] TransportException),
+    #[error("protocol exception: {0}")]
+    Protocol(#[from] ProtocolException),
+    #[error("biz error: {0}")]
+    Biz(#[from] BizError),
 }
 
-impl From<PilotaError> for Error {
-    fn from(e: PilotaError) -> Self {
-        match e {
-            PilotaError::Transport(e) => Error::Transport(e),
-            PilotaError::Protocol(e) => Error::Protocol(e),
+impl ClientError {
+    pub fn append_msg(&mut self, msg: &str) {
+        match self {
+            ClientError::Application(e) => e.append_msg(msg),
+            ClientError::Transport(e) => e.append_msg(msg),
+            ClientError::Protocol(e) => e.append_msg(msg),
+            ClientError::Biz(e) => e.append_msg(msg),
         }
     }
 }
 
-impl From<EncodeError> for Error {
-    fn from(value: EncodeError) -> Self {
-        Error::Protocol(ProtocolError {
-            kind: value.kind,
-            message: value.to_string(),
-        })
-    }
-}
-
-impl From<DecodeError> for Error {
-    fn from(value: DecodeError) -> Self {
-        macro_rules! protocol_err {
-            ($kind:ident) => {
-                Error::Protocol(ProtocolError {
-                    kind: pilota::thrift::ProtocolErrorKind::$kind,
-                    message: value.message,
-                })
-            };
-        }
-
-        match value.kind {
-            pilota::thrift::DecodeErrorKind::InvalidData => protocol_err!(InvalidData),
-            pilota::thrift::DecodeErrorKind::NegativeSize => protocol_err!(NegativeSize),
-            pilota::thrift::DecodeErrorKind::BadVersion => protocol_err!(BadVersion),
-            pilota::thrift::DecodeErrorKind::NotImplemented => protocol_err!(NotImplemented),
-            pilota::thrift::DecodeErrorKind::DepthLimit => protocol_err!(DepthLimit),
-
-            pilota::thrift::DecodeErrorKind::UnknownMethod => {
-                Error::Application(ApplicationError {
-                    kind: ApplicationErrorKind::UNKNOWN_METHOD,
-                    message: value.message,
-                })
-            }
-            pilota::thrift::DecodeErrorKind::IOError(e) => {
-                Error::Transport(TransportError::from(e))
-            }
-            pilota::thrift::DecodeErrorKind::WithContext(_) => Error::Protocol(ProtocolError::new(
-                pilota::thrift::ProtocolErrorKind::Unknown,
-                value.to_string(),
-            )),
-            pilota::thrift::DecodeErrorKind::Unknown => protocol_err!(Unknown),
-        }
-    }
-}
-
-impl From<ApplicationError> for Error {
-    fn from(e: ApplicationError) -> Self {
-        Error::Application(e)
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        match err.kind() {
-            io::ErrorKind::NotFound | io::ErrorKind::PermissionDenied => {
-                Error::Basic(BasicError::new(BasicErrorKind::GetConn, err.to_string()))
-            }
-            _ => Error::Transport(TransportError::from(err)),
-        }
-    }
-}
-
-impl Retryable for Error {
+impl Retryable for ClientError {
     fn retryable(&self) -> bool {
-        if let Error::Transport(_) = self {
+        if let Self::Transport(_) = self {
             return true;
         }
         false
     }
 }
 
-impl From<AnyhowError> for Error {
-    fn from(err: AnyhowError) -> Self {
-        Error::Anyhow(err)
-    }
-}
-
-impl From<Box<dyn std::error::Error + Send + Sync>> for Error {
-    fn from(err: Box<dyn std::error::Error + Send + Sync>) -> Self {
-        Error::Anyhow(anyhow::anyhow!(err))
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:?}")
-    }
-}
-
-impl std::error::Error for Error {}
-
-/// Information about errors in auto-generated code or in user-implemented
-/// service handlers.
-#[derive(Debug, Eq, PartialEq)]
-pub struct ApplicationError {
-    /// Application error variant.
-    ///
-    /// If a specific `ApplicationErrorKind` does not apply use
-    /// `ApplicationErrorKind::Unknown`.
-    pub kind: ApplicationErrorKind,
-    /// Human-readable error message.
-    pub message: String,
-}
-
-impl ApplicationError {
-    /// Create a new `ApplicationError`.
-    pub fn new<S: Into<String>>(kind: ApplicationErrorKind, message: S) -> ApplicationError {
-        ApplicationError {
-            kind,
-            message: message.into(),
-        }
-    }
-}
-
-impl Display for ApplicationError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let error_text = match self.kind {
-            ApplicationErrorKind::UNKNOWN => "service error",
-            ApplicationErrorKind::UNKNOWN_METHOD => "unknown service method",
-            ApplicationErrorKind::INVALID_MESSAGE_TYPE => "wrong message type received",
-            ApplicationErrorKind::WRONG_METHOD_NAME => "unknown method reply received",
-            ApplicationErrorKind::BAD_SEQUENCE_ID => "out of order sequence id",
-            ApplicationErrorKind::MISSING_RESULT => "missing method result",
-            ApplicationErrorKind::INTERNAL_ERROR => "remote service threw exception",
-            ApplicationErrorKind::PROTOCOL_ERROR => "protocol error",
-            ApplicationErrorKind::INVALID_TRANSFORM => "invalid transform",
-            ApplicationErrorKind::INVALID_PROTOCOL => "invalid protocol requested",
-            ApplicationErrorKind::UNSUPPORTED_CLIENT_TYPE => "unsupported protocol client",
-            _ => "other error",
-        };
-
-        write!(f, "{}, msg: {}", error_text, self.message)
-    }
-}
-
-impl Message for ApplicationError {
-    /// Convert an `ApplicationError` into its wire representation and write
-    /// it to the remote.
-    ///
-    /// Application code **should never** call this method directly.
-    fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError> {
-        protocol.write_struct_begin(&TAPPLICATION_EXCEPTION)?;
-
-        protocol.write_field_begin(TType::Binary, 1)?;
-        protocol.write_string(&self.message)?;
-        protocol.write_field_end()?;
-
-        protocol.write_field_begin(TType::I32, 2)?;
-        protocol.write_i32(self.kind.as_i32())?;
-        protocol.write_field_end()?;
-
-        protocol.write_field_stop()?;
-        protocol.write_struct_end()?;
-
-        protocol.flush()?;
-        Ok(())
-    }
-
-    fn decode<T: TInputProtocol>(protocol: &mut T) -> Result<Self, DecodeError> {
-        let mut message = "general remote error".to_owned();
-        let mut kind = ApplicationErrorKind::UNKNOWN;
-
-        protocol.read_struct_begin()?;
-
-        loop {
-            let field_ident = protocol.read_field_begin()?;
-
-            if field_ident.field_type == TType::Stop {
-                break;
-            }
-
-            let id = field_ident
-                .id
-                .expect("sender should always specify id for non-STOP field");
-
-            match id {
-                1 => {
-                    let remote_message = protocol.read_string()?;
-                    protocol.read_field_end()?;
-                    message = (&*remote_message).into();
-                }
-                2 => {
-                    let remote_type_as_int = protocol.read_i32()?;
-                    let remote_kind: ApplicationErrorKind = From::from(remote_type_as_int);
-                    protocol.read_field_end()?;
-                    kind = remote_kind;
-                }
-                _ => {
-                    protocol.skip(field_ident.field_type)?;
-                }
-            }
-        }
-
-        protocol.read_struct_end()?;
-
-        Ok(ApplicationError { kind, message })
-    }
-
-    async fn decode_async<T: TAsyncInputProtocol>(protocol: &mut T) -> Result<Self, DecodeError> {
-        let mut message = "general remote error".to_owned();
-        let mut kind = ApplicationErrorKind::UNKNOWN;
-
-        protocol.read_struct_begin().await?;
-
-        loop {
-            let field_ident = protocol.read_field_begin().await?;
-
-            if field_ident.field_type == TType::Stop {
-                break;
-            }
-
-            let id = field_ident
-                .id
-                .expect("sender should always specify id for non-STOP field");
-
-            match id {
-                1 => {
-                    let remote_message = protocol.read_string().await?;
-                    protocol.read_field_end().await?;
-                    message = (&*remote_message).into();
-                }
-                2 => {
-                    let remote_type_as_int = protocol.read_i32().await?;
-                    let remote_kind: ApplicationErrorKind = From::from(remote_type_as_int);
-                    protocol.read_field_end().await?;
-                    kind = remote_kind;
-                }
-                _ => {
-                    protocol.skip(field_ident.field_type).await?;
-                }
-            }
-        }
-
-        protocol.read_struct_end().await?;
-
-        Ok(ApplicationError { kind, message })
-    }
-
-    fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
-        protocol.struct_begin_len(&TAPPLICATION_EXCEPTION)
-            + protocol.field_begin_len(TType::Binary, Some(1))
-            + protocol.string_len(&self.message)
-            + protocol.field_end_len()
-            + protocol.field_begin_len(TType::I32, Some(2))
-            + protocol.i32_len(self.kind.as_i32())
-            + protocol.field_end_len()
-            + protocol.field_stop_len()
-            + protocol.struct_end_len()
-    }
-}
-
-/// Auto-generated or user-implemented code error categories.
-///
-/// This list may grow, and it is not recommended to match against it.
-#[non_exhaustive]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(transparent)]
-pub struct ApplicationErrorKind(i32);
-
-impl ApplicationErrorKind {
-    /// Catch-all application error.
-    pub const UNKNOWN: Self = Self(0);
-    /// Made service call to an unknown service method.
-    pub const UNKNOWN_METHOD: Self = Self(1);
-    /// Received an unknown Thrift message type. That is, not one of the
-    /// `thrift::protocol::TMessageType` variants.
-    pub const INVALID_MESSAGE_TYPE: Self = Self(2);
-    /// Method name in a service reply does not match the name of the
-    /// receiving service method.
-    pub const WRONG_METHOD_NAME: Self = Self(3);
-    /// Received an out-of-order Thrift message.
-    pub const BAD_SEQUENCE_ID: Self = Self(4);
-    /// Service reply is missing required fields.
-    pub const MISSING_RESULT: Self = Self(5);
-    /// User server handler error.
-    pub const INTERNAL_ERROR: Self = Self(6);
-    /// Thrift protocol error. When possible use `Error::ProtocolError` with a
-    /// specific `ProtocolErrorKind` instead.
-    pub const PROTOCOL_ERROR: Self = Self(7);
-    /// *Unknown*. Included only for compatibility with existing Thrift
-    /// implementations.
-    pub const INVALID_TRANSFORM: Self = Self(8); // ??
-    /// Thrift endpoint requested, or is using, an unsupported encoding.
-    pub const INVALID_PROTOCOL: Self = Self(9); // ??
-    /// Thrift endpoint requested, or is using, an unsupported auto-generated
-    /// client type.
-    pub const UNSUPPORTED_CLIENT_TYPE: Self = Self(10); // ??
-
-    pub fn as_i32(self) -> i32 {
-        self.0
-    }
-}
-
-impl From<i32> for ApplicationErrorKind {
-    fn from(from: i32) -> Self {
-        Self(from)
-    }
-}
-
-impl From<ApplicationErrorKind> for i32 {
-    fn from(value: ApplicationErrorKind) -> Self {
-        value.as_i32()
-    }
-}
-
-/// Create a new `Error` instance of type `Application` that wraps an
-/// `ApplicationError`.
-pub fn new_application_error<S: Into<String>>(kind: ApplicationErrorKind, message: S) -> Error {
-    Error::Application(ApplicationError::new(kind, message))
-}
-
-/// Information about errors in framework.
-#[derive(Debug, Eq, PartialEq)]
-pub struct BasicError {
-    /// Basic error variant.
-    pub kind: BasicErrorKind,
-    /// Human-readable error message.
-    pub message: String,
-}
-
-impl BasicError {
-    /// Create a new `BasicError`.
-    pub fn new<S: Into<String>>(kind: BasicErrorKind, message: S) -> BasicError {
-        BasicError {
-            kind,
-            message: message.into(),
-        }
-    }
-}
-
-#[allow(unreachable_patterns)]
-impl Display for BasicError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        let error_text = match self.kind {
-            BasicErrorKind::RpcTimeout => "rpc timeout error",
-            BasicErrorKind::LoadBalance => "load balance error",
-            BasicErrorKind::GetConn => "get connection error",
-            _ => "other error",
-        };
-
-        write!(f, "{}, msg: {}", error_text, self.message)
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[non_exhaustive]
-pub enum BasicErrorKind {
-    RpcTimeout,
-    LoadBalance,
-    GetConn,
-}
-
-/// Create a new `Error` instance of type `Basic` that wraps an
-/// `BasicError`.
-pub fn new_basic_error<S: Into<String>>(kind: BasicErrorKind, message: S) -> Error {
-    Error::Basic(BasicError::new(kind, message))
-}
-
-impl From<BasicError> for Error {
-    fn from(e: BasicError) -> Self {
-        Error::Basic(e)
-    }
-}
-
-impl From<LoadBalanceError> for Error {
+impl From<LoadBalanceError> for ClientError {
+    // TODO: use specified error code
     fn from(err: LoadBalanceError) -> Self {
-        new_basic_error(BasicErrorKind::LoadBalance, err.to_string())
+        ClientError::Application(ApplicationException::new(
+            ApplicationExceptionKind::INTERNAL_ERROR,
+            err.to_string(),
+        ))
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum UserError<T> {
-    #[error("a exception from remote: {0}")]
-    UserException(T),
-    #[error(transparent)]
-    Other(#[from] anyhow::Error),
+impl From<ThriftException> for ClientError {
+    fn from(e: ThriftException) -> Self {
+        match e {
+            ThriftException::Application(e) => ClientError::Application(e),
+            ThriftException::Transport(e) => ClientError::Transport(e),
+            ThriftException::Protocol(e) => ClientError::Protocol(e),
+        }
+    }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum ResponseError<T> {
-    #[error("a exception from remote: {0}")]
-    UserException(T),
-    #[error("application error: {0}")]
-    Application(ApplicationError),
-    #[error("transport error: {0}")]
-    Transport(TransportError),
-    #[error("protocol error: {0}")]
-    Protocol(ProtocolError),
-    #[error("basic error: {0}")]
-    Basic(BasicError),
-    #[error("biz error: {0}")]
-    BizError(BizError),
+impl From<std::io::Error> for ClientError {
+    fn from(e: io::Error) -> Self {
+        ClientError::Transport(TransportException::from(e))
+    }
 }
 
 #[derive(Debug, thiserror::Error, Clone, Default)]
@@ -535,22 +164,38 @@ impl BizError {
             extra: Some(extra),
         }
     }
+
+    pub fn append_msg(&mut self, msg: &str) {
+        let mut s = String::with_capacity(self.status_message.len() + msg.len());
+        s.push_str(self.status_message.as_str());
+        s.push_str(msg);
+        self.status_message = s.into();
+    }
 }
 
-impl<T> From<Error> for ResponseError<T> {
-    fn from(e: Error) -> Self {
-        match e {
-            Error::Transport(e) => ResponseError::Transport(e),
-            Error::Protocol(e) => ResponseError::Protocol(e),
-            Error::Application(e) => ResponseError::Application(e),
-            Error::Basic(e) => ResponseError::Basic(e),
-            Error::Anyhow(e) => match e.downcast::<BizError>() {
-                Ok(e) => ResponseError::BizError(e),
-                Err(e) => ResponseError::Application(ApplicationError::new(
-                    ApplicationErrorKind::INTERNAL_ERROR,
-                    e.to_string(),
-                )),
-            },
+impl From<BizError> for ApplicationException {
+    fn from(e: BizError) -> Self {
+        ApplicationException::new(ApplicationExceptionKind::INTERNAL_ERROR, e.to_string())
+    }
+}
+
+pub(crate) fn server_error_to_application_exception(e: ServerError) -> ApplicationException {
+    match e {
+        ServerError::Application(e) => e,
+        ServerError::Biz(e) => e.into(),
+    }
+}
+
+pub(crate) fn thrift_exception_to_application_exception(
+    e: pilota::thrift::ThriftException,
+) -> ApplicationException {
+    match e {
+        pilota::thrift::ThriftException::Application(e) => e,
+        pilota::thrift::ThriftException::Transport(e) => {
+            ApplicationException::new(ApplicationExceptionKind::INTERNAL_ERROR, e.to_string())
+        }
+        pilota::thrift::ThriftException::Protocol(e) => {
+            ApplicationException::new(ApplicationExceptionKind::PROTOCOL_ERROR, e.to_string())
         }
     }
 }

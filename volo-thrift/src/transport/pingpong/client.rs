@@ -1,7 +1,7 @@
 use std::{io, marker::PhantomData};
 
 use motore::service::{Service, UnaryService};
-use pilota::thrift::{TransportError, TransportErrorKind};
+use pilota::thrift::TransportException;
 use volo::net::{dial::MakeTransport, Address};
 
 use crate::{
@@ -103,7 +103,7 @@ where
 {
     type Response = Option<ThriftMessage<Resp>>;
 
-    type Error = crate::Error;
+    type Error = crate::ClientError;
 
     #[inline]
     async fn call<'s, 'cx>(
@@ -113,7 +113,7 @@ where
     ) -> Result<Self::Response, Self::Error> {
         let rpc_info = &cx.rpc_info;
         let target = rpc_info.callee().address().ok_or_else(|| {
-            TransportError::from(io::Error::new(
+            TransportException::from(io::Error::new(
                 io::ErrorKind::InvalidData,
                 format!("address is required, rpc_info: {:?}", rpc_info),
             ))
@@ -125,14 +125,14 @@ where
         let resp = transport.send(cx, req, oneway).await;
         if let Ok(None) = resp {
             if !oneway {
-                return Err(crate::Error::Transport(
-                    pilota::thrift::TransportError::new(
-                        TransportErrorKind::EndOfFile,
+                return Err(crate::ClientError::Transport(
+                    pilota::thrift::TransportException::from(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
                         format!(
                             "an unexpected end of file from server, rpc_info: {:?}",
                             cx.rpc_info
                         ),
-                    ),
+                    )),
                 ));
             }
         }

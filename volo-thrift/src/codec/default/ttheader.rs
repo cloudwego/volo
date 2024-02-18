@@ -12,7 +12,7 @@ use bytes::{Buf, BufMut, Bytes, BytesMut};
 use linkedbytes::LinkedBytes;
 use metainfo::{Backward, Forward};
 use num_enum::TryFromPrimitive;
-use pilota::thrift::{DecodeError, EncodeError, ProtocolErrorKind};
+use pilota::thrift::{new_protocol_exception, ProtocolException, ProtocolExceptionKind, ThriftException};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
 use tracing::{trace, warn};
 use volo::{context::Role, util::buf_reader::BufReader, FastStr};
@@ -74,7 +74,7 @@ where
         &mut self,
         cx: &mut Cx,
         bytes: &mut Bytes,
-    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError> {
+    ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, must not be TTHeader, so just forward to inner
             return self.inner.decode(cx, bytes);
@@ -99,7 +99,7 @@ where
         &mut self,
         cx: &mut Cx,
         reader: &mut BufReader<R>,
-    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError> {
+    ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
         // check if is ttheader
         if let Ok(buf) = reader.fill_buf_at_least(HEADER_DETECT_LENGTH).await {
             if is_ttheader(buf) {
@@ -163,7 +163,7 @@ where
         cx: &mut Cx,
         linked_bytes: &mut LinkedBytes,
         msg: ThriftMessage<Msg>,
-    ) -> Result<(), EncodeError> {
+    ) -> Result<(), ThriftException> {
         let dst = linked_bytes.bytes_mut();
         // only encode ttheader if role is client or server has detected ttheader in decode
         if cx.rpc_info().role() == Role::Client || cx.extensions().contains::<HasTTHeader>() {
@@ -177,7 +177,7 @@ where
         &mut self,
         cx: &mut Cx,
         msg: &ThriftMessage<Msg>,
-    ) -> Result<(usize, usize), EncodeError> {
+    ) -> Result<(usize, usize), ThriftException> {
         let (real_size, malloc_size) = self.inner.size(cx, msg)?;
         self.inner_size = real_size;
         // only calc ttheader size if role is client or server has detected ttheader in decode
@@ -269,7 +269,7 @@ pub(crate) fn encode<Cx: ThriftContext>(
     cx: &mut Cx,
     dst: &mut BytesMut,
     size: usize,
-) -> Result<(), EncodeError> {
+) -> Result<(), ThriftException> {
     metainfo::METAINFO.with(|metainfo| {
         let metainfo = metainfo.borrow_mut();
         let zero_index = dst.len();
@@ -475,8 +475,8 @@ pub(crate) fn encode<Cx: ThriftContext>(
                 written_header_size
             );
         } else {
-            return Err(pilota::thrift::new_protocol_error(
-                ProtocolErrorKind::SizeLimit,
+            return Err(ProtocolException::new(
+                ProtocolExceptionKind::SizeLimit,
                 format!("ttheader header size {written_header_size} overflows u16"),
             ));
         }
@@ -492,8 +492,8 @@ pub(crate) fn encode<Cx: ThriftContext>(
                 ttheader_size
             );
         } else {
-            return Err(pilota::thrift::new_protocol_error(
-                ProtocolErrorKind::SizeLimit,
+            return Err(ProtocolException::new(
+                ProtocolExceptionKind::SizeLimit,
                 format!("ttheader size {size} overflows u32"),
             ));
         }
@@ -503,7 +503,7 @@ pub(crate) fn encode<Cx: ThriftContext>(
 }
 
 // this must be with sync to the encode impl
-pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, EncodeError> {
+pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, ThriftException> {
     let thrift_cx = cx;
     Ok(metainfo::METAINFO.with(|metainfo| {
         let metainfo = metainfo.borrow_mut();
@@ -665,7 +665,7 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Encod
 pub(crate) fn decode<Cx: ThriftContext>(
     cx: &mut Cx,
     src: &mut Bytes,
-) -> Result<(), pilota::thrift::DecodeError> {
+) -> Result<(), ThriftException> {
     metainfo::METAINFO.with(|metainfo| {
             let metainfo = &mut *metainfo.borrow_mut();
             let _magic = src.get_u16();
@@ -677,8 +677,8 @@ pub(crate) fn decode<Cx: ThriftContext>(
                 cx.extensions_mut().insert(protocol_id);
             } else {
                 return Err(
-                    pilota::thrift::DecodeError::new(
-                        pilota::thrift::DecodeErrorKind::BadVersion,
+                    pilota::thrift::new_protocol_exception(
+                        pilota::thrift::ProtocolExceptionKind::BadVersion,
                         format!("unknown protocol id: {protocol_id} in ttheader")
                     )
                 );
@@ -763,7 +763,7 @@ pub(crate) fn decode<Cx: ThriftContext>(
                     _ => {
                         let msg = format!("unexpected info id in ttheader: {info_id}");
                         warn!("[VOLO] {}", msg);
-                        return Err(DecodeError::new( pilota::thrift::DecodeErrorKind::InvalidData, msg));
+                        return Err(new_protocol_exception( pilota::thrift::ProtocolExceptionKind::InvalidData, msg));
                     }
                 }
             }

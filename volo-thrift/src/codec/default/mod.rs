@@ -30,7 +30,7 @@ use std::future::Future;
 
 use bytes::Bytes;
 use linkedbytes::LinkedBytes;
-use pilota::thrift::{DecodeError, EncodeError, TransportError};
+use pilota::thrift::ThriftException;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
 use tracing::{trace, warn};
 use volo::util::buf_reader::BufReader;
@@ -56,7 +56,7 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
         cx: &mut Cx,
         linked_bytes: &mut LinkedBytes,
         msg: ThriftMessage<Msg>,
-    ) -> Result<(), EncodeError>;
+    ) -> Result<(), ThriftException>;
 
     /// [`size`] should return the exact size of the encoded message, as we will pre-allocate
     /// a buffer for the encoded message.
@@ -69,7 +69,7 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
         &mut self,
         cx: &mut Cx,
         msg: &ThriftMessage<Msg>,
-    ) -> Result<(usize, usize), EncodeError>;
+    ) -> Result<(usize, usize), ThriftException>;
 }
 
 /// [`ZeroCopyDecoder`] tries to decode a message without copying large data, so the [`Bytes`] in
@@ -82,7 +82,7 @@ pub trait ZeroCopyDecoder: Send + Sync + 'static {
         &mut self,
         cx: &mut Cx,
         bytes: &mut Bytes,
-    ) -> Result<Option<ThriftMessage<Msg>>, DecodeError>;
+    ) -> Result<Option<ThriftMessage<Msg>>, ThriftException>;
 
     /// The [`DefaultDecoder`] will always call `decode_async`, so the most outer decoder
     /// must implement this function.
@@ -94,7 +94,7 @@ pub trait ZeroCopyDecoder: Send + Sync + 'static {
         &mut self,
         cx: &mut Cx,
         reader: &mut BufReader<R>,
-    ) -> impl Future<Output = Result<Option<ThriftMessage<Msg>>, DecodeError>> + Send;
+    ) -> impl Future<Output = Result<Option<ThriftMessage<Msg>>, ThriftException>> + Send;
 }
 
 /// [`MakeZeroCopyCodec`] is used to create a [`ZeroCopyEncoder`] and a [`ZeroCopyDecoder`].
@@ -121,7 +121,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
-    ) -> Result<(), crate::Error> {
+    ) -> Result<(), ThriftException> {
         cx.stats_mut().record_encode_start_at();
 
         // first, we need to get the size of the message
@@ -137,13 +137,13 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         // then we reserve the size of the message in the linked bytes
         self.linked_bytes.reserve(malloc_size);
         // after that, we encode the message into the linked bytes
-        let mut write_result: Result<(), crate::Error> = self
+        let mut write_result: Result<(), ThriftException> = self
             .encoder
             .encode(cx, &mut self.linked_bytes, msg)
             .map_err(|e| {
                 // record the error time
                 cx.stats_mut().record_encode_end_at();
-                crate::Error::from(e)
+                ThriftException::from(e)
             });
         if write_result.is_ok() {
             cx.stats_mut().record_encode_end_at();
@@ -154,16 +154,10 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
                 .linked_bytes
                 .write_all_vectored(&mut self.writer)
                 .await
-                .map_err(TransportError::from)
-                .map_err(crate::Error::Transport);
+                .map_err(Into::into);
         }
         if write_result.is_ok() {
-            write_result = self
-                .writer
-                .flush()
-                .await
-                .map_err(TransportError::from)
-                .map_err(crate::Error::Transport);
+            write_result = self.writer.flush().await.map_err(Into::into);
         }
 
         // put write end here so we can also record the time of encode error
@@ -199,15 +193,9 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
     async fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-    ) -> Result<Option<ThriftMessage<Msg>>, crate::Error> {
+    ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
         // just to check if we have reached EOF
-        if self
-            .reader
-            .fill_buf()
-            .await
-            .map_err(|err| crate::Error::Transport(pilota::thrift::TransportError::from(err)))?
-            .is_empty()
-        {
+        if self.reader.fill_buf().await?.is_empty() {
             trace!(
                 "[VOLO] thrift codec decode message EOF, rpcinfo: {:?}",
                 cx.rpc_info()

@@ -72,7 +72,7 @@ impl VoloThriftBackend {
                     r#"Ok(match &*msg_ident.name {{
                         {match_methods}
                         _ => {{
-                            return Err(::pilota::thrift::DecodeError::new(::pilota::thrift::DecodeErrorKind::UnknownMethod,  format!("unknown method {{}}", msg_ident.name)));
+                            return Err(::pilota::thrift::new_application_exception(::pilota::thrift::ApplicationExceptionKind::UNKNOWN_METHOD,  format!("unknown method {{}}", msg_ident.name)));
                         }},
                     }})"#
                 }
@@ -93,20 +93,20 @@ impl VoloThriftBackend {
 
             format! {
                 r#"impl ::volo_thrift::EntryMessage for {req_recv_name} {{
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {{
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
                         }}
                     }}
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {{
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
                        {recv_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
                         protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier
-                    ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
+                    ) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException>
                         {{
                             {recv_decode_async}
                         }}
@@ -119,20 +119,20 @@ impl VoloThriftBackend {
                 }}
 
                 impl ::volo_thrift::EntryMessage for {req_send_name} {{
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {{
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
                         }}
                     }}
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {{
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
                        {send_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
                         protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier
-                    ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
+                    ) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException>
                         {{
                             {send_decode_async}
                         }}
@@ -174,7 +174,7 @@ impl VoloThriftBackend {
                     r#"Ok(match &*msg_ident.name {{
                         {match_methods}
                         _ => {{
-                            return Err(::pilota::thrift::DecodeError::new(::pilota::thrift::DecodeErrorKind::UnknownMethod,  format!("unknown method {{}}", msg_ident.name)));
+                            return Err(::pilota::thrift::new_application_exception(::pilota::thrift::ApplicationExceptionKind::UNKNOWN_METHOD,  format!("unknown method {{}}", msg_ident.name)));
                         }},
                     }})"#
                 )
@@ -194,20 +194,20 @@ impl VoloThriftBackend {
             let recv_decode_async = mk_decode(true, false);
             format! {
                 r#"impl ::volo_thrift::EntryMessage for {res_recv_name} {{
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {{
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
                         }}
                     }}
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {{
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
                        {recv_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
                         protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier,
-                    ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
+                    ) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException>
                         {{
                             {recv_decode_async}
                         }}
@@ -220,20 +220,20 @@ impl VoloThriftBackend {
                 }}
 
                 impl ::volo_thrift::EntryMessage for {res_send_name} {{
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::EncodeError> {{
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
                         }}
                     }}
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError> {{
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
                        {send_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
                         protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier,
-                    ) -> ::core::result::Result<Self, ::pilota::thrift::DecodeError>
+                    ) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException>
                         {{
                             {send_decode_async}
                         }}
@@ -392,6 +392,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             let exception = if let Some(p) = &m.exceptions {
                 self.cx().cur_related_item_path(p.did)
             } else {
+                // only placeholder, should never be used
                 "std::convert::Infallible".into()
             };
 
@@ -401,14 +402,18 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 match &*e {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
                         let name = self.cx().rust_name(v.did);
-                        format!("Some({res_recv_name}::{enum_variant}({result_path}::{name}(err))) => Err(::volo_thrift::error::ResponseError::UserException({exception}::{name}(err))),")
+                        format!("Some({res_recv_name}::{enum_variant}({result_path}::{name}(ex))) => Err(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))),")
                     }).collect::<Vec<_>>(),
                     _ => panic!()
                 }
             }).join("");
 
+            let mut resp_type_str = format!("{resp_type}");
+            if !convert_exceptions.is_empty() {
+                resp_type_str = format!("::volo_thrift::MaybeException<{resp_type_str}, {exception}>");
+            }
             client_methods.push(format! {
-                r#"pub async fn {name}(&self {req_fields}) -> ::std::result::Result<{resp_type}, ::volo_thrift::error::ResponseError<{exception}>> {{
+                r#"pub async fn {name}(&self {req_fields}) -> ::std::result::Result<{resp_type_str}, ::volo_thrift::ClientError> {{
                     let req = {req_send_name}::{enum_variant}({anonymous_args_send_name} {{
                         {req_field_names}
                     }});
@@ -430,7 +435,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             });
 
             oneshot_client_methods.push(format! {
-                r#"pub async fn {name}(self {req_fields}) -> ::std::result::Result<{resp_type}, ::volo_thrift::error::ResponseError<{exception}>> {{
+                r#"pub async fn {name}(self {req_fields}) -> ::std::result::Result<{resp_type_str}, ::volo_thrift::ClientError> {{
                     let req = {req_send_name}::{enum_variant}({anonymous_args_send_name} {{
                         {req_field_names}
                     }});
@@ -470,12 +475,6 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 let has_exception = m.exceptions.is_some();
                 let method_result_path = self.method_result_path(&service_name, m, false);
 
-                let exception: FastStr = if let Some(p) = &m.exceptions {
-                    self.cx().cur_related_item_path(p.did)
-                } else {
-                    "::volo_thrift::error::DummyError".into()
-                };
-
                 let convert_exceptions = m
                     .exceptions
                     .iter()
@@ -486,8 +485,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                             .iter()
                             .map(|v| {
                                 let name = self.cx().rust_name(v.did);
+                                let exception = self.cx().cur_related_item_path(m.exceptions.as_ref().expect("must be exception here").did);
                                 format!(
-                                "Err(::volo_thrift::error::UserError::UserException({exception}::{name}(err))) => {method_result_path}::{name}(err),"
+                                "Ok(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))) => {method_result_path}::{name}(ex),"
                             )
                             })
                             .collect::<Vec<_>>(),
@@ -498,16 +498,16 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 if has_exception {
                     format! {
                         r#"match self.inner.{name}({args}).await {{
-                        Ok(resp) => {method_result_path}::Ok(resp),
+                        Ok(::volo_thrift::MaybeException::Ok(resp)) => {method_result_path}::Ok(resp),
                         {convert_exceptions}
-                        Err(::volo_thrift::error::UserError::Other(err)) => return Err(::volo_thrift::Error::Application(::volo_thrift::error::ApplicationError::new(::volo_thrift::error::ApplicationErrorKind::INTERNAL_ERROR, err.to_string()))),
+                        Err(err) => return Err(err),
                     }}"#
                     }
                 } else {
                     format! {
                         r#"match self.inner.{name}({args}).await {{
                         Ok(resp) => {method_result_path}::Ok(resp),
-                        Err(err) => return Err(::volo_thrift::Error::Anyhow(err)),
+                        Err(err) => return Err(err),
                     }}"#
                     }
                 }
@@ -530,7 +530,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
             pub struct {mk_client_name};
 
-            pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_thrift::context::ClientContext, {req_send_name}, ::std::option::Option<{res_recv_name}>, ::volo_thrift::Error>>;
+            pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_thrift::context::ClientContext, {req_send_name}, ::std::option::Option<{res_recv_name}>, ::volo_thrift::ClientError>>;
 
             impl<S> ::volo::client::MkClient<::volo_thrift::Client<S>> for {mk_client_name} {{
                 type Target = {generic_client_name}<S>;
@@ -544,7 +544,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
             pub struct {oneshot_client_name}<S>(pub ::volo_thrift::Client<S>);
 
-            impl<S: ::volo::service::Service<::volo_thrift::context::ClientContext, {req_send_name}, Response = ::std::option::Option<{res_recv_name}>, Error = ::volo_thrift::Error> + Send + Sync + 'static> {generic_client_name}<S> {{
+            impl<S: ::volo::service::Service<::volo_thrift::context::ClientContext, {req_send_name}, Response = ::std::option::Option<{res_recv_name}>, Error = ::volo_thrift::ClientError> + Send + Sync + 'static> {generic_client_name}<S> {{
                 pub fn with_callopt<Opt: ::volo::client::Apply<::volo_thrift::context::ClientContext>>(self, opt: Opt) -> {oneshot_client_name}<::volo::client::WithOptService<S, Opt>> {{
                     {oneshot_client_name}(self.0.with_opt(opt))
                 }}
@@ -552,7 +552,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 {client_methods}
             }}
 
-            impl<S: ::volo::client::OneShotService<::volo_thrift::context::ClientContext, {req_send_name}, Response = ::std::option::Option<{res_recv_name}>, Error = ::volo_thrift::Error> + Send + Sync + 'static> {oneshot_client_name}<S> {{
+            impl<S: ::volo::client::OneShotService<::volo_thrift::context::ClientContext, {req_send_name}, Response = ::std::option::Option<{res_recv_name}>, Error = ::volo_thrift::ClientError> + Send + Sync + 'static> {oneshot_client_name}<S> {{
                 {oneshot_client_methods}
             }}
 
@@ -586,7 +586,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
             impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, {req_recv_name}> for {server_name}<T> where T: {service_name} + Send + Sync + 'static {{
                 type Response = {res_send_name};
-                type Error = ::volo_thrift::Error;
+                type Error = ::volo_thrift::ServerError;
 
                 async fn call<'s, 'cx>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> ::std::result::Result<Self::Response, Self::Error> {{
                     match req {{
@@ -620,16 +620,14 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             })
             .join(",");
 
-        let exception: FastStr = if let Some(p) = &method.exceptions {
+        if let Some(p) = &method.exceptions {
             let exception = self.inner.cur_related_item_path(p.did);
-            format! {"::volo_thrift::error::UserError<{exception}>" }.into()
-        } else {
-            "::volo_thrift::AnyhowError".into()
-        };
+            ret_ty = format!("::volo_thrift::MaybeException<{ret_ty}, {exception}>");
+        }
 
         format!(
             "fn {name}(&self, {args}) -> impl ::std::future::Future<Output = \
-             ::core::result::Result<{ret_ty}, {exception}>> + Send;"
+             ::core::result::Result<{ret_ty}, ::volo_thrift::ServerError>> + Send;"
         )
     }
 
@@ -662,15 +660,13 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             })
             .join(",");
 
-        let exception: FastStr = if let Some(p) = &method.exceptions {
-            let exception = self.inner.item_path(p.did).join("::");
-            format! {"::volo_thrift::error::UserError<volo_gen::{exception}>" }.into()
-        } else {
-            "::volo_thrift::AnyhowError".into()
-        };
+        if let Some(p) = &method.exceptions {
+            let exception = self.inner.cur_related_item_path(p.did);
+            ret_ty = format!("::volo_thrift::MaybeException<{ret_ty}, {exception}>");
+        }
 
         format!(
-            r#"async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, {exception}>
+            r#"async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, ::volo_thrift::ServerError>
             {{
                 Ok(Default::default())
             }}"#

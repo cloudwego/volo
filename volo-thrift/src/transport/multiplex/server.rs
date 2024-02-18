@@ -6,6 +6,7 @@ use std::{
 
 use metainfo::MetaInfo;
 use motore::service::Service;
+use pilota::thrift::ThriftException;
 use tokio::sync::{futures::Notified, mpsc};
 use tracing::*;
 use volo::{context::Context, net::Address, volo_unreachable};
@@ -14,7 +15,8 @@ use crate::{
     codec::{Decoder, Encoder},
     context::ServerContext,
     protocol::TMessageType,
-    DummyMessage, EntryMessage, Error, ThriftMessage,
+    server_error_to_application_exception, thrift_exception_to_application_exception, DummyMessage,
+    EntryMessage, ServerError, ThriftMessage,
 };
 
 const CHANNEL_SIZE: usize = 1024;
@@ -29,7 +31,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
     peer_addr: Option<Address>,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp> + Send + Clone + 'static + Sync,
-    Svc::Error: Into<Error> + Send,
+    Svc::Error: Into<ServerError> + Send,
     Req: EntryMessage + 'static,
     Resp: EntryMessage + 'static,
     E: Encoder,
@@ -126,8 +128,8 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             Err(e) => {
                                 error!("[VOLO] multiplex server decode error {:?}, peer_addr: {:?}", e, peer_addr);
                                 cx.msg_type = Some(TMessageType::Exception);
-                                if !matches!(e, Error::Transport(_)) {
-                                    let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e));
+                                if !matches!(e, ThriftException::Transport(_)) {
+                                    let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(thrift_exception_to_application_exception(e)));
                                     error_send_tx.send((cx, msg)).await;
                                 }
                                 return;
@@ -154,7 +156,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                         Ok(_) => TMessageType::Reply,
                                         Err(_) => TMessageType::Exception,
                                     });
-                                    let msg =  ThriftMessage::mk_server_resp(&cx, resp.map_err(|e| e.into()));
+                                    let msg =  ThriftMessage::mk_server_resp(&cx, resp.map_err(|e|server_error_to_application_exception(e.into())));
                                     let mi = metainfo::METAINFO.with(|m| m.take());
                                     send_tx.send((mi, cx, msg)).await;
                                 }

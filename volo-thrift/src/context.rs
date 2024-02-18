@@ -457,7 +457,7 @@ impl Reusable for Config {
 }
 
 impl ::volo::client::Apply<ClientContext> for CallOpt {
-    type Error = crate::Error;
+    type Error = crate::ClientError;
 
     #[inline]
     fn apply(self, cx: &mut ClientContext) -> Result<(), Self::Error> {
