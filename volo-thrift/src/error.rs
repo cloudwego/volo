@@ -16,9 +16,27 @@ pub type ServerResult<T> = Result<T, ServerError>;
 pub type ClientResult<T> = Result<T, ClientError>;
 
 #[derive(Debug)]
+pub struct AnyhowProxy(anyhow::Error);
+
+impl From<anyhow::Error> for AnyhowProxy {
+    fn from(e: anyhow::Error) -> Self {
+        AnyhowProxy(e)
+    }
+}
+
+#[derive(Debug)]
 pub enum ServerError {
     Application(ApplicationException),
     Biz(BizError),
+}
+
+impl From<AnyhowProxy> for ServerError {
+    fn from(e: AnyhowProxy) -> Self {
+        ServerError::Application(ApplicationException::new(
+            ApplicationExceptionKind::INTERNAL_ERROR,
+            e.0.to_string(),
+        ))
+    }
 }
 
 impl<E> From<E> for ServerError
