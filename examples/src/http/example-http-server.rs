@@ -3,6 +3,7 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use async_stream::stream;
 use bytes::Bytes;
 use faststr::FastStr;
+use motore::{layer::layer_fn, service::Service};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use volo_http::{
@@ -17,7 +18,7 @@ use volo_http::{
     middleware::{self, Next},
     request::ServerRequest,
     response::{IntoResponse, ServerResponse},
-    route::{from_handler, get, post, service_fn, MethodRouter, Router},
+    route::{from_handler, from_service, get, post, service_fn, MethodRouter, Router},
     Address, CookieJar, Json, Params, Server,
 };
 
@@ -147,11 +148,8 @@ async fn extension(Extension(state): Extension<Arc<State>>) -> String {
     format!("State {{ foo: {}, bar: {} }}\n", state.foo, state.bar)
 }
 
-async fn service_fn_test(
-    cx: &mut ServerContext,
-    req: ServerRequest,
-) -> Result<ServerResponse, Infallible> {
-    Ok(format!("cx: {cx:?}, req: {req:?}").into_response())
+async fn service_fn_test(cx: &mut ServerContext, req: ServerRequest) -> Result<String, Infallible> {
+    Ok(format!("cx: {cx:?}, req: {req:?}"))
 }
 
 fn index_router() -> Router {
@@ -238,6 +236,96 @@ fn test_router() -> Router {
         }))
 }
 
+#[derive(Clone)]
+enum ErrTestService<T> {
+    Val(T),
+    Err(usize),
+}
+
+impl<T> Service<ServerContext, ServerRequest> for ErrTestService<T>
+where
+    T: IntoResponse + Clone + Send + Sync,
+{
+    type Response = T;
+    type Error = usize;
+
+    async fn call(
+        &self,
+        _: &mut ServerContext,
+        _: ServerRequest,
+    ) -> Result<Self::Response, Self::Error> {
+        match self {
+            Self::Val(val) => Ok(val.clone()),
+            Self::Err(err) => Err(*err),
+        }
+    }
+}
+
+#[derive(Clone)]
+struct ErrMapService<S> {
+    inner: S,
+}
+
+impl<S, Resp> Service<ServerContext, ServerRequest> for ErrMapService<S>
+where
+    S: Service<ServerContext, ServerRequest, Response = Resp, Error = usize> + Clone + Send + Sync,
+    Resp: IntoResponse,
+{
+    type Response = ServerResponse;
+    type Error = Infallible;
+
+    async fn call(
+        &self,
+        cx: &mut ServerContext,
+        req: ServerRequest,
+    ) -> Result<Self::Response, Self::Error> {
+        match self.inner.call(cx, req).await {
+            Ok(resp) => Ok(resp.into_response()),
+            Err(val) => {
+                let status = if val == 0 {
+                    StatusCode::OK
+                } else {
+                    StatusCode::IM_A_TEAPOT
+                };
+                Ok(status.into_response())
+            }
+        }
+    }
+}
+
+fn err_router() -> Router {
+    fn map_err_layer<Resp, S>(
+        s: S,
+    ) -> impl Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
+           + Clone
+           + Send
+           + Sync
+    where
+        S: Service<ServerContext, ServerRequest, Response = Resp, Error = usize>
+            + Clone
+            + Send
+            + Sync,
+        Resp: IntoResponse,
+    {
+        ErrMapService { inner: s }
+    }
+
+    Router::new()
+        .route(
+            "/err/str",
+            MethodRouter::builder()
+                .get(from_service(ErrTestService::Val(String::from("114514"))))
+                .build(),
+        )
+        .route(
+            "/err/err",
+            MethodRouter::builder()
+                .get(from_service(ErrTestService::<()>::Err(1)))
+                .build(),
+        )
+        .layer(layer_fn(map_err_layer))
+}
+
 // You can use the following commands for testing cookies
 //
 // ```bash
@@ -315,6 +403,7 @@ async fn main() {
         .merge(user_json_router())
         .merge(user_form_router())
         .merge(test_router())
+        .merge(err_router())
         .layer(Extension(Arc::new(State {
             foo: "Foo".to_string(),
             bar: 114514,
