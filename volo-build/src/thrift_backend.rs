@@ -409,8 +409,10 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }).join("");
 
             let mut resp_type_str = format!("{resp_type}");
+            let mut resp_str = "Ok(resp)";
             if !convert_exceptions.is_empty() {
                 resp_type_str = format!("::volo_thrift::MaybeException<{resp_type_str}, {exception}>");
+                resp_str = "Ok(::volo_thrift::MaybeException::Ok(resp))";
             }
             client_methods.push(format! {
                 r#"pub async fn {name}(&self {req_fields}) -> ::std::result::Result<{resp_type_str}, ::volo_thrift::ClientError> {{
@@ -420,7 +422,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     let mut cx = self.0.make_cx("{method_name_str}", {oneway});
                     #[allow(unreachable_patterns)]
                     let resp = match ::volo::service::Service::call(&self.0, &mut cx, req).await? {{
-                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => Ok(resp),{convert_exceptions}
+                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => {resp_str},{convert_exceptions}
                         {none},
                         _ => unreachable!()
                     }};
@@ -442,7 +444,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     let mut cx = self.0.make_cx("{method_name_str}", {oneway});
                     #[allow(unreachable_patterns)]
                     let resp = match ::volo::client::OneShotService::call(self.0, &mut cx, req).await? {{
-                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => Ok(resp),{convert_exceptions}
+                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => {resp_str},{convert_exceptions}
                         {none},
                         _ => unreachable!()
                     }};
