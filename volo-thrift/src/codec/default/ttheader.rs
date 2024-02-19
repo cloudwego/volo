@@ -4,9 +4,7 @@
 //!
 //! For more information, please visit https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/
 
-use std::{
-    collections::HashMap, convert::TryFrom, default::Default, net::SocketAddr, time::Duration,
-};
+use std::{collections::HashMap, default::Default, net::SocketAddr, time::Duration};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use linkedbytes::LinkedBytes;

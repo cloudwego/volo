@@ -9,7 +9,6 @@ use std::{
 use metainfo::MetaInfo;
 use pilota::thrift::{ApplicationException, ApplicationExceptionKind};
 use pin_project::pin_project;
-use rustc_hash;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync::{oneshot, Mutex},
