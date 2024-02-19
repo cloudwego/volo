@@ -1,7 +1,5 @@
 //! These codes are copied from `tonic/src/metadata/value.rs` and may be modified by us.
 
-#![allow(clippy::upper_case_acronyms)]
-
 use std::{
     cmp,
     error::Error,
