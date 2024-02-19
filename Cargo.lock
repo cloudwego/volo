@@ -1630,7 +1630,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.11.0"
-source = "git+https://github.com/PureWhiteWu/pilota?branch=refactor/error#bb3f707db758be0c7ed5b82c1090937f25479e59"
+source = "git+https://github.com/cloudwego/pilota?branch=main#9bc9ae3731b97881533bb563daa02cd5c615f08e"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1651,7 +1651,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.11.0"
-source = "git+https://github.com/PureWhiteWu/pilota?branch=refactor/error#bb3f707db758be0c7ed5b82c1090937f25479e59"
+source = "git+https://github.com/cloudwego/pilota?branch=main#9bc9ae3731b97881533bb563daa02cd5c615f08e"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1684,7 +1684,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.11.0"
-source = "git+https://github.com/PureWhiteWu/pilota?branch=refactor/error#bb3f707db758be0c7ed5b82c1090937f25479e59"
+source = "git+https://github.com/cloudwego/pilota?branch=main#9bc9ae3731b97881533bb563daa02cd5c615f08e"
 dependencies = [
  "nom",
 ]
