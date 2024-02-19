@@ -670,15 +670,10 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         };
 
         format!(
-            r#"
-    async fn {name}(
-        &self,
-        {args},
-    ) -> ::core::result::Result<{ret_ty}, {exception}>
-    {{
-        Ok(Default::default())
-    }}
-"#
+            r#"async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, {exception}>
+            {{
+                Ok(Default::default())
+            }}"#
         )
     }
 
