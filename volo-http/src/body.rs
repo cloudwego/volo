@@ -14,7 +14,7 @@ use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
 pub use hyper::body::Incoming;
 use motore::BoxError;
 use pin_project::pin_project;
-#[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+#[cfg(feature = "__json")]
 use serde::de::DeserializeOwned;
 
 // The `futures_util::stream::BoxStream` does not have `Sync`
@@ -161,7 +161,7 @@ where
         }
     }
 
-    #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+    #[cfg(feature = "__json")]
     fn into_json<T>(self) -> impl Future<Output = Result<T, ResponseConvertError>> + Send
     where
         T: DeserializeOwned,
@@ -184,7 +184,7 @@ where
 pub enum ResponseConvertError {
     BodyCollectionError,
     StringUtf8Error,
-    #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+    #[cfg(feature = "__json")]
     JsonDeserializeError(crate::json::Error),
 }
 
@@ -193,7 +193,7 @@ impl fmt::Display for ResponseConvertError {
         match self {
             Self::BodyCollectionError => f.write_str("failed to collect body"),
             Self::StringUtf8Error => f.write_str("body is not a valid string"),
-            #[cfg(any(feature = "serde_json", feature = "sonic_json"))]
+            #[cfg(feature = "__json")]
             Self::JsonDeserializeError(e) => write!(f, "failed to deserialize body: {e}"),
         }
     }

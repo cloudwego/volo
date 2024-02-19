@@ -3,7 +3,9 @@ use std::{convert::Infallible, ops::Deref};
 pub use cookie::{time::Duration, Cookie};
 use http::{header, request::Parts, HeaderMap};
 
-use crate::{context::ServerContext, extract::FromContext};
+use crate::context::ServerContext;
+#[cfg(feature = "server")]
+use crate::server::extract::FromContext;
 
 pub struct CookieJar {
     inner: cookie::CookieJar,
@@ -34,6 +36,7 @@ impl Deref for CookieJar {
     }
 }
 
+#[cfg(feature = "server")]
 impl FromContext for CookieJar {
     type Rejection = Infallible;
 

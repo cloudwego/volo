@@ -2,13 +2,12 @@ use std::{convert::Infallible, marker::PhantomData};
 
 use motore::{layer::Layer, service::Service, ServiceExt};
 
-use crate::{
-    context::ServerContext,
+use super::{
     handler::{MiddlewareHandlerFromFn, MiddlewareHandlerMapResponse},
-    request::ServerRequest,
-    response::{IntoResponse, ServerResponse},
     route::Route,
+    IntoResponse,
 };
+use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
 pub struct FromFnLayer<F, T, R, E> {
     f: F,

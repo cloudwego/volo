@@ -8,6 +8,7 @@ use volo::{
 };
 
 use super::CommonStats;
+use crate::utils::macros::impl_deref_and_deref_mut;
 
 #[derive(Debug)]
 pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
