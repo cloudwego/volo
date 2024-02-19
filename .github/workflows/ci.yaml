@@ -70,7 +70,7 @@ jobs:
         with:
           components: rustfmt
           toolchain: ${{matrix.rust}}
-      - uses: Swatinem/rust-cache@v1
+      # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
           cargo check --features multiplex
@@ -89,7 +89,7 @@ jobs:
         with:
           components: rustfmt
           toolchain: ${{matrix.rust}}
-      - uses: Swatinem/rust-cache@v1
+      # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
           cargo check --features multiplex
