@@ -161,19 +161,14 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         self.rpc_config.host = host;
         self
     }
-}
 
-impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT>
-where
-    L: Layer<MetaService<ClientTransport<MkT>>>,
-    L::Service: Service<ClientContext, ClientRequest, Response = ClientResponse, Error = ClientError>
-        + Send
-        + Sync
-        + 'static,
-    MkC: MkClient<Client<L::Service>>,
-    MkT: MakeConnection<Address>,
-{
-    pub fn build(mut self) -> MkC::Target {
+    pub fn build(mut self) -> MkC::Target
+    where
+        L: Layer<MetaService<ClientTransport<MkT>>>,
+        L::Service: Send + Sync + 'static,
+        MkC: MkClient<Client<L::Service>>,
+        MkT: MakeConnection<Address>,
+    {
         let transport = ClientTransport::new(self.client_config, self.mk_conn);
         let service = self.layer.layer(MetaService::new(transport));
         if self.headers.get(header::USER_AGENT).is_some() {
@@ -264,19 +259,20 @@ impl<S> Client<S> {
     method_requests!(patch);
 }
 
-impl<S> Client<S>
-where
-    S: Service<ClientContext, ClientRequest, Response = ClientResponse, Error = ClientError>
-        + Send
-        + Sync
-        + 'static,
-{
-    pub async fn send_request(
+impl<S> Client<S> {
+    pub async fn send_request<B>(
         &self,
         host: Option<&str>,
         target: Address,
-        request: ClientRequest,
-    ) -> Result<S::Response, S::Error> {
+        request: ClientRequest<B>,
+    ) -> Result<S::Response, S::Error>
+    where
+        S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
+            + Send
+            + Sync
+            + 'static,
+        B: Send + 'static,
+    {
         let caller_name = self.inner.caller_name.clone();
         let callee_name = if !self.inner.callee_name.is_empty() {
             self.inner.callee_name.clone()
@@ -294,12 +290,13 @@ where
     }
 }
 
-impl<S> Service<ClientContext, ClientRequest> for Client<S>
+impl<S, B> Service<ClientContext, ClientRequest<B>> for Client<S>
 where
-    S: Service<ClientContext, ClientRequest, Response = ClientResponse, Error = ClientError>
+    S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
         + Send
         + Sync
         + 'static,
+    B: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -307,7 +304,7 @@ where
     async fn call(
         &self,
         cx: &mut ClientContext,
-        mut req: ClientRequest,
+        mut req: ClientRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         req.headers_mut().extend(self.inner.headers.clone());
 

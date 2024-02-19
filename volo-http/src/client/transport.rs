@@ -26,19 +26,20 @@ impl<MkT> ClientTransport<MkT> {
             mk_conn,
         }
     }
-}
 
-impl<MkT> ClientTransport<MkT>
-where
-    MkT: MakeConnection<Address> + Send + Sync,
-    MkT::Connection: 'static,
-    MkT::Error: Error + Send + Sync + 'static,
-{
-    async fn request(
+    async fn request<B>(
         &self,
         target: Address,
-        req: ClientRequest,
-    ) -> Result<ClientResponse, ClientError> {
+        req: ClientRequest<B>,
+    ) -> Result<ClientResponse, ClientError>
+    where
+        MkT: MakeConnection<Address> + Send + Sync,
+        MkT::Connection: 'static,
+        MkT::Error: Error + Send + Sync + 'static,
+        B: Body + Send + 'static,
+        B::Data: Send,
+        B::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
+    {
         let conn = self
             .mk_conn
             .make_connection(target)
@@ -52,11 +53,14 @@ where
     }
 }
 
-impl<MkT> Service<ClientContext, ClientRequest> for ClientTransport<MkT>
+impl<MkT, B> Service<ClientContext, ClientRequest<B>> for ClientTransport<MkT>
 where
     MkT: MakeConnection<Address> + Send + Sync,
     MkT::Connection: 'static,
     MkT::Error: Error + Send + Sync + 'static,
+    B: Body + Send + 'static,
+    B::Data: Send,
+    B::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
 {
     type Response = ClientResponse;
     type Error = ClientError;
@@ -64,7 +68,7 @@ where
     async fn call(
         &self,
         cx: &mut ClientContext,
-        mut req: ClientRequest,
+        mut req: ClientRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         // `Content-Length` must be set here because the body may be changed in previous layer(s).
         if let Some(len) = req.body().size_hint().exact() {
