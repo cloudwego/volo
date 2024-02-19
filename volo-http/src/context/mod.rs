@@ -23,6 +23,22 @@ macro_rules! stat_impl {
     };
 }
 
+macro_rules! stat_impl_getter_and_setter {
+    ($name: ident, $type: ty) => {
+        paste! {
+            #[inline]
+            pub fn $name(&self) -> Option<&$type> {
+                self.$name.as_ref()
+            }
+
+            #[inline]
+            pub fn [<set_ $name>](&mut self, t: $type) {
+                self.$name = Some(t)
+            }
+        }
+    };
+}
+
 #[cfg(feature = "client")]
 pub mod client;
 #[cfg(feature = "client")]

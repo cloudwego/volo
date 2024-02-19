@@ -3,7 +3,7 @@ use http::{
     header,
     request::Parts,
     uri::{Authority, Scheme},
-    HeaderMap, HeaderName, StatusCode,
+    HeaderMap, HeaderName, Method, StatusCode, Uri,
 };
 use hyper::header::HeaderValue;
 use paste::paste;
@@ -60,27 +60,22 @@ impl ServerCxInner {
 }
 
 /// This is unstable now and may be changed in the future.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct ServerStats {
     process_start_at: Option<DateTime<Local>>,
     process_end_at: Option<DateTime<Local>>,
 
+    method: Option<Method>,
+    uri: Option<Uri>,
     status_code: Option<StatusCode>,
 }
 
 impl ServerStats {
     stat_impl!(process_start_at);
     stat_impl!(process_end_at);
-
-    #[inline]
-    pub fn status_code(&self) -> Option<StatusCode> {
-        self.status_code
-    }
-
-    #[inline]
-    pub fn set_status_code(&mut self, status: StatusCode) {
-        self.status_code = Some(status);
-    }
+    stat_impl_getter_and_setter!(method, Method);
+    stat_impl_getter_and_setter!(uri, Uri);
+    stat_impl_getter_and_setter!(status_code, StatusCode);
 }
 
 #[derive(Debug, Default, Clone, Copy)]

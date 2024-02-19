@@ -76,17 +76,7 @@ macro_rules! impl_getter {
         }
     };
     ($name: ident, $type: ty) => {
-        paste! {
-            #[inline]
-            pub fn $name(&self) -> &$type {
-                &self.$name
-            }
-
-            #[inline]
-            pub fn [<$name _mut>](&mut self) -> &mut $type {
-                &mut self.$name
-            }
-        }
+        impl_getter!($name, $type, $name);
     };
 }
 
