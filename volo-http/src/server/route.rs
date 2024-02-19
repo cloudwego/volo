@@ -142,10 +142,7 @@ impl<E> Router<E> {
     }
 }
 
-impl<E> Service<ServerContext, ServerRequest> for Router<E>
-where
-    E: IntoResponse,
-{
+impl Service<ServerContext, ServerRequest> for Router {
     type Response = ServerResponse;
     type Error = Infallible;
 
