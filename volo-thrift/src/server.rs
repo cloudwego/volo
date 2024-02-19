@@ -29,7 +29,7 @@ use crate::{
     },
     context::ServerContext,
     tracing::{DefaultProvider, SpanProvider},
-    EntryMessage, Result,
+    EntryMessage,
 };
 
 /// This is unstable now and may be changed in the future.
@@ -176,9 +176,9 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
         L: Layer<S>,
         MkC: MakeCodec<OwnedReadHalf, OwnedWriteHalf>,
         L::Service: Service<ServerContext, Req, Response = S::Response> + Send + 'static + Sync,
-        <L::Service as Service<ServerContext, Req>>::Error: Into<crate::Error> + Send,
+        <L::Service as Service<ServerContext, Req>>::Error: Into<crate::ServerError> + Send,
         S: Service<ServerContext, Req> + Send + 'static,
-        S::Error: Into<crate::Error> + Send,
+        S::Error: Into<crate::ServerError> + Send,
         Req: EntryMessage + Send + 'static,
         S::Response: EntryMessage + Send + 'static + Sync,
         SP: SpanProvider,
@@ -392,7 +392,7 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
     W: AsyncWrite + Unpin + Send + Sync + 'static,
     Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
     Svc::Error: Send,
-    Svc::Error: Into<crate::Error>,
+    Svc::Error: Into<crate::ServerError>,
     Req: EntryMessage + Send + 'static,
     Resp: EntryMessage + Send + 'static,
     MkC: MakeCodec<R, W>,
@@ -438,7 +438,7 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
     R: AsyncRead + Unpin + Send + Sync + 'static,
     W: AsyncWrite + Unpin + Send + Sync + 'static,
     Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static + Sync,
-    Svc::Error: Into<crate::Error> + Send,
+    Svc::Error: Into<crate::ServerError> + Send,
     Req: EntryMessage + Send + 'static,
     Resp: EntryMessage + Send + 'static,
     MkC: MakeCodec<R, W>,

@@ -1,5 +1,6 @@
 use std::future::Future;
 
+use pilota::thrift::ThriftException;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
@@ -18,7 +19,7 @@ pub trait Decoder: Send + 'static {
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
-    ) -> impl Future<Output = Result<Option<ThriftMessage<Msg>>, crate::Error>> + Send;
+    ) -> impl Future<Output = Result<Option<ThriftMessage<Msg>>, ThriftException>> + Send;
 }
 
 /// [`Encoder`] writes a [`ThriftMessage`] to an [`AsyncWrite`] and flushes the data.
@@ -29,7 +30,7 @@ pub trait Encoder: Send + 'static {
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
-    ) -> impl Future<Output = Result<(), crate::Error>> + Send;
+    ) -> impl Future<Output = Result<(), ThriftException>> + Send;
 }
 
 /// [`MakeCodec`] receives an [`AsyncRead`] and an [`AsyncWrite`] and returns a

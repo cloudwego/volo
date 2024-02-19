@@ -6,7 +6,7 @@ impl volo_gen::thrift_gen::echo_unknown::EchoService for S {
     async fn hello(
         &self,
         req: volo_gen::thrift_gen::echo_unknown::EchoRequest,
-    ) -> Result<volo_gen::thrift_gen::echo_unknown::EchoResponse, volo_thrift::AnyhowError> {
+    ) -> Result<volo_gen::thrift_gen::echo_unknown::EchoResponse, volo_thrift::ServerError> {
         let resp = volo_gen::thrift_gen::echo_unknown::EchoResponse {
             name: format!("{}", req.name).into(),
             echo_union: req.echo_union,

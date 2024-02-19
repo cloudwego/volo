@@ -6,6 +6,7 @@ use std::{
 
 use metainfo::MetaInfo;
 use motore::service::Service;
+use pilota::thrift::ThriftException;
 use tokio::sync::futures::Notified;
 use tracing::*;
 use volo::{net::Address, volo_unreachable};
@@ -14,8 +15,9 @@ use crate::{
     codec::{Decoder, Encoder},
     context::{ServerContext, SERVER_CONTEXT_CACHE},
     protocol::TMessageType,
+    server_error_to_application_exception, thrift_exception_to_application_exception,
     tracing::SpanProvider,
-    DummyMessage, EntryMessage, Error, ThriftMessage,
+    DummyMessage, EntryMessage, ServerError, ThriftMessage,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -30,7 +32,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
     span_provider: SP,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
-    Svc::Error: Into<Error>,
+    Svc::Error: Into<ServerError>,
     Req: EntryMessage,
     Resp: EntryMessage,
     E: Encoder,
@@ -86,7 +88,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                     Ok(_) => TMessageType::Reply,
                                     Err(_) => TMessageType::Exception,
                                 });
-                                let msg =  ThriftMessage::mk_server_resp(&cx, resp.map_err(|e| e.into()));
+                                let msg =  ThriftMessage::mk_server_resp(&cx, resp.map_err(|e|server_error_to_application_exception(e.into())));
                                 if let Err(e) = async {
                                     let result = encoder.encode(&mut cx, msg).await;
                                     span_provider.leave_encode(&cx);
@@ -108,8 +110,8 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                         Err(e) => {
                             error!("[VOLO] pingpong server decode error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                             cx.msg_type = Some(TMessageType::Exception);
-                            if !matches!(e, Error::Transport(_)) {
-                                let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(e));
+                            if !matches!(e, ThriftException::Transport(_)) {
+                                let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(thrift_exception_to_application_exception(e)));
                                 if let Err(e) = encoder.encode(&mut cx, msg).await {
                                     error!("[VOLO] server send error error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
                                 }

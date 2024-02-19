@@ -1,4 +1,4 @@
-use pilota::thrift::{DecodeError, EncodeError, Message, TAsyncInputProtocol};
+use pilota::thrift::{ApplicationException, Message, TAsyncInputProtocol, ThriftException};
 use volo::FastStr;
 
 use crate::{
@@ -6,7 +6,7 @@ use crate::{
     protocol::{
         TInputProtocol, TLengthProtocol, TMessageIdentifier, TMessageType, TOutputProtocol,
     },
-    ApplicationError, ApplicationErrorKind, EntryMessage,
+    EntryMessage,
 };
 
 #[derive(Debug)]
@@ -18,7 +18,7 @@ pub struct MessageMeta {
 
 #[derive(Debug)]
 pub struct ThriftMessage<M> {
-    pub data: Result<M, crate::Error>,
+    pub data: Result<M, ApplicationException>,
     pub meta: MessageMeta,
 }
 
@@ -26,7 +26,7 @@ pub(crate) struct DummyMessage;
 
 impl EntryMessage for DummyMessage {
     #[inline]
-    fn encode<T: TOutputProtocol>(&self, _protocol: &mut T) -> Result<(), EncodeError> {
+    fn encode<T: TOutputProtocol>(&self, _protocol: &mut T) -> Result<(), ThriftException> {
         unreachable!()
     }
 
@@ -34,7 +34,7 @@ impl EntryMessage for DummyMessage {
     fn decode<T: TInputProtocol>(
         _protocol: &mut T,
         _msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, ThriftException> {
         unreachable!()
     }
 
@@ -42,7 +42,7 @@ impl EntryMessage for DummyMessage {
     async fn decode_async<T: TAsyncInputProtocol>(
         _protocol: &mut T,
         _msg_ident: &TMessageIdentifier,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, ThriftException> {
         unreachable!()
     }
 
@@ -53,17 +53,21 @@ impl EntryMessage for DummyMessage {
 
 impl<M> ThriftMessage<M> {
     #[inline]
-    pub fn mk_client_msg(cx: &ClientContext, msg: Result<M, crate::Error>) -> Self {
+    pub fn mk_client_msg(cx: &ClientContext, msg: M) -> Self {
         let meta = MessageMeta {
             msg_type: cx.message_type,
             method: cx.rpc_info.method().clone(),
             seq_id: cx.seq_id,
         };
-        Self { data: msg, meta }
+        Self {
+            data: Ok(msg),
+            meta,
+        }
     }
 
+    /// Server response message can only be an Ok(msg) or Err(ApplicationException).
     #[inline]
-    pub fn mk_server_resp(cx: &ServerContext, msg: Result<M, crate::Error>) -> Self {
+    pub fn mk_server_resp(cx: &ServerContext, msg: Result<M, ApplicationException>) -> Self {
         let meta = MessageMeta {
             msg_type: match msg {
                 Ok(_) => TMessageType::Reply,
@@ -94,41 +98,11 @@ where
                     + inner.size(protocol)
                     + protocol.message_end_len()
             }
-            Err(inner) => match inner {
-                crate::Error::Application(e) => {
-                    protocol.message_begin_len(&ident)
-                        + e.size(protocol)
-                        + protocol.message_end_len()
-                }
-                crate::Error::Transport(e) => {
-                    panic!("should not call send when there is a transport error: {e:?}")
-                }
-                crate::Error::Protocol(e) => {
-                    let e = ApplicationError::new(
-                        ApplicationErrorKind::PROTOCOL_ERROR,
-                        e.message.clone(),
-                    );
-                    protocol.message_begin_len(&ident)
-                        + e.size(protocol)
-                        + protocol.message_end_len()
-                }
-                crate::Error::Basic(e) => {
-                    let e = ApplicationError::new(
-                        ApplicationErrorKind::INTERNAL_ERROR,
-                        e.message.clone(),
-                    );
-                    protocol.message_begin_len(&ident)
-                        + e.size(protocol)
-                        + protocol.message_end_len()
-                }
-                crate::Error::Anyhow(e) => {
-                    let e =
-                        ApplicationError::new(ApplicationErrorKind::INTERNAL_ERROR, e.to_string());
-                    protocol.message_begin_len(&ident)
-                        + e.size(protocol)
-                        + protocol.message_end_len()
-                }
-            },
+            Err(inner) => {
+                protocol.message_begin_len(&ident)
+                    + inner.size(protocol)
+                    + protocol.message_end_len()
+            }
         }
     }
 }
@@ -138,7 +112,10 @@ where
     U: EntryMessage + Send,
 {
     #[inline]
-    pub(crate) fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), EncodeError> {
+    pub(crate) fn encode<T: TOutputProtocol>(
+        &self,
+        protocol: &mut T,
+    ) -> Result<(), ThriftException> {
         let ident = TMessageIdentifier::new(
             self.meta.method.clone(),
             self.meta.msg_type,
@@ -149,37 +126,10 @@ where
                 protocol.write_message_begin(&ident)?;
                 v.encode(protocol)?;
             }
-            Err(e) => match e {
-                crate::Error::Application(e) => {
-                    protocol.write_message_begin(&ident)?;
-                    e.encode(protocol)?;
-                }
-                crate::Error::Protocol(e) => {
-                    protocol.write_message_begin(&ident)?;
-                    let e = ApplicationError::new(
-                        ApplicationErrorKind::PROTOCOL_ERROR,
-                        e.message.clone(),
-                    );
-                    e.encode(protocol)?;
-                }
-                crate::Error::Transport(e) => {
-                    panic!("should not call send when there is a transport error: {e:?}");
-                }
-                crate::Error::Basic(e) => {
-                    protocol.write_message_begin(&ident)?;
-                    let e = ApplicationError::new(
-                        ApplicationErrorKind::INTERNAL_ERROR,
-                        e.message.clone(),
-                    );
-                    e.encode(protocol)?;
-                }
-                crate::Error::Anyhow(e) => {
-                    protocol.write_message_begin(&ident)?;
-                    let e =
-                        ApplicationError::new(ApplicationErrorKind::INTERNAL_ERROR, e.to_string());
-                    e.encode(protocol)?;
-                }
-            },
+            Err(e) => {
+                protocol.write_message_begin(&ident)?;
+                e.encode(protocol)?;
+            }
         }
         protocol.write_message_end()?;
         Ok(())
@@ -189,13 +139,13 @@ where
     pub(crate) fn decode<Cx: ThriftContext, T: TInputProtocol>(
         protocol: &mut T,
         cx: &mut Cx,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, ThriftException> {
         let msg_ident = protocol.read_message_begin()?;
 
         cx.handle_decoded_msg_ident(&msg_ident);
 
         let res = match msg_ident.message_type {
-            TMessageType::Exception => Err(crate::Error::Application(Message::decode(protocol)?)),
+            TMessageType::Exception => Err(ApplicationException::decode(protocol)?),
             _ => Ok(U::decode(protocol, &msg_ident)?),
         };
         protocol.read_message_end()?;
@@ -213,15 +163,13 @@ where
     pub(crate) async fn decode_async<Cx: ThriftContext + Send, T: TAsyncInputProtocol>(
         protocol: &mut T,
         cx: &mut Cx,
-    ) -> Result<Self, DecodeError> {
+    ) -> Result<Self, ThriftException> {
         let msg_ident = protocol.read_message_begin().await?;
 
         cx.handle_decoded_msg_ident(&msg_ident);
 
         let res = match msg_ident.message_type {
-            TMessageType::Exception => Err(crate::Error::Application(
-                <ApplicationError as Message>::decode_async(protocol).await?,
-            )),
+            TMessageType::Exception => Err(ApplicationException::decode_async(protocol).await?),
             _ => Ok(U::decode_async(protocol, &msg_ident).await?),
         };
         protocol.read_message_end().await?;

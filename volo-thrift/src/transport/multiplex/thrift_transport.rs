@@ -7,8 +7,8 @@ use std::{
 };
 
 use metainfo::MetaInfo;
+use pilota::thrift::{ApplicationException, ApplicationExceptionKind};
 use pin_project::pin_project;
-use rustc_hash;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     sync::{oneshot, Mutex},
@@ -22,7 +22,7 @@ use crate::{
     codec::{Decoder, Encoder, MakeCodec},
     context::{ClientContext, ThriftContext},
     transport::pool::{Poolable, Reservation},
-    ApplicationError, ApplicationErrorKind, EntryMessage, Error, ThriftMessage,
+    ClientError, EntryMessage, ThriftMessage,
 };
 
 lazy_static::lazy_static! {
@@ -40,7 +40,7 @@ pub struct ThriftTransport<E, Resp> {
             rustc_hash::FxHashMap<
                 i32,
                 oneshot::Sender<
-                    crate::Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>>,
+                    Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>, ClientError>,
                 >,
             >,
         >,
@@ -96,7 +96,7 @@ where
                 rustc_hash::FxHashMap<
                     i32,
                     oneshot::Sender<
-                        crate::Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>>,
+                        Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>, ClientError>,
                     >,
                 >,
             >,
@@ -135,10 +135,14 @@ where
                             let mut tx_map = inner_tx_map.lock().await;
                             inner_read_error.store(true, std::sync::atomic::Ordering::Relaxed);
                             for (_, tx) in tx_map.drain() {
-                                let _ = tx.send(Err(Error::Application(ApplicationError::new(
-                                    ApplicationErrorKind::UNKNOWN,
-                                    format!("multiplex connection error: {e}, target: {target}"),
-                                ))));
+                                let _ = tx.send(Err(ClientError::Application(
+                                    ApplicationException::new(
+                                        ApplicationExceptionKind::UNKNOWN,
+                                        format!(
+                                            "multiplex connection error: {e}, target: {target}"
+                                        ),
+                                    ),
+                                )));
                             }
                             return;
                         }
@@ -198,17 +202,17 @@ where
         cx: &mut ClientContext,
         msg: ThriftMessage<Req>,
         oneway: bool,
-    ) -> Result<Option<ThriftMessage<Resp>>, Error> {
+    ) -> Result<Option<ThriftMessage<Resp>>, ClientError> {
         // check error and closed
         if self.read_error.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(Error::Application(ApplicationError::new(
-                ApplicationErrorKind::UNKNOWN,
+            return Err(ClientError::Application(ApplicationException::new(
+                ApplicationExceptionKind::UNKNOWN,
                 "multiplex connection error".to_string(),
             )));
         }
         if self.read_closed.load(std::sync::atomic::Ordering::Relaxed) {
-            return Err(Error::Application(ApplicationError::new(
-                ApplicationErrorKind::UNKNOWN,
+            return Err(ClientError::Application(ApplicationException::new(
+                ApplicationExceptionKind::UNKNOWN,
                 "multiplex connection closed".to_string(),
             )));
         }
@@ -226,8 +230,8 @@ where
             // not be reused
             self.write_error
                 .store(true, std::sync::atomic::Ordering::Relaxed);
-            return Err(Error::Application(ApplicationError::new(
-                ApplicationErrorKind::UNKNOWN,
+            return Err(ClientError::Application(ApplicationException::new(
+                ApplicationExceptionKind::UNKNOWN,
                 "multiplex connection is dirty".to_string(),
             )));
         }
@@ -279,8 +283,8 @@ where
             },
             Err(e) => {
                 tracing::error!("[VOLO] multiplex connection oneshot recv error: {e}");
-                Err(Error::Application(ApplicationError::new(
-                    ApplicationErrorKind::UNKNOWN,
+                Err(ClientError::Application(ApplicationException::new(
+                    ApplicationExceptionKind::UNKNOWN,
                     format!("multiplex connection oneshot recv error: {e}"),
                 )))
             }
@@ -301,7 +305,7 @@ where
         &mut self,
         cx: &mut ClientContext,
         target: Address,
-    ) -> Result<Option<ThriftMessage<T>>, Error> {
+    ) -> Result<Option<ThriftMessage<T>>, ClientError> {
         let thrift_msg = self.decoder.decode(cx).await.map_err(|e| {
             tracing::error!(
                 "[VOLO] transport[{}] decode error: {}, target: {}",
@@ -344,7 +348,7 @@ where
         &mut self,
         cx: &mut impl ThriftContext,
         msg: ThriftMessage<T>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), ClientError> {
         self.encoder.encode(cx, msg).await.map_err(|mut e| {
             e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
             tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);

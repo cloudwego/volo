@@ -35,9 +35,8 @@ use crate::{
         DefaultMakeCodec, MakeCodec,
     },
     context::{ClientContext, Config, CLIENT_CONTEXT_CACHE},
-    error::{Error, Result},
     transport::{pingpong, pool},
-    EntryMessage, ThriftMessage,
+    ClientError, EntryMessage, ThriftMessage,
 };
 
 mod callopt;
@@ -468,18 +467,18 @@ where
 {
     type Response = Option<Resp>;
 
-    type Error = Error;
+    type Error = ClientError;
 
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ClientContext,
         req: Req,
     ) -> Result<Self::Response, Self::Error> {
-        let msg = ThriftMessage::mk_client_msg(cx, Ok(req));
+        let msg = ThriftMessage::mk_client_msg(cx, req);
         let resp = self.inner.call(cx, msg).await;
         match resp {
             Ok(Some(ThriftMessage { data: Ok(data), .. })) => Ok(Some(data)),
-            Ok(Some(ThriftMessage { data: Err(e), .. })) => Err(e),
+            Ok(Some(ThriftMessage { data: Err(e), .. })) => Err(e.into()),
             Err(e) => Err(e),
             Ok(None) => Ok(None),
         }
@@ -500,7 +499,7 @@ where
     >,
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
-    <LB::Layer as Layer<IL::Service>>::Service: Service<ClientContext, Req, Response = Option<Resp>, Error = Error>
+    <LB::Layer as Layer<IL::Service>>::Service: Service<ClientContext, Req, Response = Option<Resp>, Error = ClientError>
         + 'static
         + Send
         + Clone
@@ -510,13 +509,13 @@ where
     IL: Layer<MessageService<Resp, MkT, MkC>>,
     IL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + Sync + Clone + Send + 'static,
-    <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<Error>,
+    <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<ClientError>,
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
-    OL: Layer<BoxCloneService<ClientContext, Req, Option<Resp>, Error>>,
+    OL: Layer<BoxCloneService<ClientContext, Req, Option<Resp>, ClientError>>,
     OL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone + Sync,
-    <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<Error>,
+    <OL::Service as Service<ClientContext, Req>>::Error: Send + Sync + Into<ClientError>,
 {
     /// Build volo client.
     pub fn build(mut self) -> C::Target {
@@ -670,7 +669,7 @@ macro_rules! impl_client {
                     crate::context::ClientContext,
                     Req,
                     Response = Option<Res>,
-                    Error = crate::Error,
+                    Error = crate::ClientError,
                 > + Sync
                 + Send
                 + 'static,
@@ -694,7 +693,7 @@ macro_rules! impl_client {
                     crate::context::ClientContext,
                     Req,
                     Response = Option<Res>,
-                    Error = crate::Error,
+                    Error = crate::ClientError,
                 > + Sync
                 + Send
                 + 'static,

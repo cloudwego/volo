@@ -14,12 +14,11 @@ pub struct Timeout<S> {
 impl<Req, S> Service<ClientContext, Req> for Timeout<S>
 where
     Req: 'static + Send,
-    S: Service<ClientContext, Req> + 'static + Send + Sync,
-    S::Error: Send + Sync + Into<crate::Error>,
+    S: Service<ClientContext, Req, Error = crate::ClientError> + 'static + Send + Sync,
 {
     type Response = S::Response;
 
-    type Error = crate::Error;
+    type Error = S::Error;
 
     async fn call<'s, 'cx>(
         &'s self,
@@ -40,7 +39,11 @@ where
                             duration
                         );
                         warn!(msg);
-                        Err(crate::BasicError::new(crate::BasicErrorKind::RpcTimeout, msg).into())
+                        Err(crate::ApplicationException::new(
+                            crate::ApplicationExceptionKind::INTERNAL_ERROR,
+                            msg,
+                        )
+                        .into())
                     }
                 }
             }

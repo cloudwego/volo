@@ -1,5 +1,6 @@
 use std::sync::atomic::AtomicUsize;
 
+use pilota::thrift::{ApplicationException, ApplicationExceptionKind};
 use pin_project::pin_project;
 use tokio::io::{AsyncRead, AsyncWrite};
 
@@ -7,7 +8,7 @@ use crate::{
     codec::{Decoder, Encoder, MakeCodec},
     context::{ClientContext, ThriftContext},
     transport::pool::Poolable,
-    ApplicationError, ApplicationErrorKind, EntryMessage, Error, ThriftMessage,
+    ClientError, EntryMessage, ThriftMessage,
 };
 
 lazy_static::lazy_static! {
@@ -66,7 +67,7 @@ where
         cx: &mut ClientContext,
         msg: ThriftMessage<Req>,
         oneway: bool,
-    ) -> Result<Option<ThriftMessage<Resp>>, Error> {
+    ) -> Result<Option<ThriftMessage<Resp>>, ClientError> {
         self.write_half.send(cx, msg).await?;
         if oneway {
             return Ok(None);
@@ -88,7 +89,7 @@ where
     pub async fn try_next<T: EntryMessage>(
         &mut self,
         cx: &mut ClientContext,
-    ) -> Result<Option<ThriftMessage<T>>, Error> {
+    ) -> Result<Option<ThriftMessage<T>>, ClientError> {
         let thrift_msg = self.decoder.decode(cx).await.map_err(|e| {
             let mut e = e;
             e.append_msg(&format!(", cx: {:?}", cx));
@@ -105,8 +106,8 @@ where
                     cx.seq_id,
                     cx,
                 );
-                return Err(Error::Application(ApplicationError::new(
-                    ApplicationErrorKind::BAD_SEQUENCE_ID,
+                return Err(ClientError::Application(ApplicationException::new(
+                    ApplicationExceptionKind::BAD_SEQUENCE_ID,
                     format!("seq_id not match, cx: {:?}", cx),
                 )));
             }
@@ -129,7 +130,7 @@ where
         &mut self,
         cx: &mut impl ThriftContext,
         msg: ThriftMessage<T>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), ClientError> {
         self.encoder.encode(cx, msg).await.map_err(|mut e| {
             e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
             tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);

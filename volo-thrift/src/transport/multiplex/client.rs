@@ -1,7 +1,6 @@
 use std::{io, marker::PhantomData};
 
 use motore::service::{Service, UnaryService};
-use pilota::thrift::TransportErrorKind;
 use volo::net::{dial::MakeTransport, Address};
 
 use crate::{
@@ -12,7 +11,7 @@ use crate::{
         multiplex::thrift_transport::ThriftTransport,
         pool::{Config, PooledMakeTransport, Ver},
     },
-    EntryMessage, Error, ThriftMessage,
+    ClientError, EntryMessage, ThriftMessage,
 };
 
 pub struct MakeClientTransport<MkT, MkC, Resp>
@@ -123,7 +122,7 @@ where
 {
     type Response = Option<ThriftMessage<Resp>>;
 
-    type Error = crate::Error;
+    type Error = ClientError;
 
     async fn call<'cx, 's>(
         &'s self,
@@ -133,7 +132,7 @@ where
         let rpc_info = &cx.rpc_info;
         let target = rpc_info.callee().address().ok_or_else(|| {
             let msg = format!("address is required, rpcinfo: {:?}", rpc_info);
-            crate::Error::Transport(io::Error::new(io::ErrorKind::InvalidData, msg).into())
+            ClientError::Transport(io::Error::new(io::ErrorKind::InvalidData, msg).into())
         })?;
         let oneway = cx.message_type == TMessageType::OneWay;
         cx.stats.record_make_transport_start_at();
@@ -142,10 +141,12 @@ where
         let resp = transport.send(cx, req, oneway).await;
         if let Ok(None) = resp {
             if !oneway {
-                return Err(Error::Transport(pilota::thrift::TransportError::new(
-                    TransportErrorKind::EndOfFile,
-                    format!("an unexpected end of file from server, cx: {:?}", cx),
-                )));
+                return Err(ClientError::Transport(
+                    pilota::thrift::TransportException::from(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        format!("an unexpected end of file from server, cx: {:?}", cx),
+                    )),
+                ));
             }
         }
         if cx.transport.should_reuse && resp.is_ok() {

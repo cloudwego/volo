@@ -13,7 +13,7 @@
 // Ref:
 // - https://github.com/rust-lang/rust-clippy/issues/12154
 // - https://github.com/rust-lang/rust-clippy/pull/12177
-#![allow(clippy::unconditional_recursion)]
+#![allow(unconditional_recursion)]
 
 #[macro_use]
 mod cfg;

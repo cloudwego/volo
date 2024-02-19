@@ -46,11 +46,11 @@ impl<MT, K: Key> UnaryService<(K, Ver)> for PooledMakeTransport<MT, K>
 where
     MT: UnaryService<K> + Send + Clone + 'static + Sync,
     MT::Response: Poolable + Send,
-    MT::Error: Into<crate::Error> + Send,
+    MT::Error: Into<crate::ClientError> + Send,
 {
     type Response = Pooled<K, MT::Response>;
 
-    type Error = crate::Error;
+    type Error = crate::ClientError;
 
     async fn call(&self, kv: (K, Ver)) -> Result<Self::Response, Self::Error> {
         let mt = self.inner.clone();
