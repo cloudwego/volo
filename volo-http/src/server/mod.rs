@@ -321,6 +321,8 @@ where
             let peer = peer.clone();
             let mut cx = ServerContext::new(peer);
 
+            cx.stats.set_uri(request.uri().to_owned());
+            cx.stats.set_method(request.method().to_owned());
             if let Some(req_size) = request.size_hint().exact() {
                 cx.common_stats.set_req_size(req_size);
             }

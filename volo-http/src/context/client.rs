@@ -51,16 +51,7 @@ pub struct ClientStats {
 impl ClientStats {
     stat_impl!(transport_start_at);
     stat_impl!(transport_end_at);
-
-    #[inline]
-    pub fn status_code(&self) -> Option<StatusCode> {
-        self.status_code
-    }
-
-    #[inline]
-    pub fn set_status_code(&mut self, status: StatusCode) {
-        self.status_code = Some(status);
-    }
+    stat_impl_getter_and_setter!(status_code, StatusCode);
 }
 
 #[derive(Clone, Debug, Default)]
