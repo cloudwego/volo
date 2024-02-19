@@ -215,6 +215,7 @@ cfg_rustls_or_native_tls! {
         async fn call(&self, addr: Address) -> Result<Self::Response, Self::Error> {
             match addr {
                 Address::Ip(addr) => {
+                    #[allow(unused_variables)]
                     let tcp = make_tcp_connection(&self.cfg, addr).await?;
 
                     match &self.tls_config.connector {

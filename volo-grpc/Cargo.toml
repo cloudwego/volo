@@ -72,5 +72,6 @@ tracing-subscriber.workspace = true
 [features]
 default = []
 
-rustls = ["tokio-rustls"]
-native-tls = ["tokio-native-tls"]
+rustls = ["tokio-rustls", "volo/rustls"]
+native-tls = ["tokio-native-tls", "volo/native-tls"]
+native-tls-vendored = ["native-tls", "volo/native-tls-vendored"]

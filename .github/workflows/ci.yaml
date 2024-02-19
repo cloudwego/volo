@@ -36,12 +36,15 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
+          apt update
+          apt install -y libssl-dev
           cargo check -p volo-thrift --no-default-features
           cargo check -p volo-thrift --no-default-features --features multiplex
           cargo check -p volo-thrift --no-default-features --features unsafe-codec
           cargo check -p volo-grpc --no-default-features
           cargo check -p volo-grpc --no-default-features --features rustls
-          cargo check -p volo-grpc --no-default-features --features native-tls,vendored
+          cargo check -p volo-grpc --no-default-features --features native-tls
+          cargo check -p volo-grpc --no-default-features --features native-tls-vendored
           cargo check -p volo-http --no-default-features
           cargo check -p volo-http --no-default-features --features default_client
           cargo check -p volo-http --no-default-features --features default_server
@@ -64,12 +67,15 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
+          apt update
+          apt install -y libssl-dev
           cargo check -p volo-thrift --no-default-features
           cargo check -p volo-thrift --no-default-features --features multiplex
           cargo check -p volo-thrift --no-default-features --features unsafe-codec
           cargo check -p volo-grpc --no-default-features
           cargo check -p volo-grpc --no-default-features --features rustls
-          cargo check -p volo-grpc --no-default-features --features native-tls,vendored
+          cargo check -p volo-grpc --no-default-features --features native-tls
+          cargo check -p volo-grpc --no-default-features --features native-tls-vendored
           cargo check -p volo-http --no-default-features
           cargo check -p volo-http --no-default-features --features default_client
           cargo check -p volo-http --no-default-features --features default_server
@@ -98,7 +104,8 @@ jobs:
           cargo check -p volo-thrift --no-default-features --features unsafe-codec
           cargo check -p volo-grpc --no-default-features
           cargo check -p volo-grpc --no-default-features --features rustls
-          cargo check -p volo-grpc --no-default-features --features native-tls,vendored
+          cargo check -p volo-grpc --no-default-features --features native-tls
+          cargo check -p volo-grpc --no-default-features --features native-tls-vendored
           cargo check -p volo-http --no-default-features
           cargo check -p volo-http --no-default-features --features default_client
           cargo check -p volo-http --no-default-features --features default_server
@@ -127,7 +134,8 @@ jobs:
           cargo check -p volo-thrift --no-default-features --features unsafe-codec
           cargo check -p volo-grpc --no-default-features
           cargo check -p volo-grpc --no-default-features --features rustls
-          cargo check -p volo-grpc --no-default-features --features native-tls,vendored
+          cargo check -p volo-grpc --no-default-features --features native-tls
+          cargo check -p volo-grpc --no-default-features --features native-tls-vendored
           cargo check -p volo-http --no-default-features
           cargo check -p volo-http --no-default-features --features default_client
           cargo check -p volo-http --no-default-features --features default_server
