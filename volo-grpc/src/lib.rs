@@ -3,17 +3,6 @@
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
-// The clippy rule `unconditional_recursion` has a bug on `PartialEq` between `T` and `&T`, or
-// between `T` and something with `Deref<Target = &T>`.
-//
-// An issue has been brought up to the community, and a pull request is being reviewed.
-//
-// Once the issue is fixed, this line of code will be removed.
-//
-// Ref:
-// - https://github.com/rust-lang/rust-clippy/issues/12154
-// - https://github.com/rust-lang/rust-clippy/pull/12177
-#![allow(unconditional_recursion)]
 
 #[macro_use]
 mod cfg;

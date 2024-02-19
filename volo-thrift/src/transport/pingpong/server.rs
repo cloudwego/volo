@@ -1,4 +1,3 @@
-#![allow(unused_must_use)]
 use std::{
     cell::RefCell,
     sync::{atomic::Ordering, Arc},
@@ -55,7 +54,10 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
 
                 let msg = tokio::select! {
                     _ = &mut notified => {
-                        tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
+                        tracing::trace!(
+                            "[VOLO] close conn by notified, peer_addr: {:?}",
+                            peer_addr,
+                        );
                         return;
                     },
                     out = decoder.decode(&mut cx) => out
@@ -81,20 +83,33 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                 cx.transport.set_conn_reset(true);
                             }
 
-                            let req_msg_type =  cx.req_msg_type.expect("`req_msg_type` should be set.");
+                            let req_msg_type =
+                                cx.req_msg_type.expect("`req_msg_type` should be set.");
 
                             if req_msg_type != TMessageType::OneWay {
                                 cx.msg_type = Some(match resp {
                                     Ok(_) => TMessageType::Reply,
                                     Err(_) => TMessageType::Exception,
                                 });
-                                let msg =  ThriftMessage::mk_server_resp(&cx, resp.map_err(|e|server_error_to_application_exception(e.into())));
+                                let msg = ThriftMessage::mk_server_resp(
+                                    &cx,
+                                    resp.map_err(|e| {
+                                        server_error_to_application_exception(e.into())
+                                    }),
+                                );
                                 if let Err(e) = async {
                                     let result = encoder.encode(&mut cx, msg).await;
                                     span_provider.leave_encode(&cx);
                                     result
-                                }.instrument(span_provider.on_encode(tracing_cx)).await {
-                                    error!("[VOLO] server send response error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
+                                }
+                                .instrument(span_provider.on_encode(tracing_cx))
+                                .await
+                                {
+                                    error!(
+                                        "[VOLO] server send response error: {:?}, cx: {:?}, \
+                                         peer_addr: {:?}",
+                                        e, cx, peer_addr
+                                    );
                                     stat_tracer.iter().for_each(|f| f(&cx));
                                     return Err(());
                                 }
@@ -104,16 +119,33 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                             volo_unreachable!();
                         }
                         Ok(None) => {
-                            trace!("[VOLO] reach eof, connection has been closed by client, peer_addr: {:?}", peer_addr);
+                            trace!(
+                                "[VOLO] reach eof, connection has been closed by client, \
+                                 peer_addr: {:?}",
+                                peer_addr
+                            );
                             return Err(());
                         }
                         Err(e) => {
-                            error!("[VOLO] pingpong server decode error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
+                            error!(
+                                "[VOLO] pingpong server decode error: {:?}, cx: {:?}, peer_addr: \
+                                 {:?}",
+                                e, cx, peer_addr
+                            );
                             cx.msg_type = Some(TMessageType::Exception);
                             if !matches!(e, ThriftException::Transport(_)) {
-                                let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(thrift_exception_to_application_exception(e)));
+                                let msg = ThriftMessage::mk_server_resp(
+                                    &cx,
+                                    Err::<DummyMessage, _>(
+                                        thrift_exception_to_application_exception(e),
+                                    ),
+                                );
                                 if let Err(e) = encoder.encode(&mut cx, msg).await {
-                                    error!("[VOLO] server send error error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
+                                    error!(
+                                        "[VOLO] server send error error: {:?}, cx: {:?}, \
+                                         peer_addr: {:?}",
+                                        e, cx, peer_addr
+                                    );
                                 }
                             }
                             stat_tracer.iter().for_each(|f| f(&cx));
@@ -135,10 +167,13 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                         }
                     });
                     Ok(())
-                }.instrument(span_provider.on_serve(tracing_cx)).await;
+                }
+                .instrument(span_provider.on_serve(tracing_cx))
+                .await;
                 if result.is_err() {
                     break;
                 }
             }
-        }).await;
+        })
+        .await;
 }

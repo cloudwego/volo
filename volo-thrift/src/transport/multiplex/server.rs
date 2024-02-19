@@ -1,4 +1,3 @@
-#![allow(unused_must_use)]
 use std::{
     cell::RefCell,
     sync::{atomic::Ordering, Arc},
@@ -47,50 +46,74 @@ pub async fn serve<Svc, Req, Resp, E, D>(
         let peer_addr = peer_addr.clone();
         async move {
             metainfo::METAINFO
-            .scope(RefCell::new(MetaInfo::default()), async {
-                loop {
-                    tokio::select! {
-                        // receives a response, we need to send it back to client
-                        msg = send_rx.recv() => {
-                            match msg {
-                                Some((mi, mut cx, msg)) => {
-                                    if let Err(e) = metainfo::METAINFO.scope(RefCell::new(mi), encoder.encode::<Resp, ServerContext>(&mut cx, msg)).await {
+                .scope(RefCell::new(MetaInfo::default()), async {
+                    loop {
+                        tokio::select! {
+                            // receives a response, we need to send it back to client
+                            msg = send_rx.recv() => {
+                                match msg {
+                                    Some((mi, mut cx, msg)) => {
+                                        if let Err(e) = metainfo::METAINFO
+                                            .scope(
+                                                RefCell::new(mi),
+                                                encoder.encode::<Resp, ServerContext>(&mut cx, msg),
+                                            )
+                                            .await
+                                        {
+                                            // log it
+                                            error!(
+                                                "[VOLO] server send response error: {:?}, cx: \
+                                                 {:?}, peer_addr: {:?}",
+                                                e, cx, peer_addr
+                                            );
+                                            stat_tracer.iter().for_each(|f| f(&cx));
+                                            return;
+                                        }
+                                        stat_tracer.iter().for_each(|f| f(&cx));
+                                    }
+                                    None => {
                                         // log it
-                                        error!("[VOLO] server send response error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
+                                        trace!(
+                                            "[VOLO] server send channel closed, peer_addr: {:?}",
+                                            peer_addr
+                                        );
+                                        return;
+                                    }
+                                }
+                            }
+                            // receives an error, we need to close the connection
+                            error_msg = error_send_rx.recv() => {
+                                match error_msg {
+                                    Some((mut cx, msg)) => {
+                                        if let Err(e) = encoder
+                                            .encode::<DummyMessage, ServerContext>(&mut cx, msg)
+                                            .await
+                                        {
+                                            // log it
+                                            error!(
+                                                "[VOLO] server send error error: {:?}, cx: {:?}, \
+                                                 peer_addr: {:?}",
+                                                e, cx, peer_addr
+                                            );
+                                        }
                                         stat_tracer.iter().for_each(|f| f(&cx));
                                         return;
                                     }
-                                    stat_tracer.iter().for_each(|f| f(&cx));
-                                }
-                                None => {
-                                    // log it
-                                    trace!("[VOLO] server send channel closed, peer_addr: {:?}", peer_addr);
-                                    return;
-                                }
-                            }
-                        },
-                        // receives an error, we need to close the connection
-                        error_msg = error_send_rx.recv() => {
-                            match error_msg {
-                                Some((mut cx, msg)) => {
-                                    if let Err(e) = encoder.encode::<DummyMessage, ServerContext>(&mut cx, msg).await {
+                                    None => {
                                         // log it
-                                        error!("[VOLO] server send error error: {:?}, cx: {:?}, peer_addr: {:?}", e, cx, peer_addr);
+                                        trace!(
+                                            "[VOLO] server send error channel closed, peer_addr: \
+                                             {:?}",
+                                            peer_addr
+                                        );
+                                        return;
                                     }
-                                    stat_tracer.iter().for_each(|f| f(&cx));
-                                    return;
-                                }
-                                None => {
-                                    // log it
-                                    trace!("[VOLO] server send error channel closed, peer_addr: {:?}", peer_addr);
-                                    return;
                                 }
                             }
                         }
                     }
-                }
-            })
-            .await;
+                })
+                .await;
         }
     });
 
@@ -100,14 +123,19 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                 // new context
                 let mut cx = ServerContext::default();
                 if let Some(peer_addr) = &peer_addr {
-                    cx.rpc_info_mut().caller_mut().set_address(peer_addr.clone());
+                    cx.rpc_info_mut()
+                        .caller_mut()
+                        .set_address(peer_addr.clone());
                 }
 
                 tokio::select! {
                     _ = &mut notified => {
-                        tracing::trace!("[VOLO] close conn by notified, peer_addr: {:?}", peer_addr);
-                        return
-                    },
+                        tracing::trace!(
+                            "[VOLO] close conn by notified, peer_addr: {:?}",
+                            peer_addr
+                        );
+                        return;
+                    }
                     // receives a message
                     msg = decoder.decode(&mut cx) => {
                         tracing::debug!(
@@ -122,15 +150,27 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 volo_unreachable!();
                             }
                             Ok(None) => {
-                                trace!("[VOLO] reach eof, connection has been closed by client, peer_addr: {:?}", peer_addr);
+                                trace!(
+                                    "[VOLO] reach eof, connection has been closed by client, \
+                                     peer_addr: {:?}",
+                                    peer_addr
+                                );
                                 return;
                             }
                             Err(e) => {
-                                error!("[VOLO] multiplex server decode error {:?}, peer_addr: {:?}", e, peer_addr);
+                                error!(
+                                    "[VOLO] multiplex server decode error {:?}, peer_addr: {:?}",
+                                    e, peer_addr
+                                );
                                 cx.msg_type = Some(TMessageType::Exception);
                                 if !matches!(e, ThriftException::Transport(_)) {
-                                    let msg = ThriftMessage::mk_server_resp(&cx, Err::<DummyMessage, _>(thrift_exception_to_application_exception(e)));
-                                    error_send_tx.send((cx, msg)).await;
+                                    let msg = ThriftMessage::mk_server_resp(
+                                        &cx,
+                                        Err::<DummyMessage, _>(
+                                            thrift_exception_to_application_exception(e),
+                                        ),
+                                    );
+                                    let _ = error_send_tx.send((cx, msg)).await;
                                 }
                                 return;
                             }
@@ -141,26 +181,34 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                         let exit_mark = exit_mark.clone();
                         let send_tx = send_tx.clone();
                         let mi = metainfo::METAINFO.with(|m| m.take());
-                        tokio::spawn(async  {
-                            metainfo::METAINFO.scope(RefCell::new(mi), async move {
-                                cx.stats.record_process_start_at();
-                                let resp = svc.call(&mut cx, req).await;
-                                cx.stats.record_process_end_at();
+                        tokio::spawn(async {
+                            metainfo::METAINFO
+                                .scope(RefCell::new(mi), async move {
+                                    cx.stats.record_process_start_at();
+                                    let resp = svc.call(&mut cx, req).await;
+                                    cx.stats.record_process_end_at();
 
-                                if exit_mark.load(Ordering::Relaxed) {
-                                    cx.transport.set_conn_reset(true);
-                                }
-                                let req_msg_type =  cx.req_msg_type.expect("`req_msg_type` should be set.");
-                                if req_msg_type != TMessageType::OneWay {
-                                    cx.msg_type = Some(match resp {
-                                        Ok(_) => TMessageType::Reply,
-                                        Err(_) => TMessageType::Exception,
-                                    });
-                                    let msg =  ThriftMessage::mk_server_resp(&cx, resp.map_err(|e|server_error_to_application_exception(e.into())));
-                                    let mi = metainfo::METAINFO.with(|m| m.take());
-                                    send_tx.send((mi, cx, msg)).await;
-                                }
-                            }).await;
+                                    if exit_mark.load(Ordering::Relaxed) {
+                                        cx.transport.set_conn_reset(true);
+                                    }
+                                    let req_msg_type =
+                                        cx.req_msg_type.expect("`req_msg_type` should be set.");
+                                    if req_msg_type != TMessageType::OneWay {
+                                        cx.msg_type = Some(match resp {
+                                            Ok(_) => TMessageType::Reply,
+                                            Err(_) => TMessageType::Exception,
+                                        });
+                                        let msg = ThriftMessage::mk_server_resp(
+                                            &cx,
+                                            resp.map_err(|e| {
+                                                server_error_to_application_exception(e.into())
+                                            }),
+                                        );
+                                        let mi = metainfo::METAINFO.with(|m| m.take());
+                                        let _ = send_tx.send((mi, cx, msg)).await;
+                                    }
+                                })
+                                .await;
                         });
                     }
                 }
