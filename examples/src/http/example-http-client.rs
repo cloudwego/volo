@@ -52,7 +52,7 @@ async fn main() -> Result<(), BoxError> {
         "{:?}",
         client
             .post("http://127.0.0.1:8080/user/json_post")?
-            .body(Json(Person {
+            .data(Json(Person {
                 name: "Foo".to_string(),
                 age: 25,
                 phones: vec!["114514".to_string()],

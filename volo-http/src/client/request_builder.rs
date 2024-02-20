@@ -19,14 +19,14 @@ use crate::{
     response::ClientResponse,
 };
 
-pub struct RequestBuilder<'a, S> {
+pub struct RequestBuilder<'a, S, B = Body> {
     client: &'a Client<S>,
     target: Option<Address>,
     uri: Option<Uri>,
-    request: ClientRequest,
+    request: ClientRequest<B>,
 }
 
-impl<'a, S> RequestBuilder<'a, S> {
+impl<'a, S> RequestBuilder<'a, S, Body> {
     pub(crate) fn new(client: &'a Client<S>) -> Self {
         Self {
             client,
@@ -55,6 +55,33 @@ impl<'a, S> RequestBuilder<'a, S> {
         })
     }
 
+    pub fn data<D>(mut self, data: D) -> Result<Self>
+    where
+        D: TryInto<Body>,
+        D::Error: Error + Send + Sync + 'static,
+    {
+        let (parts, _) = self.request.into_parts();
+        self.request = Request::from_parts(parts, data.try_into().map_err(builder_error)?);
+
+        Ok(self)
+    }
+
+    #[cfg(feature = "__json")]
+    pub fn json<T>(mut self, json: &T) -> Result<Self>
+    where
+        T: serde::Serialize,
+    {
+        let (parts, _) = self.request.into_parts();
+        self.request = Request::from_parts(
+            parts,
+            crate::json::serialize(json).map_err(builder_error)?.into(),
+        );
+
+        Ok(self)
+    }
+}
+
+impl<'a, S, B> RequestBuilder<'a, S, B> {
     pub fn method(mut self, method: Method) -> Self {
         *self.request.method_mut() = method;
         self
@@ -132,31 +159,33 @@ impl<'a, S> RequestBuilder<'a, S> {
         self.target.as_ref()
     }
 
-    pub fn body<B>(mut self, body: B) -> Result<Self>
-    where
-        B: TryInto<Body>,
-        B::Error: Error + Send + Sync + 'static,
-    {
+    pub fn body<B2>(self, body: B2) -> RequestBuilder<'a, S, B2> {
         let (parts, _) = self.request.into_parts();
-        self.request = Request::from_parts(parts, body.try_into().map_err(builder_error)?);
-        Ok(self)
+        let request = Request::from_parts(parts, body);
+
+        RequestBuilder {
+            client: self.client,
+            target: self.target,
+            uri: self.uri,
+            request,
+        }
     }
 
-    pub fn body_ref(&self) -> &Body {
+    pub fn body_ref(&self) -> &B {
         self.request.body()
     }
 }
 
-impl<'a, S> RequestBuilder<'a, S>
+impl<'a, S, B> RequestBuilder<'a, S, B>
 where
-    S: Service<ClientContext, ClientRequest, Response = ClientResponse, Error = ClientError>
+    S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
         + Send
         + Sync
         + 'static,
+    B: Send + 'static,
 {
     pub async fn send(self) -> Result<ClientResponse> {
         let uri = self.uri.ok_or_else(no_uri)?;
-        let request = self.request;
         let target = match self.target {
             Some(target) => target,
             None => match parse_address(&uri) {
@@ -172,6 +201,8 @@ where
                 }
             },
         };
-        self.client.send_request(uri.host(), target, request).await
+        self.client
+            .send_request(uri.host(), target, self.request)
+            .await
     }
 }

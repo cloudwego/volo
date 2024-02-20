@@ -20,12 +20,13 @@ impl<S> MetaService<S> {
     }
 }
 
-impl<S> Service<ClientContext, ClientRequest> for MetaService<S>
+impl<S, B> Service<ClientContext, ClientRequest<B>> for MetaService<S>
 where
-    S: Service<ClientContext, ClientRequest, Response = ClientResponse, Error = ClientError>
+    S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
         + Send
         + Sync
         + 'static,
+    B: Send + 'static,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -33,7 +34,7 @@ where
     async fn call(
         &self,
         cx: &mut ClientContext,
-        mut req: ClientRequest,
+        mut req: ClientRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         let config = cx.rpc_info().config();
         let host = match config.host {
