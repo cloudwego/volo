@@ -14,15 +14,16 @@ use crate::utils::macros::impl_deref_and_deref_mut;
 pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 impl ClientContext {
-    pub(crate) fn new(target: Address) -> Self {
+    pub fn new(target: Address, stat_enable: bool) -> Self {
         let mut cx = RpcCx::new(
-            RpcInfo::with_role(Role::Client),
+            RpcInfo::<Config>::with_role(Role::Client),
             ClientCxInner {
                 stats: ClientStats::default(),
                 common_stats: CommonStats::default(),
             },
         );
         cx.rpc_info_mut().callee_mut().set_address(target);
+        cx.rpc_info_mut().config_mut().stat_enable = stat_enable;
         Self(cx)
     }
 }
@@ -54,9 +55,19 @@ impl ClientStats {
     stat_impl_getter_and_setter!(status_code, StatusCode);
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Config {
-    pub(crate) host: Host,
+    pub host: Host,
+    pub stat_enable: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            host: Host::default(),
+            stat_enable: true,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]

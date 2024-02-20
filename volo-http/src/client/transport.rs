@@ -5,7 +5,7 @@ use http_body::Body;
 use hyper::client::conn::http1;
 use hyper_util::rt::TokioIo;
 use motore::{make::MakeConnection, service::Service};
-use volo::net::Address;
+use volo::{context::Context, net::Address};
 
 use crate::{
     context::ClientContext,
@@ -78,13 +78,26 @@ where
         }
 
         let target = cx.rpc_info.callee().address().ok_or_else(no_address)?;
+        let stat_enable = cx.rpc_info().config().stat_enable;
 
-        cx.stats.record_transport_start_at();
+        if stat_enable {
+            if let Some(req_size) = req.size_hint().exact() {
+                cx.common_stats.set_req_size(req_size);
+            }
+            cx.stats.record_transport_start_at();
+        }
+
         let resp = self.request(target, req).await;
-        cx.stats.record_transport_end_at();
 
-        if let Ok(response) = resp.as_ref() {
-            cx.stats.set_status_code(response.status());
+        if stat_enable {
+            cx.stats.record_transport_end_at();
+
+            if let Ok(response) = resp.as_ref() {
+                cx.stats.set_status_code(response.status());
+                if let Some(resp_size) = response.size_hint().exact() {
+                    cx.common_stats.set_resp_size(resp_size);
+                }
+            }
         }
 
         resp

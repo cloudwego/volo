@@ -391,9 +391,9 @@ fn tracer(cx: &ServerContext) {
         "process start at {:?}, end at {:?}, req size: {:?}, resp size: {:?}, resp status: {:?}",
         cx.stats.process_start_at().unwrap(),
         cx.stats.process_end_at().unwrap(),
-        cx.common_stats.req_size().unwrap_or(0),
-        cx.common_stats.resp_size().unwrap_or(0),
-        cx.stats.status_code().unwrap(),
+        cx.common_stats.req_size().unwrap_or(&0),
+        cx.common_stats.resp_size().unwrap_or(&0),
+        cx.common_stats.status_code().unwrap(),
     );
 }
 
