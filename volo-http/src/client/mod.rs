@@ -43,7 +43,7 @@ const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO
 
 pub struct ClientBuilder<L, MkC, MkT> {
     client_config: ClientConfig,
-    rpc_config: Config,
+    config: Config,
     callee_name: FastStr,
     caller_name: FastStr,
     headers: HeaderMap,
@@ -57,7 +57,7 @@ impl ClientBuilder<Identity, DefaultMkClient, DefaultMakeTransport> {
     pub fn new() -> Self {
         Self {
             client_config: Default::default(),
-            rpc_config: Default::default(),
+            config: Default::default(),
             callee_name: FastStr::empty(),
             caller_name: FastStr::empty(),
             headers: Default::default(),
@@ -79,7 +79,7 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
     pub fn client_maker<MkC2>(self, new_mk_client: MkC2) -> ClientBuilder<L, MkC2, MkT> {
         ClientBuilder {
             client_config: self.client_config,
-            rpc_config: self.rpc_config,
+            config: self.config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
@@ -93,7 +93,7 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
     pub fn layer<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, L>, MkC, MkT> {
         ClientBuilder {
             client_config: self.client_config,
-            rpc_config: self.rpc_config,
+            config: self.config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
@@ -107,7 +107,7 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
     pub fn layer_front<Front>(self, layer: Front) -> ClientBuilder<Stack<L, Front>, MkC, MkT> {
         ClientBuilder {
             client_config: self.client_config,
-            rpc_config: self.rpc_config,
+            config: self.config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
@@ -158,8 +158,21 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
     }
 
     pub fn set_host(mut self, host: Host) -> Self {
-        self.rpc_config.host = host;
+        self.config.host = host;
         self
+    }
+
+    pub fn enable_stat(mut self, enable: bool) -> Self {
+        self.config.stat_enable = enable;
+        self
+    }
+
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    pub fn config_mut(&mut self) -> &mut Config {
+        &mut self.config
     }
 
     pub fn build(mut self) -> MkC::Target
@@ -200,7 +213,7 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
-            rpc_config: self.rpc_config,
+            config: self.config,
         };
         let client = Client {
             transport: service,
@@ -214,7 +227,7 @@ struct ClientInner {
     callee_name: FastStr,
     caller_name: FastStr,
     headers: HeaderMap,
-    rpc_config: Config,
+    config: Config,
 }
 
 #[derive(Clone)]
@@ -282,10 +295,10 @@ impl<S> Client<S> {
                 None => FastStr::empty(),
             }
         };
-        let mut cx = ClientContext::new(target);
+        let mut cx = ClientContext::new(target, true);
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
         cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
-        cx.rpc_info_mut().set_config(self.inner.rpc_config.clone());
+        cx.rpc_info_mut().set_config(self.inner.config.clone());
         self.call(&mut cx, request).await
     }
 }

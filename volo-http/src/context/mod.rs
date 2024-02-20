@@ -1,3 +1,6 @@
+use http::StatusCode;
+use paste::paste;
+
 macro_rules! stat_impl {
     ($t: ident) => {
         paste! {
@@ -41,6 +44,7 @@ macro_rules! stat_impl_getter_and_setter {
 
 #[cfg(feature = "client")]
 pub mod client;
+
 #[cfg(feature = "client")]
 pub use self::client::ClientContext;
 
@@ -54,28 +58,13 @@ pub use self::server::{ConnectionInfo, ServerContext};
 pub struct CommonStats {
     req_size: Option<u64>,
     resp_size: Option<u64>,
+    status_code: Option<StatusCode>,
 }
 
 impl CommonStats {
-    #[inline]
-    pub fn req_size(&self) -> Option<u64> {
-        self.req_size
-    }
-
-    #[inline]
-    pub fn set_req_size(&mut self, size: u64) {
-        self.req_size = Some(size)
-    }
-
-    #[inline]
-    pub fn resp_size(&self) -> Option<u64> {
-        self.resp_size
-    }
-
-    #[inline]
-    pub fn set_resp_size(&mut self, size: u64) {
-        self.resp_size = Some(size)
-    }
+    stat_impl_getter_and_setter!(req_size, u64);
+    stat_impl_getter_and_setter!(resp_size, u64);
+    stat_impl_getter_and_setter!(status_code, StatusCode);
 
     #[inline]
     pub fn reset(&mut self) {

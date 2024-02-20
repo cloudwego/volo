@@ -3,7 +3,7 @@ use http::{
     header,
     request::Parts,
     uri::{Authority, Scheme},
-    HeaderMap, HeaderName, Method, StatusCode, Uri,
+    HeaderMap, HeaderName, Method, Uri,
 };
 use hyper::header::HeaderValue;
 use paste::paste;
@@ -27,9 +27,9 @@ static X_FORWARDED_PROTO: HeaderName = HeaderName::from_static("x-forwarded-prot
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 impl ServerContext {
-    pub(crate) fn new(peer: Address) -> Self {
+    pub fn new(peer: Address, stat_enable: bool) -> Self {
         let mut cx = RpcCx::new(
-            RpcInfo::with_role(Role::Server),
+            RpcInfo::<Config>::with_role(Role::Server),
             ServerCxInner {
                 params: Params::default(),
                 stats: ServerStats::default(),
@@ -37,6 +37,7 @@ impl ServerContext {
             },
         );
         cx.rpc_info_mut().caller_mut().set_address(peer);
+        cx.rpc_info_mut().config_mut().stat_enable = stat_enable;
         Self(cx)
     }
 }
@@ -67,7 +68,6 @@ pub struct ServerStats {
 
     method: Option<Method>,
     uri: Option<Uri>,
-    status_code: Option<StatusCode>,
 }
 
 impl ServerStats {
@@ -75,14 +75,23 @@ impl ServerStats {
     stat_impl!(process_end_at);
     stat_impl_getter_and_setter!(method, Method);
     stat_impl_getter_and_setter!(uri, Uri);
-    stat_impl_getter_and_setter!(status_code, StatusCode);
 }
 
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Config {}
+#[derive(Debug, Clone, Copy)]
+pub struct Config {
+    pub stat_enable: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self { stat_enable: true }
+    }
+}
 
 impl Reusable for Config {
-    fn clear(&mut self) {}
+    fn clear(&mut self) {
+        self.stat_enable = true;
+    }
 }
 
 #[derive(Debug)]

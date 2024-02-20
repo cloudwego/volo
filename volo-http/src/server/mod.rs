@@ -20,7 +20,11 @@ use tokio::sync::Notify;
 use tracing::{info, trace};
 use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
 
-use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
+use crate::{
+    context::{server::Config, ServerContext},
+    request::ServerRequest,
+    response::ServerResponse,
+};
 
 mod into_response;
 pub use self::into_response::IntoResponse;
@@ -46,6 +50,7 @@ type TraceFn = fn(&ServerContext);
 pub struct Server<S, L> {
     service: S,
     layer: L,
+    config: Config,
     stat_tracer: Vec<TraceFn>,
     shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>>,
 }
@@ -55,6 +60,7 @@ impl<S> Server<S, Identity> {
         Self {
             service,
             layer: Identity::new(),
+            config: Config::default(),
             stat_tracer: Vec::new(),
             shutdown_hooks: Vec::new(),
         }
@@ -89,6 +95,7 @@ impl<S, L> Server<S, L> {
         Server {
             service: self.service,
             layer: Stack::new(layer, self.layer),
+            config: self.config,
             stat_tracer: self.stat_tracer,
             shutdown_hooks: self.shutdown_hooks,
         }
@@ -109,6 +116,7 @@ impl<S, L> Server<S, L> {
         Server {
             service: self.service,
             layer: Stack::new(self.layer, layer),
+            config: self.config,
             stat_tracer: self.stat_tracer,
             shutdown_hooks: self.shutdown_hooks,
         }
@@ -121,6 +129,19 @@ impl<S, L> Server<S, L> {
         self
     }
 
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn config_mut(&mut self) -> &mut Config {
+        &mut self.config
+    }
+
+    /// The main entry point for the server.
     pub async fn run<MI>(self, mk_incoming: MI) -> Result<(), BoxError>
     where
         S: Service<ServerContext, ServerRequest, Error = Infallible>,
@@ -167,6 +188,7 @@ impl<S, L> Server<S, L> {
                         tokio::task::spawn(handle_conn(
                             conn,
                             service.clone(),
+                            self.config,
                             stat_tracer.clone(),
                             exit_notify_inner.clone(),
                             conn_cnt.clone(),
@@ -263,6 +285,7 @@ impl<S, L> Server<S, L> {
 async fn handle_conn<S>(
     conn: Conn,
     service: S,
+    config: Config,
     stat_tracer: Arc<[TraceFn]>,
     exit_notify: Arc<Notify>,
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
@@ -281,7 +304,13 @@ async fn handle_conn<S>(
     let mut http_conn = http1::Builder::new().serve_connection(
         TokioIo::new(conn),
         hyper::service::service_fn(|req| {
-            serve(service.clone(), peer.clone(), stat_tracer.clone(), req)
+            serve(
+                service.clone(),
+                peer.clone(),
+                config,
+                stat_tracer.clone(),
+                req,
+            )
         }),
     );
     tokio::select! {
@@ -308,6 +337,7 @@ async fn handle_conn<S>(
 async fn serve<S>(
     service: S,
     peer: Address,
+    config: Config,
     stat_tracer: Arc<[TraceFn]>,
     request: ServerRequest,
 ) -> Result<ServerResponse, Infallible>
@@ -319,24 +349,29 @@ where
         .scope(RefCell::new(MetaInfo::default()), async {
             let service = service.clone();
             let peer = peer.clone();
-            let mut cx = ServerContext::new(peer);
+            let mut cx = ServerContext::new(peer, config.stat_enable);
 
-            cx.stats.set_uri(request.uri().to_owned());
-            cx.stats.set_method(request.method().to_owned());
-            if let Some(req_size) = request.size_hint().exact() {
-                cx.common_stats.set_req_size(req_size);
+            if config.stat_enable {
+                cx.stats.set_uri(request.uri().to_owned());
+                cx.stats.set_method(request.method().to_owned());
+                if let Some(req_size) = request.size_hint().exact() {
+                    cx.common_stats.set_req_size(req_size);
+                }
+                cx.stats.record_process_start_at();
             }
-            cx.stats.record_process_start_at();
 
             let resp = service.call(&mut cx, request).await.into_response();
 
-            cx.stats.record_process_end_at();
-            cx.stats.set_status_code(resp.status());
-            if let Some(resp_size) = resp.size_hint().exact() {
-                cx.common_stats.set_resp_size(resp_size);
+            if config.stat_enable {
+                cx.stats.record_process_end_at();
+                cx.common_stats.set_status_code(resp.status());
+                if let Some(resp_size) = resp.size_hint().exact() {
+                    cx.common_stats.set_resp_size(resp_size);
+                }
+
+                stat_tracer.iter().for_each(|f| f(&cx));
             }
 
-            stat_tracer.iter().for_each(|f| f(&cx));
             Ok(resp)
         })
         .await
