@@ -41,9 +41,10 @@ impl Body {
 
     pub fn from_body<B>(body: B) -> Self
     where
-        B: http_body::Body<Data = Bytes, Error = BoxError> + Send + Sync + 'static,
+        B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
+        B::Error: Into<BoxError>,
     {
-        Self::Body(BoxBody::new(body))
+        Self::Body(BoxBody::new(body.map_err(Into::into)))
     }
 }
 
