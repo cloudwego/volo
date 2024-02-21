@@ -13,11 +13,11 @@ pub struct ClientError {
 }
 
 impl ClientError {
-    pub(crate) fn new(kind: Kind, error: ClientErrorInner) -> Self {
+    pub fn new(kind: Kind, error: ClientErrorInner) -> Self {
         Self { kind, error }
     }
 
-    pub(crate) fn new_other<E>(kind: Kind, error: E) -> Self
+    pub fn new_other<E>(kind: Kind, error: E) -> Self
     where
         E: Into<BoxError>,
     {
