@@ -2,6 +2,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Ok;
 use pilota_build::BoxClonePlugin;
+use volo::FastStr;
 
 use crate::{
     model::Entry,
@@ -113,6 +114,13 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => {
                 InnerBuilder::Thrift(inner.nonstandard_snake_case(nonstandard_snake_case))
             }
+        }
+    }
+
+    pub fn common_crate_name(self, name: FastStr) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.common_crate_name(name)),
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.common_crate_name(name)),
         }
     }
 }

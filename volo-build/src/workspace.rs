@@ -31,7 +31,13 @@ pub struct WorkspaceConfig {
     pub(crate) dedup_list: Vec<FastStr>,
     #[serde(default)]
     pub(crate) nonstandard_snake_case: bool,
+    #[serde(default = "common_crate_name")]
+    pub(crate) common_crate_name: FastStr,
     pub(crate) services: Vec<Service>,
+}
+
+fn common_crate_name() -> FastStr {
+    "common".into()
 }
 
 impl WorkspaceConfig {
@@ -76,6 +82,7 @@ where
             Ok(services) => {
                 self.ignore_unused(!config.touch_all)
                     .dedup(config.dedup_list)
+                    .common_crate_name(config.common_crate_name)
                     .pilota_builder
                     .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
             }
@@ -105,6 +112,11 @@ where
         self.pilota_builder = self
             .pilota_builder
             .nonstandard_snake_case(nonstandard_snake_case);
+        self
+    }
+
+    pub fn common_crate_name(mut self, name: FastStr) -> Self {
+        self.pilota_builder = self.pilota_builder.common_crate_name(name);
         self
     }
 }
