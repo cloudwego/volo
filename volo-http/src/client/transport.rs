@@ -20,9 +20,17 @@ pub struct ClientTransport<MkT> {
 }
 
 impl<MkT> ClientTransport<MkT> {
-    pub fn new(_config: ClientConfig, mk_conn: MkT) -> Self {
+    pub fn new(config: ClientConfig, mk_conn: MkT) -> Self {
+        let mut builder = http1::Builder::new();
+        builder
+            .title_case_headers(config.title_case_headers)
+            .preserve_header_case(config.preserve_header_case);
+        if let Some(max_headers) = config.max_headers {
+            builder.max_headers(max_headers);
+        }
+
         Self {
-            client: http1::Builder::new(),
+            client: builder,
             mk_conn,
         }
     }
@@ -104,5 +112,24 @@ where
     }
 }
 
-#[derive(Default)]
-pub struct ClientConfig {}
+pub struct ClientConfig {
+    pub title_case_headers: bool,
+    pub preserve_header_case: bool,
+    pub max_headers: Option<usize>,
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ClientConfig {
+    pub fn new() -> Self {
+        Self {
+            title_case_headers: false,
+            preserve_header_case: false,
+            max_headers: None,
+        }
+    }
+}

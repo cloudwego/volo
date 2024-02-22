@@ -41,9 +41,11 @@ pub mod utils;
 
 const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO_PKG_VERSION"));
 
+pub type ClientMetaService<MkT> = MetaService<ClientTransport<MkT>>;
+
 pub struct ClientBuilder<L, MkC, MkT> {
-    client_config: ClientConfig,
     config: Config,
+    http_config: ClientConfig,
     callee_name: FastStr,
     caller_name: FastStr,
     headers: HeaderMap,
@@ -56,8 +58,8 @@ pub struct ClientBuilder<L, MkC, MkT> {
 impl ClientBuilder<Identity, DefaultMkClient, DefaultMakeTransport> {
     pub fn new() -> Self {
         Self {
-            client_config: Default::default(),
             config: Default::default(),
+            http_config: Default::default(),
             callee_name: FastStr::empty(),
             caller_name: FastStr::empty(),
             headers: Default::default(),
@@ -78,8 +80,8 @@ impl Default for ClientBuilder<Identity, DefaultMkClient, DefaultMakeTransport> 
 impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
     pub fn client_maker<MkC2>(self, new_mk_client: MkC2) -> ClientBuilder<L, MkC2, MkT> {
         ClientBuilder {
-            client_config: self.client_config,
             config: self.config,
+            http_config: self.http_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
@@ -92,8 +94,8 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
 
     pub fn layer<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, L>, MkC, MkT> {
         ClientBuilder {
-            client_config: self.client_config,
             config: self.config,
+            http_config: self.http_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
@@ -106,8 +108,8 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
 
     pub fn layer_front<Front>(self, layer: Front) -> ClientBuilder<Stack<L, Front>, MkC, MkT> {
         ClientBuilder {
-            client_config: self.client_config,
             config: self.config,
+            http_config: self.http_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
@@ -152,27 +154,52 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         &mut self.headers
     }
 
-    pub fn set_user_agent(mut self, ua: UserAgent) -> Self {
-        self.user_agent = ua;
-        self
-    }
-
-    pub fn set_host(mut self, host: Host) -> Self {
-        self.config.host = host;
-        self
-    }
-
-    pub fn enable_stat(mut self, enable: bool) -> Self {
-        self.config.stat_enable = enable;
-        self
-    }
-
     pub fn config(&self) -> &Config {
         &self.config
     }
 
     pub fn config_mut(&mut self) -> &mut Config {
         &mut self.config
+    }
+
+    pub fn http_config(&self) -> &ClientConfig {
+        &self.http_config
+    }
+
+    pub fn http_config_mut(&mut self) -> &mut ClientConfig {
+        &mut self.http_config
+    }
+
+    pub fn set_title_case_headers(&mut self, title_case_headers: bool) -> &mut Self {
+        self.http_config.title_case_headers = title_case_headers;
+        self
+    }
+
+    pub fn set_preserve_header_case(&mut self, preserve_header_case: bool) -> &mut Self {
+        self.http_config.preserve_header_case = preserve_header_case;
+        self
+    }
+
+    pub fn set_max_headers(&mut self, max_headers: usize) -> &mut Self {
+        self.http_config.max_headers = Some(max_headers);
+        self
+    }
+
+    pub fn set_user_agent(&mut self, ua: UserAgent) -> &mut Self {
+        self.user_agent = ua;
+        self
+    }
+
+    pub fn set_host(&mut self, host: Host) -> &mut Self {
+        self.config.host = host;
+        self
+    }
+
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn stat_enable(&mut self, enable: bool) -> &mut Self {
+        self.config.stat_enable = enable;
+        self
     }
 
     pub fn build(mut self) -> MkC::Target
@@ -182,7 +209,7 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         MkC: MkClient<Client<L::Service>>,
         MkT: MakeConnection<Address>,
     {
-        let transport = ClientTransport::new(self.client_config, self.mk_conn);
+        let transport = ClientTransport::new(self.http_config, self.mk_conn);
         let service = self.layer.layer(MetaService::new(transport));
         if self.headers.get(header::USER_AGENT).is_some() {
             self.user_agent = UserAgent::None;
