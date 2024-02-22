@@ -57,6 +57,7 @@ pub struct Server<S, L> {
 }
 
 impl<S> Server<S, Identity> {
+    /// Create a new server.
     pub fn new(service: S) -> Self {
         Self {
             service,
@@ -145,34 +146,75 @@ impl<S, L> Server<S, L> {
         &mut self.config
     }
 
+    /// Get a reference to the HTTP configuration of the client.
     pub fn http_config(&self) -> &ServerConfig {
         &self.http_config
     }
 
+    /// Get a mutable reference to the HTTP configuration of the client.
     pub fn http_config_mut(&mut self) -> &mut ServerConfig {
         &mut self.http_config
     }
 
+    /// Set whether HTTP/1 connections should support half-closures.
+    ///
+    /// Clients can chose to shutdown their write-side while waiting
+    /// for the server to respond. Setting this to `true` will
+    /// prevent closing the connection immediately if `read`
+    /// detects an EOF in the middle of a request.
+    ///
+    /// Default is `false`.
     pub fn set_half_close(&mut self, half_close: bool) -> &mut Self {
         self.http_config.half_close = half_close;
         self
     }
 
+    /// Enables or disables HTTP/1 keep-alive.
+    ///
+    /// Default is true.
     pub fn set_keep_alive(&mut self, keep_alive: bool) -> &mut Self {
         self.http_config.keep_alive = keep_alive;
         self
     }
 
+    /// Set whether HTTP/1 connections will write header names as title case at
+    /// the socket level.
+    ///
+    /// Default is false.
     pub fn set_title_case_headers(&mut self, title_case_headers: bool) -> &mut Self {
         self.http_config.title_case_headers = title_case_headers;
         self
     }
 
+    /// Set whether to support preserving original header cases.
+    ///
+    /// Currently, this will record the original cases received, and store them
+    /// in a private extension on the `Request`. It will also look for and use
+    /// such an extension in any provided `Response`.
+    ///
+    /// Since the relevant extension is still private, there is no way to
+    /// interact with the original cases. The only effect this can have now is
+    /// to forward the cases in a proxy-like fashion.
+    ///
+    /// Default is false.
     pub fn set_preserve_header_case(&mut self, preserve_header_case: bool) -> &mut Self {
         self.http_config.preserve_header_case = preserve_header_case;
         self
     }
 
+    /// Set the maximum number of headers.
+    ///
+    /// When a request is received, the parser will reserve a buffer to store headers for optimal
+    /// performance.
+    ///
+    /// If server receives more headers than the buffer size, it responds to the client with
+    /// "431 Request Header Fields Too Large".
+    ///
+    /// Note that headers is allocated on the stack by default, which has higher performance. After
+    /// setting this value, headers will be allocated in heap memory, that is, heap memory
+    /// allocation will occur for each request, and there will be a performance drop of about 5%.
+    ///
+    /// Default is 100.
     pub fn set_max_headers(&mut self, max_headers: usize) -> &mut Self {
         self.http_config.max_headers = Some(max_headers);
         self
