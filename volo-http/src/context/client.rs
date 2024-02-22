@@ -72,18 +72,25 @@ impl Default for Config {
 
 #[derive(Clone, Debug, Default)]
 pub enum UserAgent {
+    /// The crate name and version of the current crate.
     #[default]
     PkgNameWithVersion,
+    /// The caller name and version of the current crate.
     CallerNameWithVersion,
+    /// A specified String for the user agent.
     Specified(String),
+    /// Do not set `User-Agent` by the client.
     None,
 }
 
 #[derive(Clone, Debug, Default)]
 pub enum Host {
+    /// The callee name.
     #[default]
     CalleeName,
+    /// The target address.
     TargetAddress,
+    /// Do not set `Host` by the client.
     None,
 }
 

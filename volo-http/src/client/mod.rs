@@ -41,9 +41,11 @@ pub mod utils;
 
 const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO_PKG_VERSION"));
 
+pub type ClientMetaService<MkT> = MetaService<ClientTransport<MkT>>;
+
 pub struct ClientBuilder<L, MkC, MkT> {
-    client_config: ClientConfig,
     config: Config,
+    http_config: ClientConfig,
     callee_name: FastStr,
     caller_name: FastStr,
     headers: HeaderMap,
@@ -54,10 +56,11 @@ pub struct ClientBuilder<L, MkC, MkT> {
 }
 
 impl ClientBuilder<Identity, DefaultMkClient, DefaultMakeTransport> {
+    /// Create a new client builder.
     pub fn new() -> Self {
         Self {
-            client_config: Default::default(),
             config: Default::default(),
+            http_config: Default::default(),
             callee_name: FastStr::empty(),
             caller_name: FastStr::empty(),
             headers: Default::default(),
@@ -76,10 +79,12 @@ impl Default for ClientBuilder<Identity, DefaultMkClient, DefaultMakeTransport> 
 }
 
 impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
     pub fn client_maker<MkC2>(self, new_mk_client: MkC2) -> ClientBuilder<L, MkC2, MkT> {
         ClientBuilder {
-            client_config: self.client_config,
             config: self.config,
+            http_config: self.http_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
@@ -90,10 +95,21 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         }
     }
 
+    /// Adds a new inner layer to the server.
+    ///
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
     pub fn layer<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, L>, MkC, MkT> {
         ClientBuilder {
-            client_config: self.client_config,
             config: self.config,
+            http_config: self.http_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
@@ -104,10 +120,21 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         }
     }
 
+    /// Adds a new front layer to the server.
+    ///
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
     pub fn layer_front<Front>(self, layer: Front) -> ClientBuilder<Stack<L, Front>, MkC, MkT> {
         ClientBuilder {
-            client_config: self.client_config,
             config: self.config,
+            http_config: self.http_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
@@ -118,6 +145,7 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         }
     }
 
+    /// Sets the target server's name.
     pub fn callee_name<S>(mut self, callee: S) -> Self
     where
         S: Into<FastStr>,
@@ -126,6 +154,7 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         self
     }
 
+    /// Sets the client's name sent to the server.
     pub fn caller_name<S>(mut self, caller: S) -> Self
     where
         S: Into<FastStr>,
@@ -134,6 +163,7 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         self
     }
 
+    /// Insert a header to the request.
     pub fn header<K, V>(mut self, key: K, value: V) -> Result<Self, ClientError>
     where
         K: TryInto<HeaderName>,
@@ -148,33 +178,105 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         Ok(self)
     }
 
+    /// Get a reference to the default headers of the client.
+    pub fn headers(&self) -> &HeaderMap {
+        &self.headers
+    }
+
+    /// Get a mutable reference to the default headers of the client.
     pub fn headers_mut(&mut self) -> &mut HeaderMap {
         &mut self.headers
     }
 
-    pub fn set_user_agent(mut self, ua: UserAgent) -> Self {
-        self.user_agent = ua;
-        self
-    }
-
-    pub fn set_host(mut self, host: Host) -> Self {
-        self.config.host = host;
-        self
-    }
-
-    pub fn enable_stat(mut self, enable: bool) -> Self {
-        self.config.stat_enable = enable;
-        self
-    }
-
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
     pub fn config(&self) -> &Config {
         &self.config
     }
 
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
     pub fn config_mut(&mut self) -> &mut Config {
         &mut self.config
     }
 
+    /// Get a reference to the HTTP configuration of the client.
+    pub fn http_config(&self) -> &ClientConfig {
+        &self.http_config
+    }
+
+    /// Get a mutable reference to the HTTP configuration of the client.
+    pub fn http_config_mut(&mut self) -> &mut ClientConfig {
+        &mut self.http_config
+    }
+
+    /// Set whether HTTP/1 connections will write header names as title case at
+    /// the socket level.
+    ///
+    /// Default is false.
+    pub fn set_title_case_headers(&mut self, title_case_headers: bool) -> &mut Self {
+        self.http_config.title_case_headers = title_case_headers;
+        self
+    }
+
+    /// Set whether to support preserving original header cases.
+    ///
+    /// Currently, this will record the original cases received, and store them
+    /// in a private extension on the `Response`. It will also look for and use
+    /// such an extension in any provided `Request`.
+    ///
+    /// Since the relevant extension is still private, there is no way to
+    /// interact with the original cases. The only effect this can have now is
+    /// to forward the cases in a proxy-like fashion.
+    ///
+    /// Default is false.
+    pub fn set_preserve_header_case(&mut self, preserve_header_case: bool) -> &mut Self {
+        self.http_config.preserve_header_case = preserve_header_case;
+        self
+    }
+
+    /// Set the maximum number of headers.
+    ///
+    /// When a response is received, the parser will reserve a buffer to store headers for optimal
+    /// performance.
+    ///
+    /// If client receives more headers than the buffer size, the error "message header too large"
+    /// is returned.
+    ///
+    /// Note that headers is allocated on the stack by default, which has higher performance. After
+    /// setting this value, headers will be allocated in heap memory, that is, heap memory
+    /// allocation will occur for each response, and there will be a performance drop of about 5%.
+    ///
+    /// Default is 100.
+    pub fn set_max_headers(&mut self, max_headers: usize) -> &mut Self {
+        self.http_config.max_headers = Some(max_headers);
+        self
+    }
+
+    /// Set mode for setting `User-Agent` in request headers.
+    ///
+    /// Default is generated crate name with version, e.g., `volo-http/0.1.0`
+    pub fn set_user_agent(&mut self, ua: UserAgent) -> &mut Self {
+        self.user_agent = ua;
+        self
+    }
+
+    /// Set mode for setting `Host` in request headers.
+    ///
+    /// Default is callee name.
+    pub fn set_host(&mut self, host: Host) -> &mut Self {
+        self.config.host = host;
+        self
+    }
+
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn stat_enable(&mut self, enable: bool) -> &mut Self {
+        self.config.stat_enable = enable;
+        self
+    }
+
+    /// Build the HTTP client.
     pub fn build(mut self) -> MkC::Target
     where
         L: Layer<MetaService<ClientTransport<MkT>>>,
@@ -182,7 +284,7 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         MkC: MkClient<Client<L::Service>>,
         MkT: MakeConnection<Address>,
     {
-        let transport = ClientTransport::new(self.client_config, self.mk_conn);
+        let transport = ClientTransport::new(self.http_config, self.mk_conn);
         let service = self.layer.layer(MetaService::new(transport));
         if self.headers.get(header::USER_AGENT).is_some() {
             self.user_agent = UserAgent::None;
@@ -250,10 +352,12 @@ macro_rules! method_requests {
 }
 
 impl<S> Client<S> {
+    /// Create a builder for building a request.
     pub fn builder(&self) -> RequestBuilder<S> {
         RequestBuilder::new(self)
     }
 
+    /// Create a builder for building a request with the specified method and URI.
     pub fn request<U>(&self, method: Method, uri: U) -> Result<RequestBuilder<S>, ClientError>
     where
         U: IntoUri,
@@ -273,6 +377,7 @@ impl<S> Client<S> {
 }
 
 impl<S> Client<S> {
+    /// Send a request to the target address.
     pub async fn send_request<B>(
         &self,
         host: Option<&str>,
@@ -344,6 +449,7 @@ impl<S> MkClient<Client<S>> for DefaultMkClient {
     }
 }
 
+/// Send a GET request to the specified URI.
 pub async fn get<U>(uri: U) -> Result<ClientResponse, ClientError>
 where
     U: IntoUri,
