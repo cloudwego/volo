@@ -51,6 +51,7 @@ pub struct Server<S, L> {
     service: S,
     layer: L,
     config: Config,
+    http_config: ServerConfig,
     stat_tracer: Vec<TraceFn>,
     shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>>,
 }
@@ -61,6 +62,7 @@ impl<S> Server<S, Identity> {
             service,
             layer: Identity::new(),
             config: Config::default(),
+            http_config: ServerConfig::default(),
             stat_tracer: Vec::new(),
             shutdown_hooks: Vec::new(),
         }
@@ -96,6 +98,7 @@ impl<S, L> Server<S, L> {
             service: self.service,
             layer: Stack::new(layer, self.layer),
             config: self.config,
+            http_config: self.http_config,
             stat_tracer: self.stat_tracer,
             shutdown_hooks: self.shutdown_hooks,
         }
@@ -117,6 +120,7 @@ impl<S, L> Server<S, L> {
             service: self.service,
             layer: Stack::new(self.layer, layer),
             config: self.config,
+            http_config: self.http_config,
             stat_tracer: self.stat_tracer,
             shutdown_hooks: self.shutdown_hooks,
         }
@@ -139,6 +143,39 @@ impl<S, L> Server<S, L> {
     #[doc(hidden)]
     pub fn config_mut(&mut self) -> &mut Config {
         &mut self.config
+    }
+
+    pub fn http_config(&self) -> &ServerConfig {
+        &self.http_config
+    }
+
+    pub fn http_config_mut(&mut self) -> &mut ServerConfig {
+        &mut self.http_config
+    }
+
+    pub fn set_half_close(&mut self, half_close: bool) -> &mut Self {
+        self.http_config.half_close = half_close;
+        self
+    }
+
+    pub fn set_keep_alive(&mut self, keep_alive: bool) -> &mut Self {
+        self.http_config.keep_alive = keep_alive;
+        self
+    }
+
+    pub fn set_title_case_headers(&mut self, title_case_headers: bool) -> &mut Self {
+        self.http_config.title_case_headers = title_case_headers;
+        self
+    }
+
+    pub fn set_preserve_header_case(&mut self, preserve_header_case: bool) -> &mut Self {
+        self.http_config.preserve_header_case = preserve_header_case;
+        self
+    }
+
+    pub fn set_max_headers(&mut self, max_headers: usize) -> &mut Self {
+        self.http_config.max_headers = Some(max_headers);
+        self
     }
 
     /// The main entry point for the server.
@@ -279,6 +316,32 @@ impl<S, L> Server<S, L> {
         }
 
         Ok(())
+    }
+}
+
+pub struct ServerConfig {
+    pub half_close: bool,
+    pub keep_alive: bool,
+    pub title_case_headers: bool,
+    pub preserve_header_case: bool,
+    pub max_headers: Option<usize>,
+}
+
+impl Default for ServerConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ServerConfig {
+    pub fn new() -> Self {
+        Self {
+            half_close: false,
+            keep_alive: true,
+            title_case_headers: false,
+            preserve_header_case: false,
+            max_headers: None,
+        }
     }
 }
 
