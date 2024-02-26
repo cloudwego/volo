@@ -114,7 +114,7 @@ url_path = "0.1"
 walkdir = "2"
 
 # Optional dependencies
-librustls = { package = "rustls", version = "0.22" }
+rustls = "0.22"
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 tokio-rustls = "0.25"

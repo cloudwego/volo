@@ -2,9 +2,8 @@
 
 use std::{net::SocketAddr, path::Path, sync::Arc};
 
-use librustls::{ClientConfig, RootCertStore}; /* crate `rustls` is renamed to `librustls`
-                                                * in this example */
 use pilota::FastStr;
+use rustls::{ClientConfig, RootCertStore};
 use rustls_pemfile::certs;
 use rustls_pki_types::CertificateDer;
 use volo::net::dial::ClientTlsConfig;

@@ -21,8 +21,8 @@ macro_rules! cfg_native_tls {
 macro_rules! cfg_rustls_or_native_tls {
     ($($item:item)*) => {
         $(
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
-            #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
+            #[cfg(feature = "__tls")]
+            #[cfg_attr(docsrs, doc(cfg(feature = "__tls")))]
             $item
         )*
     }

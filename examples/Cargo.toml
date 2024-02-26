@@ -113,17 +113,17 @@ volo-http = { path = "../volo-http", features = ["full"] }
 volo-gen = { path = "./volo-gen" }
 
 # TLS dependencies
-librustls = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
 rustls-pemfile = { workspace = true, optional = true }
 rustls-pki-types = { workspace = true, optional = true }
 tokio-rustls = { workspace = true, optional = true }
 
 [features]
 tls = [
-    "librustls",
-    "rustls-pemfile",
-    "rustls-pki-types",
-    "tokio-rustls",
+    "dep:rustls",
+    "dep:rustls-pemfile",
+    "dep:rustls-pki-types",
+    "dep:tokio-rustls",
     "volo/rustls",
     "volo-grpc/rustls",
 ]
