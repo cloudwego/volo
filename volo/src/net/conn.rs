@@ -34,13 +34,11 @@ pub enum ConnStream {
     NativeTls(#[pin] tokio_native_tls::TlsStream<TcpStream>),
 }
 
-cfg_rustls! {
-    type RustlsWriteHalf = tokio::io::WriteHalf<tokio_rustls::TlsStream<TcpStream>>;
-}
+#[cfg(feature = "rustls")]
+type RustlsWriteHalf = tokio::io::WriteHalf<tokio_rustls::TlsStream<TcpStream>>;
 
-cfg_native_tls! {
-    type NativeTlsWriteHalf = tokio::io::WriteHalf<tokio_native_tls::TlsStream<TcpStream>>;
-}
+#[cfg(feature = "native-tls")]
+type NativeTlsWriteHalf = tokio::io::WriteHalf<tokio_native_tls::TlsStream<TcpStream>>;
 
 #[pin_project(project = OwnedWriteHalfProj)]
 pub enum OwnedWriteHalf {
@@ -128,13 +126,11 @@ impl AsyncWrite for OwnedWriteHalf {
     }
 }
 
-cfg_rustls! {
-    type RustlsReadHalf = tokio::io::ReadHalf<tokio_rustls::TlsStream<TcpStream>>;
-}
+#[cfg(feature = "rustls")]
+type RustlsReadHalf = tokio::io::ReadHalf<tokio_rustls::TlsStream<TcpStream>>;
 
-cfg_native_tls! {
-    type NativeTlsReadHalf = tokio::io::ReadHalf<tokio_native_tls::TlsStream<TcpStream>>;
-}
+#[cfg(feature = "native-tls")]
+type NativeTlsReadHalf = tokio::io::ReadHalf<tokio_native_tls::TlsStream<TcpStream>>;
 
 #[pin_project(project = OwnedReadHalfProj)]
 pub enum OwnedReadHalf {
@@ -209,21 +205,19 @@ impl From<UnixStream> for ConnStream {
     }
 }
 
-cfg_rustls! {
-    impl From<tokio_rustls::TlsStream<TcpStream>> for ConnStream {
-        #[inline]
-        fn from(s: tokio_rustls::TlsStream<TcpStream>) -> Self {
-            Self::Rustls(s)
-        }
+#[cfg(feature = "rustls")]
+impl From<tokio_rustls::TlsStream<TcpStream>> for ConnStream {
+    #[inline]
+    fn from(s: tokio_rustls::TlsStream<TcpStream>) -> Self {
+        Self::Rustls(s)
     }
 }
 
-cfg_native_tls! {
-    impl From<tokio_native_tls::TlsStream<TcpStream>> for ConnStream {
-        #[inline]
-        fn from(s: tokio_native_tls::TlsStream<TcpStream>) -> Self {
-            Self::NativeTls(s)
-        }
+#[cfg(feature = "native-tls")]
+impl From<tokio_native_tls::TlsStream<TcpStream>> for ConnStream {
+    #[inline]
+    fn from(s: tokio_native_tls::TlsStream<TcpStream>) -> Self {
+        Self::NativeTls(s)
     }
 }
 
