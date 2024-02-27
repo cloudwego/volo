@@ -70,8 +70,13 @@ fn get_port(uri: &Uri) -> Result<u16> {
 }
 
 pub fn parse_address(uri: &Uri) -> Result<Address> {
-    let host = uri.host().ok_or(uri_without_host())?;
+    let host = uri
+        .host()
+        .ok_or(uri_without_host())?
+        .trim_start_matches('[')
+        .trim_end_matches(']');
     let port = get_port(uri)?;
+    tracing::warn!("host: {host}, port: {port}");
     match host.parse::<IpAddr>() {
         Ok(addr) => Ok(Address::from(SocketAddr::new(addr, port))),
         Err(e) => Err(builder_error(e)),

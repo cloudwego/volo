@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use http::{HeaderMap, HeaderName, HeaderValue, Method, Request, Uri, Version};
+use http::{uri::PathAndQuery, HeaderMap, HeaderName, HeaderValue, Method, Request, Uri, Version};
 use motore::service::Service;
 use volo::net::Address;
 
@@ -10,9 +10,7 @@ use crate::{
     client::utils::{parse_address, resolve},
     context::ClientContext,
     error::{
-        client::{
-            bad_host_name, builder_error, no_uri, uri_without_path, ClientErrorInner, Result,
-        },
+        client::{bad_host_name, builder_error, no_uri, ClientErrorInner, Result},
         ClientError,
     },
     request::ClientRequest,
@@ -41,7 +39,11 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
         method: Method,
         uri: Uri,
     ) -> Result<Self> {
-        let rela_uri = uri.path_and_query().ok_or(uri_without_path())?.to_owned();
+        let rela_uri = uri
+            .path_and_query()
+            .map(PathAndQuery::as_str)
+            .unwrap_or("/")
+            .to_owned();
 
         Ok(Self {
             client,
@@ -98,8 +100,8 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
     pub fn uri(mut self, uri: Uri) -> Result<Self> {
         let rela_uri = uri
             .path_and_query()
-            .ok_or(uri_without_path())?
-            .to_owned()
+            .map(PathAndQuery::to_owned)
+            .unwrap_or_else(|| PathAndQuery::from_static("/"))
             .into();
         self.uri = Some(uri);
         *self.request.uri_mut() = rela_uri;
@@ -201,8 +203,6 @@ where
                 }
             },
         };
-        self.client
-            .send_request(uri.host(), target, self.request)
-            .await
+        self.client.send_request(uri, target, self.request).await
     }
 }
