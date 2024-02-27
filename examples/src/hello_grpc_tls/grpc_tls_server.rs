@@ -2,7 +2,7 @@
 
 use std::{net::SocketAddr, path::Path, sync::Arc};
 
-use librustls::ServerConfig;
+use rustls::ServerConfig;
 use rustls_pemfile::{certs, pkcs8_private_keys};
 use rustls_pki_types::{CertificateDer, PrivateKeyDer};
 use volo_grpc::{

@@ -60,14 +60,14 @@ impl<B: ?Sized> From<Arc<B>> for Ref<'static, B> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fmt::Display, sync::Arc};
+    use std::{fmt, sync::Arc};
 
-    use super::*;
+    use super::{Borrow, Ref};
 
     #[derive(Debug, PartialEq, Eq, Copy, Clone)]
     struct TestData;
 
-    impl Display for TestData {
+    impl fmt::Display for TestData {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.write_str("TestData")
         }

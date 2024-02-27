@@ -51,14 +51,14 @@ tower.workspace = true
 tracing.workspace = true
 
 # Optional dependencies
-librustls = { workspace = true, optional = true }
+rustls = { workspace = true, optional = true }
 tokio-rustls = { workspace = true, optional = true }
 tokio-native-tls = { workspace = true, optional = true }
 
 [features]
 default = []
 
-rustls = ["tokio-rustls", "librustls"]
-
-native-tls = ["tokio-native-tls"]
+__tls = []
+rustls = ["__tls", "dep:tokio-rustls", "dep:rustls"]
+native-tls = ["__tls", "dep:tokio-native-tls"]
 native-tls-vendored = ["native-tls", "tokio-native-tls/vendored"]

@@ -1,6 +1,9 @@
 use http::StatusCode;
 use paste::paste;
 
+// This macro is unused only when both `client` and `server` features are not enabled.
+// But no one can use this crate without any of them, maybe :)
+#[allow(unused_macros)]
 macro_rules! stat_impl {
     ($t: ident) => {
         paste! {

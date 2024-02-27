@@ -12,15 +12,13 @@ use hyper::rt::ReadBufCursor;
 use hyper_util::client::legacy::connect::{Connected, Connection};
 use motore::{make::MakeConnection, service::UnaryService};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
+#[cfg(feature = "__tls")]
+use volo::net::dial::{ClientTlsConfig, TlsMakeTransport};
 use volo::net::{
     conn::Conn,
     dial::{Config, DefaultMakeTransport, MakeTransport},
     Address,
 };
-
-cfg_rustls_or_native_tls! {
-    use volo::net::dial::{TlsMakeTransport, ClientTlsConfig};
-}
 
 #[derive(Clone, Debug)]
 pub enum Connector {
@@ -40,7 +38,7 @@ impl Connector {
         Self::Default(mt)
     }
 
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "__tls")]
     pub fn new_with_tls(cfg: Option<Config>, tls_config: ClientTlsConfig) -> Self {
         let mut mt = TlsMakeTransport::new(cfg.unwrap_or_default(), tls_config);
         if let Some(cfg) = cfg {

@@ -2,10 +2,9 @@
 
 mod client;
 mod connect;
-
-cfg_rustls_or_native_tls! {
-    mod tls;
-    pub use tls::{ServerTlsConfig, TlsAcceptor};
-}
+#[cfg(feature = "__tls")]
+mod tls;
 
 pub use client::ClientTransport;
+#[cfg(feature = "__tls")]
+pub use tls::{ServerTlsConfig, TlsAcceptor};
