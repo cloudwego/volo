@@ -17,15 +17,13 @@ use motore::{
 };
 pub use service::ServiceBuilder;
 #[cfg(feature = "__tls")]
-use volo::net::conn::ConnStream;
+use volo::net::tls::{Acceptor, ServerTlsConfig};
 use volo::{
     net::{conn::Conn, incoming::Incoming},
     spawn,
 };
 
 pub use self::router::Router;
-#[cfg(feature = "__tls")]
-use crate::transport::{ServerTlsConfig, TlsAcceptor};
 use crate::{
     body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status,
 };
@@ -46,7 +44,7 @@ pub struct Server<L> {
     http2_config: Http2Config,
     router: Router,
 
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "__tls")]
     tls_config: Option<ServerTlsConfig>,
 }
 
@@ -292,11 +290,13 @@ impl<L> Server<L> {
                     };
                     #[cfg(feature = "__tls")]
                     let conn = {
-                        let info = conn.info;
+                        let Conn {
+                            stream,
+                            info,
+                        } = conn;
                         // Only perform TLS handshake if either rustls or native-tls is configured
-                        match (conn.stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
-                            #[cfg(feature = "rustls")]
-                            (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::Rustls(tls_acceptor))) => {
+                        match (stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
+                            (volo::net::conn::ConnStream::Tcp(tcp), Some(tls_acceptor)) => {
                                 let stream = match tls_acceptor.accept(tcp).await {
                                     Ok(stream) => stream,
                                     Err(err) => {
@@ -305,21 +305,7 @@ impl<L> Server<L> {
                                     },
                                 };
                                 Conn {
-                                    stream: ConnStream::Rustls(tokio_rustls::TlsStream::Server(stream)),
-                                    info
-                                }
-                            },
-                            #[cfg(feature = "native-tls")]
-                            (volo::net::conn::ConnStream::Tcp(tcp), Some(TlsAcceptor::NativeTls(tls_acceptor))) => {
-                                let stream = match tls_acceptor.accept(tcp).await {
-                                    Ok(stream) => stream,
-                                    Err(err) => {
-                                        tracing::debug!("[VOLO] TLS handshake error: {:?}", err);
-                                        continue;
-                                    },
-                                };
-                                Conn {
-                                    stream: ConnStream::NativeTls(stream),
+                                    stream,
                                     info,
                                 }
                             },

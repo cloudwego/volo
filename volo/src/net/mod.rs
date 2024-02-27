@@ -1,6 +1,9 @@
 pub mod conn;
 pub mod dial;
 pub mod incoming;
+#[cfg(feature = "__tls")]
+pub mod tls;
+
 mod probe;
 
 #[cfg(target_os = "linux")]

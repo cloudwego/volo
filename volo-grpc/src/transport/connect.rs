@@ -13,7 +13,7 @@ use hyper_util::client::legacy::connect::{Connected, Connection};
 use motore::{make::MakeConnection, service::UnaryService};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 #[cfg(feature = "__tls")]
-use volo::net::dial::{ClientTlsConfig, TlsMakeTransport};
+use volo::net::tls::{ClientTlsConfig, TlsMakeTransport};
 use volo::net::{
     conn::Conn,
     dial::{Config, DefaultMakeTransport, MakeTransport},
@@ -23,7 +23,7 @@ use volo::net::{
 #[derive(Clone, Debug)]
 pub enum Connector {
     Default(DefaultMakeTransport),
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "__tls")]
     Tls(TlsMakeTransport),
 }
 
@@ -63,7 +63,7 @@ impl UnaryService<Address> for Connector {
     async fn call(&self, addr: Address) -> Result<Self::Response, Self::Error> {
         match self {
             Self::Default(mkt) => mkt.make_connection(addr).await,
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             Self::Tls(mkt) => mkt.make_connection(addr).await,
         }
     }

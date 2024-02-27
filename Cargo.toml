@@ -116,7 +116,10 @@ walkdir = "2"
 rustls = "0.22"
 rustls-pemfile = "2"
 rustls-pki-types = "1"
+webpki-roots = "0.26"
+
 tokio-rustls = "0.25"
+native-tls = "0.2"
 tokio-native-tls = "0.3"
 
 [profile.release]
