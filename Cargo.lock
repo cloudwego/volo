@@ -1657,14 +1657,14 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.10.2"
+version = "0.10.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed60c849bbcb729248832e683486092305bdea3c859e926cb50baaaa25cbcb6b"
+checksum = "5566c39ac322361cc0df605a6a7af11f595eb48cc19314e4a5f0f22df4acd85d"
 dependencies = [
+ "ahash",
  "anyhow",
  "dashmap",
  "faststr",
- "fxhash",
  "heck 0.4.1",
  "itertools",
  "lazy_static",
@@ -1678,6 +1678,7 @@ dependencies = [
  "protobuf2",
  "quote",
  "rayon",
+ "rustc-hash",
  "salsa",
  "scoped-tls",
  "serde",
@@ -2891,7 +2892,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.9.3"
+version = "0.9.5"
 dependencies = [
  "anyhow",
  "dirs",
