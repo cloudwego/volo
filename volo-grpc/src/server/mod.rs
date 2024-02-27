@@ -16,21 +16,19 @@ use motore::{
     BoxError,
 };
 pub use service::ServiceBuilder;
+#[cfg(feature = "__tls")]
+use volo::net::conn::ConnStream;
 use volo::{
     net::{conn::Conn, incoming::Incoming},
     spawn,
 };
 
 pub use self::router::Router;
+#[cfg(feature = "__tls")]
+use crate::transport::{ServerTlsConfig, TlsAcceptor};
 use crate::{
     body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status,
 };
-
-cfg_rustls_or_native_tls! {
-    use volo::net::conn::ConnStream;
-
-    use crate::transport::{ServerTlsConfig, TlsAcceptor};
-}
 
 /// A trait to provide a static reference to the service's
 /// name. This is used for routing service's within the router.
@@ -66,21 +64,20 @@ impl Server<Identity> {
             http2_config: Http2Config::default(),
             router: Router::new(),
 
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: None,
         }
     }
 }
 
 impl<L> Server<L> {
-    cfg_rustls_or_native_tls! {
-        /// Sets the TLS configuration for the server.
-        ///
-        /// If not set, the server will not use TLS.
-        pub fn tls_config(mut self, value: impl Into<ServerTlsConfig>) -> Self {
-            self.tls_config = Some(value.into());
-            self
-        }
+    #[cfg(feature = "__tls")]
+    /// Sets the TLS configuration for the server.
+    ///
+    /// If not set, the server will not use TLS.
+    pub fn tls_config(mut self, value: impl Into<ServerTlsConfig>) -> Self {
+        self.tls_config = Some(value.into());
+        self
     }
 
     /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
@@ -204,7 +201,7 @@ impl<L> Server<L> {
             layer: Stack::new(layer, self.layer),
             http2_config: self.http2_config,
             router: self.router,
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
@@ -225,7 +222,7 @@ impl<L> Server<L> {
             layer: Stack::new(self.layer, layer),
             http2_config: self.http2_config,
             router: self.router,
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
@@ -244,7 +241,7 @@ impl<L> Server<L> {
             layer: self.layer,
             http2_config: self.http2_config,
             router: self.router.add_service(s),
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
@@ -293,8 +290,8 @@ impl<L> Server<L> {
                         Some(c) => c,
                         None => return Ok(()),
                     };
-                    #[cfg(any(feature = "rustls", feature = "native-tls"))]
-                    let conn: Conn = {
+                    #[cfg(feature = "__tls")]
+                    let conn = {
                         let info = conn.info;
                         // Only perform TLS handshake if either rustls or native-tls is configured
                         match (conn.stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
