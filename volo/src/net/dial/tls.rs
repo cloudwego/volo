@@ -84,14 +84,11 @@ impl UnaryService<Address> for TlsMakeTransport {
                             .map(Conn::from)
                     }
                     #[cfg(feature = "native-tls")]
-                    TlsConnector::NativeTls(connector) => {
-                        let tcp = make_tcp_connection(&self.cfg, addr).await?;
-                        connector
-                            .connect(&self.tls_config.server_name[..], tcp)
-                            .await
-                            .map(Conn::from)
-                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
-                    }
+                    TlsConnector::NativeTls(connector) => connector
+                        .connect(&self.tls_config.server_name[..], tcp)
+                        .await
+                        .map(Conn::from)
+                        .map_err(|e| io::Error::new(io::ErrorKind::Other, e)),
                 }
             }
             #[cfg(target_family = "unix")]

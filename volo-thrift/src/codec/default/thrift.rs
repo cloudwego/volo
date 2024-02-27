@@ -243,7 +243,7 @@ impl ZeroCopyEncoder for ThriftCodec {
                 let buf = unsafe {
                     let l = linked_bytes.bytes_mut().len();
                     std::slice::from_raw_parts_mut(
-                        linked_bytes.bytes_mut().as_mut_ptr().offset(l as isize),
+                        linked_bytes.bytes_mut().as_mut_ptr().add(l),
                         linked_bytes.bytes_mut().capacity() - l,
                     )
                 };

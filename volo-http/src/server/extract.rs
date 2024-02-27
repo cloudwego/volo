@@ -6,8 +6,6 @@ use futures_util::Future;
 use http::{header, request::Parts, Method, StatusCode, Uri};
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
-#[cfg(feature = "__serde")]
-use serde::de::DeserializeOwned;
 use volo::{context::Context, net::Address};
 
 use super::{param::Params, IntoResponse};
@@ -138,7 +136,7 @@ impl FromContext for Params {
 #[cfg(feature = "query")]
 impl<T> FromContext for Query<T>
 where
-    T: DeserializeOwned,
+    T: serde::de::DeserializeOwned,
 {
     type Rejection = RejectionError;
 
@@ -301,7 +299,7 @@ impl<T> FromRequest for MaybeInvalid<T> {
 #[cfg(feature = "form")]
 impl<T> FromRequest for Form<T>
 where
-    T: DeserializeOwned,
+    T: serde::de::DeserializeOwned,
 {
     type Rejection = RejectionError;
 
