@@ -51,7 +51,6 @@ tracing.workspace = true
 
 # server optional
 matchit = { workspace = true, optional = true }
-url = { workspace = true, optional = true }
 
 # cookie support
 cookie = { workspace = true, optional = true, features = ["percent-encode"] }
@@ -76,7 +75,7 @@ default_server = ["server", "query", "form", "json"]
 full = ["client", "server", "cookie", "query", "form", "json"]
 
 client = ["hyper/client"] # client core
-server = ["hyper/server", "dep:matchit", "dep:url"] # server core
+server = ["hyper/server", "dep:matchit"] # server core
 
 cookie = ["dep:cookie"]
 

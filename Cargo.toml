@@ -109,7 +109,6 @@ tower = "0.4"
 tracing = "0.1"
 tracing-subscriber = "0.3"
 update-informer = "1"
-url = "2"
 url_path = "0.1"
 walkdir = "2"
 
