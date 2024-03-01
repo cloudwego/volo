@@ -3,22 +3,21 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use async_stream::stream;
 use bytes::Bytes;
 use faststr::FastStr;
-use http::{header, Method, StatusCode, Uri};
+use http::{header, request::Parts, Method, StatusCode, Uri};
 use http_body::Frame;
 use motore::{layer::layer_fn, service::Service};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use volo_http::{
     body::Body,
-    context::{ConnectionInfo, ServerContext},
-    cookie,
-    cookie::CookieJar,
+    context::{RequestPartsExt, ServerContext},
+    cookie::{self, CookieJar},
     extension::Extension,
     json::Json,
     request::ServerRequest,
     response::ServerResponse,
     server::{
-        extract::{Form, MaybeInvalid, Query},
+        extract::{Form, FromContext, MaybeInvalid, Query},
         layer::{FilterLayer, TimeoutLayer},
         middleware::{self, Next},
         param::Params,
@@ -123,10 +122,6 @@ async fn echo(params: Params) -> Result<FastStr, StatusCode> {
     Err(StatusCode::BAD_REQUEST)
 }
 
-async fn conn_show(conn: ConnectionInfo) -> String {
-    format!("{conn:?}\n")
-}
-
 async fn stream_test() -> Body {
     // build a `Vec<u8>` by a string
     let resp = "Hello, this is a stream.\n".as_bytes().iter().copied();
@@ -143,6 +138,29 @@ async fn stream_test() -> Body {
 async fn box_body_test() -> Body {
     let body = stream_test().await;
     Body::from_body(body)
+}
+
+struct FullUri(FastStr);
+
+impl FromContext for FullUri {
+    type Rejection = ();
+
+    async fn from_context(
+        _cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(Self(parts.full_uri().ok_or(())?.to_string().into()))
+    }
+}
+
+async fn full_uri(uri: FullUri) -> String {
+    format!("{}\n", uri.0)
+}
+
+async fn forwarded_getter(_: &mut ServerContext, req: ServerRequest) -> Result<String, Infallible> {
+    let (parts, _) = req.into_parts();
+    let forwarded = parts.forwarded();
+    Ok(format!("{forwarded:?}\n"))
 }
 
 struct State {
@@ -217,8 +235,6 @@ fn test_router() -> Router {
         )
         // curl -v http://127.0.0.1:8080/test/param/114514
         .route("/test/param/:echo", get(echo))
-        // curl http://127.0.0.1:8080/test/conn_show
-        .route("/test/conn_show", get(conn_show))
         // curl http://127.0.0.1:8080/test/extension
         .route("/test/extension", get(extension))
         // curl http://127.0.0.1:8080/test/service_fn
@@ -232,6 +248,19 @@ fn test_router() -> Router {
         .route("/test/stream", get(stream_test))
         // curl -v http://127.0.0.1:8080/test/body
         .route("/test/body", get(box_body_test))
+        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for="_gazonk"'
+        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: For="[2001:db8:cafe::17]:4711"'
+        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for=192.0.2.60;proto=http;by=203.0.113.43'
+        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for=192.0.2.43, for=198.51.100.17'
+        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for=192.0.2.43, for=198.51.100.17, host=example.com'
+        .route(
+            "/test/forwarded",
+            MethodRouter::builder()
+                .get(service_fn(forwarded_getter))
+                .build(),
+        )
+        // curl -v http://127.0.0.1:8080/test/full_uri
+        .route("/test/full_uri", get(full_uri))
         // curl -v http://127.0.0.1:8080/test/anyaddr?reject_me
         .layer(FilterLayer::new(|uri: Uri| async move {
             if uri.query().is_some() && uri.query().unwrap() == "reject_me" {

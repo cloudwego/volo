@@ -53,8 +53,9 @@ pub use self::client::ClientContext;
 
 #[cfg(feature = "server")]
 pub mod server;
+
 #[cfg(feature = "server")]
-pub use self::server::{ConnectionInfo, ServerContext};
+pub use self::server::{RequestPartsExt, ServerContext};
 
 /// This is unstable now and may be changed in the future.
 #[derive(Debug, Default, Clone, Copy)]

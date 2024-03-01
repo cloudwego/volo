@@ -3027,7 +3027,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "url",
  "volo",
 ]
 

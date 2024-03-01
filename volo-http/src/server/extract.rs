@@ -9,11 +9,7 @@ use hyper::body::Incoming;
 use volo::{context::Context, net::Address};
 
 use super::{param::Params, IntoResponse};
-use crate::{
-    context::{server::get_connection_info, ConnectionInfo, ServerContext},
-    request::ServerRequest,
-    response::ServerResponse,
-};
+use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
 mod private {
     #[derive(Debug, Clone, Copy)]
@@ -147,16 +143,6 @@ where
         let query = parts.uri.query().unwrap_or_default();
         let param = serde_urlencoded::from_str(query).map_err(RejectionError::QueryRejection)?;
         Ok(Query(param))
-    }
-}
-
-impl FromContext for ConnectionInfo {
-    type Rejection = Infallible;
-    async fn from_context(
-        _cx: &mut ServerContext,
-        parts: &mut Parts,
-    ) -> Result<Self, Self::Rejection> {
-        Ok(get_connection_info(parts))
     }
 }
 

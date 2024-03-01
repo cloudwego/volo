@@ -5,10 +5,10 @@ use http::{uri::Scheme, Uri};
 use tokio::net::lookup_host;
 use volo::net::Address;
 
-use crate::error::client::{bad_scheme, builder_error, uri_without_host, Result};
-
-const HTTP_DEFAULT_PORT: u16 = 80;
-const HTTPS_DEFAULT_PORT: u16 = 443;
+use crate::{
+    error::client::{bad_scheme, builder_error, uri_without_host, Result},
+    utils::consts::{HTTPS_DEFAULT_PORT, HTTP_DEFAULT_PORT},
+};
 
 pub trait IntoUri {
     fn into_uri(self) -> Result<Uri>;
