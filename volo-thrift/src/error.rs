@@ -11,7 +11,7 @@ use volo::loadbalance::error::{LoadBalanceError, Retryable};
 pub type ServerResult<T> = Result<T, ServerError>;
 pub type ClientResult<T> = Result<T, ClientError>;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum ServerError {
     #[error("application exception: {0}")]
     Application(#[from] ApplicationException),
@@ -88,7 +88,7 @@ impl ServerError {
     }
 }
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, Clone)]
 pub enum ClientError {
     #[error("application exception: {0}")]
     Application(#[from] ApplicationException),
