@@ -174,7 +174,7 @@ impl CliCommand for Init {
         volo_build::util::with_config(|config| {
             let mut lock = None;
             let mut idl = Idl::new();
-            idl.includes = self.includes.clone();
+            idl.includes.clone_from(&self.includes);
 
             // Handling Git-Based Template Creation
             if let Some(git) = self.git.as_ref() {
@@ -191,7 +191,7 @@ impl CliCommand for Init {
             if self.git.is_some() {
                 idl.path = strip_slash_prefix(&self.idl);
             } else {
-                idl.path = self.idl.clone();
+                idl.path.clone_from(&self.idl);
                 // only ensure readable when idl is from local
                 idl.ensure_readable()?;
             }
@@ -250,9 +250,9 @@ impl CliCommand for Init {
                         };
 
                         if let Some(git) = self.git.as_ref() {
-                            *repo = git.clone();
+                            repo.clone_from(git);
                             if self.r#ref.is_some() {
-                                *r#ref = self.r#ref.clone();
+                                r#ref.clone_from(&self.r#ref);
                             }
                         } else {
                             unreachable!()
