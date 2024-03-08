@@ -1,35 +1,21 @@
 //! Run with `cargo run --bin hello-tls-grpc-client --features tls`
 
-use std::{net::SocketAddr, path::Path, sync::Arc};
+use std::net::SocketAddr;
 
-use pilota::FastStr;
-use rustls::{ClientConfig, RootCertStore};
-use rustls_pemfile::certs;
-use rustls_pki_types::CertificateDer;
-use volo::net::dial::ClientTlsConfig;
-
-fn load_certs(path: impl AsRef<Path>) -> std::io::Result<Vec<CertificateDer<'static>>> {
-    Ok(
-        certs(&mut std::io::BufReader::new(std::fs::File::open(path)?))
-            .map(|v| v.unwrap())
-            .collect::<Vec<_>>(),
-    )
-}
+use faststr::FastStr;
+use volo::net::tls::{ClientTlsConfig, TlsConnector};
 
 #[volo::main]
 async fn main() {
     // The key and CertificateDer are copied from
     // https://github.com/hyperium/tonic/tree/master/examples/data/tls
     let data_dir = std::path::PathBuf::from_iter([std::env!("CARGO_MANIFEST_DIR"), "data"]);
-    let mut root_cert = load_certs(data_dir.join("tls/ca.pem")).unwrap();
-    let mut root_certs = RootCertStore::empty();
-    root_certs.add(root_cert.remove(0)).unwrap();
-
-    let client_config = ClientConfig::builder()
-        .with_root_certificates(root_certs)
-        .with_no_client_auth();
-    let client_config = Arc::new(client_config);
-    let connector = tokio_rustls::TlsConnector::from(client_config);
+    let connector = TlsConnector::builder()
+        .enable_default_root_certs(false)
+        .add_pem_from_file(data_dir.join("tls/ca.pem"))
+        .expect("failed to read ca.pem")
+        .build()
+        .expect("failed to build TlsConnector");
     let tls_config = ClientTlsConfig::new("example.com", connector);
 
     let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();

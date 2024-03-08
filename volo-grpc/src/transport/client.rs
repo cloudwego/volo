@@ -76,7 +76,7 @@ impl<U> ClientTransport<U> {
     pub fn new_with_tls(
         http2_config: &Http2Config,
         rpc_config: &Config,
-        tls_config: volo::net::dial::ClientTlsConfig,
+        tls_config: volo::net::tls::ClientTlsConfig,
     ) -> Self {
         let config = volo::net::dial::Config::new(
             rpc_config.connect_timeout,

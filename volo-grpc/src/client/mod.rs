@@ -48,8 +48,8 @@ pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     mk_lb: LB,
     _marker: PhantomData<fn(T, U)>,
 
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
-    tls_config: Option<volo::net::dial::ClientTlsConfig>,
+    #[cfg(feature = "__tls")]
+    tls_config: Option<volo::net::tls::ClientTlsConfig>,
 }
 
 impl<C, T, U>
@@ -76,7 +76,7 @@ impl<C, T, U>
             mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
             _marker: PhantomData,
 
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: None,
         }
     }
@@ -99,7 +99,7 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
             mk_lb: self.mk_lb.load_balance(load_balance),
             _marker: PhantomData,
 
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
@@ -120,7 +120,7 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
             mk_lb: self.mk_lb.discover(discover),
             _marker: PhantomData,
 
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
@@ -301,7 +301,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_lb: mk_load_balance,
             _marker: PhantomData,
 
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
@@ -345,7 +345,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_lb: self.mk_lb,
             _marker: self._marker,
 
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
@@ -379,7 +379,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_lb: self.mk_lb,
             _marker: self._marker,
 
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
@@ -413,14 +413,14 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             mk_lb: self.mk_lb,
             _marker: self._marker,
 
-            #[cfg(any(feature = "rustls", feature = "native-tls"))]
+            #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
 
     /// Sets the [`ClientTlsConfig`] for the client.
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
-    pub fn tls_config(mut self, tls_config: volo::net::dial::ClientTlsConfig) -> Self {
+    #[cfg(feature = "__tls")]
+    pub fn tls_config(mut self, tls_config: volo::net::tls::ClientTlsConfig) -> Self {
         self.tls_config = Some(tls_config);
         self
     }
@@ -458,10 +458,10 @@ where
 {
     /// Builds a new [`Client`].
     pub fn build(self) -> C::Target {
-        #[cfg(not(any(feature = "rustls", feature = "native-tls")))]
+        #[cfg(not(feature = "__tls"))]
         let transport =
             MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config));
-        #[cfg(any(feature = "rustls", feature = "native-tls"))]
+        #[cfg(feature = "__tls")]
         let transport = match self.tls_config {
             Some(tls_config) => MetaService::new(ClientTransport::new_with_tls(
                 &self.http2_config,

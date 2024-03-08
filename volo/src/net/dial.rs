@@ -15,11 +15,6 @@ use super::{
     Address,
 };
 
-#[cfg(feature = "__tls")]
-mod tls;
-#[cfg(feature = "__tls")]
-pub use self::tls::{ClientTlsConfig, TlsConnector, TlsMakeTransport};
-
 /// [`MakeTransport`] creates an [`AsyncRead`] and an [`AsyncWrite`] for the given [`Address`].
 pub trait MakeTransport: Clone + Send + Sync + 'static {
     type ReadHalf: AsyncRead + Send + Sync + Unpin + 'static;
@@ -105,7 +100,10 @@ impl MakeTransport for DefaultMakeTransport {
     }
 }
 
-async fn make_tcp_connection(cfg: &Config, addr: SocketAddr) -> Result<TcpStream, io::Error> {
+pub(super) async fn make_tcp_connection(
+    cfg: &Config,
+    addr: SocketAddr,
+) -> Result<TcpStream, io::Error> {
     let domain = Domain::for_address(addr);
     let socket = Socket::new(domain, Type::STREAM, Some(Protocol::TCP))?;
     socket.set_nonblocking(true)?;
