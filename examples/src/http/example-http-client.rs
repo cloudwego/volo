@@ -21,7 +21,18 @@ async fn main() -> Result<(), BoxError> {
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     // simple `get` function and dns resolve
-    println!("{}", get("http://www.126.com/").await?.into_string().await?);
+    println!(
+        "{}",
+        get("http://httpbin.org/get").await?.into_string().await?
+    );
+
+    // HTTPS `get`
+    //
+    // If tls is not enabled, the `httpbin.org` will response 400 Bad Request.
+    println!(
+        "{}",
+        get("https://httpbin.org/get").await?.into_string().await?
+    );
 
     // create client by builder
     let client = ClientBuilder::new()
