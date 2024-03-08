@@ -26,11 +26,11 @@ path = "src/hello/thrift_client.rs"
 [[bin]]
 name = "hello-tls-grpc-server"
 path = "src/hello_grpc_tls/grpc_tls_server.rs"
-required-features = ["tls"]
+required-features = ["__tls"]
 [[bin]]
 name = "hello-tls-grpc-client"
 path = "src/hello_grpc_tls/grpc_tls_client.rs"
-required-features = ["tls"]
+required-features = ["__tls"]
 
 # compression
 [[bin]]
@@ -112,18 +112,20 @@ volo-http = { path = "../volo-http", features = ["full"] }
 
 volo-gen = { path = "./volo-gen" }
 
-# TLS dependencies
-rustls = { workspace = true, optional = true }
-rustls-pemfile = { workspace = true, optional = true }
-rustls-pki-types = { workspace = true, optional = true }
-tokio-rustls = { workspace = true, optional = true }
-
 [features]
-tls = [
-    "dep:rustls",
-    "dep:rustls-pemfile",
-    "dep:rustls-pki-types",
-    "dep:tokio-rustls",
+__tls = []
+rustls = [
+    "__tls",
     "volo/rustls",
     "volo-grpc/rustls",
+]
+native-tls = [
+    "__tls",
+    "volo/native-tls",
+    "volo-grpc/native-tls",
+]
+native-tls-vendored = [
+    "__tls",
+    "volo/native-tls-vendored",
+    "volo-grpc/native-tls-vendored",
 ]
