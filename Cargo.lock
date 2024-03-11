@@ -3036,6 +3036,8 @@ dependencies = [
  "sonic-rs",
  "thiserror",
  "tokio",
+ "tokio-native-tls",
+ "tokio-rustls 0.25.0",
  "tracing",
  "volo",
 ]

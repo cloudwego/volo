@@ -16,9 +16,11 @@ use motore::{
     BoxError,
 };
 use scopeguard::defer;
-use tokio::sync::Notify;
+use tokio::{sync::Notify, task::JoinHandle};
 use tracing::{info, trace};
 use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
+#[cfg(feature = "__tls")]
+use volo::net::{conn::ConnStream, tls::Acceptor, tls::ServerTlsConfig};
 
 use crate::{
     context::{server::Config, ServerContext},
@@ -54,6 +56,8 @@ pub struct Server<S, L> {
     http_config: ServerConfig,
     stat_tracer: Vec<TraceFn>,
     shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>>,
+    #[cfg(feature = "__tls")]
+    tls_config: Option<ServerTlsConfig>,
 }
 
 impl<S> Server<S, Identity> {
@@ -66,11 +70,22 @@ impl<S> Server<S, Identity> {
             http_config: ServerConfig::default(),
             stat_tracer: Vec::new(),
             shutdown_hooks: Vec::new(),
+            #[cfg(feature = "__tls")]
+            tls_config: None,
         }
     }
 }
 
 impl<S, L> Server<S, L> {
+    #[cfg(feature = "__tls")]
+    /// Enable TLS with the specified configuration.
+    ///
+    /// If not set, the server will not use TLS.
+    pub fn tls_config(mut self, config: impl Into<ServerTlsConfig>) -> Self {
+        self.tls_config = Some(config.into());
+        self
+    }
+
     /// Register shutdown hook.
     ///
     /// Hook functions will be called just before volo's own gracefull existing code starts,
@@ -102,6 +117,8 @@ impl<S, L> Server<S, L> {
             http_config: self.http_config,
             stat_tracer: self.stat_tracer,
             shutdown_hooks: self.shutdown_hooks,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
         }
     }
 
@@ -124,6 +141,8 @@ impl<S, L> Server<S, L> {
             http_config: self.http_config,
             stat_tracer: self.stat_tracer,
             shutdown_hooks: self.shutdown_hooks,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
         }
     }
 
@@ -223,9 +242,9 @@ impl<S, L> Server<S, L> {
     /// The main entry point for the server.
     pub async fn run<MI>(self, mk_incoming: MI) -> Result<(), BoxError>
     where
-        S: Service<ServerContext, ServerRequest, Error = Infallible>,
+        S: Service<ServerContext, ServerRequest, Error = Infallible> + Send + Sync + 'static,
         S::Response: IntoResponse,
-        L: Layer<S>,
+        L: Layer<S> + Send + Sync + 'static,
         L::Service:
             Service<ServerContext, ServerRequest, Error = Infallible> + Send + Sync + 'static,
         <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
@@ -248,35 +267,51 @@ impl<S, L> Server<S, L> {
         let (exit_notify_inner, exit_flag_inner) = (exit_notify.clone(), exit_flag.clone());
 
         // spawn accept loop
-        let handler = tokio::spawn(async move {
+        let handler: JoinHandle<Result<(), BoxError>> = tokio::spawn(async move {
             let exit_flag = exit_flag_inner.clone();
             loop {
                 if *exit_flag.read() {
                     break Ok(());
                 }
-                match incoming.accept().await {
-                    Ok(Some(conn)) => {
-                        let peer = conn
-                            .info
-                            .peer_addr
-                            .clone()
-                            .expect("http address should have one");
-
-                        trace!("[VOLO] accept connection from: {:?}", peer);
-
-                        tokio::task::spawn(handle_conn(
-                            conn,
-                            service.clone(),
-                            self.config,
-                            stat_tracer.clone(),
-                            exit_notify_inner.clone(),
-                            conn_cnt.clone(),
-                            peer,
-                        ));
+                let conn = match incoming.accept().await? {
+                    Some(conn) => conn,
+                    None => break Ok(()),
+                };
+                #[cfg(feature = "__tls")]
+                let conn = {
+                    let Conn { stream, info } = conn;
+                    match (stream, &self.tls_config) {
+                        (ConnStream::Tcp(stream), Some(tls_config)) => {
+                            let stream = match tls_config.acceptor.accept(stream).await {
+                                Ok(conn) => conn,
+                                Err(err) => {
+                                    trace!("[VOLO] tls handshake error: {err:?}");
+                                    continue;
+                                }
+                            };
+                            Conn { stream, info }
+                        }
+                        (stream, _) => Conn { stream, info },
                     }
-                    Ok(None) => break Ok(()),
-                    Err(e) => break Err(Box::new(e)),
-                }
+                };
+
+                let peer = conn
+                    .info
+                    .peer_addr
+                    .clone()
+                    .expect("no peer address found in server connection");
+
+                trace!("[VOLO] accept connection from: {:?}", peer);
+
+                tokio::task::spawn(handle_conn(
+                    conn,
+                    service.clone(),
+                    self.config,
+                    stat_tracer.clone(),
+                    exit_notify_inner.clone(),
+                    conn_cnt.clone(),
+                    peer,
+                ));
             }
         });
 
@@ -295,17 +330,7 @@ impl<S, L> Server<S, L> {
                 _ = sigint.recv() => {}
                 _ = sighup.recv() => {}
                 _ = sigterm.recv() => {}
-                res = handler => {
-                    match res {
-                        Ok(res) => {
-                            match res {
-                                Ok(()) => {}
-                                Err(e) => return Err(Box::new(e))
-                            };
-                        }
-                        Err(e) => return Err(Box::new(e)),
-                    }
-                }
+                res = handler => res??,
             }
         }
 
@@ -313,17 +338,7 @@ impl<S, L> Server<S, L> {
         #[cfg(target_family = "windows")]
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
-            res = handler => {
-                match res {
-                    Ok(res) => {
-                        match res {
-                            Ok(()) => {}
-                            Err(e) => return Err(Box::new(e))
-                        };
-                    }
-                    Err(e) => return Err(Box::new(e)),
-                }
-            }
+            res = handler => res??,
         }
 
         if !self.shutdown_hooks.is_empty() {
@@ -433,7 +448,7 @@ async fn handle_conn<S>(
         }
         result = &mut http_conn => {
             if let Err(err) = result {
-                tracing::debug!("[VOLO] http connection error: {:?}", err);
+                tracing::debug!("[VOLO] connection error: {:?}", err);
             }
         },
     }

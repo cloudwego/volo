@@ -1,4 +1,5 @@
 use chrono::{DateTime, Local};
+use faststr::FastStr;
 use http::StatusCode;
 use paste::paste;
 use volo::{
@@ -57,39 +58,47 @@ impl ClientStats {
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub host: Host,
+    pub caller_name: CallerName,
+    pub callee_name: CalleeName,
     pub stat_enable: bool,
+    #[cfg(feature = "__tls")]
+    pub is_tls: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            host: Host::default(),
+            caller_name: CallerName::default(),
+            callee_name: CalleeName::default(),
             stat_enable: true,
+            #[cfg(feature = "__tls")]
+            is_tls: false,
         }
     }
 }
 
 #[derive(Clone, Debug, Default)]
-pub enum UserAgent {
+pub enum CallerName {
     /// The crate name and version of the current crate.
     #[default]
     PkgNameWithVersion,
+    /// The original caller name.
+    OriginalCallerName,
     /// The caller name and version of the current crate.
     CallerNameWithVersion,
     /// A specified String for the user agent.
-    Specified(String),
+    Specified(FastStr),
     /// Do not set `User-Agent` by the client.
     None,
 }
 
 #[derive(Clone, Debug, Default)]
-pub enum Host {
-    /// The callee name.
+pub enum CalleeName {
+    /// The target authority of URI.
     #[default]
-    CalleeName,
-    /// The target address.
-    TargetAddress,
+    TargetName,
+    /// The original callee name.
+    OriginalCalleeName,
     /// Do not set `Host` by the client.
     None,
 }

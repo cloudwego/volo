@@ -72,10 +72,10 @@ macro_rules! error_kind {
 }
 
 macro_rules! client_error_inner {
-    ($($kind:ident => $name:ident => $msg:literal,)+) => {
+    ($($(#[$attr:meta])* $kind:ident => $name:ident => $msg:literal,)+) => {
         #[derive(Debug)]
         pub enum ClientErrorInner {
-            $($name,)+
+            $($(#[$attr])* $name,)+
             Other(BoxError),
         }
 
@@ -83,6 +83,7 @@ macro_rules! client_error_inner {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
                 match self {
                     $(
+                        $(#[$attr])*
                         Self::$name => f.write_str($msg),
                     )+
                     Self::Other(err) => write!(f, "{}", err),
@@ -94,6 +95,7 @@ macro_rules! client_error_inner {
 
         paste! {
             $(
+                $(#[$attr])*
                 pub(crate) fn [<$name:snake>]() -> ClientError {
                     ClientError::new(Kind::$kind, ClientErrorInner::$name)
                 }
@@ -112,6 +114,5 @@ client_error_inner! {
     Builder => UriWithoutHost => "host not found in uri",
     Builder => BadScheme => "bad scheme",
     Builder => BadHostName => "bad host name",
-    Builder => UriWithoutPath => "path not found in uri",
     Request => NoAddress => "missing target address",
 }

@@ -87,6 +87,16 @@ path = "src/http/example-http-server.rs"
 name = "example-http-client"
 path = "src/http/example-http-client.rs"
 
+[[bin]]
+name = "http-tls-server"
+path = "src/http/http-tls-server.rs"
+required-features = ["__tls"]
+
+[[bin]]
+name = "http-tls-client"
+path = "src/http/http-tls-client.rs"
+required-features = ["__tls"]
+
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
@@ -108,7 +118,7 @@ pilota.workspace = true
 volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc" }
 volo-thrift = { path = "../volo-thrift", features = ["multiplex"] }
-volo-http = { path = "../volo-http", features = ["full"] }
+volo-http = { path = "../volo-http", features = ["default_client", "default_server", "cookie"] }
 
 volo-gen = { path = "./volo-gen" }
 
@@ -118,14 +128,17 @@ rustls = [
     "__tls",
     "volo/rustls",
     "volo-grpc/rustls",
+    "volo-http/rustls",
 ]
 native-tls = [
     "__tls",
     "volo/native-tls",
     "volo-grpc/native-tls",
+    "volo-http/native-tls",
 ]
 native-tls-vendored = [
     "__tls",
     "volo/native-tls-vendored",
     "volo-grpc/native-tls-vendored",
+    "volo-http/native-tls-vendored",
 ]

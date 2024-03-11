@@ -1,21 +1,23 @@
-use std::{cell::RefCell, error::Error, sync::Arc};
+use std::{cell::RefCell, error::Error, sync::Arc, time::Duration};
 
 use faststr::FastStr;
 use http::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
-    Method,
+    Method, Uri,
 };
 use metainfo::{MetaInfo, METAINFO};
 use motore::{
     layer::{Identity, Layer, Stack},
-    make::MakeConnection,
     service::Service,
 };
 use paste::paste;
 use volo::{
     client::MkClient,
     context::Context,
-    net::{dial::DefaultMakeTransport, Address},
+    net::{
+        dial::{DefaultMakeTransport, MakeTransport},
+        Address,
+    },
 };
 
 use self::{
@@ -26,7 +28,7 @@ use self::{
 };
 use crate::{
     context::{
-        client::{Config, Host, UserAgent},
+        client::{CalleeName, CallerName, Config},
         ClientContext,
     },
     error::client::{builder_error, ClientError},
@@ -41,57 +43,60 @@ pub mod utils;
 
 const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO_PKG_VERSION"));
 
-pub type ClientMetaService<MkT> = MetaService<ClientTransport<MkT>>;
+pub type ClientMetaService = MetaService<ClientTransport>;
 
-pub struct ClientBuilder<L, MkC, MkT> {
+pub struct ClientBuilder<L, MkC> {
     config: Config,
     http_config: ClientConfig,
+    transport_config: volo::net::dial::Config,
     callee_name: FastStr,
     caller_name: FastStr,
     headers: HeaderMap,
-    user_agent: UserAgent,
     layer: L,
     mk_client: MkC,
-    mk_conn: MkT,
+    #[cfg(feature = "__tls")]
+    tls_config: Option<volo::net::tls::TlsConnector>,
 }
 
-impl ClientBuilder<Identity, DefaultMkClient, DefaultMakeTransport> {
+impl ClientBuilder<Identity, DefaultMkClient> {
     /// Create a new client builder.
     pub fn new() -> Self {
         Self {
             config: Default::default(),
             http_config: Default::default(),
+            transport_config: Default::default(),
             callee_name: FastStr::empty(),
             caller_name: FastStr::empty(),
             headers: Default::default(),
-            user_agent: Default::default(),
             layer: Identity::new(),
             mk_client: DefaultMkClient,
-            mk_conn: DefaultMakeTransport::new(),
+            #[cfg(feature = "__tls")]
+            tls_config: None,
         }
     }
 }
 
-impl Default for ClientBuilder<Identity, DefaultMkClient, DefaultMakeTransport> {
+impl Default for ClientBuilder<Identity, DefaultMkClient> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
+impl<L, MkC> ClientBuilder<L, MkC> {
     /// This is unstable now and may be changed in the future.
     #[doc(hidden)]
-    pub fn client_maker<MkC2>(self, new_mk_client: MkC2) -> ClientBuilder<L, MkC2, MkT> {
+    pub fn client_maker<MkC2>(self, new_mk_client: MkC2) -> ClientBuilder<L, MkC2> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
+            transport_config: self.transport_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
-            user_agent: self.user_agent,
             layer: self.layer,
             mk_client: new_mk_client,
-            mk_conn: self.mk_conn,
+            #[cfg(feature = "__tls")]
+            tls_config: None,
         }
     }
 
@@ -106,17 +111,18 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, L>, MkC, MkT> {
+    pub fn layer<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, L>, MkC> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
+            transport_config: self.transport_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
-            user_agent: self.user_agent,
             layer: Stack::new(layer, self.layer),
             mk_client: self.mk_client,
-            mk_conn: self.mk_conn,
+            #[cfg(feature = "__tls")]
+            tls_config: None,
         }
     }
 
@@ -131,17 +137,18 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> ClientBuilder<Stack<L, Front>, MkC, MkT> {
+    pub fn layer_front<Front>(self, layer: Front) -> ClientBuilder<Stack<L, Front>, MkC> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
+            transport_config: self.transport_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             headers: self.headers,
-            user_agent: self.user_agent,
             layer: Stack::new(self.layer, layer),
             mk_client: self.mk_client,
-            mk_conn: self.mk_conn,
+            #[cfg(feature = "__tls")]
+            tls_config: None,
         }
     }
 
@@ -178,6 +185,16 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         Ok(self)
     }
 
+    /// Set tls config for the client.
+    #[cfg(feature = "__tls")]
+    pub fn set_tls_config<T>(mut self, tls_config: T) -> Self
+    where
+        T: Into<volo::net::tls::TlsConnector>,
+    {
+        self.tls_config = Some(Into::into(tls_config));
+        self
+    }
+
     /// Get a reference to the default headers of the client.
     pub fn headers(&self) -> &HeaderMap {
         &self.headers
@@ -208,6 +225,39 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
     /// Get a mutable reference to the HTTP configuration of the client.
     pub fn http_config_mut(&mut self) -> &mut ClientConfig {
         &mut self.http_config
+    }
+
+    /// Get a reference to the transport configuration of the client.
+    pub fn transport_config(&self) -> &volo::net::dial::Config {
+        &self.transport_config
+    }
+
+    /// Get a mutable reference to the transport configuration of the client.
+    pub fn transport_config_mut(&mut self) -> &mut volo::net::dial::Config {
+        &mut self.transport_config
+    }
+
+    /// Set mode for setting `Host` in request headers, and server name when using TLS.
+    ///
+    /// Default is callee name.
+    pub fn set_callee_name_mode(&mut self, mode: CalleeName) -> &mut Self {
+        self.config.callee_name = mode;
+        self
+    }
+
+    /// Set mode for setting `User-Agent` in request headers.
+    ///
+    /// Default is the current crate name and version.
+    pub fn set_caller_name_mode(&mut self, mode: CalleeName) -> &mut Self {
+        self.config.callee_name = mode;
+        self
+    }
+
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn stat_enable(&mut self, enable: bool) -> &mut Self {
+        self.config.stat_enable = enable;
+        self
     }
 
     /// Set whether HTTP/1 connections will write header names as title case at
@@ -253,64 +303,65 @@ impl<L, MkC, MkT> ClientBuilder<L, MkC, MkT> {
         self
     }
 
-    /// Set mode for setting `User-Agent` in request headers.
-    ///
-    /// Default is generated crate name with version, e.g., `volo-http/0.1.0`
-    pub fn set_user_agent(&mut self, ua: UserAgent) -> &mut Self {
-        self.user_agent = ua;
+    /// Set the maximum idle time for a connection.
+    pub fn set_connect_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.transport_config.connect_timeout = Some(timeout);
         self
     }
 
-    /// Set mode for setting `Host` in request headers.
-    ///
-    /// Default is callee name.
-    pub fn set_host(&mut self, host: Host) -> &mut Self {
-        self.config.host = host;
+    /// Set the maximum idle time for reading data from the connection.
+    pub fn set_read_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.transport_config.read_timeout = Some(timeout);
         self
     }
 
-    /// This is unstable now and may be changed in the future.
-    #[doc(hidden)]
-    pub fn stat_enable(&mut self, enable: bool) -> &mut Self {
-        self.config.stat_enable = enable;
+    /// Set the maximum idle time for writing data to the connection.
+    pub fn set_write_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.transport_config.write_timeout = Some(timeout);
         self
     }
 
     /// Build the HTTP client.
     pub fn build(mut self) -> MkC::Target
     where
-        L: Layer<MetaService<ClientTransport<MkT>>>,
+        L: Layer<MetaService<ClientTransport>>,
         L::Service: Send + Sync + 'static,
         MkC: MkClient<Client<L::Service>>,
-        MkT: MakeConnection<Address>,
     {
-        let transport = ClientTransport::new(self.http_config, self.mk_conn);
+        let mut default_mk_conn = DefaultMakeTransport::new();
+        default_mk_conn.set_connect_timeout(self.transport_config.connect_timeout);
+        default_mk_conn.set_read_timeout(self.transport_config.read_timeout);
+        default_mk_conn.set_write_timeout(self.transport_config.write_timeout);
+
+        let transport = ClientTransport::new(
+            self.http_config,
+            default_mk_conn,
+            #[cfg(feature = "__tls")]
+            self.tls_config.unwrap_or_default(),
+        );
         let service = self.layer.layer(MetaService::new(transport));
-        if self.headers.get(header::USER_AGENT).is_some() {
-            self.user_agent = UserAgent::None;
-        }
-        match self.user_agent {
-            UserAgent::PkgNameWithVersion => self.headers.insert(
-                header::USER_AGENT,
-                HeaderValue::from_static(PKG_NAME_WITH_VER),
-            ),
-            UserAgent::CallerNameWithVersion if !self.caller_name.is_empty() => {
-                self.headers.insert(
-                    header::USER_AGENT,
-                    HeaderValue::from_str(&format!(
-                        "{}/{}",
-                        self.caller_name,
-                        env!("CARGO_PKG_VERSION")
-                    ))
-                    .expect("Invalid caller name"),
-                )
+
+        let caller_name = match &self.config.caller_name {
+            CallerName::PkgNameWithVersion => FastStr::from_static_str(PKG_NAME_WITH_VER),
+            CallerName::OriginalCallerName => self.caller_name.clone(),
+            CallerName::CallerNameWithVersion if !self.caller_name.is_empty() => {
+                FastStr::from_string(format!(
+                    "{}/{}",
+                    self.caller_name,
+                    env!("CARGO_PKG_VERSION")
+                ))
             }
-            UserAgent::Specified(val) if !val.is_empty() => self.headers.insert(
-                header::USER_AGENT,
-                val.try_into().expect("Invalid value for User-Agent"),
-            ),
-            _ => None,
+            CallerName::Specified(val) => val.to_owned(),
+            _ => FastStr::empty(),
         };
+
+        if !caller_name.is_empty() && self.headers.get(header::USER_AGENT).is_none() {
+            self.headers.insert(
+                header::USER_AGENT,
+                HeaderValue::from_str(caller_name.as_str()).expect("Invalid caller name"),
+            );
+        }
+
         let client_inner = ClientInner {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
@@ -351,9 +402,16 @@ macro_rules! method_requests {
     };
 }
 
+impl Client<()> {
+    /// Create a new client builder.
+    pub fn builder() -> ClientBuilder<Identity, DefaultMkClient> {
+        ClientBuilder::new()
+    }
+}
+
 impl<S> Client<S> {
     /// Create a builder for building a request.
-    pub fn builder(&self) -> RequestBuilder<S> {
+    pub fn request_builder(&self) -> RequestBuilder<S> {
         RequestBuilder::new(self)
     }
 
@@ -378,11 +436,46 @@ impl<S> Client<S> {
 
 impl<S> Client<S> {
     /// Send a request to the target address.
+    ///
+    /// This is a low-level method and you should build the `uri` and `request`, and get the
+    /// address by yourself.
+    ///
+    /// For simple usage, you can use the `get`, `post` and other methods directly.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use std::net::SocketAddr;
+    ///
+    /// use http::{Method, Uri};
+    /// use volo::net::Address;
+    /// use volo_http::{body::Body, client::Client, request::ClientRequest};
+    ///
+    /// let client = Client::builder().build();
+    /// let addr: SocketAddr = "[::]:8080".parse().unwrap();
+    /// let addr = Address::from(addr);
+    /// let resp = client
+    ///     .send_request(
+    ///         Uri::from_static("http://localhost:8080/"),
+    ///         addr,
+    ///         ClientRequest::builder()
+    ///             .method(Method::GET)
+    ///             .uri("/")
+    ///             .body(Body::empty())
+    ///             .expect("build request failed"),
+    ///     )
+    ///     .await
+    ///     .expect("request failed")
+    ///     .into_string()
+    ///     .await
+    ///     .expect("response failed to convert to string");
+    /// println!("{resp:?}");
+    /// ```
     pub async fn send_request<B>(
         &self,
-        host: Option<&str>,
+        uri: Uri,
         target: Address,
-        request: ClientRequest<B>,
+        mut request: ClientRequest<B>,
     ) -> Result<S::Response, S::Error>
     where
         S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
@@ -392,18 +485,55 @@ impl<S> Client<S> {
         B: Send + 'static,
     {
         let caller_name = self.inner.caller_name.clone();
-        let callee_name = if !self.inner.callee_name.is_empty() {
-            self.inner.callee_name.clone()
-        } else {
-            match host {
-                Some(host) => FastStr::from(host.to_owned()),
-                None => FastStr::empty(),
-            }
+        let callee_name = match self.inner.config.callee_name {
+            CalleeName::TargetName => match uri.host() {
+                // IPv6 address in URI has square brackets, but we does not need it as a
+                // "host name".
+                Some(host) => FastStr::from(
+                    host.trim_start_matches('[')
+                        .trim_end_matches(']')
+                        .to_owned(),
+                ),
+                None => match &target {
+                    Address::Ip(addr) => FastStr::from(addr.ip().to_string()),
+                    #[cfg(target_family = "unix")]
+                    Address::Unix(_) => FastStr::empty(),
+                },
+            },
+            CalleeName::OriginalCalleeName => self.inner.callee_name.clone(),
+            CalleeName::None => FastStr::empty(),
         };
+        tracing::trace!(
+            "create a request with caller_name: {caller_name}, callee_name: {callee_name}"
+        );
+
+        if request.headers().get(header::HOST).is_none() && uri.host().is_some() {
+            let mut host = uri.host().unwrap().to_string();
+            if let Some(port) = uri.port() {
+                host.push(':');
+                host.push_str(port.as_str());
+            }
+            if let Ok(value) = HeaderValue::from_str(&host) {
+                request.headers_mut().insert(header::HOST, value);
+            } else {
+                tracing::info!(
+                    "failed to insert `Host` to headers, `{host}` is not a valid header value"
+                );
+            }
+        }
+
         let mut cx = ClientContext::new(target, true);
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
         cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
         cx.rpc_info_mut().set_config(self.inner.config.clone());
+        #[cfg(feature = "__tls")]
+        {
+            cx.rpc_info_mut().config_mut().is_tls = match uri.scheme() {
+                Some(scheme) => scheme == &http::uri::Scheme::HTTPS,
+                None => false,
+            };
+        }
+
         self.call(&mut cx, request).await
     }
 }

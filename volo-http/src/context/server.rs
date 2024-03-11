@@ -145,11 +145,7 @@ impl RequestPartsExt for Parts {
     }
 
     fn scheme(&self) -> Scheme {
-        self.uri
-            .scheme()
-            // volo-http supports http only now
-            .unwrap_or(&Scheme::HTTP)
-            .to_owned()
+        self.uri.scheme().unwrap_or(&Scheme::HTTP).to_owned()
     }
 
     fn host(&self) -> Option<&str> {

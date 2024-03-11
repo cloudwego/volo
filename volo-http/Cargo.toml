@@ -52,6 +52,10 @@ tracing.workspace = true
 # server optional
 matchit = { workspace = true, optional = true }
 
+# tls optional
+tokio-rustls = { workspace = true, optional = true }
+tokio-native-tls = { workspace = true, optional = true }
+
 # cookie support
 cookie = { workspace = true, optional = true, features = ["percent-encode"] }
 
@@ -72,10 +76,15 @@ default = []
 default_client = ["client", "json"]
 default_server = ["server", "query", "form", "json"]
 
-full = ["client", "server", "cookie", "query", "form", "json"]
+full = ["client", "server", "rustls", "cookie", "query", "form", "json"]
 
 client = ["hyper/client"] # client core
 server = ["hyper/server", "dep:matchit"] # server core
+
+__tls = []
+rustls = ["__tls", "dep:tokio-rustls", "volo/rustls"]
+native-tls = ["__tls", "dep:tokio-native-tls", "volo/native-tls"]
+native-tls-vendored = ["native-tls", "volo/native-tls-vendored"]
 
 cookie = ["dep:cookie"]
 
