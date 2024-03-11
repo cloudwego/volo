@@ -248,8 +248,8 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     /// Set mode for setting `User-Agent` in request headers.
     ///
     /// Default is the current crate name and version.
-    pub fn set_caller_name_mode(&mut self, mode: CalleeName) -> &mut Self {
-        self.config.callee_name = mode;
+    pub fn set_caller_name_mode(&mut self, mode: CallerName) -> &mut Self {
+        self.config.caller_name = mode;
         self
     }
 
