@@ -15,17 +15,26 @@ use crate::utils::macros::impl_deref_and_deref_mut;
 pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 impl ClientContext {
-    pub fn new(target: Address, stat_enable: bool) -> Self {
+    pub fn new(target: Address, #[cfg(feature = "__tls")] tls: bool) -> Self {
         let mut cx = RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Client),
             ClientCxInner {
+                #[cfg(feature = "__tls")]
+                tls,
                 stats: ClientStats::default(),
                 common_stats: CommonStats::default(),
             },
         );
         cx.rpc_info_mut().callee_mut().set_address(target);
-        cx.rpc_info_mut().config_mut().stat_enable = stat_enable;
         Self(cx)
+    }
+
+    pub fn enable_stat(&mut self, stat: bool) {
+        self.rpc_info_mut().config_mut().stat_enable = stat;
+    }
+
+    pub(crate) fn stat_enabled(&self) -> bool {
+        self.rpc_info().config().stat_enable
     }
 }
 
@@ -35,10 +44,20 @@ impl_deref_and_deref_mut!(ClientContext, RpcCx<ClientCxInner, Config>, 0);
 
 #[derive(Debug)]
 pub struct ClientCxInner {
+    #[cfg(feature = "__tls")]
+    tls: bool,
+
     /// This is unstable now and may be changed in the future.
     pub stats: ClientStats,
     /// This is unstable now and may be changed in the future.
     pub common_stats: CommonStats,
+}
+
+impl ClientCxInner {
+    #[cfg(feature = "__tls")]
+    pub fn is_tls(&self) -> bool {
+        self.tls
+    }
 }
 
 /// This is unstable now and may be changed in the future.
@@ -58,11 +77,9 @@ impl ClientStats {
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub caller_name: CallerName,
-    pub callee_name: CalleeName,
-    pub stat_enable: bool,
-    #[cfg(feature = "__tls")]
-    pub is_tls: bool,
+    pub(crate) caller_name: CallerName,
+    pub(crate) callee_name: CalleeName,
+    pub(crate) stat_enable: bool,
 }
 
 impl Default for Config {
@@ -71,8 +88,6 @@ impl Default for Config {
             caller_name: CallerName::default(),
             callee_name: CalleeName::default(),
             stat_enable: true,
-            #[cfg(feature = "__tls")]
-            is_tls: false,
         }
     }
 }

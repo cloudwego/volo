@@ -26,7 +26,7 @@ use crate::{
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 impl ServerContext {
-    pub fn new(peer: Address, stat_enable: bool) -> Self {
+    pub fn new(peer: Address) -> Self {
         let mut cx = RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Server),
             ServerCxInner {
@@ -36,8 +36,15 @@ impl ServerContext {
             },
         );
         cx.rpc_info_mut().caller_mut().set_address(peer);
-        cx.rpc_info_mut().config_mut().stat_enable = stat_enable;
         Self(cx)
+    }
+
+    pub fn enable_stat(&mut self, enable: bool) {
+        self.rpc_info_mut().config_mut().stat_enable = enable;
+    }
+
+    pub(crate) fn stat_enabled(&self) -> bool {
+        self.rpc_info().config().stat_enable
     }
 }
 
@@ -78,7 +85,7 @@ impl ServerStats {
 
 #[derive(Debug, Clone, Copy)]
 pub struct Config {
-    pub stat_enable: bool,
+    pub(crate) stat_enable: bool,
 }
 
 impl Default for Config {
