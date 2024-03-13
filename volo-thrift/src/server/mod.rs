@@ -22,15 +22,19 @@ use volo::net::{
     Address,
 };
 
+use self::layer::biz_error::BizErrorService;
 use crate::{
     codec::{
         default::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec},
         DefaultMakeCodec, MakeCodec,
     },
     context::ServerContext,
+    server::layer::biz_error::BizErrorLayer,
     tracing::{DefaultProvider, SpanProvider},
     EntryMessage,
 };
+
+mod layer;
 
 /// This is unstable now and may be changed in the future.
 #[doc(hidden)]
@@ -173,7 +177,7 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
         make_incoming: MI,
     ) -> Result<(), BoxError>
     where
-        L: Layer<S>,
+        L: Layer<BizErrorService<S>>,
         MkC: MakeCodec<OwnedReadHalf, OwnedWriteHalf>,
         L::Service: Service<ServerContext, Req, Response = S::Response> + Send + 'static + Sync,
         <L::Service as Service<ServerContext, Req>>::Error: Into<crate::ServerError> + Send,
@@ -184,7 +188,8 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
         SP: SpanProvider,
     {
         // init server
-        let service = Arc::new(self.layer.layer(self.service));
+        // inject biz error layer first
+        let service = Arc::new(self.layer.layer(BizErrorLayer::new().layer(self.service)));
         // TODO(lyf1999): type annotation is needed here, figure out why
         let stat_tracer: Arc<[TraceFn]> = Arc::from(self.stat_tracer);
 

@@ -23,10 +23,12 @@ pilota.workspace = true
 motore.workspace = true
 metainfo.workspace = true
 
+ahash.workspace = true
 anyhow.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 futures.workspace = true
+itoa.workspace = true
 rustc-hash.workspace = true
 lazy_static.workspace = true
 linkedbytes.workspace = true
@@ -36,6 +38,7 @@ parking_lot.workspace = true
 paste.workspace = true
 pin-project.workspace = true
 scopeguard.workspace = true
+sonic-rs.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = [
     "time",

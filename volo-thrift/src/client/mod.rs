@@ -61,6 +61,7 @@ pub struct ClientBuilder<IL, OL, MkClient, Req, Resp, MkT, MkC, LB> {
     _marker: PhantomData<(*const Req, *const Resp)>,
 
     disable_timeout_layer: bool,
+    enable_biz_error: bool,
 
     #[cfg(feature = "multiplex")]
     multiplex: bool,
@@ -94,6 +95,7 @@ impl<C, Req, Resp>
             _marker: PhantomData,
 
             disable_timeout_layer: false,
+            enable_biz_error: true,
 
             #[cfg(feature = "multiplex")]
             multiplex: false,
@@ -123,6 +125,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
             mk_lb: self.mk_lb.load_balance(load_balance),
 
             disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -148,6 +151,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
             mk_lb: self.mk_lb.discover(discover),
 
             disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -203,6 +207,15 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
         self
     }
 
+    /// Set if to read biz error.
+    ///
+    /// Default is true.
+    #[doc(hidden)]
+    pub fn enable_biz_error(mut self, enable_biz_error: bool) -> Self {
+        self.enable_biz_error = enable_biz_error;
+        self
+    }
+
     pub fn mk_load_balance<NLB>(
         self,
         mk_load_balance: NLB,
@@ -222,6 +235,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             mk_lb: mk_load_balance,
 
             disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -255,6 +269,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             mk_lb: self.mk_lb,
 
             disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -282,6 +297,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             mk_lb: self.mk_lb,
 
             disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -330,6 +346,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             mk_lb: self.mk_lb,
 
             disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -368,6 +385,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             mk_lb: self.mk_lb,
 
             disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -406,6 +424,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             mk_lb: self.mk_lb,
 
             disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
 
             #[cfg(feature = "multiplex")]
             multiplex: self.multiplex,
@@ -431,6 +450,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             mk_lb: self.mk_lb,
 
             disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
 
             multiplex,
         }
@@ -456,6 +476,7 @@ where
         pingpong::Client<Resp, MkT, MkC>,
         crate::transport::multiplex::Client<Resp, MkT, MkC>,
     >,
+    read_biz_error: bool,
 }
 
 impl<Req, Resp, MkT, MkC> Service<ClientContext, Req> for MessageService<Resp, MkT, MkC>
@@ -476,6 +497,11 @@ where
     ) -> Result<Self::Response, Self::Error> {
         let msg = ThriftMessage::mk_client_msg(cx, req);
         let resp = self.inner.call(cx, msg).await;
+        if self.read_biz_error {
+            if let Some(biz_err) = cx.common_stats.biz_error() {
+                return Err(biz_err.clone().into());
+            }
+        }
         match resp {
             Ok(Some(ThriftMessage { data: Ok(data), .. })) => Ok(Some(data)),
             Ok(Some(ThriftMessage { data: Err(e), .. })) => Err(e.into()),
@@ -545,6 +571,7 @@ where
                     self.make_codec,
                 ))
             },
+            read_biz_error: self.enable_biz_error,
         };
 
         let transport = if !self.disable_timeout_layer {

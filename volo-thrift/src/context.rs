@@ -8,7 +8,7 @@ use volo::{
     newtype_impl_context,
 };
 
-use crate::{client::CallOpt, protocol::TMessageType};
+use crate::{client::CallOpt, protocol::TMessageType, BizError};
 
 macro_rules! stat_impl {
     ($t: ident) => {
@@ -58,7 +58,7 @@ impl ServerTransportInfo {
 }
 
 /// This is unstable now and may be changed in the future.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct CommonStats {
     // if there's a length-prefixed transport, we can get the read time
     read_start_at: Option<DateTime<Local>>,
@@ -75,6 +75,9 @@ pub struct CommonStats {
     read_size: Option<usize>, /* only applicable to length-prefixed transport such as TTHeader
                                * and Framed */
     write_size: Option<usize>,
+
+    // biz error
+    biz_error: Option<BizError>,
 }
 
 impl CommonStats {
@@ -105,6 +108,18 @@ impl CommonStats {
     #[inline]
     pub fn set_write_size(&mut self, size: usize) {
         self.write_size = Some(size)
+    }
+
+    #[doc(hidden)]
+    #[inline]
+    pub fn biz_error(&self) -> &Option<BizError> {
+        &self.biz_error
+    }
+
+    #[doc(hidden)]
+    #[inline]
+    pub fn set_biz_error(&mut self, biz_error: BizError) {
+        self.biz_error = Some(biz_error);
     }
 
     #[inline]
@@ -164,7 +179,7 @@ impl PooledTransport {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct ClientCxInner {
     pub seq_id: i32,
     pub message_type: TMessageType,
@@ -175,7 +190,7 @@ pub struct ClientCxInner {
     pub common_stats: CommonStats,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct ServerCxInner {
     pub seq_id: Option<i32>,
     pub req_msg_type: Option<TMessageType>,
@@ -215,7 +230,7 @@ impl ClientContext {
         self.stats.reset();
         self.common_stats.reset();
         // self.0 is RpcCx, this reset will clear rpcinfo and extension
-        self.0.reset(self.0.inner);
+        self.0.reset(self.0.inner.clone());
     }
 }
 
