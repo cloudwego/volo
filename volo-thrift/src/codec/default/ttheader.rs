@@ -321,6 +321,7 @@ pub(crate) fn encode<Cx: ThriftContext>(
             Role::Server => {
                 metainfo.get_all_backward_transients().is_some()
                     || cx.encode_conn_reset().unwrap_or(false)
+                    || cx.stats().biz_error().is_some()
             }
         };
 

@@ -16,13 +16,15 @@ use tokio::{
     sync::Notify,
 };
 use tracing::{info, trace};
-use volo::net::{
-    conn::{OwnedReadHalf, OwnedWriteHalf},
-    incoming::Incoming,
-    Address,
+use volo::{
+    net::{
+        conn::{OwnedReadHalf, OwnedWriteHalf},
+        incoming::Incoming,
+        Address,
+    },
+    service::BoxService,
 };
 
-use self::layer::biz_error::BizErrorService;
 use crate::{
     codec::{
         default::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec},
@@ -177,19 +179,23 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
         make_incoming: MI,
     ) -> Result<(), BoxError>
     where
-        L: Layer<BizErrorService<S>>,
+        L: Layer<BoxService<ServerContext, Req, S::Response, crate::ServerError>>,
         MkC: MakeCodec<OwnedReadHalf, OwnedWriteHalf>,
-        L::Service: Service<ServerContext, Req, Response = S::Response> + Send + 'static + Sync,
-        <L::Service as Service<ServerContext, Req>>::Error: Into<crate::ServerError> + Send,
-        S: Service<ServerContext, Req> + Send + 'static,
-        S::Error: Into<crate::ServerError> + Send,
-        Req: EntryMessage + Send + 'static,
+        L::Service: Service<ServerContext, Req, Response = S::Response, Error = crate::ServerError>
+            + Send
+            + 'static
+            + Sync,
+        S: Service<ServerContext, Req, Error = crate::ServerError> + Send + 'static + Sync,
         S::Response: EntryMessage + Send + 'static + Sync,
+        Req: EntryMessage + Send + 'static,
         SP: SpanProvider,
     {
         // init server
         // inject biz error layer first
-        let service = Arc::new(self.layer.layer(BizErrorLayer::new().layer(self.service)));
+        let service = Arc::new(
+            self.layer
+                .layer(BoxService::new(BizErrorLayer::new().layer(self.service))),
+        );
         // TODO(lyf1999): type annotation is needed here, figure out why
         let stat_tracer: Arc<[TraceFn]> = Arc::from(self.stat_tracer);
 
