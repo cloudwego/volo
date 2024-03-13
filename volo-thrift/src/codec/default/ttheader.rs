@@ -2,6 +2,8 @@
 //!
 //! For more information, please visit https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/
 
+#![allow(clippy::mutable_key_type)]
+
 use std::{collections::HashMap, net::SocketAddr, time::Duration};
 
 use bytes::{Buf, BufMut, Bytes, BytesMut};
@@ -19,7 +21,7 @@ use super::MakeZeroCopyCodec;
 use crate::{
     codec::default::{ZeroCopyDecoder, ZeroCopyEncoder},
     context::ThriftContext,
-    EntryMessage, ThriftMessage,
+    BizError, EntryMessage, ThriftMessage,
 };
 
 /// [`MakeTTHeaderCodec`] implements [`MakeZeroCopyCodec`] to create [`TTheaderEncoder`] and
@@ -48,6 +50,8 @@ impl<Inner: MakeZeroCopyCodec> MakeZeroCopyCodec for MakeTTHeaderCodec<Inner> {
 
 /// This is used to tell the encoder to encode TTHeader at server side.
 pub struct HasTTHeader;
+
+struct BizErrorExtra(FastStr);
 
 #[derive(Clone)]
 pub struct TTHeaderDecoder<D: ZeroCopyDecoder> {
@@ -202,6 +206,9 @@ pub(crate) const HEADER_TRANS_REMOTE_ADDR: &str = "rip";
 // the connection peer will shutdown later, so it send back the header to tell client to close the
 // connection.
 pub(crate) const HEADER_CONNECTION_READY_TO_RESET: &str = "crrst";
+pub(crate) const TT_HEADER_BIZ_STATUS_KEY: &str = "biz-status";
+pub(crate) const TT_HEADER_BIZ_MESSAGE_KEY: &str = "biz-message";
+pub(crate) const TT_HEADER_BIZ_EXTRA_KEY: &str = "biz-extra";
 
 #[derive(TryFromPrimitive, Clone, Copy, Default)]
 #[repr(u8)]
@@ -369,6 +376,39 @@ pub(crate) fn encode<Cx: ThriftContext>(
                         dst.put_u16(1);
                         dst.put_slice("1".as_bytes());
                         string_kv_len += 1;
+                    }
+
+                    if let Some(biz_error) = cx.stats().biz_error() {
+                        let mut ibuf = itoa::Buffer::new();
+                        let status_code = ibuf.format(biz_error.status_code);
+                        dst.put_u16(TT_HEADER_BIZ_STATUS_KEY.as_bytes().len() as u16);
+                        dst.put_slice(TT_HEADER_BIZ_STATUS_KEY.as_bytes());
+                        dst.put_u16(status_code.len() as u16);
+                        dst.put_slice(status_code.as_bytes());
+                        string_kv_len += 1;
+
+                        dst.put_u16(TT_HEADER_BIZ_MESSAGE_KEY.as_bytes().len() as u16);
+                        dst.put_slice(TT_HEADER_BIZ_MESSAGE_KEY.as_bytes());
+                        dst.put_u16(biz_error.status_message.len() as u16);
+                        dst.put_slice(biz_error.status_message.as_bytes());
+                        string_kv_len += 1;
+
+                        if let Some(extra) = &biz_error.extra {
+                            let extra_str = if let Some(extra) =
+                                cx.extensions().get::<BizErrorExtra>().map(|e| e.0.clone())
+                            {
+                                extra
+                            } else {
+                                sonic_rs::to_string(&extra)
+                                    .expect("encode biz error extra")
+                                    .into()
+                            };
+                            dst.put_u16(TT_HEADER_BIZ_EXTRA_KEY.as_bytes().len() as u16);
+                            dst.put_slice(TT_HEADER_BIZ_EXTRA_KEY.as_bytes());
+                            dst.put_u16(extra_str.as_bytes().len() as u16);
+                            dst.put_slice(extra_str.as_bytes());
+                            string_kv_len += 1;
+                        }
                     }
                 }
             }
@@ -585,6 +625,32 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                         len += 2;
                         len += "1".as_bytes().len();
                     }
+                    if let Some(biz_error) = thrift_cx.stats().biz_error() {
+                        len += 2;
+                        len += TT_HEADER_BIZ_STATUS_KEY.as_bytes().len();
+                        len += 2;
+                        len += itoa::Buffer::new()
+                            .format(biz_error.status_code)
+                            .as_bytes()
+                            .len();
+
+                        len += 2;
+                        len += TT_HEADER_BIZ_MESSAGE_KEY.as_bytes().len();
+                        len += 2;
+                        len += biz_error.status_message.as_bytes().len();
+
+                        if let Some(extra) = &biz_error.extra {
+                            len += 2;
+                            len += TT_HEADER_BIZ_EXTRA_KEY.as_bytes().len();
+                            len += 2;
+                            let extra =
+                                sonic_rs::to_string(&extra).expect("encode biz error extra");
+                            len += extra.as_bytes().len();
+                            thrift_cx
+                                .extensions_mut()
+                                .insert(BizErrorExtra(extra.into()));
+                        }
+                    }
                 }
             }
         }
@@ -784,6 +850,8 @@ pub(crate) fn decode<Cx: ThriftContext>(
                         }
                     }
 
+                    set_biz_error_header(cx, &mut headers);
+
                     // Search for backward metainfo.
                     // We are not supposed to use headers, so we can use into_iter to avoid clone.
                     for (k, v) in headers.into_iter() {
@@ -839,4 +907,51 @@ pub(crate) fn decode<Cx: ThriftContext>(
             }
             Ok(())
         })
+}
+
+fn set_biz_error_header<Cx: ThriftContext>(
+    thrift_cx: &mut Cx,
+    headers: &mut HashMap<FastStr, FastStr>,
+) {
+    let biz_error = BizError {
+        status_code: if let Some(biz_status) = headers.remove(TT_HEADER_BIZ_STATUS_KEY) {
+            if let Ok(status_code) = biz_status.parse() {
+                if status_code == 0 {
+                    // align with kitex, 0 means no biz error
+                    return;
+                }
+                status_code
+            } else {
+                warn!(
+                    "[VOLO] \"biz-status\" key found in ttheader, but value is not a valid i32 \
+                     string: {}, rpcinfo: {:?}",
+                    biz_status,
+                    thrift_cx.rpc_info()
+                );
+                return;
+            }
+        } else {
+            return;
+        },
+        status_message: headers
+            .remove(TT_HEADER_BIZ_MESSAGE_KEY)
+            .unwrap_or_default(),
+        extra: headers
+            .remove(TT_HEADER_BIZ_EXTRA_KEY)
+            .and_then(|biz_extra| {
+                sonic_rs::from_str(&biz_extra)
+                    .map_err(|e| {
+                        warn!(
+                            "[VOLO] \"biz-extra\" key found in ttheader, but value is not a valid \
+                             json string: {}, rpcinfo: {:?}, error: {}",
+                            biz_extra,
+                            thrift_cx.rpc_info(),
+                            e
+                        )
+                    })
+                    .unwrap_or_default()
+            }),
+    };
+
+    thrift_cx.stats_mut().set_biz_error(biz_error);
 }
