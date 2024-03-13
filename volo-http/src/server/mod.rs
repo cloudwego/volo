@@ -18,9 +18,12 @@ use motore::{
 use scopeguard::defer;
 use tokio::{sync::Notify, task::JoinHandle};
 use tracing::{info, trace};
-use volo::net::{conn::Conn, incoming::Incoming, Address, MakeIncoming};
 #[cfg(feature = "__tls")]
 use volo::net::{conn::ConnStream, tls::Acceptor, tls::ServerTlsConfig};
+use volo::{
+    context::Context,
+    net::{conn::Conn, incoming::Incoming, Address, MakeIncoming},
+};
 
 use crate::{
     context::{server::Config, ServerContext},
@@ -469,9 +472,12 @@ where
         .scope(RefCell::new(MetaInfo::default()), async {
             let service = service.clone();
             let peer = peer.clone();
-            let mut cx = ServerContext::new(peer, config.stat_enable);
+            let mut cx = ServerContext::new(peer);
+            cx.rpc_info_mut().set_config(config);
 
-            if config.stat_enable {
+            let stat_enabled = cx.stat_enabled();
+
+            if stat_enabled {
                 cx.stats.set_uri(request.uri().to_owned());
                 cx.stats.set_method(request.method().to_owned());
                 if let Some(req_size) = request.size_hint().exact() {
@@ -482,7 +488,7 @@ where
 
             let resp = service.call(&mut cx, request).await.into_response();
 
-            if config.stat_enable {
+            if stat_enabled {
                 cx.stats.record_process_end_at();
                 cx.common_stats.set_status_code(resp.status());
                 if let Some(resp_size) = resp.size_hint().exact() {

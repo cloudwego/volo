@@ -3,7 +3,6 @@ use std::error::Error;
 use http::header;
 use http_body::Body;
 use motore::service::Service;
-use volo::context::Context;
 
 use crate::{
     context::ClientContext, error::client::ClientError, request::ClientRequest,
@@ -47,9 +46,9 @@ where
             }
         }
 
-        let stat_enable = cx.rpc_info().config().stat_enable;
+        let stat_enabled = cx.stat_enabled();
 
-        if stat_enable {
+        if stat_enabled {
             if let Some(req_size) = exact_len {
                 cx.common_stats.set_req_size(req_size);
             }
@@ -60,7 +59,7 @@ where
 
         let res = self.inner.call(cx, req).await;
 
-        if stat_enable {
+        if stat_enabled {
             if let Ok(response) = res.as_ref() {
                 cx.stats.set_status_code(response.status());
                 if let Some(resp_size) = response.size_hint().exact() {

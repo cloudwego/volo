@@ -50,9 +50,8 @@ impl ClientTransport {
     #[cfg(feature = "__tls")]
     async fn make_connection(&self, cx: &ClientContext) -> Result<Conn, ClientError> {
         let target_addr = cx.rpc_info().callee().address().ok_or_else(no_address)?;
-        let is_tls = cx.rpc_info().config().is_tls;
         match target_addr {
-            volo::net::Address::Ip(_) if is_tls => {
+            volo::net::Address::Ip(_) if cx.is_tls() => {
                 let target_name = cx.rpc_info().callee().service_name_ref();
                 tracing::debug!("connecting to tls target: {target_addr:?}, name: {target_name:?}");
                 let conn = self
@@ -140,15 +139,15 @@ where
         cx: &mut ClientContext,
         req: ClientRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
-        let stat_enable = cx.rpc_info().config().stat_enable;
+        let stat_enabled = cx.stat_enabled();
 
-        if stat_enable {
+        if stat_enabled {
             cx.stats.record_transport_start_at();
         }
 
         let res = self.request(cx, req).await;
 
-        if stat_enable {
+        if stat_enabled {
             cx.stats.record_transport_end_at();
         }
 

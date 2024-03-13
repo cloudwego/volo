@@ -522,17 +522,15 @@ impl<S> Client<S> {
             }
         }
 
-        let mut cx = ClientContext::new(target, true);
+        let mut cx = ClientContext::new(
+            target,
+            #[cfg(feature = "__tls")]
+            uri.scheme()
+                .is_some_and(|scheme| scheme == &http::uri::Scheme::HTTPS),
+        );
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
         cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
         cx.rpc_info_mut().set_config(self.inner.config.clone());
-        #[cfg(feature = "__tls")]
-        {
-            cx.rpc_info_mut().config_mut().is_tls = match uri.scheme() {
-                Some(scheme) => scheme == &http::uri::Scheme::HTTPS,
-                None => false,
-            };
-        }
 
         self.call(&mut cx, request).await
     }
