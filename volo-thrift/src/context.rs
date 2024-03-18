@@ -129,7 +129,7 @@ impl CommonStats {
 }
 
 /// This is unstable now and may be changed in the future.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct ServerStats {
     process_start_at: Option<DateTime<Local>>,
     process_end_at: Option<DateTime<Local>>,
@@ -147,7 +147,7 @@ impl ServerStats {
 }
 
 /// This is unstable now and may be changed in the future.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct ClientStats {
     make_transport_start_at: Option<DateTime<Local>>,
     make_transport_end_at: Option<DateTime<Local>>,
@@ -164,7 +164,7 @@ impl ClientStats {
     }
 }
 
-#[derive(Default, Clone, Debug, Copy)]
+#[derive(Default, Clone, Debug)]
 pub struct PooledTransport {
     pub should_reuse: bool,
 }
