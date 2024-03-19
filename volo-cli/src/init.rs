@@ -196,8 +196,7 @@ impl CliCommand for Init {
             if let Some(git) = self.git.as_ref() {
                 let repo_name = FastStr::new(
                     self.repo
-                        .as_ref()
-                        .map(|s| s.as_str())
+                        .as_deref()
                         .unwrap_or_else(|| get_repo_name_by_url(git)),
                 );
                 let r#ref = self.r#ref.as_deref().unwrap_or("HEAD");
@@ -225,7 +224,7 @@ impl CliCommand for Init {
                 filename: PathBuf::from(DEFAULT_FILENAME),
                 protocol: idl.protocol(),
                 repos: if let Some(repo) = repo {
-                    let mut repos = HashMap::new();
+                    let mut repos = HashMap::with_capacity(1);
                     let repo_name = if let Source::Git(GitSource { repo_name }) = &idl.source {
                         repo_name.clone()
                     } else {

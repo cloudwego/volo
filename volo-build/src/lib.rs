@@ -2,7 +2,7 @@
     html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
-
+#![allow(clippy::mutable_key_type)]
 use std::{
     path::{Path, PathBuf},
     str::FromStr,

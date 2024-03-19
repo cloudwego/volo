@@ -1,19 +1,14 @@
-use std::{collections::HashMap, fs::create_dir_all, path::PathBuf, process::Command};
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::anyhow;
 use clap::Parser;
 use faststr::FastStr;
 use volo_build::{
-    config_builder::InitBuilder,
     legacy::{self, util::open_config_file},
     model::{
         CodegenOption, CommonOption, Entry, GitSource, Idl, IdlProtocol, Repo, Service, Source,
-        DEFAULT_FILENAME,
     },
-    util::{
-        get_repo_latest_commit_id, get_repo_name_by_url, git_repo_init, strip_slash_prefix,
-        DEFAULT_CONFIG_FILE,
-    },
+    util::{get_repo_latest_commit_id, get_repo_name_by_url, DEFAULT_CONFIG_FILE},
 };
 
 use crate::command::CliCommand;
@@ -23,7 +18,7 @@ use crate::command::CliCommand;
 pub struct Migrate {}
 
 impl CliCommand for Migrate {
-    fn run(&self, cx: crate::context::Context) -> anyhow::Result<()> {
+    fn run(&self, _cx: crate::context::Context) -> anyhow::Result<()> {
         let path = if std::fs::metadata(DEFAULT_CONFIG_FILE).is_ok() {
             PathBuf::from(DEFAULT_CONFIG_FILE)
         } else {
@@ -76,10 +71,10 @@ impl CliCommand for Migrate {
     }
 }
 
-fn transfer_from_legacy(idls: &Vec<legacy::model::Idl>) -> (HashMap<FastStr, Repo>, Vec<Service>) {
-    let mut repos = HashMap::new();
-    let mut services = Vec::new();
-    idls.into_iter().for_each(|idl| {
+fn transfer_from_legacy(idls: &[legacy::model::Idl]) -> (HashMap<FastStr, Repo>, Vec<Service>) {
+    let mut repos = HashMap::with_capacity(idls.len());
+    let mut services = Vec::with_capacity(idls.len());
+    idls.iter().for_each(|idl| {
         let (repo, service) =
             if let legacy::model::Source::Git(legacy::model::GitSource { repo, r#ref, lock }) =
                 &idl.source
@@ -88,7 +83,7 @@ fn transfer_from_legacy(idls: &Vec<legacy::model::Idl>) -> (HashMap<FastStr, Rep
                 let lock = lock
                     .clone()
                     .unwrap_or_else(|| {
-                        let r = get_repo_latest_commit_id(&repo, &r#ref);
+                        let r = get_repo_latest_commit_id(repo, &r#ref);
                         if r.is_err() {
                             eprintln!(
                                 "failed to get latest commit id for repo: {}, err: {}",
@@ -100,7 +95,7 @@ fn transfer_from_legacy(idls: &Vec<legacy::model::Idl>) -> (HashMap<FastStr, Rep
                         r.unwrap()
                     })
                     .into();
-                let name = FastStr::new(get_repo_name_by_url(&repo));
+                let name = FastStr::new(get_repo_name_by_url(repo));
                 let service = Service {
                     idl: Idl {
                         source: Source::Git(GitSource {

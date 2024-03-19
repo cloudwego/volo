@@ -64,12 +64,10 @@ where
                     None
                 };
 
-                get_or_download_idl(s.idl, repo, &s.codegen_option, work_dir.join("target")).map(
-                    |idl| IdlService {
-                        path: idl.path,
-                        config: s.codegen_option.config,
-                    },
-                )
+                get_or_download_idl(s.idl, repo, work_dir.join("target")).map(|idl| IdlService {
+                    path: idl.path,
+                    config: s.codegen_option.config,
+                })
             })
             .collect::<Result<Vec<_>, _>>();
         match services {

@@ -5,7 +5,7 @@ use pilota_build::BoxClonePlugin;
 use volo::FastStr;
 
 use crate::{
-    model::{self, Entry, GitSource, Source},
+    model::{self, CodegenOption, Entry, GitSource, Source},
     util::{
         get_or_download_idl, open_config_file, read_config_from_file, LocalIdl,
         DEFAULT_CONFIG_FILE, DEFAULT_DIR,
@@ -141,7 +141,7 @@ impl SingleConfigBuilder {
 
     pub fn write(self) -> anyhow::Result<()> {
         println!("cargo:rerun-if-changed={}", self.filename.display());
-        let f = open_config_file(self.filename)?;
+        let f = open_config_file(self.filename.clone())?;
         let config = read_config_from_file(&f)?;
         config
             .entries
@@ -151,7 +151,7 @@ impl SingleConfigBuilder {
                     model::IdlProtocol::Thrift => InnerBuilder::thrift(),
                     model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
                 }
-                .filename(entry.filename);
+                .filename(entry.filename.clone());
 
                 for p in self.plugins.iter() {
                     builder = builder.plugin(p.clone());
@@ -170,13 +170,12 @@ impl SingleConfigBuilder {
                     };
 
                     let target = PathBuf::from(&*DEFAULT_DIR).join(entry_name.clone());
-
-                    let LocalIdl {
-                        path,
-                        includes,
-                        touch,
+                    let LocalIdl { path, includes } = get_or_download_idl(s.idl, repo, target)?;
+                    let CodegenOption {
                         keep_unknown_fields,
-                    } = get_or_download_idl(s.idl, repo, &s.codegen_option, target)?;
+                        touch,
+                        ..
+                    } = s.codegen_option;
 
                     println!("keep unknown fields switch is: {}", keep_unknown_fields);
 
@@ -235,12 +234,12 @@ impl InitBuilder {
                 None
             };
             let target = PathBuf::from(&*DEFAULT_DIR).join(self.entry_name.clone());
-            let LocalIdl {
-                path,
-                includes,
-                touch,
+            let LocalIdl { path, includes } = get_or_download_idl(s.idl, repo, target)?;
+            let CodegenOption {
                 keep_unknown_fields,
-            } = get_or_download_idl(s.idl, repo, &s.codegen_option, target)?;
+                touch,
+                ..
+            } = s.codegen_option;
 
             builder = builder
                 .add_service(path.clone())

@@ -1,6 +1,4 @@
-use std::path::PathBuf;
-
-use clap::{value_parser, Parser};
+use clap::Parser;
 use faststr::FastStr;
 use volo_build::{
     model::Repo,
@@ -42,8 +40,7 @@ impl CliCommand for Add {
 
         let name = FastStr::new(
             self.repo
-                .as_ref()
-                .map(|s| s.as_str())
+                .as_deref()
                 .unwrap_or_else(|| get_repo_name_by_url(git)),
         );
         let url = FastStr::new(git);

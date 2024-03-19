@@ -171,15 +171,4 @@ where
         )
     }
 }
-
-macro_rules! join_multi_strs {
-    ($sep: tt, |$($s: tt),*| ->  $f: tt) => {
-        {
-            #[allow(unused_parens)]
-            itertools::izip!($(&$s),*).map(|($($s),*)| format!($f)).join($sep)
-        }
-    };
-}
-
-pub(crate) use join_multi_strs;
 use volo::FastStr;

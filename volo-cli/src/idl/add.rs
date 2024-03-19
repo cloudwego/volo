@@ -115,10 +115,9 @@ impl CliCommand for Add {
                     if s.idl.path != self.idl {
                         continue;
                     }
-                    match s.idl.source {
-                        Source::Local => is_existed_local = true,
-                        _ => {}
-                    };
+                    if let Source::Local = s.idl.source {
+                        is_existed_local = true;
+                    }
                     has_found_idl = true;
                     break;
                 }
@@ -182,7 +181,7 @@ impl CliCommand for Add {
                         protocol: new_service.idl.protocol(),
                         filename: PathBuf::from(&self.filename),
                         repos: if let Some(new_repo) = new_repo {
-                            let mut repos = HashMap::new();
+                            let mut repos = HashMap::with_capacity(1);
                             let repo_name = if let Source::Git(GitSource { repo_name }) =
                                 &new_service.idl.source
                             {

@@ -10,7 +10,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::de::Error;
 
-use crate::model::{CodegenOption, Idl, Repo, SingleConfig};
+use crate::model::{Idl, Repo, SingleConfig};
 
 lazy_static! {
     pub static ref DEFAULT_DIR: PathBuf = std::path::Path::new(
@@ -82,14 +82,11 @@ pub fn download_files_from_git(task: Task) -> anyhow::Result<()> {
 pub struct LocalIdl {
     pub path: PathBuf,
     pub includes: Vec<PathBuf>,
-    pub touch: Vec<String>,
-    pub keep_unknown_fields: bool,
 }
 
 pub fn get_or_download_idl(
     idl: Idl,
     repo: Option<&Repo>,
-    code_gen_option: &CodegenOption,
     target_dir: impl AsRef<Path>,
 ) -> anyhow::Result<LocalIdl> {
     let (path, includes) = if let Some(repo) = repo {
@@ -100,7 +97,7 @@ pub fn get_or_download_idl(
             repo.url.to_string(),
             repo.lock.to_string(),
         );
-        download_files_from_git(task).with_context(|| format!("download repo {{repo.name}}"))?;
+        download_files_from_git(task).with_context(|| format!("download repo {}", repo.url))?;
 
         (
             // git should use relative path instead of absolute path
@@ -115,12 +112,7 @@ pub fn get_or_download_idl(
         (idl.path.to_path_buf(), idl.includes.unwrap_or_default())
     };
 
-    Ok(LocalIdl {
-        path,
-        includes,
-        touch: code_gen_option.touch.clone(),
-        keep_unknown_fields: code_gen_option.keep_unknown_fields,
-    })
+    Ok(LocalIdl { path, includes })
 }
 
 fn run_command(command: &mut Command) -> anyhow::Result<()> {
@@ -201,7 +193,7 @@ pub fn get_repo_name_by_url(git: &str) -> &str {
     // 1. username@domain:namespace/repo.git
     // 2. https://domain/namespace/repo.git
     let g = git.trim_end_matches(".git");
-    g.rsplit_once("/").map(|s| s.1).unwrap_or(g)
+    g.rsplit_once('/').map(|s| s.1).unwrap_or(g)
 }
 
 pub struct Task {
