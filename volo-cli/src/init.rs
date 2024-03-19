@@ -1,10 +1,14 @@
-use std::{fs::create_dir_all, path::PathBuf, process::Command};
+use std::{collections::HashMap, fs::create_dir_all, path::PathBuf, process::Command};
 
 use clap::{value_parser, Parser};
+use faststr::FastStr;
 use volo_build::{
     config_builder::InitBuilder,
-    model::{Entry, GitSource, Idl, Source, DEFAULT_FILENAME},
-    util::{get_repo_latest_commit_id, git_repo_init, strip_slash_prefix, DEFAULT_CONFIG_FILE},
+    model::{Entry, GitSource, Idl, Repo, Service, Source, DEFAULT_FILENAME},
+    util::{
+        get_repo_latest_commit_id, get_repo_name_by_url, git_repo_init, strip_slash_prefix,
+        DEFAULT_CONFIG_FILE,
+    },
 };
 
 use crate::command::CliCommand;
@@ -14,6 +18,8 @@ use crate::command::CliCommand;
 pub struct Init {
     #[arg(help = "The name of project")]
     pub name: String,
+    #[arg(help = "The name of repo")]
+    pub repo: Option<String>,
     #[arg(
         short = 'g',
         long = "git",
@@ -28,7 +34,6 @@ pub struct Init {
         help = "Specify the git repo ref(branch) for idl.\nExample: main / $TAG"
     )]
     pub r#ref: Option<String>,
-
     #[arg(
         short = 'i',
         long = "includes",
@@ -54,13 +59,17 @@ impl Init {
         }
     }
 
-    fn init_gen(&self, config_entry: Entry) -> anyhow::Result<(String, String)> {
-        InitBuilder::new(config_entry).init()
+    fn init_gen(
+        &self,
+        entry_name: String,
+        config_entry: Entry,
+    ) -> anyhow::Result<(String, String)> {
+        InitBuilder::new(entry_name, config_entry).init()
     }
 
-    fn copy_grpc_template(&self, config_entry: Entry) -> anyhow::Result<()> {
+    fn copy_grpc_template(&self, entry_name: String, config_entry: Entry) -> anyhow::Result<()> {
         std::env::set_var("OUT_DIR", "/tmp/idl");
-        let (service_global_name, methods) = self.init_gen(config_entry)?;
+        let (service_global_name, methods) = self.init_gen(entry_name, config_entry)?;
 
         let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
@@ -113,9 +122,9 @@ impl Init {
         Ok(())
     }
 
-    fn copy_thrift_template(&self, config_entry: Entry) -> anyhow::Result<()> {
+    fn copy_thrift_template(&self, entry_name: String, config_entry: Entry) -> anyhow::Result<()> {
         std::env::set_var("OUT_DIR", "/tmp/idl");
-        let (service_global_name, methods) = self.init_gen(config_entry)?;
+        let (service_global_name, methods) = self.init_gen(entry_name, config_entry)?;
 
         let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
@@ -171,21 +180,37 @@ impl Init {
 
 impl CliCommand for Init {
     fn run(&self, cx: crate::context::Context) -> anyhow::Result<()> {
-        volo_build::util::with_config(|config| {
-            let mut lock = None;
+        if std::fs::metadata(DEFAULT_CONFIG_FILE).is_ok()
+            || std::fs::metadata(PathBuf::from("./volo-gen/").join(DEFAULT_CONFIG_FILE)).is_ok()
+        {
+            eprintln!("volo.yml already exists, the initialization is not allowed!");
+            std::process::exit(1);
+        }
+
+        volo_build::util::with_config(|_config| {
             let mut idl = Idl::new();
             idl.includes.clone_from(&self.includes);
+            let mut repo = None;
 
             // Handling Git-Based Template Creation
             if let Some(git) = self.git.as_ref() {
+                let repo_name = FastStr::new(
+                    self.repo
+                        .as_ref()
+                        .map(|s| s.as_str())
+                        .unwrap_or_else(|| get_repo_name_by_url(git)),
+                );
                 let r#ref = self.r#ref.as_deref().unwrap_or("HEAD");
-                let lock_value = get_repo_latest_commit_id(git, r#ref)?;
-                let _ = lock.insert(lock_value);
+                let lock = get_repo_latest_commit_id(git, r#ref)?;
+                let new_repo = Repo {
+                    url: git.clone().into(),
+                    r#ref: FastStr::new(r#ref),
+                    lock: lock.into(),
+                };
                 idl.source = Source::Git(GitSource {
-                    repo: git.clone(),
-                    r#ref: None,
-                    lock,
+                    repo_name: repo_name.clone(),
                 });
+                repo = Some(new_repo);
             }
 
             if self.git.is_some() {
@@ -197,23 +222,37 @@ impl CliCommand for Init {
             }
 
             let mut entry = Entry {
-                protocol: idl.protocol(),
                 filename: PathBuf::from(DEFAULT_FILENAME),
-                idls: vec![idl.clone()],
-                touch_all: false,
-                nonstandard_snake_case: false,
+                protocol: idl.protocol(),
+                repos: if let Some(repo) = repo {
+                    let mut repos = HashMap::new();
+                    let repo_name = if let Source::Git(GitSource { repo_name }) = &idl.source {
+                        repo_name.clone()
+                    } else {
+                        unreachable!("git service should have the git source")
+                    };
+                    repos.insert(repo_name, repo.clone());
+                    repos
+                } else {
+                    HashMap::new()
+                },
+                services: vec![Service {
+                    idl: idl.clone(),
+                    codegen_option: Default::default(),
+                }],
+                common_option: Default::default(),
             };
 
             if self.is_grpc_project() {
-                self.copy_grpc_template(entry.clone())?;
+                self.copy_grpc_template(cx.entry_name.clone(), entry.clone())?;
             } else {
-                self.copy_thrift_template(entry.clone())?;
+                self.copy_thrift_template(cx.entry_name.clone(), entry.clone())?;
             }
 
             if self.git.as_ref().is_none() {
                 // we will move volo.yml to volo-gen, so we need to add .. to includes and idl path
-                if let Some(idl) = entry.idls.get_mut(0) {
-                    if let Some(includes) = &mut idl.includes {
+                if let Some(service) = entry.services.get_mut(0) {
+                    if let Some(includes) = &mut service.idl.includes {
                         for i in includes {
                             if i.is_absolute() {
                                 continue;
@@ -226,48 +265,6 @@ impl CliCommand for Init {
                     }
                 }
             }
-
-            let config_entry = config.entries.entry(cx.entry_name);
-            match config_entry {
-                std::collections::hash_map::Entry::Occupied(mut e) => {
-                    // find the specified idl and update it.
-                    let mut found = false;
-                    for idl in e.get_mut().idls.iter_mut() {
-                        if self.idl != idl.path {
-                            continue;
-                        }
-                        let (repo, r#ref) = match idl.source {
-                            Source::Git(GitSource {
-                                ref mut repo,
-                                ref mut r#ref,
-                                ..
-                            }) => {
-                                // found the desired idl, update it
-                                found = true;
-                                (repo, r#ref)
-                            }
-                            _ => continue,
-                        };
-
-                        if let Some(git) = self.git.as_ref() {
-                            repo.clone_from(git);
-                            if self.r#ref.is_some() {
-                                r#ref.clone_from(&self.r#ref);
-                            }
-                        } else {
-                            unreachable!()
-                        }
-                        break;
-                    }
-
-                    if !found {
-                        e.get_mut().idls.push(idl);
-                    }
-                }
-                std::collections::hash_map::Entry::Vacant(e) => {
-                    e.insert(entry);
-                }
-            };
 
             Ok(())
         })?;

@@ -4,15 +4,15 @@ use anyhow::Ok;
 use pilota_build::BoxClonePlugin;
 use volo::FastStr;
 
-use crate::{
-    model::{self, Entry, GitSource, Source},
+use super::{
+    model::{self, Entry},
     util::{
         get_or_download_idl, open_config_file, read_config_from_file, LocalIdl,
         DEFAULT_CONFIG_FILE, DEFAULT_DIR,
     },
 };
 
-pub struct SingleConfigBuilder {
+pub struct ConfigBuilder {
     filename: PathBuf,
     plugins: Vec<BoxClonePlugin>,
 }
@@ -125,9 +125,9 @@ impl InnerBuilder {
     }
 }
 
-impl SingleConfigBuilder {
+impl ConfigBuilder {
     pub fn new(filename: PathBuf) -> Self {
-        SingleConfigBuilder {
+        ConfigBuilder {
             filename,
             plugins: Vec::new(),
         }
@@ -143,77 +143,59 @@ impl SingleConfigBuilder {
         println!("cargo:rerun-if-changed={}", self.filename.display());
         let f = open_config_file(self.filename)?;
         let config = read_config_from_file(&f)?;
-        config
-            .entries
-            .into_iter()
-            .try_for_each(|(entry_name, entry)| {
-                let mut builder = match entry.protocol {
-                    model::IdlProtocol::Thrift => InnerBuilder::thrift(),
-                    model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
+
+        config.entries.into_iter().try_for_each(|(_key, entry)| {
+            let mut builder = match entry.protocol {
+                model::IdlProtocol::Thrift => InnerBuilder::thrift(),
+                model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
+            }
+            .filename(entry.filename);
+
+            for p in self.plugins.iter() {
+                builder = builder.plugin(p.clone());
+            }
+
+            for idl in entry.idls {
+                let LocalIdl {
+                    path,
+                    includes,
+                    touch,
+                    keep_unknown_fields,
+                } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
+
+                builder = builder
+                    .add_service(path.clone())
+                    .includes(includes)
+                    .touch([(path.clone(), touch)]);
+                if keep_unknown_fields {
+                    builder = builder.keep_unknown_fields([path])
                 }
-                .filename(entry.filename);
+            }
 
-                for p in self.plugins.iter() {
-                    builder = builder.plugin(p.clone());
-                }
+            builder
+                .ignore_unused(!entry.touch_all)
+                .nonstandard_snake_case(entry.nonstandard_snake_case)
+                .write()?;
 
-                for s in entry.services {
-                    let repo = if let Source::Git(GitSource { ref repo_name }) = s.idl.source {
-                        Some(
-                            entry
-                                .repos
-                                .get(repo_name)
-                                .expect("git source requires the repo info for idl"),
-                        )
-                    } else {
-                        None
-                    };
-
-                    let target = PathBuf::from(&*DEFAULT_DIR).join(entry_name.clone());
-
-                    let LocalIdl {
-                        path,
-                        includes,
-                        touch,
-                        keep_unknown_fields,
-                    } = get_or_download_idl(s.idl, repo, &s.codegen_option, target)?;
-
-                    println!("keep unknown fields switch is: {}", keep_unknown_fields);
-
-                    builder = builder
-                        .add_service(path.clone())
-                        .includes(includes)
-                        .touch([(path.clone(), touch)]);
-                    if keep_unknown_fields {
-                        builder = builder.keep_unknown_fields([path])
-                    }
-                }
-
-                builder
-                    .ignore_unused(!entry.common_option.touch_all)
-                    .nonstandard_snake_case(entry.common_option.nonstandard_snake_case)
-                    .write()?;
-
-                Ok(())
-            })?;
+            Ok(())
+        })?;
         Ok(())
     }
 }
 
-impl Default for SingleConfigBuilder {
+impl Default for ConfigBuilder {
     fn default() -> Self {
-        SingleConfigBuilder::new(PathBuf::from(DEFAULT_CONFIG_FILE))
+        ConfigBuilder::new(PathBuf::from(DEFAULT_CONFIG_FILE))
     }
 }
 
 pub struct InitBuilder {
-    entry_name: String,
     entry: Entry,
 }
 
 impl InitBuilder {
-    pub fn new(entry_name: String, entry: Entry) -> Self {
-        InitBuilder { entry_name, entry }
+    pub fn new(entry: Entry) -> Self {
+        InitBuilder { entry }
     }
 
     pub fn init(self) -> anyhow::Result<(String, String)> {
@@ -223,24 +205,13 @@ impl InitBuilder {
         }
         .filename(self.entry.filename);
 
-        for s in self.entry.services {
-            let repo = if let Source::Git(GitSource { ref repo_name }) = s.idl.source {
-                Some(
-                    self.entry
-                        .repos
-                        .get(repo_name)
-                        .expect("git source requires the repo info for idl"),
-                )
-            } else {
-                None
-            };
-            let target = PathBuf::from(&*DEFAULT_DIR).join(self.entry_name.clone());
+        for idl in self.entry.idls {
             let LocalIdl {
                 path,
                 includes,
                 touch,
                 keep_unknown_fields,
-            } = get_or_download_idl(s.idl, repo, &s.codegen_option, target)?;
+            } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
 
             builder = builder
                 .add_service(path.clone())

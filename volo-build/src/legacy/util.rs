@@ -10,7 +10,7 @@ use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::de::Error;
 
-use crate::model::{CodegenOption, Idl, Repo, SingleConfig};
+use super::model::{Config, GitSource, Idl, Source};
 
 lazy_static! {
     pub static ref DEFAULT_DIR: PathBuf = std::path::Path::new(
@@ -30,18 +30,18 @@ pub fn ensure_cache_path() -> std::io::Result<()> {
     ensure_path(&DEFAULT_DIR)
 }
 
-pub fn read_config_from_file(f: &File) -> Result<SingleConfig, serde_yaml::Error> {
+pub fn read_config_from_file(f: &File) -> Result<Config, serde_yaml::Error> {
     match f.metadata() {
         Ok(metadata) => {
             if metadata.len() == 0 {
-                Ok(SingleConfig::new())
+                Ok(Config::new())
             } else {
                 serde_yaml::from_reader(f)
             }
         }
         Err(e) => {
             if e.kind() == std::io::ErrorKind::NotFound {
-                Ok(SingleConfig::new())
+                Ok(Config::new())
             } else {
                 Err(serde_yaml::Error::custom(format!(
                     "failed to read config file, err: {}",
@@ -86,21 +86,28 @@ pub struct LocalIdl {
     pub keep_unknown_fields: bool,
 }
 
-pub fn get_or_download_idl(
-    idl: Idl,
-    repo: Option<&Repo>,
-    code_gen_option: &CodegenOption,
-    target_dir: impl AsRef<Path>,
-) -> anyhow::Result<LocalIdl> {
-    let (path, includes) = if let Some(repo) = repo {
-        let dir = target_dir.as_ref().join(get_git_path(repo.url.as_str())?);
+pub fn get_or_download_idl(idl: Idl, target_dir: impl AsRef<Path>) -> anyhow::Result<LocalIdl> {
+    let (path, includes) = if let Source::Git(GitSource {
+        ref repo, ref lock, ..
+    }) = idl.source
+    {
+        let lock = lock.as_ref().ok_or_else(|| {
+            anyhow::anyhow!(
+                "please exec 'volo idl update' or specify the lock for {}",
+                repo
+            )
+        })?;
+        let dir = target_dir
+            .as_ref()
+            .join(get_git_path(repo.as_str())?)
+            .join(lock);
         let task = Task::new(
             vec![idl.path.to_string_lossy().to_string()],
             dir.clone(),
-            repo.url.to_string(),
-            repo.lock.to_string(),
+            repo.clone(),
+            lock.to_string(),
         );
-        download_files_from_git(task).with_context(|| format!("download repo {{repo.name}}"))?;
+        download_files_from_git(task).with_context(|| format!("download repo {repo}"))?;
 
         (
             // git should use relative path instead of absolute path
@@ -118,8 +125,8 @@ pub fn get_or_download_idl(
     Ok(LocalIdl {
         path,
         includes,
-        touch: code_gen_option.touch.clone(),
-        keep_unknown_fields: code_gen_option.keep_unknown_fields,
+        touch: idl.touch,
+        keep_unknown_fields: idl.keep_unknown_fields,
     })
 }
 
@@ -196,14 +203,6 @@ pub fn get_git_path(git: &str) -> anyhow::Result<PathBuf> {
     }
 }
 
-pub fn get_repo_name_by_url(git: &str) -> &str {
-    // there may be two type of git here:
-    // 1. username@domain:namespace/repo.git
-    // 2. https://domain/namespace/repo.git
-    let g = git.trim_end_matches(".git");
-    g.rsplit_once("/").map(|s| s.1).unwrap_or(g)
-}
-
 pub struct Task {
     _files: Vec<String>,
     dir: PathBuf,
@@ -274,7 +273,7 @@ pub fn get_repo_latest_commit_id(repo: &str, r#ref: &str) -> anyhow::Result<Stri
 
 pub fn with_config<F, R>(func: F) -> anyhow::Result<R>
 where
-    F: FnOnce(&mut SingleConfig) -> anyhow::Result<R>,
+    F: FnOnce(&mut Config) -> anyhow::Result<R>,
 {
     // open config file and read
     let mut f = open_config_file(DEFAULT_CONFIG_FILE).context("open config file")?;

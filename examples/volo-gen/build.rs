@@ -1,3 +1,3 @@
 fn main() {
-    volo_build::ConfigBuilder::default().write().unwrap();
+    volo_build::SingleConfigBuilder::default().write().unwrap();
 }

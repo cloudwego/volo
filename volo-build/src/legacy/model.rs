@@ -2,7 +2,6 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
-use volo::FastStr;
 
 use crate::util::get_repo_latest_commit_id;
 
@@ -10,66 +9,20 @@ pub const DEFAULT_ENTRY_NAME: &str = "default";
 pub const DEFAULT_FILENAME: &str = "volo_gen.rs";
 
 #[derive(Default, Serialize, Deserialize, Debug, Clone)]
-pub struct SingleConfig {
+pub struct Config {
     pub entries: HashMap<String, Entry>,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct CommonOption {
-    #[serde(default)]
-    pub touch_all: bool,
-    #[serde(default)]
-    pub nonstandard_snake_case: bool,
-    #[serde(default)]
-    pub dedups: Vec<FastStr>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Entry {
-    pub filename: PathBuf,
     pub protocol: IdlProtocol,
+    pub filename: PathBuf,
+
+    pub idls: Vec<Idl>,
     #[serde(default)]
-    pub repos: HashMap<FastStr, Repo>,
-    pub services: Vec<Service>,
-    #[serde(flatten)]
-    pub common_option: CommonOption,
-}
-
-fn common_crate_name() -> FastStr {
-    "common".into()
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct WorkspaceConfig {
-    #[serde(default = "common_crate_name")]
-    pub common_crate_name: FastStr,
+    pub touch_all: bool,
     #[serde(default)]
-    pub repos: HashMap<FastStr, Repo>,
-    pub services: Vec<Service>,
-    #[serde(flatten)]
-    pub common_option: CommonOption,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Repo {
-    pub url: FastStr,
-    pub r#ref: FastStr,
-    pub lock: FastStr,
-}
-
-impl Repo {
-    pub fn update(&mut self) -> anyhow::Result<()> {
-        let commit_id = get_repo_latest_commit_id(&self.url, &self.r#ref)?;
-        self.lock = commit_id.into();
-        Ok::<(), anyhow::Error>(())
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct Service {
-    pub idl: Idl,
-    #[serde(default, skip_serializing_if = "CodegenOption::is_empty")]
-    pub codegen_option: CodegenOption,
+    pub nonstandard_snake_case: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq)]
@@ -80,27 +33,6 @@ pub enum IdlProtocol {
     Protobuf,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, Default)]
-pub struct CodegenOption {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub crate_name: Option<FastStr>,
-    #[serde(skip_serializing_if = "Vec::is_empty", default = "Vec::new")]
-    pub touch: Vec<String>,
-    #[serde(skip_serializing_if = "is_false", default)]
-    pub keep_unknown_fields: bool,
-    #[serde(default, skip_serializing_if = "serde_yaml::Value::is_null")]
-    pub config: serde_yaml::Value,
-}
-
-impl CodegenOption {
-    fn is_empty(&self) -> bool {
-        self.crate_name.is_none()
-            && self.touch.is_empty()
-            && !self.keep_unknown_fields
-            && self.config.is_null()
-    }
-}
-
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Idl {
     #[serde(flatten)]
@@ -108,9 +40,20 @@ pub struct Idl {
     pub path: PathBuf,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub includes: Option<Vec<PathBuf>>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default = "Vec::new")]
+    pub touch: Vec<String>,
+    #[serde(skip_serializing_if = "is_false", default)]
+    pub keep_unknown_fields: bool,
 }
 
 impl Idl {
+    pub fn update(&mut self) -> anyhow::Result<()> {
+        match &mut self.source {
+            Source::Git(git_source) => git_source.update(),
+            Source::Local => Ok(()),
+        }
+    }
+
     pub fn ensure_readable(&self) -> anyhow::Result<()> {
         // We should ensure that:
         //   1. All the files exist (`ENOENT` may occur)
@@ -156,10 +99,25 @@ pub enum Source {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GitSource {
-    pub repo_name: FastStr,
+    pub repo: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub r#ref: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub lock: Option<String>,
 }
 
-impl SingleConfig {
+impl GitSource {
+    pub fn update(&mut self) -> anyhow::Result<()> {
+        let commit_id =
+            get_repo_latest_commit_id(&self.repo, self.r#ref.as_deref().unwrap_or("HEAD"))?;
+
+        let _ = self.lock.insert(commit_id);
+
+        Ok::<(), anyhow::Error>(())
+    }
+}
+
+impl Config {
     pub fn new() -> Self {
         Default::default()
     }
@@ -177,6 +135,8 @@ impl Idl {
             source: Source::Local,
             path: PathBuf::from(""),
             includes: None,
+            touch: Vec::default(),
+            keep_unknown_fields: false,
         }
     }
 

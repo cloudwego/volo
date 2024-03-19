@@ -1,10 +1,7 @@
 use pilota_build::{IdlService, Plugin};
 use volo::FastStr;
 
-use crate::{
-    model::{GitSource, Source, WorkspaceConfig},
-    util::get_or_download_idl,
-};
+use super::{model, util::get_or_download_idl};
 
 pub struct Builder<MkB, P> {
     pilota_builder: pilota_build::Builder<MkB, P>,
@@ -19,11 +16,33 @@ impl Builder<crate::thrift_backend::MkThriftBackend, crate::parser::ThriftParser
     }
 }
 
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct Service {
+    pub idl: model::Idl,
+    #[serde(default)]
+    pub config: serde_yaml::Value,
+}
+
+#[derive(serde::Deserialize, serde::Serialize)]
+pub struct WorkspaceConfig {
+    #[serde(default)]
+    pub(crate) touch_all: bool,
+    #[serde(default)]
+    pub(crate) dedup_list: Vec<FastStr>,
+    #[serde(default)]
+    pub(crate) nonstandard_snake_case: bool,
+    #[serde(default = "common_crate_name")]
+    pub(crate) common_crate_name: FastStr,
+    pub(crate) services: Vec<Service>,
+}
+
+fn common_crate_name() -> FastStr {
+    "common".into()
+}
+
 impl WorkspaceConfig {
-    pub fn update_repos(&mut self) -> anyhow::Result<()> {
-        self.repos
-            .iter_mut()
-            .try_for_each(|(_, repo)| repo.update())
+    pub fn update_idls(&mut self) -> anyhow::Result<()> {
+        self.services.iter_mut().try_for_each(|s| s.idl.update())
     }
 }
 
@@ -53,29 +72,16 @@ where
             .services
             .into_iter()
             .map(|s| {
-                let repo = if let Source::Git(GitSource { ref repo_name }) = s.idl.source {
-                    Some(
-                        config
-                            .repos
-                            .get(repo_name)
-                            .expect("git source requires the repo info for idl"),
-                    )
-                } else {
-                    None
-                };
-
-                get_or_download_idl(s.idl, repo, &s.codegen_option, work_dir.join("target")).map(
-                    |idl| IdlService {
-                        path: idl.path,
-                        config: s.codegen_option.config,
-                    },
-                )
+                get_or_download_idl(s.idl, work_dir.join("target")).map(|idl| IdlService {
+                    path: idl.path,
+                    config: s.config,
+                })
             })
             .collect::<Result<Vec<_>, _>>();
         match services {
             Ok(services) => {
-                self.ignore_unused(!config.common_option.touch_all)
-                    .dedup(config.common_option.dedups)
+                self.ignore_unused(!config.touch_all)
+                    .dedup(config.dedup_list)
                     .common_crate_name(config.common_crate_name)
                     .pilota_builder
                     .compile_with_config(services, pilota_build::Output::Workspace(work_dir));

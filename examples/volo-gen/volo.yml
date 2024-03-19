@@ -4,29 +4,36 @@ entries:
     filename: proto_gen.rs
     touch_all: false
     nonstandard_snake_case: false
-    idls:
-      - source: local
-        path: ../proto/hello.proto
-        includes:
-          - ../proto
-      - source: local
-        path: ../proto/echo.proto
-        includes:
-          - ../proto
-      - source: local
-        path: ../proto/streaming.proto
-        includes:
-          - ../proto
+    services:
+      - idl:
+          source: local
+          path: ../proto/hello.proto
+          includes:
+            - ../proto
+      - idl:
+          source: local
+          path: ../proto/echo.proto
+          includes:
+            - ../proto
+      - idl:
+          source: local
+          path: ../proto/streaming.proto
+          includes:
+            - ../proto
   thrift:
     protocol: thrift
     filename: thrift_gen.rs
     touch_all: false
     nonstandard_snake_case: false
-    idls:
-      - source: local
+    services:
+    - idl:
+        source: local
         path: ../thrift_idl/hello.thrift
-      - source: local
+    - idl:
+        source: local
         path: ../thrift_idl/echo.thrift
-      - source: local
+    - idl:
+        source: local
         path: ../thrift_idl/echo_unknown.thrift
+      codegen_option:
         keep_unknown_fields: true

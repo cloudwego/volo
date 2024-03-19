@@ -21,8 +21,10 @@ volo = { version = "0.9", path = "../volo" }
 
 pilota-build.workspace = true
 
+ahash.workspace = true
 anyhow.workspace = true
 dirs.workspace = true
+faststr.workspace = true
 git2.workspace = true
 heck.workspace = true
 itertools.workspace = true

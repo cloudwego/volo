@@ -9,7 +9,9 @@ pub mod context;
 mod http;
 mod idl;
 mod init;
+mod migrate;
 pub mod model;
+mod repo;
 
 /// output template file's content to target file, if any params provided,
 /// file content will be treated as format string.

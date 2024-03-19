@@ -1,8 +1,3 @@
-#![doc(
-    html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
-)]
-#![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
-
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -13,14 +8,11 @@ use itertools::Itertools;
 use pilota_build::{parser::Parser, IdlService};
 
 pub mod config_builder;
-pub mod grpc_backend;
-pub mod legacy;
 pub mod model;
-pub mod thrift_backend;
 pub mod util;
 pub mod workspace;
 
-pub use config_builder::SingleConfigBuilder;
+pub use config_builder::ConfigBuilder;
 pub use pilota_build::{
     parser, plugin, rir, BoxClonePlugin, ClonePlugin, Context, DefId, MakeBackend, Plugin,
 };
@@ -33,11 +25,11 @@ pub struct Builder<MkB, P> {
     config_file_path: PathBuf,
 }
 
-impl Builder<thrift_backend::MkThriftBackend, parser::ThriftParser> {
+impl Builder<crate::thrift_backend::MkThriftBackend, parser::ThriftParser> {
     pub fn thrift() -> Self {
         Builder {
             pilota_builder: pilota_build::Builder::thrift()
-                .with_backend(thrift_backend::MkThriftBackend),
+                .with_backend(crate::thrift_backend::MkThriftBackend),
             out_dir: Default::default(),
             filename: "volo_gen.rs".into(),
             idls: Default::default(),
@@ -46,11 +38,11 @@ impl Builder<thrift_backend::MkThriftBackend, parser::ThriftParser> {
     }
 }
 
-impl Builder<grpc_backend::MkGrpcBackend, parser::ProtobufParser> {
+impl Builder<crate::grpc_backend::MkGrpcBackend, parser::ProtobufParser> {
     pub fn protobuf() -> Self {
         Builder {
             pilota_builder: pilota_build::Builder::protobuf()
-                .with_backend(grpc_backend::MkGrpcBackend),
+                .with_backend(crate::grpc_backend::MkGrpcBackend),
             out_dir: Default::default(),
             filename: "volo_gen.rs".into(),
             idls: Default::default(),
