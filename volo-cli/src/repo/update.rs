@@ -11,11 +11,6 @@ pub struct Update {
 
 impl CliCommand for Update {
     fn run(&self, cx: Context) -> anyhow::Result<()> {
-        if self.repos.is_empty() {
-            eprintln!("repos should not be empty");
-            std::process::exit(1);
-        }
-
         volo_build::util::with_config(|config| {
             if !config.entries.contains_key(&cx.entry_name) {
                 eprintln!("entry {} not found", cx.entry_name);
@@ -29,6 +24,18 @@ impl CliCommand for Update {
                     std::process::exit(1);
                 }
             };
+
+            if self.repos.is_empty() && entry.repos.is_empty() {
+                eprintln!("no repos found in entry {}", cx.entry_name);
+                std::process::exit(1);
+            } else if self.repos.is_empty() {
+                entry.repos.iter_mut().for_each(|(k, v)| {
+                    let r = v.update();
+                    if r.is_err() {
+                        eprintln!("update git repo {k} failed");
+                    }
+                });
+            }
 
             // check if the git exists in the config
             self.repos.iter().for_each(|g| {
