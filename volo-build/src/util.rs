@@ -394,4 +394,74 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn test_get_repo_name_by_url() {
+        let url = "username@domain:namespace/repo.git";
+        assert_eq!(get_repo_name_by_url(url), "repo");
+        let url = "https://domain/namespace/repo.git";
+        assert_eq!(get_repo_name_by_url(url), "repo");
+    }
+
+    #[test]
+    fn test_get_git_path() {
+        let git = "username@domain:namespace/repo.git";
+        assert_eq!(
+            get_git_path(git).unwrap(),
+            PathBuf::from("domain/namespace/repo")
+        );
+        let git = "https://domain/namespace/repo.git";
+        assert_eq!(
+            get_git_path(git).unwrap(),
+            PathBuf::from("domain/namespace/repo")
+        );
+        let git = "../path/to/repo";
+        assert_eq!(get_git_path(git).unwrap(), PathBuf::from("../path/to/repo"));
+    }
+
+    #[test]
+    fn test_get_idl_relative_path() {
+        let idl = Idl {
+            source: Source::Local,
+            path: PathBuf::from("idl/test.thrift"),
+            includes: vec![],
+        };
+        let repo_relative_dir_map = HashMap::new();
+        assert_eq!(
+            get_idl_relative_path(&idl, &repo_relative_dir_map),
+            idl.path
+        );
+
+        let idl = Idl {
+            source: Source::Git(GitSource {
+                repo_name: "test".into(),
+            }),
+            path: PathBuf::from("idl/test.thrift"),
+            includes: vec![],
+        };
+        let mut repo_relative_dir_map = HashMap::new();
+        repo_relative_dir_map.insert("test".into(), PathBuf::from("repo"));
+        assert_eq!(
+            get_idl_relative_path(&idl, &repo_relative_dir_map),
+            PathBuf::from("repo/idl/test.thrift")
+        );
+    }
+
+    #[test]
+    fn test_get_service_builders_from_services() {
+        let idl = Idl {
+            source: Source::Local,
+            path: PathBuf::from("idl/test.thrift"),
+            includes: vec![],
+        };
+        let service = Service {
+            idl: idl.clone(),
+            codegen_option: Default::default(),
+        };
+        let services = vec![service];
+        let repo_relative_dir_map = HashMap::new();
+        let builders = get_service_builders_from_services(&services, &repo_relative_dir_map);
+        assert_eq!(builders.len(), 1);
+        assert_eq!(builders[0].path, idl.path);
+    }
 }
