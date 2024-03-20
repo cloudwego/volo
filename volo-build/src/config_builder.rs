@@ -5,10 +5,10 @@ use pilota_build::BoxClonePlugin;
 use volo::FastStr;
 
 use crate::{
-    model::{self, CodegenOption, Entry, GitSource, Source},
+    model::{self, Entry},
     util::{
-        get_or_download_idl, open_config_file, read_config_from_file, LocalIdl,
-        DEFAULT_CONFIG_FILE, DEFAULT_DIR,
+        download_repos_to_target, get_service_builders_from_services, open_config_file,
+        read_config_from_file, ServiceBuilder, DEFAULT_CONFIG_FILE, DEFAULT_DIR,
     },
 };
 
@@ -79,6 +79,25 @@ impl InnerBuilder {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.add_service(path)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.add_service(path)),
         }
+    }
+
+    pub fn add_services(mut self, service_builders: Vec<ServiceBuilder>) -> Self {
+        for ServiceBuilder {
+            path,
+            includes,
+            touch,
+            keep_unknown_fields,
+        } in service_builders
+        {
+            self = self
+                .add_service(path.clone())
+                .includes(includes)
+                .touch([(path.clone(), touch)]);
+            if keep_unknown_fields {
+                self = self.keep_unknown_fields([path])
+            }
+        }
+        self
     }
 
     pub fn touch(self, items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>) -> Self {
@@ -157,38 +176,17 @@ impl SingleConfigBuilder {
                     builder = builder.plugin(p.clone());
                 }
 
-                for s in entry.services {
-                    let repo = if let Source::Git(GitSource { ref repo_name }) = s.idl.source {
-                        Some(
-                            entry
-                                .repos
-                                .get(repo_name)
-                                .expect("git source requires the repo info for idl"),
-                        )
-                    } else {
-                        None
-                    };
+                // download repos and get the relative paths
+                let target_dir = PathBuf::from(&*DEFAULT_DIR).join(entry_name);
+                let repo_relative_dir_map = download_repos_to_target(&entry.repos, target_dir)?;
 
-                    let target = PathBuf::from(&*DEFAULT_DIR).join(entry_name.clone());
-                    let LocalIdl { path, includes } = get_or_download_idl(s.idl, repo, target)?;
-                    let CodegenOption {
-                        keep_unknown_fields,
-                        touch,
-                        ..
-                    } = s.codegen_option;
+                // get idl builders from services
+                let service_builders =
+                    get_service_builders_from_services(&entry.services, &repo_relative_dir_map);
 
-                    println!("keep unknown fields switch is: {}", keep_unknown_fields);
-
-                    builder = builder
-                        .add_service(path.clone())
-                        .includes(includes)
-                        .touch([(path.clone(), touch)]);
-                    if keep_unknown_fields {
-                        builder = builder.keep_unknown_fields([path])
-                    }
-                }
-
+                // add build options to the builder and build
                 builder
+                    .add_services(service_builders)
                     .ignore_unused(!entry.common_option.touch_all)
                     .nonstandard_snake_case(entry.common_option.nonstandard_snake_case)
                     .write()?;
@@ -222,33 +220,16 @@ impl InitBuilder {
         }
         .filename(self.entry.filename);
 
-        for s in self.entry.services {
-            let repo = if let Source::Git(GitSource { ref repo_name }) = s.idl.source {
-                Some(
-                    self.entry
-                        .repos
-                        .get(repo_name)
-                        .expect("git source requires the repo info for idl"),
-                )
-            } else {
-                None
-            };
-            let target = PathBuf::from(&*DEFAULT_DIR).join(self.entry_name.clone());
-            let LocalIdl { path, includes } = get_or_download_idl(s.idl, repo, target)?;
-            let CodegenOption {
-                keep_unknown_fields,
-                touch,
-                ..
-            } = s.codegen_option;
+        // download repos and get the relative paths
+        let target_dir = PathBuf::from(&*DEFAULT_DIR).join(&self.entry_name);
+        let repo_relative_dir_map = download_repos_to_target(&self.entry.repos, target_dir)?;
 
-            builder = builder
-                .add_service(path.clone())
-                .includes(includes)
-                .touch([(path.clone(), touch)]);
-            if keep_unknown_fields {
-                builder = builder.keep_unknown_fields([path])
-            }
-        }
+        // get idl builders from services
+        let idl_builders =
+            get_service_builders_from_services(&self.entry.services, &repo_relative_dir_map);
+
+        // add services to the builder
+        builder = builder.add_services(idl_builders);
 
         builder.init_service()
     }

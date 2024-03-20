@@ -3,7 +3,7 @@ use volo::FastStr;
 
 use crate::{
     model::{GitSource, Source, WorkspaceConfig},
-    util::get_or_download_idl,
+    util::{download_repos_to_target, strip_slash_prefix},
 };
 
 pub struct Builder<MkB, P> {
@@ -49,40 +49,44 @@ where
                 std::process::exit(1);
             }
         };
+
+        let target_dir = work_dir.join("target");
+        let repo_relative_dir_map = if let Ok(repo_relative_dir_map) =
+            download_repos_to_target(&config.repos, target_dir.as_path())
+        {
+            repo_relative_dir_map
+        } else {
+            eprintln!("failed to download repos");
+            std::process::exit(1);
+        };
+
         let services = config
             .services
             .into_iter()
             .map(|s| {
-                let repo = if let Source::Git(GitSource { ref repo_name }) = s.idl.source {
-                    Some(
-                        config
-                            .repos
-                            .get(repo_name)
-                            .expect("git source requires the repo info for idl"),
-                    )
+                if let Source::Git(GitSource { ref repo_name }) = s.idl.source {
+                    // git should use relative path instead of absolute path
+                    let dir = repo_relative_dir_map
+                        .get(repo_name)
+                        .expect("git source requires the repo info for idl")
+                        .clone();
+                    IdlService {
+                        path: dir.join(strip_slash_prefix(s.idl.path.as_path())),
+                        config: s.codegen_option.config,
+                    }
                 } else {
-                    None
-                };
-
-                get_or_download_idl(s.idl, repo, work_dir.join("target")).map(|idl| IdlService {
-                    path: idl.path,
-                    config: s.codegen_option.config,
-                })
+                    IdlService {
+                        path: s.idl.path.clone(),
+                        config: s.codegen_option.config,
+                    }
+                }
             })
-            .collect::<Result<Vec<_>, _>>();
-        match services {
-            Ok(services) => {
-                self.ignore_unused(!config.common_option.touch_all)
-                    .dedup(config.common_option.dedups)
-                    .common_crate_name(config.common_crate_name)
-                    .pilota_builder
-                    .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
-            }
-            Err(e) => {
-                eprintln!("failed to get or download idl, err: {}", e);
-                std::process::exit(1);
-            }
-        }
+            .collect();
+        self.ignore_unused(!config.common_option.touch_all)
+            .dedup(config.common_option.dedups)
+            .common_crate_name(config.common_crate_name)
+            .pilota_builder
+            .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
     }
 
     pub fn plugin(mut self, plugin: impl Plugin + 'static) -> Self {

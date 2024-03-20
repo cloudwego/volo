@@ -112,14 +112,10 @@ pub fn get_or_download_idl(idl: Idl, target_dir: impl AsRef<Path>) -> anyhow::Re
         (
             // git should use relative path instead of absolute path
             dir.join(strip_slash_prefix(idl.path.as_path())),
-            idl.includes
-                .unwrap_or_default()
-                .into_iter()
-                .map(|v| dir.join(v))
-                .collect_vec(),
+            idl.includes.into_iter().map(|v| dir.join(v)).collect_vec(),
         )
     } else {
-        (idl.path.to_path_buf(), idl.includes.unwrap_or_default())
+        (idl.path.to_path_buf(), idl.includes)
     };
 
     Ok(LocalIdl {

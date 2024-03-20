@@ -106,8 +106,8 @@ pub struct Idl {
     #[serde(flatten)]
     pub source: Source,
     pub path: PathBuf,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub includes: Option<Vec<PathBuf>>,
+    #[serde(skip_serializing_if = "Vec::is_empty", default = "Vec::new")]
+    pub includes: Vec<PathBuf>,
 }
 
 impl Idl {
@@ -121,10 +121,8 @@ impl Idl {
         try_open_readonly(&self.path)
             .map_err(|e| anyhow!("{}: {}", self.path.to_str().unwrap(), e))?;
 
-        if let Some(includes) = &self.includes {
-            for inc in includes.iter() {
-                try_open_readonly(inc).map_err(|e| anyhow!("{}: {}", inc.to_str().unwrap(), e))?;
-            }
+        for inc in self.includes.iter() {
+            try_open_readonly(inc).map_err(|e| anyhow!("{}: {}", inc.to_str().unwrap(), e))?;
         }
 
         Ok(())
@@ -176,7 +174,7 @@ impl Idl {
         Self {
             source: Source::Local,
             path: PathBuf::from(""),
-            includes: None,
+            includes: Vec::new(),
         }
     }
 

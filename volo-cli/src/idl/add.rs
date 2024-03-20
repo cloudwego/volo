@@ -40,7 +40,7 @@ pub struct Add {
         help = "Specify the include dirs for idl.\nIf -g or --git is specified, then this should \
                 be the path in the specified git repo."
     )]
-    pub includes: Option<Vec<PathBuf>>,
+    pub includes: Vec<PathBuf>,
 
     #[arg(
         short = 'f',

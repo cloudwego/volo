@@ -40,7 +40,7 @@ pub struct Init {
         help = "Specify the include dirs for idl.\nIf -g or --git is specified, then this should \
                 be the path in the specified git repo."
     )]
-    pub includes: Option<Vec<PathBuf>>,
+    pub includes: Vec<PathBuf>,
     #[arg(
         value_parser = value_parser!(PathBuf),
         help = "Specify the path for idl.\nIf -g or --git is specified, then this should be the \
@@ -251,13 +251,11 @@ impl CliCommand for Init {
             if self.git.as_ref().is_none() {
                 // we will move volo.yml to volo-gen, so we need to add .. to includes and idl path
                 if let Some(service) = entry.services.get_mut(0) {
-                    if let Some(includes) = &mut service.idl.includes {
-                        for i in includes {
-                            if i.is_absolute() {
-                                continue;
-                            }
-                            *i = PathBuf::new().join("../").join(i.clone());
+                    for i in &mut service.idl.includes {
+                        if i.is_absolute() {
+                            continue;
                         }
+                        *i = PathBuf::new().join("../").join(i.clone());
                     }
                     if !idl.path.is_absolute() {
                         idl.path = PathBuf::new().join("../").join(self.idl.clone());

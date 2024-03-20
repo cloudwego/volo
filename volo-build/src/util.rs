@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs::{create_dir_all, File, OpenOptions},
     io::Seek,
     path::{Path, PathBuf},
@@ -6,11 +7,11 @@ use std::{
 };
 
 use anyhow::{bail, Context};
-use itertools::Itertools;
 use lazy_static::lazy_static;
 use serde::de::Error;
+use volo::FastStr;
 
-use crate::model::{Idl, Repo, SingleConfig};
+use crate::model::{GitSource, Idl, Repo, Service, SingleConfig, Source};
 
 lazy_static! {
     pub static ref DEFAULT_DIR: PathBuf = std::path::Path::new(
@@ -79,40 +80,16 @@ pub fn download_files_from_git(task: Task) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub struct LocalIdl {
-    pub path: PathBuf,
-    pub includes: Vec<PathBuf>,
-}
-
-pub fn get_or_download_idl(
-    idl: Idl,
-    repo: Option<&Repo>,
-    target_dir: impl AsRef<Path>,
-) -> anyhow::Result<LocalIdl> {
-    let (path, includes) = if let Some(repo) = repo {
-        let dir = target_dir.as_ref().join(get_git_path(repo.url.as_str())?);
-        let task = Task::new(
-            vec![idl.path.to_string_lossy().to_string()],
-            dir.clone(),
-            repo.url.to_string(),
-            repo.lock.to_string(),
-        );
-        download_files_from_git(task).with_context(|| format!("download repo {}", repo.url))?;
-
-        (
-            // git should use relative path instead of absolute path
-            dir.join(strip_slash_prefix(idl.path.as_path())),
-            idl.includes
-                .unwrap_or_default()
-                .into_iter()
-                .map(|v| dir.join(v))
-                .collect_vec(),
-        )
-    } else {
-        (idl.path.to_path_buf(), idl.includes.unwrap_or_default())
-    };
-
-    Ok(LocalIdl { path, includes })
+pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
+    let dir = target_dir.as_ref().join(get_git_path(repo.url.as_str())?);
+    let task = Task::new(
+        vec![],
+        dir.clone(),
+        repo.url.to_string(),
+        repo.lock.to_string(),
+    );
+    download_files_from_git(task).with_context(|| format!("download repo {}", repo.url))?;
+    Ok(dir)
 }
 
 fn run_command(command: &mut Command) -> anyhow::Result<()> {
@@ -313,6 +290,56 @@ pub fn strip_slash_prefix(p: &Path) -> PathBuf {
         Ok(p) => p.to_path_buf(),
         Err(_) => p.to_path_buf(),
     }
+}
+
+pub fn download_repos_to_target(
+    repos: &HashMap<FastStr, Repo>,
+    target_dir: impl AsRef<Path>,
+) -> anyhow::Result<HashMap<FastStr, PathBuf>> {
+    let mut repo_relative_dir_map = HashMap::with_capacity(repos.len());
+    for (name, repo) in repos {
+        let dir = download_repo(repo, target_dir.as_ref())?;
+        repo_relative_dir_map.insert(name.clone(), dir);
+    }
+    Ok(repo_relative_dir_map)
+}
+
+pub fn get_idl_relative_path(
+    idl: &Idl,
+    repo_relative_dir_map: &HashMap<FastStr, PathBuf>,
+) -> PathBuf {
+    if let Source::Git(GitSource { ref repo_name }) = idl.source {
+        // git should use relative path instead of absolute path
+        let dir = repo_relative_dir_map
+            .get(repo_name)
+            .expect("git source requires the repo info for idl")
+            .clone();
+        dir.join(strip_slash_prefix(idl.path.as_path()))
+    } else {
+        idl.path.clone()
+    }
+}
+
+pub struct ServiceBuilder {
+    pub path: PathBuf,
+    pub includes: Vec<PathBuf>,
+    pub touch: Vec<String>,
+    pub keep_unknown_fields: bool,
+}
+
+pub fn get_service_builders_from_services(
+    services: &[Service],
+    repo_relative_dir_map: &HashMap<FastStr, PathBuf>,
+) -> Vec<ServiceBuilder> {
+    services
+        .iter()
+        .map(|s| ServiceBuilder {
+            path: get_idl_relative_path(&s.idl, repo_relative_dir_map),
+            includes: s.idl.includes.clone(),
+            touch: s.codegen_option.touch.clone(),
+            keep_unknown_fields: s.codegen_option.keep_unknown_fields,
+        })
+        .collect()
 }
 
 #[cfg(test)]
