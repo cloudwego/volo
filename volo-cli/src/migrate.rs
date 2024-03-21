@@ -8,7 +8,7 @@ use volo_build::{
     model::{
         CodegenOption, CommonOption, Entry, GitSource, Idl, IdlProtocol, Repo, Service, Source,
     },
-    util::{get_repo_latest_commit_id, get_repo_name_by_url, DEFAULT_CONFIG_FILE},
+    util::{get_repo_name_by_url, git::get_repo_latest_commit_id, DEFAULT_CONFIG_FILE},
 };
 
 use crate::command::CliCommand;

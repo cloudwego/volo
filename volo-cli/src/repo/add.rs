@@ -2,7 +2,7 @@ use clap::Parser;
 use faststr::FastStr;
 use volo_build::{
     model::Repo,
-    util::{get_repo_latest_commit_id, get_repo_name_by_url},
+    util::{get_repo_name_by_url, git::get_repo_latest_commit_id},
 };
 
 use crate::{command::CliCommand, context::Context};

@@ -1,11 +1,9 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::bail;
 use clap::{value_parser, Parser};
-use faststr::FastStr;
 use volo_build::{
-    model::{Entry, GitSource, Idl, Repo, Service, Source},
-    util::{get_repo_latest_commit_id, get_repo_name_by_url, strip_slash_prefix},
+    model::{Entry, Idl, Service, Source},
+    util::{check_and_get_repo_name, create_git_service, strip_slash_prefix},
 };
 
 use crate::{command::CliCommand, context::Context};
@@ -80,7 +78,6 @@ impl CliCommand for Add {
             };
 
             let mut has_found_entry = false;
-
             // iter the entries to find the entry
             for (entry_name, entry) in config.entries.iter_mut() {
                 if entry_name != &cx.entry_name {
@@ -133,13 +130,15 @@ impl CliCommand for Add {
                 }
 
                 // case 2: [new git idl]
-                // create the git idl service
+                // check and get the repo name
                 let mut new_repo = None;
-                let git_service = self.create_git_service(
+                let repo_name = check_and_get_repo_name(
                     entry_name,
-                    &mut new_repo,
                     &entry.repos,
-                    has_found_idl,
+                    &self.repo,
+                    &self.git,
+                    &self.r#ref,
+                    &mut new_repo,
                 )?;
 
                 // check the exact idl service
@@ -152,27 +151,32 @@ impl CliCommand for Add {
                     std::process::exit(1);
                 }
 
+                // create the git idl service
+                let git_service = create_git_service(repo_name.clone(), &self.idl, &self.includes)?;
+                entry.services.push(git_service);
+
                 // case 2.1: new repo, else case 2.2: exsited repo
                 if let Some(new_repo) = new_repo {
-                    let repo_name =
-                        if let Source::Git(GitSource { repo_name }) = &git_service.idl.source {
-                            repo_name.clone()
-                        } else {
-                            unreachable!("git service should have the git source")
-                        };
                     entry.repos.insert(repo_name, new_repo.clone());
                 }
 
-                entry.services.push(git_service);
                 break;
             }
 
             if !has_found_entry {
                 let mut new_repo = None;
+                let repo_name = check_and_get_repo_name(
+                    &cx.entry_name,
+                    &HashMap::new(),
+                    &self.repo,
+                    &self.git,
+                    &self.r#ref,
+                    &mut new_repo,
+                )?;
                 let new_service = if let Some(local_service) = local_service.as_ref() {
                     local_service.clone()
                 } else {
-                    self.create_git_service(&cx.entry_name, &mut new_repo, &HashMap::new(), false)?
+                    create_git_service(repo_name.clone(), &self.idl, &self.includes)?
                 };
 
                 config.entries.insert(
@@ -182,13 +186,6 @@ impl CliCommand for Add {
                         filename: PathBuf::from(&self.filename),
                         repos: if let Some(new_repo) = new_repo {
                             let mut repos = HashMap::with_capacity(1);
-                            let repo_name = if let Source::Git(GitSource { repo_name }) =
-                                &new_service.idl.source
-                            {
-                                repo_name.clone()
-                            } else {
-                                unreachable!("git service should have the git source")
-                            };
                             repos.insert(repo_name, new_repo.clone());
                             repos
                         } else {
@@ -200,152 +197,6 @@ impl CliCommand for Add {
                 );
             }
             Ok(())
-        })
-    }
-}
-
-impl Add {
-    fn create_git_service(
-        &self,
-        entry_name: &String,
-        new_repo: &mut Option<Repo>,
-        repos: &HashMap<FastStr, Repo>,
-        has_found_idl: bool,
-    ) -> Result<Service, anyhow::Error> {
-        // valid when one of these meets:
-        // 1. the repo is not existed in the entry, that is repo name and url are not existed and
-        //    the url is a must
-        // 2. the repo is existed in the entry, and the url, ref is the same, and the idl is not,
-        //    and the repo name is the same when provided
-        let url_map = {
-            let mut map = HashMap::<FastStr, FastStr>::with_capacity(repos.len());
-            repos.iter().for_each(|(key, repo)| {
-                let _ = map.insert(repo.url.clone(), key.clone());
-            });
-            map
-        };
-        let r#ref = FastStr::new(self.r#ref.as_deref().unwrap_or("HEAD"));
-        let repo_name = match (self.repo.as_ref(), self.git.as_ref()) {
-            (Some(repo_name), Some(git)) => {
-                // check repo by repo name index
-                let key: FastStr = repo_name.clone().into();
-                if repos.contains_key(&key) {
-                    let repo = repos.get(&key).unwrap();
-                    if repo.url != git {
-                        bail!(
-                            "The specified repo '{}' already exists in entry '{}' with different \
-                             url, maybe use another repo name, like {}",
-                            key,
-                            entry_name,
-                            get_repo_name_by_url(git)
-                        );
-                    } else if has_found_idl {
-                        bail!(
-                            "The specified idl '{}' is existed in the entry '{}'",
-                            self.idl.to_str().unwrap(),
-                            entry_name
-                        );
-                    } else if repo.r#ref != r#ref {
-                        bail!(
-                            "The specified repo '{}' already exists in entry '{}' with different \
-                             ref  '{}'",
-                            key,
-                            entry_name,
-                            r#ref
-                        );
-                    }
-                } else {
-                    // check repo by git url rindex
-                    if url_map.contains_key(&FastStr::new(git)) {
-                        if has_found_idl {
-                            bail!(
-                                "The specified idl '{}' is existed in the entry '{}'",
-                                self.idl.to_str().unwrap(),
-                                entry_name
-                            );
-                        }
-                        bail!(
-                            "The specified repo '{}' is indexed by the existed repo name '{}' in \
-                             entry '{}', please use the existed repo name",
-                            git,
-                            url_map.get(&FastStr::new(git)).unwrap(),
-                            entry_name
-                        );
-                    }
-                    let lock = get_repo_latest_commit_id(git, &r#ref)?.into();
-                    let _ = new_repo.insert(Repo {
-                        url: git.clone().into(),
-                        r#ref: r#ref.clone(),
-                        lock,
-                    });
-                }
-                key.clone()
-            }
-            (Some(repo_name), _) => {
-                // the repo should exist in the entry
-                let key: FastStr = repo_name.clone().into();
-                if !repos.contains_key(&key) {
-                    bail!(
-                        "The specified repo index '{}' not exists in entry '{}', please use the \
-                         existed repo name or specify the git url for the new repo",
-                        key,
-                        entry_name
-                    );
-                }
-                key.clone()
-            }
-            (_, Some(git)) => {
-                let key = FastStr::new(git);
-                if url_map.contains_key(&key) {
-                    // check repo by git url rindex
-                    if has_found_idl {
-                        bail!(
-                            "The specified idl '{}' is existed in the entry '{}'",
-                            self.idl.to_str().unwrap(),
-                            entry_name
-                        );
-                    }
-                    let repo = url_map.get(&key).unwrap();
-                    let existed_ref = &repos
-                        .get(repo)
-                        .expect("the repo index should exist for the git rindex map")
-                        .r#ref;
-                    if existed_ref.clone() != r#ref {
-                        bail!(
-                            "The specified repo '{}' already exists in entry '{}' with different \
-                             ref '{}', please check and use the correct one.",
-                            key,
-                            entry_name,
-                            existed_ref
-                        );
-                    }
-                    repo.clone()
-                } else {
-                    // create a new repo by the git url
-                    let name = FastStr::new(get_repo_name_by_url(git));
-                    let lock = get_repo_latest_commit_id(git, &r#ref)?.into();
-                    let _ = new_repo.insert(Repo {
-                        url: git.clone().into(),
-                        r#ref: r#ref.clone(),
-                        lock,
-                    });
-                    name
-                }
-            }
-            _ => {
-                bail!("The specified repo or git should be specified")
-            }
-        };
-
-        Ok(Service {
-            idl: Idl {
-                source: Source::Git(GitSource {
-                    repo_name: repo_name.clone(),
-                }),
-                path: strip_slash_prefix(self.idl.as_path()),
-                includes: self.includes.clone(),
-            },
-            codegen_option: Default::default(),
         })
     }
 }

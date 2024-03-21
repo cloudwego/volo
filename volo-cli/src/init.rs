@@ -6,8 +6,8 @@ use volo_build::{
     config_builder::InitBuilder,
     model::{Entry, GitSource, Idl, Repo, Service, Source, DEFAULT_FILENAME},
     util::{
-        get_repo_latest_commit_id, get_repo_name_by_url, git_repo_init, strip_slash_prefix,
-        DEFAULT_CONFIG_FILE,
+        check_and_get_repo_name, get_repo_name_by_url, git::get_repo_latest_commit_id,
+        git_repo_init, strip_slash_prefix, DEFAULT_CONFIG_FILE,
     },
 };
 
@@ -190,7 +190,7 @@ impl CliCommand for Init {
         volo_build::util::with_config(|_config| {
             let mut idl = Idl::new();
             idl.includes.clone_from(&self.includes);
-            let mut repo = None;
+            let mut repos = HashMap::new();
 
             // Handling Git-Based Template Creation
             if let Some(git) = self.git.as_ref() {
@@ -209,11 +209,7 @@ impl CliCommand for Init {
                 idl.source = Source::Git(GitSource {
                     repo_name: repo_name.clone(),
                 });
-                repo = Some(new_repo);
-            }
-
-            if self.git.is_some() {
-                idl.path = strip_slash_prefix(&self.idl);
+                repos.insert(repo_name, new_repo);
             } else {
                 idl.path.clone_from(&self.idl);
                 // only ensure readable when idl is from local
@@ -223,18 +219,7 @@ impl CliCommand for Init {
             let mut entry = Entry {
                 filename: PathBuf::from(DEFAULT_FILENAME),
                 protocol: idl.protocol(),
-                repos: if let Some(repo) = repo {
-                    let mut repos = HashMap::with_capacity(1);
-                    let repo_name = if let Source::Git(GitSource { repo_name }) = &idl.source {
-                        repo_name.clone()
-                    } else {
-                        unreachable!("git service should have the git source")
-                    };
-                    repos.insert(repo_name, repo.clone());
-                    repos
-                } else {
-                    HashMap::new()
-                },
+                repos,
                 services: vec![Service {
                     idl: idl.clone(),
                     codegen_option: Default::default(),

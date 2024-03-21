@@ -4,7 +4,7 @@ use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
 use volo::FastStr;
 
-use crate::util::get_repo_latest_commit_id;
+use crate::util::git::get_repo_latest_commit_id;
 
 pub const DEFAULT_ENTRY_NAME: &str = "default";
 pub const DEFAULT_FILENAME: &str = "volo_gen.rs";

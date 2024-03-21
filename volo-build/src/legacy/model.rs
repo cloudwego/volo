@@ -2,8 +2,9 @@ use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
+use util::get_repo_latest_commit_id;
 
-use crate::util::get_repo_latest_commit_id;
+use super::util;
 
 pub const DEFAULT_ENTRY_NAME: &str = "default";
 pub const DEFAULT_FILENAME: &str = "volo_gen.rs";
