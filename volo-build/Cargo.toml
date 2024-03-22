@@ -46,6 +46,7 @@ syn = { workspace = true, features = [
   "visit",
   "visit-mut",
 ] }
+tempdir.workspace = true
 tempfile.workspace = true
 url_path.workspace = true
 walkdir.workspace = true

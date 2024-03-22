@@ -204,13 +204,12 @@ impl Default for SingleConfigBuilder {
 }
 
 pub struct InitBuilder {
-    entry_name: String,
     entry: Entry,
 }
 
 impl InitBuilder {
-    pub fn new(entry_name: String, entry: Entry) -> Self {
-        InitBuilder { entry_name, entry }
+    pub fn new(entry: Entry) -> Self {
+        InitBuilder { entry }
     }
 
     pub fn init(self) -> anyhow::Result<(String, String)> {
@@ -221,8 +220,9 @@ impl InitBuilder {
         .filename(self.entry.filename);
 
         // download repos and get the relative paths
-        let target_dir = PathBuf::from(&*DEFAULT_DIR).join(&self.entry_name);
-        let repo_relative_dir_map = download_repos_to_target(&self.entry.repos, target_dir)?;
+        let temp_target_dir = tempdir::TempDir::new("")?;
+        let repo_relative_dir_map =
+            download_repos_to_target(&self.entry.repos, temp_target_dir.as_ref())?;
 
         // get idl builders from services
         let idl_builders =

@@ -11,7 +11,7 @@ use crate::{command::CliCommand, context::Context};
 #[command(arg_required_else_help = true)]
 pub struct Add {
     #[arg(
-        long = "repo",
+        long,
         help = "Specify the git repo name for repo.\nExample: cloudwego_volo"
     )]
     pub repo: Option<String>,

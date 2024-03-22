@@ -1,12 +1,11 @@
 use std::{collections::HashMap, fs::create_dir_all, path::PathBuf, process::Command};
 
 use clap::{value_parser, Parser};
-use faststr::FastStr;
 use volo_build::{
     config_builder::InitBuilder,
-    model::{Entry, GitSource, Idl, Repo, Service, Source, DEFAULT_FILENAME},
+    model::{Entry, DEFAULT_FILENAME},
     util::{
-        get_repo_name_by_url, git::get_repo_latest_commit_id, git_repo_init, DEFAULT_CONFIG_FILE,
+        create_git_service, git_repo_init, init_git_repo, init_local_service, DEFAULT_CONFIG_FILE,
     },
 };
 
@@ -17,7 +16,10 @@ use crate::command::CliCommand;
 pub struct Init {
     #[arg(help = "The name of project")]
     pub name: String,
-    #[arg(help = "The name of repo")]
+    #[arg(
+        long,
+        help = "Specify the git repo name for repo.\nExample: cloudwego_volo"
+    )]
     pub repo: Option<String>,
     #[arg(
         short = 'g',
@@ -58,17 +60,12 @@ impl Init {
         }
     }
 
-    fn init_gen(
-        &self,
-        entry_name: String,
-        config_entry: Entry,
-    ) -> anyhow::Result<(String, String)> {
-        InitBuilder::new(entry_name, config_entry).init()
+    fn init_gen(&self, config_entry: Entry) -> anyhow::Result<(String, String)> {
+        InitBuilder::new(config_entry).init()
     }
 
-    fn copy_grpc_template(&self, entry_name: String, config_entry: Entry) -> anyhow::Result<()> {
-        std::env::set_var("OUT_DIR", "/tmp/idl");
-        let (service_global_name, methods) = self.init_gen(entry_name, config_entry)?;
+    fn copy_grpc_template(&self, config_entry: Entry) -> anyhow::Result<()> {
+        let (service_global_name, methods) = self.init_gen(config_entry)?;
 
         let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
@@ -121,9 +118,8 @@ impl Init {
         Ok(())
     }
 
-    fn copy_thrift_template(&self, entry_name: String, config_entry: Entry) -> anyhow::Result<()> {
-        std::env::set_var("OUT_DIR", "/tmp/idl");
-        let (service_global_name, methods) = self.init_gen(entry_name, config_entry)?;
+    fn copy_thrift_template(&self, config_entry: Entry) -> anyhow::Result<()> {
+        let (service_global_name, methods) = self.init_gen(config_entry)?;
 
         let name = self.name.replace(['.', '-'], "_");
         let cwd = std::env::current_dir()?;
@@ -182,70 +178,35 @@ impl CliCommand for Init {
         if std::fs::metadata(DEFAULT_CONFIG_FILE).is_ok()
             || std::fs::metadata(PathBuf::from("./volo-gen/").join(DEFAULT_CONFIG_FILE)).is_ok()
         {
-            eprintln!("volo.yml already exists, the initialization is not allowed!");
+            eprintln!("{DEFAULT_CONFIG_FILE} already exists, the initialization is not allowed!");
             std::process::exit(1);
         }
 
-        volo_build::util::with_config(|_config| {
-            let mut idl = Idl::new();
-            idl.includes.clone_from(&self.includes);
+        volo_build::util::with_config(|config| {
             let mut repos = HashMap::new();
-
-            // Handling Git-Based Template Creation
-            if let Some(git) = self.git.as_ref() {
-                let repo_name = FastStr::new(
-                    self.repo
-                        .as_deref()
-                        .unwrap_or_else(|| get_repo_name_by_url(git)),
-                );
-                let r#ref = self.r#ref.as_deref().unwrap_or("HEAD");
-                let lock = get_repo_latest_commit_id(git, r#ref)?;
-                let new_repo = Repo {
-                    url: git.clone().into(),
-                    r#ref: FastStr::new(r#ref),
-                    lock: lock.into(),
-                };
-                idl.source = Source::Git(GitSource {
-                    repo_name: repo_name.clone(),
-                });
-                repos.insert(repo_name, new_repo);
+            let service = if let Some(git) = self.git.as_ref() {
+                let (repo_name, repo) = init_git_repo(&self.repo, git, &self.r#ref)?;
+                repos.insert(repo_name.clone(), repo);
+                create_git_service(repo_name, self.idl.as_path(), &self.includes)
             } else {
-                idl.path.clone_from(&self.idl);
-                // only ensure readable when idl is from local
-                idl.ensure_readable()?;
-            }
+                init_local_service(self.idl.as_path(), &self.includes)?
+            };
 
-            let mut entry = Entry {
+            let entry = Entry {
                 filename: PathBuf::from(DEFAULT_FILENAME),
-                protocol: idl.protocol(),
+                protocol: service.idl.protocol(),
                 repos,
-                services: vec![Service {
-                    idl: idl.clone(),
-                    codegen_option: Default::default(),
-                }],
+                services: vec![service],
                 common_option: Default::default(),
             };
 
             if self.is_grpc_project() {
-                self.copy_grpc_template(cx.entry_name.clone(), entry.clone())?;
+                self.copy_grpc_template(entry.clone())?;
             } else {
-                self.copy_thrift_template(cx.entry_name.clone(), entry.clone())?;
+                self.copy_thrift_template(entry.clone())?;
             }
 
-            if self.git.as_ref().is_none() {
-                // we will move volo.yml to volo-gen, so we need to add .. to includes and idl path
-                if let Some(service) = entry.services.get_mut(0) {
-                    for i in &mut service.idl.includes {
-                        if i.is_absolute() {
-                            continue;
-                        }
-                        *i = PathBuf::new().join("../").join(i.clone());
-                    }
-                    if !idl.path.is_absolute() {
-                        idl.path = PathBuf::new().join("../").join(self.idl.clone());
-                    }
-                }
-            }
+            config.entries.insert(cx.entry_name.clone(), entry);
 
             Ok(())
         })?;

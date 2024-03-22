@@ -28,7 +28,7 @@ pub struct CommonOption {
 pub struct Entry {
     pub filename: PathBuf,
     pub protocol: IdlProtocol,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub repos: HashMap<FastStr, Repo>,
     pub services: Vec<Service>,
     #[serde(flatten)]

@@ -308,6 +308,51 @@ pub fn strip_slash_prefix(p: &Path) -> PathBuf {
     }
 }
 
+pub fn init_local_service(idl: impl AsRef<Path>, includes: &[PathBuf]) -> anyhow::Result<Service> {
+    let includes = includes
+        .iter()
+        .map(|i| {
+            if i.is_absolute() {
+                i.clone()
+            } else {
+                PathBuf::new().join("../").join(i.clone())
+            }
+        })
+        .collect();
+    let path = if idl.as_ref().is_absolute() {
+        idl.as_ref().to_path_buf()
+    } else {
+        PathBuf::new().join("../").join(idl.as_ref())
+    };
+    let local_idl = Idl {
+        source: Source::Local,
+        path,
+        includes,
+    };
+    // only ensure readable when idl is from local
+    local_idl.ensure_readable()?;
+    Ok(Service {
+        idl: local_idl,
+        codegen_option: Default::default(),
+    })
+}
+
+pub fn init_git_repo(
+    repo: &Option<String>,
+    git: &str,
+    r#ref: &Option<String>,
+) -> anyhow::Result<(FastStr, Repo)> {
+    let repo_name = FastStr::new(repo.as_deref().unwrap_or_else(|| get_repo_name_by_url(git)));
+    let r#ref = r#ref.as_deref().unwrap_or("HEAD");
+    let lock = get_repo_latest_commit_id(git, r#ref)?;
+    let new_repo = Repo {
+        url: FastStr::new(git),
+        r#ref: FastStr::new(r#ref),
+        lock: lock.into(),
+    };
+    Ok((repo_name, new_repo))
+}
+
 pub fn download_repos_to_target(
     repos: &HashMap<FastStr, Repo>,
     target_dir: impl AsRef<Path>,
