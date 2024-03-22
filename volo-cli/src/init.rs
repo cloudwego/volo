@@ -6,8 +6,7 @@ use volo_build::{
     config_builder::InitBuilder,
     model::{Entry, GitSource, Idl, Repo, Service, Source, DEFAULT_FILENAME},
     util::{
-        check_and_get_repo_name, get_repo_name_by_url, git::get_repo_latest_commit_id,
-        git_repo_init, strip_slash_prefix, DEFAULT_CONFIG_FILE,
+        get_repo_name_by_url, git::get_repo_latest_commit_id, git_repo_init, DEFAULT_CONFIG_FILE,
     },
 };
 

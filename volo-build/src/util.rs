@@ -473,19 +473,15 @@ pub fn check_and_get_repo_name(
     Ok(repo_name)
 }
 
-pub fn create_git_service(
-    repo_name: FastStr,
-    idl_path: &Path,
-    includes: &[PathBuf],
-) -> Result<Service, anyhow::Error> {
-    Ok(Service {
+pub fn create_git_service(repo_name: FastStr, idl_path: &Path, includes: &[PathBuf]) -> Service {
+    Service {
         idl: Idl {
             source: Source::Git(GitSource { repo_name }),
             path: strip_slash_prefix(idl_path),
             includes: includes.to_vec(),
         },
         codegen_option: Default::default(),
-    })
+    }
 }
 
 #[cfg(test)]
