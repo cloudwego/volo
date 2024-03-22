@@ -3,13 +3,17 @@ use std::{convert::Infallible, marker::PhantomData};
 use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::Future;
-use http::{header, request::Parts, Method, StatusCode, Uri};
+use http::{header, request::Parts, Method, Uri};
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use volo::{context::Context, net::Address};
 
 use super::{param::Params, IntoResponse};
-use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
+use crate::{
+    context::ServerContext,
+    error::server::{body_collection_error, RejectionError},
+    request::ServerRequest,
+};
 
 mod private {
     #[derive(Debug, Clone, Copy)]
@@ -141,7 +145,7 @@ where
         parts: &mut Parts,
     ) -> Result<Self, Self::Rejection> {
         let query = parts.uri.query().unwrap_or_default();
-        let param = serde_urlencoded::from_str(query).map_err(RejectionError::QueryRejection)?;
+        let param = serde_urlencoded::from_str(query).map_err(RejectionError::Query)?;
         Ok(Query(param))
     }
 }
@@ -211,7 +215,7 @@ impl FromRequest for Bytes {
         let bytes = body
             .collect()
             .await
-            .map_err(|_| RejectionError::BodyCollectionError)?
+            .map_err(|_| body_collection_error())?
             .to_bytes();
 
         if let Some(Ok(Ok(cap))) = parts
@@ -243,7 +247,7 @@ impl FromRequest for String {
         let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
         // Check if the &[u8] is a valid string
-        let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::StringRejection)?;
+        let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::String)?;
 
         // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
         Ok(unsafe { String::from_utf8_unchecked(vec) })
@@ -261,7 +265,7 @@ impl FromRequest for FastStr {
         let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
         // Check if the &[u8] is a valid string
-        let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::StringRejection)?;
+        let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::String)?;
 
         // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
         Ok(unsafe { FastStr::from_vec_u8_unchecked(vec) })
@@ -295,40 +299,9 @@ where
         body: Incoming,
     ) -> Result<Self, Self::Rejection> {
         let bytes = Bytes::from_request(cx, parts, body).await?;
-        let form = serde_html_form::from_bytes::<T>(bytes.as_ref())
-            .map_err(RejectionError::FormRejection)?;
+        let form =
+            serde_html_form::from_bytes::<T>(bytes.as_ref()).map_err(RejectionError::Form)?;
 
         Ok(Form(form))
-    }
-}
-
-#[derive(Debug)]
-pub enum RejectionError {
-    BodyCollectionError,
-    InvalidContentType,
-    StringRejection(simdutf8::basic::Utf8Error),
-    #[cfg(feature = "__json")]
-    JsonRejection(crate::json::Error),
-    #[cfg(feature = "query")]
-    QueryRejection(serde_urlencoded::de::Error),
-    #[cfg(feature = "form")]
-    FormRejection(serde_html_form::de::Error),
-}
-
-impl IntoResponse for RejectionError {
-    fn into_response(self) -> ServerResponse {
-        let status = match self {
-            Self::BodyCollectionError => StatusCode::INTERNAL_SERVER_ERROR,
-            Self::InvalidContentType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            Self::StringRejection(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            #[cfg(feature = "__json")]
-            Self::JsonRejection(_) => StatusCode::BAD_REQUEST,
-            #[cfg(feature = "query")]
-            Self::QueryRejection(_) => StatusCode::BAD_REQUEST,
-            #[cfg(feature = "form")]
-            Self::FormRejection(_) => StatusCode::BAD_REQUEST,
-        };
-
-        status.into_response()
     }
 }
