@@ -164,19 +164,24 @@ impl CliCommand for Add {
             }
 
             if !has_found_entry {
-                let mut new_repo = None;
-                let repo_name = check_and_get_repo_name(
-                    &cx.entry_name,
-                    &HashMap::new(),
-                    &self.repo,
-                    &self.git,
-                    &self.r#ref,
-                    &mut new_repo,
-                )?;
+                let mut repos = HashMap::new();
                 let new_service = if let Some(local_service) = local_service.as_ref() {
                     local_service.clone()
                 } else {
-                    create_git_service(repo_name.clone(), &self.idl, &self.includes)
+                    let mut new_repo = None;
+                    let repo_name = check_and_get_repo_name(
+                        &cx.entry_name,
+                        &HashMap::new(),
+                        &self.repo,
+                        &self.git,
+                        &self.r#ref,
+                        &mut new_repo,
+                    )?;
+                    repos.insert(
+                        repo_name.clone(),
+                        new_repo.expect("new entry's git source requires the new repo for idl"),
+                    );
+                    create_git_service(repo_name, &self.idl, &self.includes)
                 };
 
                 config.entries.insert(
@@ -184,13 +189,7 @@ impl CliCommand for Add {
                     Entry {
                         protocol: new_service.idl.protocol(),
                         filename: PathBuf::from(&self.filename),
-                        repos: if let Some(new_repo) = new_repo {
-                            let mut repos = HashMap::with_capacity(1);
-                            repos.insert(repo_name, new_repo.clone());
-                            repos
-                        } else {
-                            HashMap::new()
-                        },
+                        repos,
                         services: vec![new_service],
                         common_option: Default::default(),
                     },
