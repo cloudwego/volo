@@ -16,11 +16,11 @@ pub struct SingleConfig {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CommonOption {
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_false")]
     pub touch_all: bool,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_false")]
     pub nonstandard_snake_case: bool,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dedups: Vec<FastStr>,
 }
 
@@ -43,7 +43,7 @@ fn common_crate_name() -> FastStr {
 pub struct WorkspaceConfig {
     #[serde(default = "common_crate_name")]
     pub common_crate_name: FastStr,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub repos: HashMap<FastStr, Repo>,
     pub services: Vec<Service>,
     #[serde(flatten)]
@@ -82,11 +82,11 @@ pub enum IdlProtocol {
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct CodegenOption {
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crate_name: Option<FastStr>,
-    #[serde(skip_serializing_if = "Vec::is_empty", default = "Vec::new")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub touch: Vec<String>,
-    #[serde(skip_serializing_if = "is_false", default)]
+    #[serde(default, skip_serializing_if = "is_false")]
     pub keep_unknown_fields: bool,
     #[serde(default, skip_serializing_if = "serde_yaml::Value::is_null")]
     pub config: serde_yaml::Value,
