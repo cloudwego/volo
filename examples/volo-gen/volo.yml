@@ -33,7 +33,7 @@ entries:
     services:
     - idl:
         source: git
-        repo_name: thrift
+        repo: thrift
         path: test/Service.thrift
     touch_all: false
     nonstandard_snake_case: false

@@ -154,7 +154,7 @@ pub enum Source {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct GitSource {
-    pub repo_name: FastStr,
+    pub repo: FastStr,
 }
 
 impl SingleConfig {

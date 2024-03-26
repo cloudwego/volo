@@ -187,7 +187,7 @@ impl CliCommand for Init {
             let service = if let Some(git) = self.git.as_ref() {
                 let (repo_name, repo) = init_git_repo(&self.repo, git, &self.r#ref)?;
                 repos.insert(repo_name.clone(), repo);
-                create_git_service(repo_name, self.idl.as_path(), &self.includes)
+                create_git_service(&repo_name, self.idl.as_path(), &self.includes)
             } else {
                 init_local_service(self.idl.as_path(), &self.includes)?
             };

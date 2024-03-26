@@ -75,7 +75,7 @@ fn transfer_from_legacy(idls: &[legacy::model::Idl]) -> (HashMap<FastStr, Repo>,
     let mut repos = HashMap::with_capacity(idls.len());
     let mut services = Vec::with_capacity(idls.len());
     idls.iter().for_each(|idl| {
-        let (repo, service) =
+        let source =
             if let legacy::model::Source::Git(legacy::model::GitSource { repo, r#ref, lock }) =
                 &idl.source
             {
@@ -96,54 +96,29 @@ fn transfer_from_legacy(idls: &[legacy::model::Idl]) -> (HashMap<FastStr, Repo>,
                     })
                     .into();
                 let name = FastStr::new(get_repo_name_by_url(repo));
-                let service = Service {
-                    idl: Idl {
-                        source: Source::Git(GitSource {
-                            repo_name: name.clone(),
-                        }),
-                        includes: idl.includes.clone(),
-                        path: idl.path.clone(),
-                    },
-                    codegen_option: CodegenOption {
-                        keep_unknown_fields: idl.keep_unknown_fields,
-                        touch: idl.touch.clone(),
-                        ..Default::default()
-                    },
+                let repo = Repo {
+                    url: repo.clone().into(),
+                    r#ref,
+                    lock,
                 };
-                (
-                    Some(Repo {
-                        url: repo.clone().into(),
-                        r#ref,
-                        lock,
-                    }),
-                    service,
-                )
+                repos.insert(name.clone(), repo);
+                Source::Git(GitSource { repo: name.clone() })
             } else {
-                (
-                    None,
-                    Service {
-                        idl: Idl {
-                            source: Source::Local,
-                            includes: idl.includes.clone(),
-                            path: idl.path.clone(),
-                        },
-                        codegen_option: CodegenOption {
-                            keep_unknown_fields: idl.keep_unknown_fields,
-                            touch: idl.touch.clone(),
-                            ..Default::default()
-                        },
-                    },
-                )
+                Source::Local
             };
 
-        if let Some(repo) = repo {
-            let repo_name = if let Source::Git(GitSource { repo_name }) = &service.idl.source {
-                repo_name.clone()
-            } else {
-                unreachable!("git service should have the git source")
-            };
-            repos.insert(repo_name, repo);
-        }
+        let service = Service {
+            idl: Idl {
+                source,
+                includes: idl.includes.clone(),
+                path: idl.path.clone(),
+            },
+            codegen_option: CodegenOption {
+                keep_unknown_fields: idl.keep_unknown_fields,
+                touch: idl.touch.clone(),
+                ..Default::default()
+            },
+        };
         services.push(service);
     });
 

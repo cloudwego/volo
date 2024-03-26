@@ -152,7 +152,7 @@ impl CliCommand for Add {
                 }
 
                 // create the git idl service
-                let git_service = create_git_service(repo_name.clone(), &self.idl, &self.includes);
+                let git_service = create_git_service(&repo_name, &self.idl, &self.includes);
                 entry.services.push(git_service);
 
                 // case 2.1: new repo, else case 2.2: exsited repo
@@ -181,7 +181,7 @@ impl CliCommand for Add {
                         repo_name.clone(),
                         new_repo.expect("new entry's git source requires the new repo for idl"),
                     );
-                    create_git_service(repo_name, &self.idl, &self.includes)
+                    create_git_service(&repo_name, &self.idl, &self.includes)
                 };
 
                 config.entries.insert(

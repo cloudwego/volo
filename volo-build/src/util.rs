@@ -369,10 +369,10 @@ pub fn get_idl_relative_path(
     idl: &Idl,
     repo_relative_dir_map: &HashMap<FastStr, PathBuf>,
 ) -> PathBuf {
-    if let Source::Git(GitSource { ref repo_name }) = idl.source {
+    if let Source::Git(GitSource { ref repo }) = idl.source {
         // git should use relative path instead of absolute path
         let dir = repo_relative_dir_map
-            .get(repo_name)
+            .get(repo)
             .expect("git source requires the repo info for idl")
             .clone();
         dir.join(strip_slash_prefix(idl.path.as_path()))
@@ -518,10 +518,10 @@ pub fn check_and_get_repo_name(
     Ok(repo_name)
 }
 
-pub fn create_git_service(repo_name: FastStr, idl_path: &Path, includes: &[PathBuf]) -> Service {
+pub fn create_git_service(repo: &FastStr, idl_path: &Path, includes: &[PathBuf]) -> Service {
     Service {
         idl: Idl {
-            source: Source::Git(GitSource { repo_name }),
+            source: Source::Git(GitSource { repo: repo.clone() }),
             path: strip_slash_prefix(idl_path),
             includes: includes.to_vec(),
         },
@@ -621,7 +621,7 @@ mod tests {
 
         let idl = Idl {
             source: Source::Git(GitSource {
-                repo_name: "test".into(),
+                repo: "test".into(),
             }),
             path: PathBuf::from("idl/test.thrift"),
             includes: vec![],

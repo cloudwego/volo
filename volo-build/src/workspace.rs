@@ -64,10 +64,10 @@ where
             .services
             .into_iter()
             .map(|s| {
-                if let Source::Git(GitSource { ref repo_name }) = s.idl.source {
+                if let Source::Git(GitSource { ref repo }) = s.idl.source {
                     // git should use relative path instead of absolute path
                     let dir = repo_relative_dir_map
-                        .get(repo_name)
+                        .get(repo)
                         .expect("git source requires the repo info for idl")
                         .clone();
                     IdlService {
