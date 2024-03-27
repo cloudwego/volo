@@ -6,7 +6,7 @@ use tokio::net::lookup_host;
 use volo::net::Address;
 
 use crate::{
-    error::client::{bad_scheme, builder_error, uri_without_host, Result},
+    error::client::{bad_host_name, bad_scheme, builder_error, uri_without_host, Result},
     utils::consts::{HTTPS_DEFAULT_PORT, HTTP_DEFAULT_PORT},
 };
 
@@ -17,7 +17,7 @@ pub trait IntoUri {
 impl IntoUri for Uri {
     fn into_uri(self) -> Result<Uri> {
         if self.scheme().is_none() {
-            Err(uri_without_host())
+            Err(uri_without_host(self))
         } else {
             Ok(self)
         }
@@ -52,7 +52,7 @@ fn get_port(uri: &Uri) -> Result<u16> {
             let scheme = match uri.scheme() {
                 Some(scheme) => scheme,
                 None => {
-                    return Err(bad_scheme());
+                    return Err(bad_scheme(uri.to_owned()));
                 }
             };
             // `match` is unavailable here, ref:
@@ -62,32 +62,31 @@ fn get_port(uri: &Uri) -> Result<u16> {
             } else if scheme == &Scheme::HTTPS {
                 HTTPS_DEFAULT_PORT
             } else {
-                return Err(bad_scheme());
+                return Err(bad_scheme(uri.to_owned()));
             }
         }
     };
     Ok(port)
 }
 
-pub fn parse_address(uri: &Uri) -> Result<Address> {
+pub async fn resolve(uri: &Uri) -> Result<Address> {
+    // Trim the brackets from the host name if it's an IPv6 address.
+    //
+    // e.g., for `http://[::1]:8080/`, it can be trimed to `::1` rather than `[::1]`
     let host = uri
         .host()
-        .ok_or(uri_without_host())?
+        .ok_or(uri_without_host(uri.to_owned()))?
         .trim_start_matches('[')
         .trim_end_matches(']');
     let port = get_port(uri)?;
-    tracing::warn!("host: {host}, port: {port}");
-    match host.parse::<IpAddr>() {
-        Ok(addr) => Ok(Address::from(SocketAddr::new(addr, port))),
-        Err(e) => Err(builder_error(e)),
-    }
-}
 
-pub async fn resolve(uri: &Uri) -> Result<impl Iterator<Item = Address>> {
-    let host = uri.host().ok_or_else(uri_without_host)?.to_owned();
-    let port = get_port(uri)?;
-    match lookup_host((host, port)).await {
-        Ok(addrs) => Ok(addrs.map(Address::from)),
-        Err(e) => Err(builder_error(e)),
+    // Parse the adddress directly.
+    if let Ok(addr) = host.parse::<IpAddr>() {
+        return Ok(Address::from(SocketAddr::new(addr, port)));
     }
+
+    // The address may be a domain name, so we need to resolve it.
+    let mut iter = lookup_host((host, port)).await.map_err(builder_error)?;
+    let addr = iter.next().ok_or_else(|| bad_host_name(uri.to_owned()))?;
+    Ok(Address::Ip(addr))
 }
