@@ -18,8 +18,6 @@ pub struct SingleConfig {
 pub struct CommonOption {
     #[serde(default, skip_serializing_if = "is_false")]
     pub touch_all: bool,
-    #[serde(default, skip_serializing_if = "is_false")]
-    pub nonstandard_snake_case: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dedups: Vec<FastStr>,
 }
@@ -175,17 +173,6 @@ impl Idl {
             source: Source::Local,
             path: PathBuf::from(""),
             includes: Vec::new(),
-        }
-    }
-
-    pub fn protocol(&self) -> IdlProtocol {
-        match self.path.extension().and_then(|v| v.to_str()) {
-            Some("thrift") => IdlProtocol::Thrift,
-            Some("proto") => IdlProtocol::Protobuf,
-            _ => {
-                eprintln!("invalid file ext {:?}", self.path);
-                std::process::exit(1);
-            }
         }
     }
 }

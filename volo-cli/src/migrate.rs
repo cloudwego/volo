@@ -47,7 +47,6 @@ impl CliCommand for Migrate {
                         services,
                         common_option: CommonOption {
                             touch_all: old_entry.touch_all,
-                            nonstandard_snake_case: old_entry.nonstandard_snake_case,
                             dedups: Vec::new(),
                         },
                     };

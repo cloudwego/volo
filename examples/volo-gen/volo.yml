@@ -2,13 +2,12 @@ entries:
   proto:
     filename: proto_gen.rs
     protocol: protobuf
-    repos: {}
+    repos:
+      protobuf:
+        url: https://github.com/protocolbuffers/protobuf.git
+        ref: HEAD
+        lock: 704d0454ddc58da683e8cec22896ff3498089549
     services:
-    - idl:
-        source: local
-        path: ../proto/hello.proto
-        includes:
-        - ../proto
     - idl:
         source: local
         path: ../proto/echo.proto
@@ -19,29 +18,25 @@ entries:
         path: ../proto/streaming.proto
         includes:
         - ../proto
-    touch_all: false
-    nonstandard_snake_case: false
-    dedups: []
-  default:
-    filename: volo_gen.rs
+    - idl:
+        source: local
+        path: ../proto/hello.proto
+        includes:
+        - ../proto
+    - idl:
+        source: git
+        repo: protobuf
+        path: examples/addressbook.proto
+        includes:
+        - examples
+  thrift:
+    filename: thrift_gen.rs
     protocol: thrift
     repos:
       thrift:
         url: https://github.com/apache/thrift.git
         ref: HEAD
-        lock: a9b14634991cb50dbe90bbeb27b16e2d2f7ddcc6
-    services:
-    - idl:
-        source: git
-        repo: thrift
-        path: test/Service.thrift
-    touch_all: false
-    nonstandard_snake_case: false
-    dedups: []
-  thrift:
-    filename: thrift_gen.rs
-    protocol: thrift
-    repos: {}
+        lock: 9bd1f1bee7bf59080492bbd3213ca1fed57ab4d6
     services:
     - idl:
         source: local
@@ -54,6 +49,7 @@ entries:
         path: ../thrift_idl/echo_unknown.thrift
       codegen_option:
         keep_unknown_fields: true
-    touch_all: false
-    nonstandard_snake_case: false
-    dedups: []
+    - idl:
+        source: git
+        repo: thrift
+        path: test/Service.thrift

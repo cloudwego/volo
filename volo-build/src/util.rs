@@ -12,7 +12,7 @@ use mockall_double::double;
 use serde::de::Error;
 use volo::FastStr;
 
-use crate::model::{GitSource, Idl, Repo, Service, SingleConfig, Source};
+use crate::model::{GitSource, Idl, IdlProtocol, Repo, Service, SingleConfig, Source};
 
 lazy_static! {
     pub static ref DEFAULT_DIR: PathBuf = std::path::Path::new(
@@ -365,22 +365,25 @@ pub fn download_repos_to_target(
     Ok(repo_relative_dir_map)
 }
 
-pub fn get_idl_relative_path(
+pub fn get_idl_build_path_and_includes(
     idl: &Idl,
     repo_relative_dir_map: &HashMap<FastStr, PathBuf>,
-) -> PathBuf {
+) -> (PathBuf, Vec<PathBuf>) {
     if let Source::Git(GitSource { ref repo }) = idl.source {
         // git should use relative path instead of absolute path
         let dir = repo_relative_dir_map
             .get(repo)
             .expect("git source requires the repo info for idl")
             .clone();
-        dir.join(strip_slash_prefix(idl.path.as_path()))
+        let path = dir.join(strip_slash_prefix(idl.path.as_path()));
+        let includes = idl.includes.iter().map(|v| dir.join(v.clone())).collect();
+        (path, includes)
     } else {
-        idl.path.clone()
+        (idl.path.clone(), idl.includes.clone())
     }
 }
 
+#[derive(Default)]
 pub struct ServiceBuilder {
     pub path: PathBuf,
     pub includes: Vec<PathBuf>,
@@ -394,11 +397,14 @@ pub fn get_service_builders_from_services(
 ) -> Vec<ServiceBuilder> {
     services
         .iter()
-        .map(|s| ServiceBuilder {
-            path: get_idl_relative_path(&s.idl, repo_relative_dir_map),
-            includes: s.idl.includes.clone(),
-            touch: s.codegen_option.touch.clone(),
-            keep_unknown_fields: s.codegen_option.keep_unknown_fields,
+        .map(|s| {
+            let (path, includes) = get_idl_build_path_and_includes(&s.idl, repo_relative_dir_map);
+            ServiceBuilder {
+                path,
+                includes,
+                touch: s.codegen_option.touch.clone(),
+                keep_unknown_fields: s.codegen_option.keep_unknown_fields,
+            }
         })
         .collect()
 }
@@ -529,6 +535,18 @@ pub fn create_git_service(repo: &FastStr, idl_path: &Path, includes: &[PathBuf])
     }
 }
 
+pub fn detect_protocol<P: AsRef<Path>>(path: P) -> IdlProtocol {
+    let path = path.as_ref();
+    match path.extension().and_then(|v| v.to_str()) {
+        Some("thrift") => IdlProtocol::Thrift,
+        Some("proto") => IdlProtocol::Protobuf,
+        _ => {
+            eprintln!("invalid file ext {:?}", path);
+            std::process::exit(1);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -607,16 +625,19 @@ mod tests {
     }
 
     #[test]
-    fn test_get_idl_relative_path() {
+    fn test_get_idl_build_path_and_includes() {
         let idl = Idl {
             source: Source::Local,
-            path: PathBuf::from("idl/test.thrift"),
-            includes: vec![],
+            path: PathBuf::from("../idl/test.thrift"),
+            includes: vec![PathBuf::from("../idl")],
         };
         let repo_relative_dir_map = HashMap::new();
         assert_eq!(
-            get_idl_relative_path(&idl, &repo_relative_dir_map),
-            idl.path
+            get_idl_build_path_and_includes(&idl, &repo_relative_dir_map),
+            (
+                PathBuf::from("../idl/test.thrift"),
+                vec![PathBuf::from("../idl")]
+            )
         );
 
         let idl = Idl {
@@ -624,13 +645,16 @@ mod tests {
                 repo: "test".into(),
             }),
             path: PathBuf::from("idl/test.thrift"),
-            includes: vec![],
+            includes: vec![PathBuf::from("idl")],
         };
         let mut repo_relative_dir_map = HashMap::new();
         repo_relative_dir_map.insert("test".into(), PathBuf::from("repo"));
         assert_eq!(
-            get_idl_relative_path(&idl, &repo_relative_dir_map),
-            PathBuf::from("repo/idl/test.thrift")
+            get_idl_build_path_and_includes(&idl, &repo_relative_dir_map),
+            (
+                PathBuf::from("repo/idl/test.thrift"),
+                vec![PathBuf::from("repo/idl")]
+            )
         );
     }
 
@@ -638,8 +662,8 @@ mod tests {
     fn test_get_service_builders_from_services() {
         let idl = Idl {
             source: Source::Local,
-            path: PathBuf::from("idl/test.thrift"),
-            includes: vec![],
+            path: PathBuf::from("../idl/test.thrift"),
+            includes: vec![PathBuf::from("../idl")],
         };
         let service = Service {
             idl: idl.clone(),

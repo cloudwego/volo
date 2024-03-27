@@ -5,7 +5,8 @@ use volo_build::{
     config_builder::InitBuilder,
     model::{Entry, DEFAULT_FILENAME},
     util::{
-        create_git_service, git_repo_init, init_git_repo, init_local_service, DEFAULT_CONFIG_FILE,
+        create_git_service, detect_protocol, git_repo_init, init_git_repo, init_local_service,
+        DEFAULT_CONFIG_FILE,
     },
 };
 
@@ -194,7 +195,7 @@ impl CliCommand for Init {
 
             let entry = Entry {
                 filename: PathBuf::from(DEFAULT_FILENAME),
-                protocol: service.idl.protocol(),
+                protocol: detect_protocol(service.idl.path.as_path()),
                 repos,
                 services: vec![service],
                 common_option: Default::default(),

@@ -188,7 +188,6 @@ impl SingleConfigBuilder {
                 builder
                     .add_services(service_builders)
                     .ignore_unused(!entry.common_option.touch_all)
-                    .nonstandard_snake_case(entry.common_option.nonstandard_snake_case)
                     .write()?;
 
                 Ok(())

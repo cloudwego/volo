@@ -2,8 +2,8 @@ use std::{collections::HashMap, path::PathBuf};
 
 use clap::{value_parser, Parser};
 use volo_build::{
-    model::{Entry, Idl, Service, Source},
-    util::{check_and_get_repo_name, create_git_service, strip_slash_prefix},
+    model::{Entry, GitSource, Idl, Service, Source},
+    util::{check_and_get_repo_name, create_git_service, detect_protocol, strip_slash_prefix},
 };
 
 use crate::{command::CliCommand, context::Context};
@@ -65,12 +65,15 @@ impl CliCommand for Add {
         }
         volo_build::util::with_config(|config| {
             let local_service = if self.repo.is_none() && self.git.is_none() {
+                let local_idl = Idl {
+                    source: Source::Local,
+                    path: strip_slash_prefix(self.idl.as_path()),
+                    includes: self.includes.clone(),
+                };
+                // only ensure readable when idl is from local
+                local_idl.ensure_readable()?;
                 Some(Service {
-                    idl: Idl {
-                        source: Source::Local,
-                        path: strip_slash_prefix(self.idl.as_path()),
-                        includes: self.includes.clone(),
-                    },
+                    idl: local_idl,
                     codegen_option: Default::default(),
                 })
             } else {
@@ -94,6 +97,16 @@ impl CliCommand for Add {
                 // found the entry
                 has_found_entry = true;
 
+                // check the protocol
+                if entry.protocol != detect_protocol(self.idl.as_path()) {
+                    eprintln!(
+                        "The specified idl's protocol is conflicted with the specified entry \
+                         '{}', whose protocol is {:?}",
+                        entry_name, entry.protocol
+                    );
+                    std::process::exit(1);
+                }
+
                 if entry.filename != PathBuf::from(&self.filename) {
                     eprintln!(
                         "The specified filename '{}' doesn't match the current filename '{}' in \
@@ -105,7 +118,7 @@ impl CliCommand for Add {
                     std::process::exit(1);
                 }
 
-                let mut has_found_idl = false;
+                let mut found_idl = None;
                 let mut is_existed_local = false;
                 // iter idls to find if the idl is already in the entry
                 for s in entry.services.iter() {
@@ -115,11 +128,11 @@ impl CliCommand for Add {
                     if let Source::Local = s.idl.source {
                         is_existed_local = true;
                     }
-                    has_found_idl = true;
+                    found_idl = Some(&s.idl);
                     break;
                 }
 
-                // case 1: [new local idl]
+                // case 1: [local idl]
                 if let Some(local_service) = local_service.as_ref() {
                     // case 1.1: exsited git idl or not exsit
                     if !is_existed_local {
@@ -129,7 +142,7 @@ impl CliCommand for Add {
                     break;
                 }
 
-                // case 2: [new git idl]
+                // case 2: [git idl]
                 // check and get the repo name
                 let mut new_repo = None;
                 let repo_name = check_and_get_repo_name(
@@ -141,14 +154,31 @@ impl CliCommand for Add {
                     &mut new_repo,
                 )?;
 
-                // check the exact idl service
-                if new_repo.is_none() && has_found_idl {
-                    eprintln!(
-                        "The specified idl '{}' already exists in entry '{}'!",
-                        self.idl.to_string_lossy(),
-                        entry_name
-                    );
-                    std::process::exit(1);
+                // check the existed idl service
+                if let Some(idl) = found_idl {
+                    if new_repo.is_none() {
+                        eprintln!(
+                            "The specified idl '{}' already exists in entry '{}'!",
+                            self.idl.to_string_lossy(),
+                            entry_name
+                        );
+                        std::process::exit(1);
+                    }
+                    // check if exsited idl with the same repo name but miss the repo in yml
+                    match &idl.source {
+                        Source::Git(GitSource { repo }) if *repo == repo_name => {
+                            eprintln!(
+                                "The specified idl '{}' already exists in entry '{}', but the \
+                                 repo is missed, check the yml file and delete the existed idl \
+                                 before the execution if the idl is the same, or add the missed \
+                                 repo for the existed idl and add the new idl later with \
+                                 different repo name",
+                                self.idl.to_string_lossy(),
+                                entry_name
+                            );
+                        }
+                        _ => {}
+                    }
                 }
 
                 // create the git idl service
@@ -187,7 +217,7 @@ impl CliCommand for Add {
                 config.entries.insert(
                     cx.entry_name.clone(),
                     Entry {
-                        protocol: new_service.idl.protocol(),
+                        protocol: detect_protocol(new_service.idl.path.as_path()),
                         filename: PathBuf::from(&self.filename),
                         repos,
                         services: vec![new_service],
