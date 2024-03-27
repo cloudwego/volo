@@ -1,10 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use anyhow::anyhow;
 use serde::{Deserialize, Serialize};
-use util::get_repo_latest_commit_id;
-
-use super::util;
 
 pub const DEFAULT_ENTRY_NAME: &str = "default";
 pub const DEFAULT_FILENAME: &str = "volo_gen.rs";
@@ -47,44 +43,8 @@ pub struct Idl {
     pub keep_unknown_fields: bool,
 }
 
-impl Idl {
-    pub fn update(&mut self) -> anyhow::Result<()> {
-        match &mut self.source {
-            Source::Git(git_source) => git_source.update(),
-            Source::Local => Ok(()),
-        }
-    }
-
-    pub fn ensure_readable(&self) -> anyhow::Result<()> {
-        // We should ensure that:
-        //   1. All the files exist (`ENOENT` may occur)
-        //   2. All the files can be accessed by the current user (`EPERM` may occur)
-        //   3. All the files can be read by the current user (`EPERM` may occur)
-        // The simplest method is opening it with read perm (`O_RDONLY`)
-
-        try_open_readonly(&self.path)
-            .map_err(|e| anyhow!("{}: {}", self.path.to_str().unwrap(), e))?;
-
-        for inc in self.includes.iter() {
-            try_open_readonly(inc).map_err(|e| anyhow!("{}: {}", inc.to_str().unwrap(), e))?;
-        }
-
-        Ok(())
-    }
-}
-
 fn is_false(b: &bool) -> bool {
     !b
-}
-
-fn try_open_readonly<P: AsRef<std::path::Path>>(path: P) -> std::io::Result<()> {
-    let md = std::fs::metadata(&path)?;
-    if md.is_dir() {
-        std::fs::read_dir(path)?;
-    } else {
-        std::fs::OpenOptions::new().read(true).open(path)?;
-    }
-    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -105,48 +65,8 @@ pub struct GitSource {
     pub lock: Option<String>,
 }
 
-impl GitSource {
-    pub fn update(&mut self) -> anyhow::Result<()> {
-        let commit_id =
-            get_repo_latest_commit_id(&self.repo, self.r#ref.as_deref().unwrap_or("HEAD"))?;
-
-        let _ = self.lock.insert(commit_id);
-
-        Ok::<(), anyhow::Error>(())
-    }
-}
-
 impl Config {
     pub fn new() -> Self {
         Default::default()
-    }
-}
-
-impl Default for Idl {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl Idl {
-    pub fn new() -> Self {
-        Self {
-            source: Source::Local,
-            path: PathBuf::from(""),
-            includes: Vec::new(),
-            touch: Vec::default(),
-            keep_unknown_fields: false,
-        }
-    }
-
-    pub fn protocol(&self) -> IdlProtocol {
-        match self.path.extension().and_then(|v| v.to_str()) {
-            Some("thrift") => IdlProtocol::Thrift,
-            Some("proto") => IdlProtocol::Protobuf,
-            _ => {
-                eprintln!("invalid file ext {:?}", self.path);
-                std::process::exit(1);
-            }
-        }
     }
 }

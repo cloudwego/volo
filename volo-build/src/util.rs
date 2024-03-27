@@ -357,21 +357,21 @@ pub fn download_repos_to_target(
     repos: &HashMap<FastStr, Repo>,
     target_dir: impl AsRef<Path>,
 ) -> anyhow::Result<HashMap<FastStr, PathBuf>> {
-    let mut repo_relative_dir_map = HashMap::with_capacity(repos.len());
+    let mut repo_dir_map = HashMap::with_capacity(repos.len());
     for (name, repo) in repos {
         let dir = download_repo(repo, target_dir.as_ref())?;
-        repo_relative_dir_map.insert(name.clone(), dir);
+        repo_dir_map.insert(name.clone(), dir);
     }
-    Ok(repo_relative_dir_map)
+    Ok(repo_dir_map)
 }
 
 pub fn get_idl_build_path_and_includes(
     idl: &Idl,
-    repo_relative_dir_map: &HashMap<FastStr, PathBuf>,
+    repo_dir_map: &HashMap<FastStr, PathBuf>,
 ) -> (PathBuf, Vec<PathBuf>) {
     if let Source::Git(GitSource { ref repo }) = idl.source {
         // git should use relative path instead of absolute path
-        let dir = repo_relative_dir_map
+        let dir = repo_dir_map
             .get(repo)
             .expect("git source requires the repo info for idl")
             .clone();
@@ -393,12 +393,12 @@ pub struct ServiceBuilder {
 
 pub fn get_service_builders_from_services(
     services: &[Service],
-    repo_relative_dir_map: &HashMap<FastStr, PathBuf>,
+    repo_dir_map: &HashMap<FastStr, PathBuf>,
 ) -> Vec<ServiceBuilder> {
     services
         .iter()
         .map(|s| {
-            let (path, includes) = get_idl_build_path_and_includes(&s.idl, repo_relative_dir_map);
+            let (path, includes) = get_idl_build_path_and_includes(&s.idl, repo_dir_map);
             ServiceBuilder {
                 path,
                 includes,
@@ -454,7 +454,7 @@ pub fn check_and_get_repo_name(
                     );
                 }
             } else {
-                // check repo by git url rindex
+                // check repo by git url index
                 if url_map.contains_key(&FastStr::new(git)) {
                     bail!(
                         "The specified repo '{}' is indexed by the existed repo name '{}' in \
@@ -489,11 +489,11 @@ pub fn check_and_get_repo_name(
         (_, Some(git)) => {
             let key = FastStr::new(git);
             if url_map.contains_key(&key) {
-                // check repo by git url rindex
+                // check repo by git url index
                 let repo = url_map.get(&key).unwrap();
                 let existed_ref = &repos
                     .get(repo)
-                    .expect("the repo index should exist for the git rindex map")
+                    .expect("the repo index should exist for the git index map")
                     .r#ref;
                 if existed_ref.clone() != r#ref {
                     bail!(
@@ -518,7 +518,7 @@ pub fn check_and_get_repo_name(
             }
         }
         _ => {
-            bail!("The specified repo or git should be specified")
+            bail!("Either the repo or the git arg should be specified!")
         }
     };
     Ok(repo_name)
@@ -631,9 +631,9 @@ mod tests {
             path: PathBuf::from("../idl/test.thrift"),
             includes: vec![PathBuf::from("../idl")],
         };
-        let repo_relative_dir_map = HashMap::new();
+        let repo_dir_map = HashMap::new();
         assert_eq!(
-            get_idl_build_path_and_includes(&idl, &repo_relative_dir_map),
+            get_idl_build_path_and_includes(&idl, &repo_dir_map),
             (
                 PathBuf::from("../idl/test.thrift"),
                 vec![PathBuf::from("../idl")]
@@ -647,10 +647,10 @@ mod tests {
             path: PathBuf::from("idl/test.thrift"),
             includes: vec![PathBuf::from("idl")],
         };
-        let mut repo_relative_dir_map = HashMap::new();
-        repo_relative_dir_map.insert("test".into(), PathBuf::from("repo"));
+        let mut repo_dir_map = HashMap::new();
+        repo_dir_map.insert("test".into(), PathBuf::from("repo"));
         assert_eq!(
-            get_idl_build_path_and_includes(&idl, &repo_relative_dir_map),
+            get_idl_build_path_and_includes(&idl, &repo_dir_map),
             (
                 PathBuf::from("repo/idl/test.thrift"),
                 vec![PathBuf::from("repo/idl")]
@@ -670,8 +670,8 @@ mod tests {
             codegen_option: Default::default(),
         };
         let services = vec![service];
-        let repo_relative_dir_map = HashMap::new();
-        let builders = get_service_builders_from_services(&services, &repo_relative_dir_map);
+        let repo_dir_map = HashMap::new();
+        let builders = get_service_builders_from_services(&services, &repo_dir_map);
         assert_eq!(builders.len(), 1);
         assert_eq!(builders[0].path, idl.path);
     }

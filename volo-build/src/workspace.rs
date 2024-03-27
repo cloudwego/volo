@@ -51,10 +51,10 @@ where
         };
 
         let target_dir = work_dir.join("target");
-        let repo_relative_dir_map = if let Ok(repo_relative_dir_map) =
+        let repo_dir_map = if let Ok(repo_dir_map) =
             download_repos_to_target(&config.repos, target_dir.as_path())
         {
-            repo_relative_dir_map
+            repo_dir_map
         } else {
             eprintln!("failed to download repos");
             std::process::exit(1);
@@ -66,7 +66,7 @@ where
             .map(|s| {
                 if let Source::Git(GitSource { ref repo }) = s.idl.source {
                     // git should use relative path instead of absolute path
-                    let dir = repo_relative_dir_map
+                    let dir = repo_dir_map
                         .get(repo)
                         .expect("git source requires the repo info for idl")
                         .clone();

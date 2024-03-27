@@ -7,12 +7,10 @@ use anyhow::anyhow;
 use itertools::Itertools;
 use pilota_build::{parser::Parser, IdlService};
 
-pub mod config_builder;
 pub mod model;
 pub mod util;
 pub mod workspace;
 
-pub use config_builder::ConfigBuilder;
 pub use pilota_build::{
     parser, plugin, rir, BoxClonePlugin, ClonePlugin, Context, DefId, MakeBackend, Plugin,
 };

@@ -12,7 +12,7 @@ use crate::{
     },
 };
 
-pub struct SingleConfigBuilder {
+pub struct ConfigBuilder {
     filename: PathBuf,
     plugins: Vec<BoxClonePlugin>,
 }
@@ -144,9 +144,9 @@ impl InnerBuilder {
     }
 }
 
-impl SingleConfigBuilder {
+impl ConfigBuilder {
     pub fn new(filename: PathBuf) -> Self {
-        SingleConfigBuilder {
+        ConfigBuilder {
             filename,
             plugins: Vec::new(),
         }
@@ -176,13 +176,13 @@ impl SingleConfigBuilder {
                     builder = builder.plugin(p.clone());
                 }
 
-                // download repos and get the relative paths
+                // download repos and get the repo paths
                 let target_dir = PathBuf::from(&*DEFAULT_DIR).join(entry_name);
-                let repo_relative_dir_map = download_repos_to_target(&entry.repos, target_dir)?;
+                let repo_dir_map = download_repos_to_target(&entry.repos, target_dir)?;
 
                 // get idl builders from services
                 let service_builders =
-                    get_service_builders_from_services(&entry.services, &repo_relative_dir_map);
+                    get_service_builders_from_services(&entry.services, &repo_dir_map);
 
                 // add build options to the builder and build
                 builder
@@ -196,9 +196,9 @@ impl SingleConfigBuilder {
     }
 }
 
-impl Default for SingleConfigBuilder {
+impl Default for ConfigBuilder {
     fn default() -> Self {
-        SingleConfigBuilder::new(PathBuf::from(DEFAULT_CONFIG_FILE))
+        ConfigBuilder::new(PathBuf::from(DEFAULT_CONFIG_FILE))
     }
 }
 
@@ -218,14 +218,12 @@ impl InitBuilder {
         }
         .filename(self.entry.filename);
 
-        // download repos and get the relative paths
+        // download repos and get the repo paths
         let temp_target_dir = tempdir::TempDir::new("")?;
-        let repo_relative_dir_map =
-            download_repos_to_target(&self.entry.repos, temp_target_dir.as_ref())?;
+        let repo_dir_map = download_repos_to_target(&self.entry.repos, temp_target_dir.as_ref())?;
 
         // get idl builders from services
-        let idl_builders =
-            get_service_builders_from_services(&self.entry.services, &repo_relative_dir_map);
+        let idl_builders = get_service_builders_from_services(&self.entry.services, &repo_dir_map);
 
         // add services to the builder
         builder = builder.add_services(idl_builders);

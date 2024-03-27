@@ -176,6 +176,7 @@ impl CliCommand for Add {
                                 self.idl.to_string_lossy(),
                                 entry_name
                             );
+                            std::process::exit(1);
                         }
                         _ => {}
                     }

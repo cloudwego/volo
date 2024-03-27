@@ -20,7 +20,7 @@ pub mod thrift_backend;
 pub mod util;
 pub mod workspace;
 
-pub use config_builder::SingleConfigBuilder;
+pub use config_builder::ConfigBuilder;
 pub use pilota_build::{
     parser, plugin, rir, BoxClonePlugin, ClonePlugin, Context, DefId, MakeBackend, Plugin,
 };
