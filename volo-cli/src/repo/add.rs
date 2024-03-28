@@ -21,7 +21,7 @@ pub struct Add {
         help = "Specify the git repo for idl.\nShould be in the format of \
                 \"git@domain:path/repo.git\".\nExample: git@github.com:cloudwego/volo.git"
     )]
-    pub git: Option<String>,
+    pub git: String,
     #[arg(
         short = 'r',
         long = "ref",
@@ -33,10 +33,7 @@ pub struct Add {
 
 impl CliCommand for Add {
     fn run(&self, cx: Context) -> anyhow::Result<()> {
-        if self.git.is_none() {
-            unreachable!("git should be specified")
-        }
-        let git = self.git.as_ref().unwrap();
+        let git = self.git.as_ref();
 
         let name = FastStr::new(
             self.repo

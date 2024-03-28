@@ -125,17 +125,6 @@ impl InnerBuilder {
         }
     }
 
-    pub fn nonstandard_snake_case(self, nonstandard_snake_case: bool) -> Self {
-        match self {
-            InnerBuilder::Protobuf(inner) => {
-                InnerBuilder::Protobuf(inner.nonstandard_snake_case(nonstandard_snake_case))
-            }
-            InnerBuilder::Thrift(inner) => {
-                InnerBuilder::Thrift(inner.nonstandard_snake_case(nonstandard_snake_case))
-            }
-        }
-    }
-
     pub fn common_crate_name(self, name: FastStr) -> Self {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.common_crate_name(name)),

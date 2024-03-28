@@ -135,13 +135,6 @@ where
         self
     }
 
-    pub fn nonstandard_snake_case(mut self, nonstandard_snake_case: bool) -> Self {
-        self.pilota_builder = self
-            .pilota_builder
-            .nonstandard_snake_case(nonstandard_snake_case);
-        self
-    }
-
     pub fn common_crate_name(mut self, name: FastStr) -> Self {
         self.pilota_builder = self.pilota_builder.common_crate_name(name);
         self
