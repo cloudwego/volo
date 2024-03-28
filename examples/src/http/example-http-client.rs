@@ -38,11 +38,12 @@ async fn main() -> Result<(), BoxError> {
 
     // create client by builder
     let client = {
-        let mut builder = ClientBuilder::new()
+        let mut builder = ClientBuilder::new();
+        builder
             .caller_name("example.http.client")
             .callee_name("example.http.server")
-            .header("Test", "Test")?;
-        builder.fail_on_error_status(true);
+            .header("Test", "Test")?
+            .fail_on_error_status(true);
         builder.build()
     };
 
