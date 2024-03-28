@@ -7,7 +7,7 @@ use volo::net::Address;
 
 use crate::{
     error::client::{bad_host_name, bad_scheme, builder_error, uri_without_host, Result},
-    utils::consts::{HTTPS_DEFAULT_PORT, HTTP_DEFAULT_PORT},
+    utils::consts,
 };
 
 pub trait IntoUri {
@@ -57,10 +57,12 @@ fn get_port(uri: &Uri) -> Result<u16> {
             };
             // `match` is unavailable here, ref:
             // https://doc.rust-lang.org/stable/std/marker/trait.StructuralPartialEq.html
+            #[cfg(feature = "__tls")]
+            if scheme == &Scheme::HTTPS {
+                return Ok(consts::HTTPS_DEFAULT_PORT);
+            }
             if scheme == &Scheme::HTTP {
-                HTTP_DEFAULT_PORT
-            } else if scheme == &Scheme::HTTPS {
-                HTTPS_DEFAULT_PORT
+                consts::HTTP_DEFAULT_PORT
             } else {
                 return Err(bad_scheme(uri.to_owned()));
             }

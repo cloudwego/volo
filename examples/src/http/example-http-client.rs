@@ -27,12 +27,13 @@ async fn main() -> Result<(), BoxError> {
     );
 
     // HTTPS `get`
-    //
-    // If tls is not enabled, the `httpbin.org` will response 400 Bad Request.
-    println!(
-        "{}",
-        get("https://httpbin.org/get").await?.into_string().await?
-    );
+    #[cfg(feature = "__tls")]
+    {
+        println!(
+            "{}",
+            get("https://httpbin.org/get").await?.into_string().await?
+        );
+    }
 
     // create client by builder
     let client = ClientBuilder::new()
@@ -63,6 +64,8 @@ async fn main() -> Result<(), BoxError> {
         "{:?}",
         client
             .post("http://127.0.0.1:8080/user/json_post")?
+            // Content-Type is needed!
+            .header("Content-Type", "application/json")?
             .data(Json(Person {
                 name: "Foo".to_string(),
                 age: 25,
