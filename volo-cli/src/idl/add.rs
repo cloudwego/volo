@@ -1,9 +1,9 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use clap::{value_parser, Parser};
 use volo_build::{
-    model::{Entry, GitSource, Idl, Source},
-    util::{get_repo_latest_commit_id, strip_slash_prefix},
+    model::{Entry, GitSource, Idl, Service, Source},
+    util::{check_and_get_repo_name, create_git_service, detect_protocol, strip_slash_prefix},
 };
 
 use crate::{command::CliCommand, context::Context};
@@ -11,6 +11,12 @@ use crate::{command::CliCommand, context::Context};
 #[derive(Debug, Parser)]
 #[command(arg_required_else_help = true)]
 pub struct Add {
+    #[arg(
+        long,
+        help = "Specify the git repo name for repo.\nExample: cloudwego_volo"
+    )]
+    pub repo: Option<String>,
+
     #[arg(
         short = 'g',
         long = "git",
@@ -32,7 +38,7 @@ pub struct Add {
         help = "Specify the include dirs for idl.\nIf -g or --git is specified, then this should \
                 be the path in the specified git repo."
     )]
-    pub includes: Option<Vec<PathBuf>>,
+    pub includes: Vec<PathBuf>,
 
     #[arg(
         short = 'f',
@@ -58,41 +64,30 @@ impl CliCommand for Add {
             std::process::exit(1);
         }
         volo_build::util::with_config(|config| {
-            let new_idl = {
-                if let Some(git) = self.git.as_ref() {
-                    let lock =
-                        get_repo_latest_commit_id(git, self.r#ref.as_deref().unwrap_or("HEAD"))?;
-                    Idl {
-                        source: Source::Git(GitSource {
-                            repo: git.clone(),
-                            r#ref: self.r#ref.clone(),
-                            lock: Some(lock),
-                        }),
-                        touch: vec![],
-                        path: strip_slash_prefix(self.idl.as_path()),
-                        includes: self.includes.clone(),
-                        keep_unknown_fields: false,
-                    }
-                } else {
-                    Idl {
-                        source: Source::Local,
-                        touch: vec![],
-                        path: self.idl.clone(),
-                        includes: self.includes.clone(),
-                        keep_unknown_fields: false,
-                    }
-                }
+            let local_service = if self.repo.is_none() && self.git.is_none() {
+                let local_idl = Idl {
+                    source: Source::Local,
+                    path: strip_slash_prefix(self.idl.as_path()),
+                    includes: self.includes.clone(),
+                };
+                // only ensure readable when idl is from local
+                local_idl.ensure_readable()?;
+                Some(Service {
+                    idl: local_idl,
+                    codegen_option: Default::default(),
+                })
+            } else {
+                None
             };
 
             let mut has_found_entry = false;
-
             // iter the entries to find the entry
-            for (k, v) in config.entries.iter_mut() {
-                if k != &cx.entry_name {
-                    if v.filename == PathBuf::from(&self.filename) {
+            for (entry_name, entry) in config.entries.iter_mut() {
+                if entry_name != &cx.entry_name {
+                    if entry.filename == PathBuf::from(&self.filename) {
                         eprintln!(
                             "The specified filename '{}' already exists in entry '{}'!",
-                            self.filename, k
+                            self.filename, entry_name
                         );
                         std::process::exit(1);
                     }
@@ -102,68 +97,132 @@ impl CliCommand for Add {
                 // found the entry
                 has_found_entry = true;
 
-                if v.filename != PathBuf::from(&self.filename) {
+                // check the protocol
+                if entry.protocol != detect_protocol(self.idl.as_path()) {
                     eprintln!(
-                        "The specified filename '{}' doesn't match the current filename '{}' in \
-                         the entry '{}'!",
-                        self.filename,
-                        v.filename.to_string_lossy(),
-                        k
+                        "The specified idl's protocol is conflicted with the specified entry \
+                         '{}', whose protocol is {:?}",
+                        entry_name, entry.protocol
                     );
                     std::process::exit(1);
                 }
 
-                let mut has_found_idl = false;
+                if entry.filename != PathBuf::from(&self.filename) {
+                    eprintln!(
+                        "The specified filename '{}' doesn't match the current filename '{}' in \
+                         the entry '{}'!",
+                        self.filename,
+                        entry.filename.to_string_lossy(),
+                        entry_name
+                    );
+                    std::process::exit(1);
+                }
+
+                let mut found_idl = None;
+                let mut is_existed_local = false;
                 // iter idls to find if the idl is already in the entry
-                for idl in v.idls.iter_mut() {
-                    if idl.path != self.idl {
+                for s in entry.services.iter() {
+                    if s.idl.path != self.idl {
                         continue;
                     }
-
-                    let git_source = match idl.source {
-                        Source::Git(ref mut git_source)
-                            if self.git.as_ref() == Some(&git_source.repo) =>
-                        {
-                            has_found_idl = true;
-                            git_source
-                        }
-                        Source::Git(_) => continue,
-                        Source::Local => {
-                            has_found_idl = true;
-                            break;
-                        }
-                    };
-
-                    if let Some(r#ref) = self.r#ref.as_ref() {
-                        let _ = git_source.r#ref.insert(r#ref.clone());
-                    } else {
-                        unreachable!("git ref should be Some if git source is git")
+                    if let Source::Local = s.idl.source {
+                        is_existed_local = true;
                     }
-                    let git = match new_idl.source {
-                        Source::Git(ref git) => git,
-                        _ => unreachable!("git source should be git if idl source is git"),
-                    };
-                    if let Some(lock) = git.lock.clone() {
-                        let _ = git_source.lock.insert(lock);
-                    } else {
-                        unreachable!("git lock should be Some if idl source is git")
-                    }
+                    found_idl = Some(&s.idl);
                     break;
                 }
 
-                if !has_found_idl {
-                    v.idls.push(new_idl.clone());
+                // case 1: [local idl]
+                if let Some(local_service) = local_service.as_ref() {
+                    // case 1.1: exsited git idl or not exsit
+                    if !is_existed_local {
+                        entry.services.push(local_service.clone());
+                    }
+                    // case 1.2: local exsited idl, do nothing
+                    break;
                 }
+
+                // case 2: [git idl]
+                // check and get the repo name
+                let mut new_repo = None;
+                let repo_name = check_and_get_repo_name(
+                    entry_name,
+                    &entry.repos,
+                    &self.repo,
+                    &self.git,
+                    &self.r#ref,
+                    &mut new_repo,
+                )?;
+
+                // check the existed idl service
+                if let Some(idl) = found_idl {
+                    if new_repo.is_none() {
+                        eprintln!(
+                            "The specified idl '{}' already exists in entry '{}'!",
+                            self.idl.to_string_lossy(),
+                            entry_name
+                        );
+                        std::process::exit(1);
+                    }
+                    // check if exsited idl with the same repo name but miss the repo in yml
+                    match &idl.source {
+                        Source::Git(GitSource { repo }) if *repo == repo_name => {
+                            eprintln!(
+                                "The specified idl '{}' already exists in entry '{}', but the \
+                                 repo is missed, check the yml file and delete the existed idl \
+                                 before the execution if the idl is the same, or add the missed \
+                                 repo for the existed idl and add the new idl later with \
+                                 different repo name",
+                                self.idl.to_string_lossy(),
+                                entry_name
+                            );
+                            std::process::exit(1);
+                        }
+                        _ => {}
+                    }
+                }
+
+                // create the git idl service
+                let git_service = create_git_service(&repo_name, &self.idl, &self.includes);
+                entry.services.push(git_service);
+
+                // case 2.1: new repo, else case 2.2: exsited repo
+                if let Some(new_repo) = new_repo {
+                    entry.repos.insert(repo_name, new_repo.clone());
+                }
+
+                break;
             }
+
             if !has_found_entry {
+                let mut repos = HashMap::new();
+                let new_service = if let Some(local_service) = local_service.as_ref() {
+                    local_service.clone()
+                } else {
+                    let mut new_repo = None;
+                    let repo_name = check_and_get_repo_name(
+                        &cx.entry_name,
+                        &HashMap::new(),
+                        &self.repo,
+                        &self.git,
+                        &self.r#ref,
+                        &mut new_repo,
+                    )?;
+                    repos.insert(
+                        repo_name.clone(),
+                        new_repo.expect("new entry's git source requires the new repo for idl"),
+                    );
+                    create_git_service(&repo_name, &self.idl, &self.includes)
+                };
+
                 config.entries.insert(
                     cx.entry_name.clone(),
                     Entry {
-                        protocol: new_idl.protocol(),
+                        protocol: detect_protocol(new_service.idl.path.as_path()),
                         filename: PathBuf::from(&self.filename),
-                        idls: vec![new_idl],
-                        touch_all: false,
-                        nonstandard_snake_case: false,
+                        repos,
+                        services: vec![new_service],
+                        common_option: Default::default(),
                     },
                 );
             }

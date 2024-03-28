@@ -4,6 +4,7 @@ use socket2::{Domain, Protocol, Socket, Type};
 #[derive(Debug)]
 pub struct IpStackCapability {
     pub ipv4: bool,
+    #[allow(dead_code)]
     pub ipv6: bool,
     pub ipv4_mapped_ipv6: bool,
 }

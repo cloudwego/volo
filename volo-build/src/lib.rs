@@ -2,7 +2,7 @@
     html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
-
+#![allow(clippy::mutable_key_type)]
 use std::{
     path::{Path, PathBuf},
     str::FromStr,
@@ -14,6 +14,7 @@ use pilota_build::{parser::Parser, IdlService};
 
 pub mod config_builder;
 pub mod grpc_backend;
+pub mod legacy;
 pub mod model;
 pub mod thrift_backend;
 pub mod util;
@@ -131,13 +132,6 @@ where
 {
     pub fn include_dirs(mut self, include_dirs: Vec<PathBuf>) -> Self {
         self.pilota_builder = self.pilota_builder.include_dirs(include_dirs);
-        self
-    }
-
-    pub fn nonstandard_snake_case(mut self, nonstandard_snake_case: bool) -> Self {
-        self.pilota_builder = self
-            .pilota_builder
-            .nonstandard_snake_case(nonstandard_snake_case);
         self
     }
 
