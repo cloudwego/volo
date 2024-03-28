@@ -80,6 +80,7 @@ pub struct Config {
     pub caller_name: CallerName,
     pub callee_name: CalleeName,
     pub stat_enable: bool,
+    pub fail_on_error_status: bool,
 }
 
 impl Default for Config {
@@ -88,6 +89,7 @@ impl Default for Config {
             caller_name: CallerName::default(),
             callee_name: CalleeName::default(),
             stat_enable: true,
+            fail_on_error_status: false,
         }
     }
 }

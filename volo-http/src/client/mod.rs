@@ -260,6 +260,14 @@ impl<L, MkC> ClientBuilder<L, MkC> {
         self
     }
 
+    /// Return `Err` rather than full `ClientResponse` when the response status code is 4xx or 5xx.
+    ///
+    /// Default is false.
+    pub fn fail_on_error_status(&mut self, fail_on_error_status: bool) -> &mut Self {
+        self.config.fail_on_error_status = fail_on_error_status;
+        self
+    }
+
     /// Set whether HTTP/1 connections will write header names as title case at
     /// the socket level.
     ///

@@ -1,3 +1,4 @@
+use http::header;
 use serde::{Deserialize, Serialize};
 use volo_http::{
     body::BodyConversion,
@@ -36,11 +37,14 @@ async fn main() -> Result<(), BoxError> {
     }
 
     // create client by builder
-    let client = ClientBuilder::new()
-        .caller_name("example.http.client")
-        .callee_name("example.http.server")
-        .header("Test", "Test")?
-        .build();
+    let client = {
+        let mut builder = ClientBuilder::new()
+            .caller_name("example.http.client")
+            .callee_name("example.http.server")
+            .header("Test", "Test")?;
+        builder.fail_on_error_status(true);
+        builder.build()
+    };
 
     println!(
         "{}",
@@ -64,8 +68,23 @@ async fn main() -> Result<(), BoxError> {
         "{:?}",
         client
             .post("http://127.0.0.1:8080/user/json_post")?
-            // Content-Type is needed!
-            .header("Content-Type", "application/json")?
+            // `Content-Type` is needed!
+            .header(header::CONTENT_TYPE, "application/json")?
+            .data(Json(Person {
+                name: "Foo".to_string(),
+                age: 25,
+                phones: vec!["114514".to_string()],
+            }))?
+            .send()
+            .await?
+            .into_string()
+            .await?
+    );
+    println!(
+        "{:?}",
+        // Without `Content-Type`, server will response with 415 Unsupported Media Type
+        client
+            .post("http://127.0.0.1:8080/user/json_post")?
             .data(Json(Person {
                 name: "Foo".to_string(),
                 age: 25,

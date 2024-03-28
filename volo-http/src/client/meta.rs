@@ -3,9 +3,12 @@ use std::error::Error;
 use http::header;
 use http_body::Body;
 use motore::service::Service;
+use volo::context::Context;
 
 use crate::{
-    context::ClientContext, error::client::ClientError, request::ClientRequest,
+    context::ClientContext,
+    error::client::{status_error, ClientError},
+    request::ClientRequest,
     response::ClientResponse,
 };
 
@@ -68,6 +71,17 @@ where
             }
         }
 
-        res
+        if !cx.rpc_info().config().fail_on_error_status {
+            return res;
+        }
+
+        let resp = res?;
+
+        let status = resp.status();
+        if status.is_client_error() || status.is_server_error() {
+            Err(status_error(status))
+        } else {
+            Ok(resp)
+        }
     }
 }
