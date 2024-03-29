@@ -728,7 +728,7 @@ mod tests {
         assert_eq!(
             name.unwrap_err().to_string(),
             "The specified repo 'https://domain/namespace/repo.git' is indexed by the existed \
-             repo name 'test' in entry 'test_entry', please use the existed repo name"
+             repo name 'test' in entry 'test_entry', please use the existed one"
         );
 
         // case 1.4 incorrect with provided name not exist
@@ -808,8 +808,7 @@ mod tests {
         assert!(new_repo.is_none());
         assert_eq!(
             name_result.unwrap_err().to_string(),
-            "The specified repo 'test' already exists in entry 'test_entry' with different url, \
-             maybe use another repo name, like repo2"
+            "The specified repo 'test' already exists in entry 'test_entry' with different url"
         );
     }
 }
