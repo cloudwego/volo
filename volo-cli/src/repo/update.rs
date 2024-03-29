@@ -37,7 +37,7 @@ impl CliCommand for Update {
                 });
             }
 
-            // check if the git exists in the config
+            // check if the repo exists in the config
             self.repos.iter().for_each(|g| {
                 if !entry.repos.contains_key(&FastStr::new(g)) {
                     eprintln!("git repo {g} not exists in config");

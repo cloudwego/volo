@@ -438,11 +438,9 @@ pub fn check_and_get_repo_name(
                 let repo = repos.get(&key).unwrap();
                 if repo.url != git {
                     bail!(
-                        "The specified repo '{}' already exists in entry '{}' with different url, \
-                         maybe use another repo name, like {}",
+                        "The specified repo '{}' already exists in entry '{}' with different url",
                         key,
                         entry_name,
-                        get_repo_name_by_url(git)
                     );
                 } else if repo.r#ref != r#ref {
                     bail!(
@@ -458,7 +456,7 @@ pub fn check_and_get_repo_name(
                 if url_map.contains_key(&FastStr::new(git)) {
                     bail!(
                         "The specified repo '{}' is indexed by the existed repo name '{}' in \
-                         entry '{}', please use the existed repo name",
+                         entry '{}', please use the existed one",
                         git,
                         url_map.get(&FastStr::new(git)).unwrap(),
                         entry_name
