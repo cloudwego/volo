@@ -5,10 +5,10 @@ use pilota_build::BoxClonePlugin;
 use volo::FastStr;
 
 use crate::{
-    model::Entry,
+    model::{self, Entry},
     util::{
-        get_or_download_idl, open_config_file, read_config_from_file, LocalIdl,
-        DEFAULT_CONFIG_FILE, DEFAULT_DIR,
+        download_repos_to_target, get_service_builders_from_services, open_config_file,
+        read_config_from_file, ServiceBuilder, DEFAULT_CONFIG_FILE, DEFAULT_DIR,
     },
 };
 
@@ -81,6 +81,25 @@ impl InnerBuilder {
         }
     }
 
+    pub fn add_services(mut self, service_builders: Vec<ServiceBuilder>) -> Self {
+        for ServiceBuilder {
+            path,
+            includes,
+            touch,
+            keep_unknown_fields,
+        } in service_builders
+        {
+            self = self
+                .add_service(path.clone())
+                .includes(includes)
+                .touch([(path.clone(), touch)]);
+            if keep_unknown_fields {
+                self = self.keep_unknown_fields([path])
+            }
+        }
+        self
+    }
+
     pub fn touch(self, items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>) -> Self {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.touch(items)),
@@ -103,17 +122,6 @@ impl InnerBuilder {
                 InnerBuilder::Protobuf(inner.keep_unknown_fields(keep))
             }
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.keep_unknown_fields(keep)),
-        }
-    }
-
-    pub fn nonstandard_snake_case(self, nonstandard_snake_case: bool) -> Self {
-        match self {
-            InnerBuilder::Protobuf(inner) => {
-                InnerBuilder::Protobuf(inner.nonstandard_snake_case(nonstandard_snake_case))
-            }
-            InnerBuilder::Thrift(inner) => {
-                InnerBuilder::Thrift(inner.nonstandard_snake_case(nonstandard_snake_case))
-            }
         }
     }
 
@@ -141,44 +149,38 @@ impl ConfigBuilder {
 
     pub fn write(self) -> anyhow::Result<()> {
         println!("cargo:rerun-if-changed={}", self.filename.display());
-        let f = open_config_file(self.filename)?;
+        let f = open_config_file(self.filename.clone())?;
         let config = read_config_from_file(&f)?;
-
-        config.entries.into_iter().try_for_each(|(_key, entry)| {
-            let mut builder = match entry.protocol {
-                crate::model::IdlProtocol::Thrift => InnerBuilder::thrift(),
-                crate::model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
-            }
-            .filename(entry.filename);
-
-            for p in self.plugins.iter() {
-                builder = builder.plugin(p.clone());
-            }
-
-            for idl in entry.idls {
-                let LocalIdl {
-                    path,
-                    includes,
-                    touch,
-                    keep_unknown_fields,
-                } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
-
-                builder = builder
-                    .add_service(path.clone())
-                    .includes(includes)
-                    .touch([(path.clone(), touch)]);
-                if keep_unknown_fields {
-                    builder = builder.keep_unknown_fields([path])
+        config
+            .entries
+            .into_iter()
+            .try_for_each(|(entry_name, entry)| {
+                let mut builder = match entry.protocol {
+                    model::IdlProtocol::Thrift => InnerBuilder::thrift(),
+                    model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
                 }
-            }
+                .filename(entry.filename.clone());
 
-            builder
-                .ignore_unused(!entry.touch_all)
-                .nonstandard_snake_case(entry.nonstandard_snake_case)
-                .write()?;
+                for p in self.plugins.iter() {
+                    builder = builder.plugin(p.clone());
+                }
 
-            Ok(())
-        })?;
+                // download repos and get the repo paths
+                let target_dir = PathBuf::from(&*DEFAULT_DIR).join(entry_name);
+                let repo_dir_map = download_repos_to_target(&entry.repos, target_dir)?;
+
+                // get idl builders from services
+                let service_builders =
+                    get_service_builders_from_services(&entry.services, &repo_dir_map);
+
+                // add build options to the builder and build
+                builder
+                    .add_services(service_builders)
+                    .ignore_unused(!entry.common_option.touch_all)
+                    .write()?;
+
+                Ok(())
+            })?;
         Ok(())
     }
 }
@@ -200,27 +202,20 @@ impl InitBuilder {
 
     pub fn init(self) -> anyhow::Result<(String, String)> {
         let mut builder = match self.entry.protocol {
-            crate::model::IdlProtocol::Thrift => InnerBuilder::thrift(),
-            crate::model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
+            model::IdlProtocol::Thrift => InnerBuilder::thrift(),
+            model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
         }
         .filename(self.entry.filename);
 
-        for idl in self.entry.idls {
-            let LocalIdl {
-                path,
-                includes,
-                touch,
-                keep_unknown_fields,
-            } = get_or_download_idl(idl, &*DEFAULT_DIR)?;
+        // download repos and get the repo paths
+        let temp_target_dir = tempfile::TempDir::new()?;
+        let repo_dir_map = download_repos_to_target(&self.entry.repos, temp_target_dir.as_ref())?;
 
-            builder = builder
-                .add_service(path.clone())
-                .includes(includes)
-                .touch([(path.clone(), touch)]);
-            if keep_unknown_fields {
-                builder = builder.keep_unknown_fields([path])
-            }
-        }
+        // get idl builders from services
+        let idl_builders = get_service_builders_from_services(&self.entry.services, &repo_dir_map);
+
+        // add services to the builder
+        builder = builder.add_services(idl_builders);
 
         builder.init_service()
     }

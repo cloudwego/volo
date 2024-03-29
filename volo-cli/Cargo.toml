@@ -24,6 +24,7 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 volo-build = { version = "0.9", path = "../volo-build" }
 pilota-thrift-parser.workspace = true
+faststr.workspace = true
 
 anyhow.workspace = true
 clap = { workspace = true, features = ["wrap_help", "derive"] }

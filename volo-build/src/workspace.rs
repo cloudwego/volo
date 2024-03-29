@@ -1,7 +1,10 @@
 use pilota_build::{IdlService, Plugin};
 use volo::FastStr;
 
-use crate::{model, util::get_or_download_idl};
+use crate::{
+    model::{GitSource, Source, WorkspaceConfig},
+    util::{download_repos_to_target, strip_slash_prefix},
+};
 
 pub struct Builder<MkB, P> {
     pilota_builder: pilota_build::Builder<MkB, P>,
@@ -16,33 +19,11 @@ impl Builder<crate::thrift_backend::MkThriftBackend, crate::parser::ThriftParser
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct Service {
-    pub idl: model::Idl,
-    #[serde(default)]
-    pub config: serde_yaml::Value,
-}
-
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct WorkspaceConfig {
-    #[serde(default)]
-    pub(crate) touch_all: bool,
-    #[serde(default)]
-    pub(crate) dedup_list: Vec<FastStr>,
-    #[serde(default)]
-    pub(crate) nonstandard_snake_case: bool,
-    #[serde(default = "common_crate_name")]
-    pub(crate) common_crate_name: FastStr,
-    pub(crate) services: Vec<Service>,
-}
-
-fn common_crate_name() -> FastStr {
-    "common".into()
-}
-
 impl WorkspaceConfig {
-    pub fn update_idls(&mut self) -> anyhow::Result<()> {
-        self.services.iter_mut().try_for_each(|s| s.idl.update())
+    pub fn update_repos(&mut self) -> anyhow::Result<()> {
+        self.repos
+            .iter_mut()
+            .try_for_each(|(_, repo)| repo.update())
     }
 }
 
@@ -68,29 +49,44 @@ where
                 std::process::exit(1);
             }
         };
+
+        let target_dir = work_dir.join("target");
+        let repo_dir_map = if let Ok(repo_dir_map) =
+            download_repos_to_target(&config.repos, target_dir.as_path())
+        {
+            repo_dir_map
+        } else {
+            eprintln!("failed to download repos");
+            std::process::exit(1);
+        };
+
         let services = config
             .services
             .into_iter()
             .map(|s| {
-                get_or_download_idl(s.idl, work_dir.join("target")).map(|idl| IdlService {
-                    path: idl.path,
-                    config: s.config,
-                })
+                if let Source::Git(GitSource { ref repo }) = s.idl.source {
+                    // git should use relative path instead of absolute path
+                    let dir = repo_dir_map
+                        .get(repo)
+                        .expect("git source requires the repo info for idl")
+                        .clone();
+                    IdlService {
+                        path: dir.join(strip_slash_prefix(s.idl.path.as_path())),
+                        config: s.codegen_option.config,
+                    }
+                } else {
+                    IdlService {
+                        path: s.idl.path.clone(),
+                        config: s.codegen_option.config,
+                    }
+                }
             })
-            .collect::<Result<Vec<_>, _>>();
-        match services {
-            Ok(services) => {
-                self.ignore_unused(!config.touch_all)
-                    .dedup(config.dedup_list)
-                    .common_crate_name(config.common_crate_name)
-                    .pilota_builder
-                    .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
-            }
-            Err(e) => {
-                eprintln!("failed to get or download idl, err: {}", e);
-                std::process::exit(1);
-            }
-        }
+            .collect();
+        self.ignore_unused(!config.common_option.touch_all)
+            .dedup(config.common_option.dedups)
+            .common_crate_name(config.common_crate_name)
+            .pilota_builder
+            .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
     }
 
     pub fn plugin(mut self, plugin: impl Plugin + 'static) -> Self {
@@ -105,13 +101,6 @@ where
 
     pub fn dedup(mut self, dedup_list: Vec<FastStr>) -> Self {
         self.pilota_builder = self.pilota_builder.dedup(dedup_list);
-        self
-    }
-
-    pub fn nonstandard_snake_case(mut self, nonstandard_snake_case: bool) -> Self {
-        self.pilota_builder = self
-            .pilota_builder
-            .nonstandard_snake_case(nonstandard_snake_case);
         self
     }
 
