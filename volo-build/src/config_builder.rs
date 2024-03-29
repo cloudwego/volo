@@ -208,7 +208,7 @@ impl InitBuilder {
         .filename(self.entry.filename);
 
         // download repos and get the repo paths
-        let temp_target_dir = tempdir::TempDir::new("")?;
+        let temp_target_dir = tempfile::TempDir::new()?;
         let repo_dir_map = download_repos_to_target(&self.entry.repos, temp_target_dir.as_ref())?;
 
         // get idl builders from services
