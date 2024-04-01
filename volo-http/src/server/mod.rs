@@ -309,7 +309,7 @@ impl<S, L> Server<S, L> {
                 tokio::task::spawn(handle_conn(
                     conn,
                     service.clone(),
-                    self.config,
+                    self.config.clone(),
                     stat_tracer.clone(),
                     exit_notify_inner.clone(),
                     conn_cnt.clone(),
@@ -430,7 +430,7 @@ async fn handle_conn<S>(
             serve(
                 service.clone(),
                 peer.clone(),
-                config,
+                config.clone(),
                 stat_tracer.clone(),
                 req,
             )
@@ -478,18 +478,18 @@ where
             let stat_enabled = cx.stat_enabled();
 
             if stat_enabled {
-                cx.stats.set_uri(request.uri().to_owned());
-                cx.stats.set_method(request.method().to_owned());
+                cx.common_stats.set_uri(request.uri().to_owned());
+                cx.common_stats.set_method(request.method().to_owned());
                 if let Some(req_size) = request.size_hint().exact() {
                     cx.common_stats.set_req_size(req_size);
                 }
-                cx.stats.record_process_start_at();
+                cx.common_stats.record_process_start_at();
             }
 
             let resp = service.call(&mut cx, request).await.into_response();
 
             if stat_enabled {
-                cx.stats.record_process_end_at();
+                cx.common_stats.record_process_end_at();
                 cx.common_stats.set_status_code(resp.status());
                 if let Some(resp_size) = resp.size_hint().exact() {
                     cx.common_stats.set_resp_size(resp_size);

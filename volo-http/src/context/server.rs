@@ -1,10 +1,8 @@
-use chrono::{DateTime, Local};
 use http::{
     header,
     header::{HeaderMap, HeaderValue},
     request::Parts,
     uri::{Authority, PathAndQuery, Scheme, Uri},
-    Method,
 };
 use paste::paste;
 use volo::{
@@ -68,22 +66,11 @@ impl ServerCxInner {
 
 /// This is unstable now and may be changed in the future.
 #[derive(Debug, Default, Clone)]
-pub struct ServerStats {
-    process_start_at: Option<DateTime<Local>>,
-    process_end_at: Option<DateTime<Local>>,
+pub struct ServerStats {}
 
-    method: Option<Method>,
-    uri: Option<Uri>,
-}
+impl ServerStats {}
 
-impl ServerStats {
-    stat_impl!(process_start_at);
-    stat_impl!(process_end_at);
-    stat_impl_getter_and_setter!(method, Method);
-    stat_impl_getter_and_setter!(uri, Uri);
-}
-
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Config {
     pub(crate) stat_enable: bool,
 }

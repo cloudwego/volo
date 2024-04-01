@@ -377,7 +377,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
             config: self.config,
         };
         let client = Client {
-            transport: service,
+            service,
             inner: Arc::new(client_inner),
         };
         self.mk_client.mk_client(client)
@@ -393,7 +393,7 @@ struct ClientInner {
 
 #[derive(Clone)]
 pub struct Client<S> {
-    transport: S,
+    service: S,
     inner: Arc<ClientInner>,
 }
 
@@ -563,7 +563,20 @@ where
         req.headers_mut().extend(self.inner.headers.clone());
 
         let has_metainfo = METAINFO.try_with(|_| {}).is_ok();
-        let mk_call = self.transport.call(cx, req);
+        let stat_enabled = cx.stat_enabled();
+
+        let mk_call = async {
+            if stat_enabled {
+                cx.common_stats.record_process_start_at();
+            }
+
+            let res = self.service.call(cx, req).await;
+
+            if stat_enabled {
+                cx.common_stats.record_process_end_at();
+            }
+            res
+        };
 
         if has_metainfo {
             mk_call.await
