@@ -1,4 +1,5 @@
-use http::StatusCode;
+use chrono::{DateTime, Local};
+use http::{Method, StatusCode, Uri};
 use paste::paste;
 
 // This macro is unused only when both `client` and `server` features are not enabled.
@@ -58,17 +59,29 @@ pub mod server;
 pub use self::server::{RequestPartsExt, ServerContext};
 
 /// This is unstable now and may be changed in the future.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct CommonStats {
+    process_start_at: Option<DateTime<Local>>,
+    process_end_at: Option<DateTime<Local>>,
+
+    method: Option<Method>,
+    uri: Option<Uri>,
+    status_code: Option<StatusCode>,
+
     req_size: Option<u64>,
     resp_size: Option<u64>,
-    status_code: Option<StatusCode>,
 }
 
 impl CommonStats {
+    stat_impl!(process_start_at);
+    stat_impl!(process_end_at);
+
+    stat_impl_getter_and_setter!(method, Method);
+    stat_impl_getter_and_setter!(uri, Uri);
+    stat_impl_getter_and_setter!(status_code, StatusCode);
+
     stat_impl_getter_and_setter!(req_size, u64);
     stat_impl_getter_and_setter!(resp_size, u64);
-    stat_impl_getter_and_setter!(status_code, StatusCode);
 
     #[inline]
     pub fn reset(&mut self) {

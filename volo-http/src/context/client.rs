@@ -1,6 +1,5 @@
 use chrono::{DateTime, Local};
 use faststr::FastStr;
-use http::StatusCode;
 use paste::paste;
 use volo::{
     context::{Context, Reusable, Role, RpcCx, RpcInfo},
@@ -61,22 +60,15 @@ impl ClientCxInner {
 }
 
 /// This is unstable now and may be changed in the future.
-#[derive(Debug, Default, Clone, Copy)]
+#[derive(Debug, Default, Clone)]
 pub struct ClientStats {
-    process_start_at: Option<DateTime<Local>>,
-    process_end_at: Option<DateTime<Local>>,
     transport_start_at: Option<DateTime<Local>>,
     transport_end_at: Option<DateTime<Local>>,
-
-    status_code: Option<StatusCode>,
 }
 
 impl ClientStats {
-    stat_impl!(process_start_at);
-    stat_impl!(process_end_at);
     stat_impl!(transport_start_at);
     stat_impl!(transport_end_at);
-    stat_impl_getter_and_setter!(status_code, StatusCode);
 }
 
 #[derive(Clone, Debug)]

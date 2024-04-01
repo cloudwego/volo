@@ -64,7 +64,7 @@ where
 
         if stat_enabled {
             if let Ok(response) = res.as_ref() {
-                cx.stats.set_status_code(response.status());
+                cx.common_stats.set_status_code(response.status());
                 if let Some(resp_size) = response.size_hint().exact() {
                     cx.common_stats.set_resp_size(resp_size);
                 }

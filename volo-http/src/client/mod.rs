@@ -567,13 +567,13 @@ where
 
         let mk_call = async {
             if stat_enabled {
-                cx.stats.record_process_start_at();
+                cx.common_stats.record_process_start_at();
             }
 
             let res = self.service.call(cx, req).await;
 
             if stat_enabled {
-                cx.stats.record_process_end_at();
+                cx.common_stats.record_process_end_at();
             }
             res
         };
