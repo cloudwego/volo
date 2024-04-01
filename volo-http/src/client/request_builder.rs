@@ -7,10 +7,10 @@ use volo::net::Address;
 use super::Client;
 use crate::{
     body::Body,
-    client::utils::{parse_address, resolve},
+    client::utils::resolve,
     context::ClientContext,
     error::{
-        client::{bad_host_name, builder_error, no_uri, ClientErrorInner, Result},
+        client::{builder_error, no_uri, Result},
         ClientError,
     },
     request::ClientRequest,
@@ -190,18 +190,7 @@ where
         let uri = self.uri.ok_or_else(no_uri)?;
         let target = match self.target {
             Some(target) => target,
-            None => match parse_address(&uri) {
-                Ok(addr) => addr,
-                Err(err) => {
-                    if matches!(
-                        err.inner(),
-                        ClientErrorInner::UriWithoutHost | ClientErrorInner::BadScheme
-                    ) {
-                        return Err(err);
-                    }
-                    resolve(&uri).await?.next().ok_or_else(bad_host_name)?
-                }
-            },
+            None => resolve(&uri).await?,
         };
         self.client.send_request(uri, target, self.request).await
     }

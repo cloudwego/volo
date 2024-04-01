@@ -16,7 +16,11 @@ async fn main() {
         .build()
         .expect("failed to build TlsConnector");
 
-    let client = Client::builder().set_tls_config(connector).build();
+    let client = {
+        let mut builder = Client::builder();
+        builder.set_tls_config(connector);
+        builder.build()
+    };
 
     let resp = client
         .get("https://[::1]:8080/")

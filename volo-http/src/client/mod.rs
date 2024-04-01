@@ -153,7 +153,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     }
 
     /// Sets the target server's name.
-    pub fn callee_name<S>(mut self, callee: S) -> Self
+    pub fn callee_name<S>(&mut self, callee: S) -> &mut Self
     where
         S: Into<FastStr>,
     {
@@ -162,7 +162,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     }
 
     /// Sets the client's name sent to the server.
-    pub fn caller_name<S>(mut self, caller: S) -> Self
+    pub fn caller_name<S>(&mut self, caller: S) -> &mut Self
     where
         S: Into<FastStr>,
     {
@@ -171,7 +171,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     }
 
     /// Insert a header to the request.
-    pub fn header<K, V>(mut self, key: K, value: V) -> Result<Self, ClientError>
+    pub fn header<K, V>(&mut self, key: K, value: V) -> Result<&mut Self, ClientError>
     where
         K: TryInto<HeaderName>,
         K::Error: Error + Send + Sync + 'static,
@@ -187,7 +187,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
 
     /// Set tls config for the client.
     #[cfg(feature = "__tls")]
-    pub fn set_tls_config<T>(mut self, tls_config: T) -> Self
+    pub fn set_tls_config<T>(&mut self, tls_config: T) -> &mut Self
     where
         T: Into<volo::net::tls::TlsConnector>,
     {
@@ -257,6 +257,14 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     #[doc(hidden)]
     pub fn stat_enable(&mut self, enable: bool) -> &mut Self {
         self.config.stat_enable = enable;
+        self
+    }
+
+    /// Return `Err` rather than full `ClientResponse` when the response status code is 4xx or 5xx.
+    ///
+    /// Default is false.
+    pub fn fail_on_error_status(&mut self, fail_on_error_status: bool) -> &mut Self {
+        self.config.fail_on_error_status = fail_on_error_status;
         self
     }
 

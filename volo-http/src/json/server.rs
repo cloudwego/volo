@@ -10,11 +10,9 @@ use serde::de::DeserializeOwned;
 use super::{deserialize, Error, Json};
 use crate::{
     context::ServerContext,
+    error::server::{invalid_content_type, RejectionError},
     response::ServerResponse,
-    server::{
-        extract::{FromRequest, RejectionError},
-        IntoResponse,
-    },
+    server::{extract::FromRequest, IntoResponse},
 };
 
 impl IntoResponse for Error {
@@ -35,11 +33,11 @@ where
         body: Incoming,
     ) -> Result<Self, Self::Rejection> {
         if !json_content_type(&parts.headers) {
-            return Err(RejectionError::InvalidContentType);
+            return Err(invalid_content_type());
         }
 
         let bytes = Bytes::from_request(cx, parts, body).await?;
-        let json = deserialize(&bytes).map_err(RejectionError::JsonRejection)?;
+        let json = deserialize(&bytes).map_err(RejectionError::Json)?;
 
         Ok(Json(json))
     }

@@ -77,9 +77,10 @@ impl ClientStats {
 
 #[derive(Clone, Debug)]
 pub struct Config {
-    pub(crate) caller_name: CallerName,
-    pub(crate) callee_name: CalleeName,
-    pub(crate) stat_enable: bool,
+    pub caller_name: CallerName,
+    pub callee_name: CalleeName,
+    pub stat_enable: bool,
+    pub fail_on_error_status: bool,
 }
 
 impl Default for Config {
@@ -88,6 +89,7 @@ impl Default for Config {
             caller_name: CallerName::default(),
             callee_name: CalleeName::default(),
             stat_enable: true,
+            fail_on_error_status: false,
         }
     }
 }
