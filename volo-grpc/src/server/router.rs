@@ -62,7 +62,7 @@ where
             + Sync
             + 'static,
     {
-        let path = format!("/{}/*rest", S::NAME);
+        let path = format!("/{}/{{*rest}}", S::NAME);
 
         if path.is_empty() {
             panic!("[VOLO] Paths must start with a `/`. Use \"/\" for root routes");
