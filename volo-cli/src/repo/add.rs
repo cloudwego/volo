@@ -1,9 +1,5 @@
 use clap::Parser;
-use faststr::FastStr;
-use volo_build::{
-    model::Repo,
-    util::{get_repo_name_by_url, git::get_repo_latest_commit_id},
-};
+use volo_build::util::check_and_get_repo_name;
 
 use crate::{command::CliCommand, context::Context};
 
@@ -33,43 +29,34 @@ pub struct Add {
 
 impl CliCommand for Add {
     fn run(&self, cx: Context) -> anyhow::Result<()> {
-        let git = self.git.as_ref();
-
-        let name = FastStr::new(
-            self.repo
-                .as_deref()
-                .unwrap_or_else(|| get_repo_name_by_url(git)),
-        );
-        let url = FastStr::new(git);
-        let r#ref = FastStr::new(self.r#ref.as_deref().unwrap_or("HEAD"));
-        let lock = get_repo_latest_commit_id(&url, &r#ref)?.into();
-        let new_repo = Repo { url, r#ref, lock };
-
         volo_build::util::with_config(|config| {
-            let mut has_found_entry = false;
-            // iter the entries to find the entry
-            for (k, v) in config.entries.iter_mut() {
-                if k != &cx.entry_name {
-                    continue;
-                }
+            let entry = if config.entries.contains_key(&cx.entry_name) {
+                config.entries.get_mut(&cx.entry_name).unwrap()
+            } else {
+                unreachable!("The specified entry should exist when add new repo.");
+            };
 
-                // found the entry
-                has_found_entry = true;
+            let mut new_repo = None;
+            // repo name is valid when the repo and git arg are not conflicted with the entry's
+            // repos
+            let repo_name = check_and_get_repo_name(
+                &cx.entry_name,
+                &entry.repos,
+                &self.repo,
+                &Some(self.git.clone()),
+                &self.r#ref,
+                &mut new_repo,
+            )?;
 
-                if v.repos.contains_key(&name) {
-                    eprintln!(
-                        "The specified repo '{}' already exists in entry '{}'!",
-                        name, k
-                    );
-                    std::process::exit(1);
-                }
-
-                v.repos.insert(name.clone(), new_repo.clone());
-                break;
-            }
-
-            if !has_found_entry {
-                unreachable!("entry should be found when add new repo");
+            if let Some(new_repo) = new_repo {
+                entry.repos.insert(repo_name.clone(), new_repo);
+            } else {
+                // not add the repeated repo
+                eprintln!(
+                    "The specified repo '{}' has already been added in the entry '{}'",
+                    self.git, cx.entry_name
+                );
+                std::process::exit(1);
             }
             Ok(())
         })
