@@ -131,6 +131,13 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.common_crate_name(name)),
         }
     }
+
+    pub fn special_namings(self, namings: impl IntoIterator<Item = FastStr>) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.special_namings(namings)),
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.special_namings(namings)),
+        }
+    }
 }
 
 impl ConfigBuilder {
@@ -177,6 +184,7 @@ impl ConfigBuilder {
                 builder
                     .add_services(service_builders)
                     .ignore_unused(!entry.common_option.touch_all)
+                    .special_namings(entry.common_option.special_namings)
                     .write()?;
 
                 Ok(())

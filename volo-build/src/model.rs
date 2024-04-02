@@ -20,6 +20,8 @@ pub struct CommonOption {
     pub touch_all: bool,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub dedups: Vec<FastStr>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub special_namings: Vec<FastStr>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

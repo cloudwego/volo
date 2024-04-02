@@ -84,6 +84,7 @@ where
             .collect();
         self.ignore_unused(!config.common_option.touch_all)
             .dedup(config.common_option.dedups)
+            .special_namings(config.common_option.special_namings)
             .common_crate_name(config.common_crate_name)
             .pilota_builder
             .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
@@ -106,6 +107,11 @@ where
 
     pub fn common_crate_name(mut self, name: FastStr) -> Self {
         self.pilota_builder = self.pilota_builder.common_crate_name(name);
+        self
+    }
+
+    pub fn special_namings(mut self, namings: impl IntoIterator<Item = FastStr>) -> Self {
+        self.pilota_builder = self.pilota_builder.special_namings(namings);
         self
     }
 }

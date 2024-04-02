@@ -112,6 +112,11 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
+    pub fn special_namings(mut self, namings: impl IntoIterator<Item = FastStr>) -> Self {
+        self.pilota_builder = self.pilota_builder.special_namings(namings);
+        self
+    }
+
     fn get_out_dir(&self) -> anyhow::Result<PathBuf> {
         self.out_dir
             .clone()
