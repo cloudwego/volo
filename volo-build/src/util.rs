@@ -67,14 +67,9 @@ pub fn ensure_file(filename: &Path) -> std::io::Result<File> {
         .open(filename)
 }
 
-const PILOTA_CREATED_FILE_NAME: &str = "pilota_crated";
-
 /// Pull the minimal, expected .thrift files from a git repository.
 pub fn download_files_from_git(task: Task) -> anyhow::Result<()> {
     ensure_path(&task.dir)?;
-    if task.dir.join(PILOTA_CREATED_FILE_NAME).exists() {
-        return Ok(());
-    }
 
     git_archive(&task.repo, &task.lock, &task.dir)?;
 
@@ -105,14 +100,14 @@ fn run_command(command: &mut Command) -> anyhow::Result<()> {
 
 pub fn git_archive(repo: &str, revision: &str, dir: &Path) -> anyhow::Result<()> {
     run_command(Command::new("git").arg("init").current_dir(dir))?;
-    run_command(
+    let _ = run_command(
         Command::new("git")
             .arg("remote")
             .arg("add")
             .arg("origin")
             .arg(repo)
             .current_dir(dir),
-    )?;
+    );
 
     run_command(
         Command::new("git")
@@ -130,8 +125,6 @@ pub fn git_archive(repo: &str, revision: &str, dir: &Path) -> anyhow::Result<()>
             .arg(revision)
             .current_dir(dir),
     )?;
-
-    std::fs::write(dir.join(PILOTA_CREATED_FILE_NAME), "")?;
 
     Ok(())
 }
