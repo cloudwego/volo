@@ -1,11 +1,12 @@
 [package]
 name = "volo-thrift"
-version = "0.9.2"
+version = "0.10.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 authors.workspace = true
+rust-version.workspace = true
 description = "Thrift RPC framework implementation of volo."
 documentation = "https://docs.rs/volo-thrift"
 readme = "README.md"
@@ -18,7 +19,7 @@ keywords = ["async", "rpc", "thrift"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.9", path = "../volo" }
+volo = { version = "0.10", path = "../volo" }
 pilota.workspace = true
 motore.workspace = true
 metainfo.workspace = true
