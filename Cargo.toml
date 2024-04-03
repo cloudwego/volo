@@ -19,6 +19,7 @@ edition = "2021"
 homepage = "https://www.cloudwego.io/docs/volo/"
 repository = "https://github.com/cloudwego/volo"
 license = "MIT OR Apache-2.0"
+rust-version = "1.77.0"
 
 [workspace.dependencies]
 # pilota = "0.10"

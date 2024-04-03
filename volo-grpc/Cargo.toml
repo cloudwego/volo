@@ -1,11 +1,12 @@
 [package]
 name = "volo-grpc"
-version = "0.9.3"
+version = "0.10.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 authors.workspace = true
+rust-version.workspace = true
 description = "gRPC framework implementation of volo."
 documentation = "https://docs.rs/volo-grpc"
 readme = "README.md"
@@ -22,7 +23,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 pilota.workspace = true
-volo = { version = "0.9", path = "../volo" }
+volo = { version = "0.10", path = "../volo" }
 motore = { workspace = true, features = ["tower"] }
 metainfo.workspace = true
 

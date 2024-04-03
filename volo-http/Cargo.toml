@@ -6,6 +6,7 @@ homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 authors.workspace = true
+rust-version.workspace = true
 description = "HTTP framework implementation of volo."
 documentation = "https://docs.rs/volo-http"
 readme = "README.md"
@@ -18,7 +19,7 @@ keywords = ["async", "rpc", "http"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.9", path = "../volo" }
+volo = { version = "0.10", path = "../volo" }
 
 ahash.workspace = true
 bytes.workspace = true
