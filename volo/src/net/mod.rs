@@ -47,6 +47,7 @@ impl PartialEq for Address {
                     _ => false,
                 }
             }
+            #[cfg(target_family = "unix")]
             _ => false,
         }
     }
