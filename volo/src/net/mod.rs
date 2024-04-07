@@ -47,6 +47,7 @@ impl PartialEq for Address {
                     _ => false,
                 }
             }
+            #[cfg(target_family = "unix")]
             _ => false,
         }
     }
@@ -139,6 +140,10 @@ impl From<TokioUnixSocketAddr> for Address {
     fn from(value: TokioUnixSocketAddr) -> Self {
         // SAFETY: `std::mem::transmute` can ensure both struct has the same size, so there is no
         // need for checking it.
-        Address::Unix(unsafe { std::mem::transmute(value) })
+        Address::Unix(unsafe {
+            std::mem::transmute::<tokio::net::unix::SocketAddr, std::os::unix::net::SocketAddr>(
+                value,
+            )
+        })
     }
 }

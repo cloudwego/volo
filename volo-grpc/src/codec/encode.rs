@@ -50,7 +50,7 @@ where
                             .map_err(|err| Status::internal(format!("Error encoding: {}", err)))?;
                     }
                     let len = buf.len() - PREFIX_LEN;
-                    assert!(len <= std::u32::MAX as usize);
+                    assert!(len <= u32::MAX as usize);
                     {
                         let mut buf = &mut buf[..PREFIX_LEN];
                         buf.put_u8(compression_encoding.is_some() as u8);

@@ -7,7 +7,9 @@ use std::{
 };
 
 use motore::{make::MakeConnection, UnaryService};
-use tokio::net::{TcpStream, UnixStream};
+use tokio::net::TcpStream;
+#[cfg(target_family = "unix")]
+use tokio::net::UnixStream;
 
 use super::{
     conn::ConnStream,
