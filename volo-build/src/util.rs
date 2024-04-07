@@ -38,7 +38,7 @@ pub fn read_config_from_file(f: &mut File) -> Result<SingleConfig, serde_yaml::E
             if metadata.len() == 0 {
                 Ok(SingleConfig::new())
             } else {
-                let mut s = String::with_capacity(4096); // should be enough for most cases
+                let mut s = String::with_capacity(metadata.len() as usize);
                 f.read_to_string(&mut s).map_err(|e| {
                     serde_yaml::Error::custom(format!("failed to read config file, err: {}", e))
                 })?;
