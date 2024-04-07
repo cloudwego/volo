@@ -1,17 +1,20 @@
 use std::error::Error;
 
-use http::{uri::PathAndQuery, HeaderMap, HeaderName, HeaderValue, Method, Request, Uri, Version};
+use faststr::FastStr;
+use http::{
+    uri::{PathAndQuery, Scheme},
+    HeaderMap, HeaderName, HeaderValue, Method, Request, Uri, Version,
+};
 use motore::service::Service;
 use volo::net::Address;
 
-use super::Client;
+use super::{utils::TargetBuilder, Client};
 use crate::{
     body::Body,
-    client::utils::resolve,
     context::ClientContext,
     error::{
-        client::{builder_error, no_uri, Result},
-        ClientError,
+        client::{builder_error, Result},
+        BoxError, ClientError,
     },
     request::ClientRequest,
     response::ClientResponse,
@@ -19,8 +22,7 @@ use crate::{
 
 pub struct RequestBuilder<'a, S, B = Body> {
     client: &'a Client<S>,
-    target: Option<Address>,
-    uri: Option<Uri>,
+    target: TargetBuilder,
     request: ClientRequest<B>,
 }
 
@@ -28,8 +30,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
     pub(crate) fn new(client: &'a Client<S>) -> Self {
         Self {
             client,
-            target: None,
-            uri: None,
+            target: TargetBuilder::None,
             request: Request::new(Body::empty()),
         }
     }
@@ -45,16 +46,18 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
             .unwrap_or("/")
             .to_owned();
 
-        Ok(Self {
+        let mut builder = Self {
             client,
-            target: None,
-            uri: Some(uri),
+            target: TargetBuilder::None,
             request: Request::builder()
                 .method(method)
                 .uri(rela_uri)
                 .body(Body::empty())
                 .map_err(builder_error)?,
-        })
+        };
+        builder.fill_target(&uri);
+
+        Ok(builder)
     }
 
     pub fn data<D>(mut self, data: D) -> Result<Self>
@@ -93,43 +96,74 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         self.request.method()
     }
 
+    fn fill_target(&mut self, uri: &Uri) {
+        if let Some(host) = uri.host() {
+            self.target = TargetBuilder::Host {
+                scheme: uri.scheme().cloned(),
+                host: FastStr::from_string(host.to_owned()),
+                port: uri.port_u16(),
+            };
+        }
+    }
+
     /// Set uri for building request.
     ///
-    /// Note that the param `uri` must be a full uri, it will be checked and only relative uri
-    /// (path and query) will be used in request.
-    pub fn uri(mut self, uri: Uri) -> Result<Self> {
+    /// The uri will be split into two parts scheme+host and path+query. The scheme and host can be
+    /// empty and it will be resolved as the target address. The path and query must exist and they
+    /// are used to build the request uri.
+    ///
+    /// Note that only path and query will be set to the request uri. For setting the full uri, use
+    /// `full_uri` instead.
+    pub fn uri<U>(mut self, uri: U) -> Result<Self>
+    where
+        U: TryInto<Uri>,
+        U::Error: Into<BoxError>,
+    {
+        let uri = uri.try_into().map_err(builder_error)?;
         let rela_uri = uri
             .path_and_query()
             .map(PathAndQuery::to_owned)
             .unwrap_or_else(|| PathAndQuery::from_static("/"))
             .into();
-        self.uri = Some(uri);
+        self.fill_target(&uri);
         *self.request.uri_mut() = rela_uri;
         Ok(self)
     }
 
     /// Set full uri for building request.
     ///
+    /// In this function, scheme and host will be resolved as the target address, and the full uri
+    /// will be set as the request uri.
+    ///
     /// This function is only used for using http(s) proxy.
-    pub fn absolute_uri(mut self, uri: Uri) -> Self {
-        self.uri = Some(uri.clone());
+    pub fn full_uri<U>(mut self, uri: U) -> Result<Self>
+    where
+        U: TryInto<Uri>,
+        U::Error: Into<BoxError>,
+    {
+        let uri = uri.try_into().map_err(builder_error)?;
+        self.fill_target(&uri);
         *self.request.uri_mut() = uri;
-        self
+        Ok(self)
     }
 
+    /// Get the reference of uri in the request.
     pub fn uri_ref(&self) -> &Uri {
         self.request.uri()
     }
 
+    /// Set the version of the HTTP request.
     pub fn version(mut self, version: Version) -> Self {
         *self.request.version_mut() = version;
         self
     }
 
+    /// Get the reference of version in the request.
     pub fn version_ref(&self) -> Version {
         self.request.version()
     }
 
+    /// Insert a header into the request.
     pub fn header<K, V>(mut self, key: K, value: V) -> Result<Self>
     where
         K: TryInto<HeaderName>,
@@ -144,23 +178,66 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         Ok(self)
     }
 
+    /// Get the reference of headers in the request.
     pub fn headers(&self) -> &HeaderMap {
         self.request.headers()
     }
 
+    /// Get the mutable reference of headers in the request.
     pub fn headers_mut(&mut self) -> &mut HeaderMap {
         self.request.headers_mut()
     }
 
-    pub fn target(mut self, target: Address) -> Self {
-        self.target = Some(target);
+    /// Set the target address for the request.
+    pub fn address<A>(mut self, address: A, #[cfg(feature = "__tls")] use_tls: bool) -> Self
+    where
+        A: Into<Address>,
+    {
+        self.target = TargetBuilder::Address {
+            addr: address.into(),
+            #[cfg(feature = "__tls")]
+            use_tls,
+        };
         self
     }
 
-    pub fn target_ref(&self) -> Option<&Address> {
-        self.target.as_ref()
+    /// Set the target host for the request.
+    ///
+    /// If TLS is enabled, it will use https with port 443 by default, otherwise it will use http
+    /// with port 80 by default.
+    ///
+    /// For setting the scheme and port, use `scheme_host_and_port` instead.
+    pub fn host<IS>(mut self, host: IS) -> Self
+    where
+        IS: Into<FastStr>,
+    {
+        self.target = TargetBuilder::Host {
+            scheme: None,
+            host: host.into(),
+            port: None,
+        };
+        self
     }
 
+    /// Set the target scheme, host and port for the request.
+    pub fn scheme_host_and_port<IS>(
+        mut self,
+        scheme: Option<Scheme>,
+        host: IS,
+        port: Option<u16>,
+    ) -> Self
+    where
+        IS: Into<FastStr>,
+    {
+        self.target = TargetBuilder::Host {
+            scheme,
+            host: host.into(),
+            port,
+        };
+        self
+    }
+
+    /// Set the request body.
     pub fn body<B2>(self, body: B2) -> RequestBuilder<'a, S, B2> {
         let (parts, _) = self.request.into_parts();
         let request = Request::from_parts(parts, body);
@@ -168,11 +245,11 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         RequestBuilder {
             client: self.client,
             target: self.target,
-            uri: self.uri,
             request,
         }
     }
 
+    /// Get the reference of body in the request.
     pub fn body_ref(&self) -> &B {
         self.request.body()
     }
@@ -186,12 +263,8 @@ where
         + 'static,
     B: Send + 'static,
 {
+    /// Send the request and get the response.
     pub async fn send(self) -> Result<ClientResponse> {
-        let uri = self.uri.ok_or_else(no_uri)?;
-        let target = match self.target {
-            Some(target) => target,
-            None => resolve(&uri).await?,
-        };
-        self.client.send_request(uri, target, self.request).await
+        self.client.send_request(self.target, self.request).await
     }
 }

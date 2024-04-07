@@ -174,8 +174,7 @@ macro_rules! simple_error_with_url {
     };
 }
 
-simple_error!(Builder => NoUri => "uri not found");
-simple_error_with_url!(Builder => UriWithoutHost => "host not found in uri");
+simple_error!(Builder => NoAddress => "missing target address");
 simple_error_with_url!(Builder => BadScheme => "bad scheme");
 simple_error_with_url!(Builder => BadHostName => "bad host name");
-simple_error!(Request => NoAddress => "missing target address");
+simple_error!(Builder => UnreachableBuilderError => "unreachable builder error");
