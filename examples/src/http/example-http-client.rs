@@ -90,6 +90,8 @@ async fn main() -> Result<(), BoxError> {
         client
             .post("/user/json_post")?
             // `Content-Type` is needed!
+            //
+            // Without `Content-Type`, server will response with 415 Unsupported Media Type
             .header(header::CONTENT_TYPE, "application/json")?
             .data(Json(Person {
                 name: "Foo".to_string(),
@@ -101,20 +103,28 @@ async fn main() -> Result<(), BoxError> {
             .into_string()
             .await?
     );
+
+    // an empty client
+    let client = ClientBuilder::new().build();
     println!(
-        "{:?}",
-        // Without `Content-Type`, server will response with 415 Unsupported Media Type
+        "{}",
         client
-            .post("http://127.0.0.1:8080/user/json_post")?
-            .data(Json(Person {
-                name: "Foo".to_string(),
-                age: 25,
-                phones: vec!["114514".to_string()],
-            }))?
+            .get("http://127.0.0.1:8080/")?
             .send()
             .await?
             .into_string()
             .await?
     );
+
+    // invalid request because there is no target address
+    println!(
+        "{:?}",
+        client
+            .get("/")?
+            .send()
+            .await
+            .expect_err("this request should fail"),
+    );
+
     Ok(())
 }
