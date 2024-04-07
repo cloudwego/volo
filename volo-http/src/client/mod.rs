@@ -3,7 +3,8 @@ use std::{cell::RefCell, error::Error, sync::Arc, time::Duration};
 use faststr::FastStr;
 use http::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
-    Method, Uri,
+    uri::{Scheme, Uri},
+    Method,
 };
 use metainfo::{MetaInfo, METAINFO};
 use motore::{
@@ -24,14 +25,17 @@ use self::{
     meta::MetaService,
     request_builder::RequestBuilder,
     transport::{ClientConfig, ClientTransport},
-    utils::IntoUri,
+    utils::{Target, TargetBuilder},
 };
 use crate::{
     context::{
         client::{CalleeName, CallerName, Config},
         ClientContext,
     },
-    error::client::{builder_error, ClientError},
+    error::{
+        client::{builder_error, no_address, ClientError},
+        BoxError,
+    },
     request::ClientRequest,
     response::ClientResponse,
 };
@@ -51,6 +55,7 @@ pub struct ClientBuilder<L, MkC> {
     transport_config: volo::net::dial::Config,
     callee_name: FastStr,
     caller_name: FastStr,
+    target: TargetBuilder,
     headers: HeaderMap,
     layer: L,
     mk_client: MkC,
@@ -67,6 +72,7 @@ impl ClientBuilder<Identity, DefaultMkClient> {
             transport_config: Default::default(),
             callee_name: FastStr::empty(),
             caller_name: FastStr::empty(),
+            target: Default::default(),
             headers: Default::default(),
             layer: Identity::new(),
             mk_client: DefaultMkClient,
@@ -92,6 +98,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
             transport_config: self.transport_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
+            target: self.target,
             headers: self.headers,
             layer: self.layer,
             mk_client: new_mk_client,
@@ -100,7 +107,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
         }
     }
 
-    /// Adds a new inner layer to the server.
+    /// Add a new inner layer to the server.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
@@ -118,6 +125,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
             transport_config: self.transport_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
+            target: self.target,
             headers: self.headers,
             layer: Stack::new(layer, self.layer),
             mk_client: self.mk_client,
@@ -126,7 +134,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
         }
     }
 
-    /// Adds a new front layer to the server.
+    /// Add a new front layer to the server.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
@@ -144,6 +152,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
             transport_config: self.transport_config,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
+            target: self.target,
             headers: self.headers,
             layer: Stack::new(self.layer, layer),
             mk_client: self.mk_client,
@@ -152,7 +161,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
         }
     }
 
-    /// Sets the target server's name.
+    /// Set the target server's name.
     pub fn callee_name<S>(&mut self, callee: S) -> &mut Self
     where
         S: Into<FastStr>,
@@ -161,12 +170,66 @@ impl<L, MkC> ClientBuilder<L, MkC> {
         self
     }
 
-    /// Sets the client's name sent to the server.
+    /// Set the client's name sent to the server.
     pub fn caller_name<S>(&mut self, caller: S) -> &mut Self
     where
         S: Into<FastStr>,
     {
         self.caller_name = caller.into();
+        self
+    }
+
+    /// Set the target address of the client.
+    ///
+    /// If there is no target specified when building a request, client will use this address.
+    pub fn address<A>(&mut self, address: A, #[cfg(feature = "__tls")] use_tls: bool) -> &mut Self
+    where
+        A: Into<Address>,
+    {
+        self.target = TargetBuilder::Address {
+            addr: address.into(),
+            #[cfg(feature = "__tls")]
+            use_tls,
+        };
+        self
+    }
+
+    /// Set the target host of the client.
+    ///
+    /// If there is no target specified when building a request, client will use this address.
+    ///
+    /// If tls is enabled, the scheme will be set to `https`, otherwise it will be set to `http`.
+    ///
+    /// To specify scheme or port, use `scheme_host_and_port` instead.
+    pub fn host<H>(&mut self, host: H) -> &mut Self
+    where
+        H: Into<FastStr>,
+    {
+        self.target = TargetBuilder::Host {
+            scheme: None,
+            host: host.into(),
+            port: None,
+        };
+        self
+    }
+
+    /// Set the target scheme, host and port of the client.
+    ///
+    /// If there is no target specified when building a request, client will use this address.
+    pub fn scheme_host_and_port<H>(
+        &mut self,
+        scheme: Option<Scheme>,
+        host: H,
+        port: Option<u16>,
+    ) -> &mut Self
+    where
+        H: Into<FastStr>,
+    {
+        self.target = TargetBuilder::Host {
+            scheme,
+            host: host.into(),
+            port,
+        };
         self
     }
 
@@ -351,7 +414,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
 
         let caller_name = match &self.config.caller_name {
             CallerName::PkgNameWithVersion => FastStr::from_static_str(PKG_NAME_WITH_VER),
-            CallerName::OriginalCallerName => self.caller_name.clone(),
+            CallerName::OriginalCallerName => self.caller_name,
             CallerName::CallerNameWithVersion if !self.caller_name.is_empty() => {
                 FastStr::from_string(format!(
                     "{}/{}",
@@ -362,7 +425,6 @@ impl<L, MkC> ClientBuilder<L, MkC> {
             CallerName::Specified(val) => val.to_owned(),
             _ => FastStr::empty(),
         };
-
         if !caller_name.is_empty() && self.headers.get(header::USER_AGENT).is_none() {
             self.headers.insert(
                 header::USER_AGENT,
@@ -370,9 +432,29 @@ impl<L, MkC> ClientBuilder<L, MkC> {
             );
         }
 
+        #[cfg(feature = "__tls")]
+        let default_target_is_tls = self.target.is_tls();
+        let default_target_callee_name = self
+            .target
+            .gen_callee_name(&self.config.callee_name, &self.callee_name);
+        let default_target = if self.target.is_none() {
+            None
+        } else {
+            Some(Target {
+                addr: self
+                    .target
+                    .resolve_sync()
+                    .expect("failed to resolve default target of client"),
+                #[cfg(feature = "__tls")]
+                use_tls: default_target_is_tls,
+                callee_name: default_target_callee_name,
+            })
+        };
+
         let client_inner = ClientInner {
             callee_name: self.callee_name,
-            caller_name: self.caller_name,
+            caller_name,
+            default_target,
             headers: self.headers,
             config: self.config,
         };
@@ -384,9 +466,10 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     }
 }
 
-struct ClientInner {
+pub(super) struct ClientInner {
     callee_name: FastStr,
     caller_name: FastStr,
+    default_target: Option<Target>,
     headers: HeaderMap,
     config: Config,
 }
@@ -402,7 +485,8 @@ macro_rules! method_requests {
         paste! {
             pub fn [<$method:lower>]<U>(&self, uri: U) -> Result<RequestBuilder<S>, ClientError>
             where
-                U: IntoUri,
+                U: TryInto<Uri>,
+                U::Error: Into<BoxError>,
             {
                 self.request(Method::[<$method:upper>], uri)
             }
@@ -426,9 +510,14 @@ impl<S> Client<S> {
     /// Create a builder for building a request with the specified method and URI.
     pub fn request<U>(&self, method: Method, uri: U) -> Result<RequestBuilder<S>, ClientError>
     where
-        U: IntoUri,
+        U: TryInto<Uri>,
+        U::Error: Into<BoxError>,
     {
-        RequestBuilder::new_with_method_and_uri(self, method, uri.into_uri()?)
+        RequestBuilder::new_with_method_and_uri(
+            self,
+            method,
+            uri.try_into().map_err(builder_error)?,
+        )
     }
 
     method_requests!(options);
@@ -440,9 +529,12 @@ impl<S> Client<S> {
     method_requests!(trace);
     method_requests!(connect);
     method_requests!(patch);
-}
 
-impl<S> Client<S> {
+    /// Get the default target address of the client.
+    pub fn default_target(&self) -> Option<&Target> {
+        self.inner.default_target.as_ref()
+    }
+
     /// Send a request to the target address.
     ///
     /// This is a low-level method and you should build the `uri` and `request`, and get the
@@ -458,14 +550,14 @@ impl<S> Client<S> {
     /// use http::{Method, Uri};
     /// use volo::net::Address;
     /// use volo_http::{body::Body, client::Client, request::ClientRequest};
+    /// use volo_http::client::utils::TargetBuilder;
     ///
     /// let client = Client::builder().build();
     /// let addr: SocketAddr = "[::]:8080".parse().unwrap();
     /// let addr = Address::from(addr);
     /// let resp = client
     ///     .send_request(
-    ///         Uri::from_static("http://localhost:8080/"),
-    ///         addr,
+    ///         TargetBuilder::Address { addr },
     ///         ClientRequest::builder()
     ///             .method(Method::GET)
     ///             .uri("/")
@@ -481,8 +573,7 @@ impl<S> Client<S> {
     /// ```
     pub async fn send_request<B>(
         &self,
-        uri: Uri,
-        target: Address,
+        target: TargetBuilder,
         mut request: ClientRequest<B>,
     ) -> Result<S::Response, S::Error>
     where
@@ -493,48 +584,25 @@ impl<S> Client<S> {
         B: Send + 'static,
     {
         let caller_name = self.inner.caller_name.clone();
-        let callee_name = match self.inner.config.callee_name {
-            CalleeName::TargetName => match uri.host() {
-                // IPv6 address in URI has square brackets, but we does not need it as a
-                // "host name".
-                Some(host) => FastStr::from(
-                    host.trim_start_matches('[')
-                        .trim_end_matches(']')
-                        .to_owned(),
-                ),
-                None => match &target {
-                    Address::Ip(addr) => FastStr::from(addr.ip().to_string()),
-                    #[cfg(target_family = "unix")]
-                    Address::Unix(_) => FastStr::empty(),
-                },
-            },
-            CalleeName::OriginalCalleeName => self.inner.callee_name.clone(),
-            CalleeName::None => FastStr::empty(),
-        };
+        let target = target
+            .into_target(&self.inner)
+            .await?
+            .or_else(|| self.inner.default_target.clone())
+            .ok_or_else(no_address)?;
+        let callee_name = target.callee_name;
+
+        if let Ok(host) = HeaderValue::from_maybe_shared(callee_name.clone()) {
+            request.headers_mut().insert(header::HOST, host);
+        }
+
         tracing::trace!(
             "create a request with caller_name: {caller_name}, callee_name: {callee_name}"
         );
 
-        if request.headers().get(header::HOST).is_none() && uri.host().is_some() {
-            let mut host = uri.host().unwrap().to_string();
-            if let Some(port) = uri.port() {
-                host.push(':');
-                host.push_str(port.as_str());
-            }
-            if let Ok(value) = HeaderValue::from_str(&host) {
-                request.headers_mut().insert(header::HOST, value);
-            } else {
-                tracing::info!(
-                    "failed to insert `Host` to headers, `{host}` is not a valid header value"
-                );
-            }
-        }
-
         let mut cx = ClientContext::new(
-            target,
+            target.addr,
             #[cfg(feature = "__tls")]
-            uri.scheme()
-                .is_some_and(|scheme| scheme == &http::uri::Scheme::HTTPS),
+            target.use_tls,
         );
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
         cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
@@ -598,10 +666,11 @@ impl<S> MkClient<Client<S>> for DefaultMkClient {
     }
 }
 
-/// Send a GET request to the specified URI.
+/// Create a GET request to the specified URI.
 pub async fn get<U>(uri: U) -> Result<ClientResponse, ClientError>
 where
-    U: IntoUri,
+    U: TryInto<Uri>,
+    U::Error: Into<BoxError>,
 {
     ClientBuilder::new().build().get(uri)?.send().await
 }

@@ -58,6 +58,7 @@ git2 = { version = "0.18", default-features = false }
 h2 = "0.4"
 heck = "0.5"
 hex = "0.4"
+hickory-resolver = "0.24"
 http = "1"
 http-body = "1"
 http-body-util = "0.1"

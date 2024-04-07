@@ -27,11 +27,13 @@ chrono.workspace = true
 faststr.workspace = true
 futures.workspace = true
 futures-util.workspace = true
+hickory-resolver.workspace = true
 http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
 hyper = { workspace = true, features = ["client", "server", "http1"] }
 hyper-util = { workspace = true, features = ["tokio"] }
+lazy_static.workspace = true
 metainfo.workspace = true
 mime.workspace = true
 motore.workspace = true

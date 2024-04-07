@@ -1,3 +1,5 @@
+use std::net::SocketAddr;
+
 use http::header;
 use serde::{Deserialize, Serialize};
 use volo_http::{
@@ -21,7 +23,7 @@ async fn main() -> Result<(), BoxError> {
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
-    // simple `get` function and dns resolve
+    // simple `get` function with dns resolve
     println!(
         "{}",
         get("http://httpbin.org/get").await?.into_string().await?
@@ -42,10 +44,25 @@ async fn main() -> Result<(), BoxError> {
         builder
             .caller_name("example.http.client")
             .callee_name("example.http.server")
+            // set default target address
+            .address("127.0.0.1:8080".parse::<SocketAddr>().unwrap())
             .header("Test", "Test")?
             .fail_on_error_status(true);
         builder.build()
     };
+
+    // set host and override the default one
+    println!(
+        "{}",
+        client
+            .request_builder()
+            .host("httpbin.org")
+            .uri("/get")?
+            .send()
+            .await?
+            .into_string()
+            .await?
+    );
 
     println!(
         "{}",
@@ -56,10 +73,13 @@ async fn main() -> Result<(), BoxError> {
             .into_string()
             .await?
     );
+
+    // use default target address
     println!(
         "{:?}",
         client
-            .get("http://127.0.0.1:8080/user/json_get")?
+            .request_builder()
+            .uri("/user/json_get")?
             .send()
             .await?
             .into_json::<Person>()
@@ -68,7 +88,7 @@ async fn main() -> Result<(), BoxError> {
     println!(
         "{:?}",
         client
-            .post("http://127.0.0.1:8080/user/json_post")?
+            .post("/user/json_post")?
             // `Content-Type` is needed!
             .header(header::CONTENT_TYPE, "application/json")?
             .data(Json(Person {
