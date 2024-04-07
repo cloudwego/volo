@@ -535,8 +535,12 @@ impl CodegenBackend for VoloGrpcBackend {
 
             impl<S> {server_name}<S> {{
                 pub fn new(inner: S) -> Self {{
+                    Self::from_arc(::std::sync::Arc::new(inner))
+                }}
+
+                pub fn from_arc(inner: ::std::sync::Arc<S>) -> Self {{
                     Self {{
-                        inner: ::std::sync::Arc::new(inner),
+                        inner,
                     }}
                 }}
             }}
