@@ -6,7 +6,7 @@ use volo_build::{
     model::{Entry, DEFAULT_FILENAME},
     util::{
         create_git_service, detect_protocol, git_repo_init, init_git_repo, init_local_service,
-        DEFAULT_CONFIG_FILE,
+        modify_local_init_service_path_relative_to_yml, DEFAULT_CONFIG_FILE,
     },
 };
 
@@ -185,7 +185,7 @@ impl CliCommand for Init {
 
         volo_build::util::with_config(|config| {
             let mut repos = HashMap::new();
-            let service = if let Some(git) = self.git.as_ref() {
+            let mut service = if let Some(git) = self.git.as_ref() {
                 let (repo_name, repo) = init_git_repo(&self.repo, git, &self.r#ref)?;
                 repos.insert(repo_name.clone(), repo);
                 create_git_service(&repo_name, self.idl.as_path(), &self.includes)
@@ -193,11 +193,11 @@ impl CliCommand for Init {
                 init_local_service(self.idl.as_path(), &self.includes)?
             };
 
-            let entry = Entry {
+            let mut entry = Entry {
                 filename: PathBuf::from(DEFAULT_FILENAME),
                 protocol: detect_protocol(service.idl.path.as_path()),
                 repos,
-                services: vec![service],
+                services: vec![service.clone()],
                 common_option: Default::default(),
             };
 
@@ -206,6 +206,9 @@ impl CliCommand for Init {
             } else {
                 self.copy_thrift_template(entry.clone())?;
             }
+
+            modify_local_init_service_path_relative_to_yml(&mut service);
+            entry.services = vec![service];
 
             config.entries.insert(cx.entry_name.clone(), entry);
 
