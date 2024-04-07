@@ -513,9 +513,9 @@ dependencies = [
 
 [[package]]
 name = "event-listener"
-version = "5.2.0"
+version = "5.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b5fb89194fa3cad959b833185b3063ba881dbfc7030680b314250779fb4cc91"
+checksum = "6d9944b8ca13534cdfb2800775f8dd4902ff3fc75a50101466decadfdf322a24"
 dependencies = [
  "concurrent-queue",
  "parking",
@@ -729,9 +729,9 @@ dependencies = [
 
 [[package]]
 name = "getrandom"
-version = "0.2.12"
+version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "190092ea657667030ac6a35e305e62fc4dd69fd98ac98631e5d3a2b1575a12b5"
+checksum = "a06fddc2749e0528d2813f95e050e87e52c8cbbae56223b9babf73b3e53b0cc6"
 dependencies = [
  "cfg-if",
  "libc",
@@ -759,9 +759,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.3.25"
+version = "0.3.26"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fbd2820c5e49886948654ab546d0688ff24530286bdcf8fca3cefb16d4618eb"
+checksum = "81fe527a889e1532da5c525686d96d4c2e74cdd345badf8dfef9f6b39dd5f5e8"
 dependencies = [
  "bytes",
  "fnv",
@@ -778,9 +778,9 @@ dependencies = [
 
 [[package]]
 name = "h2"
-version = "0.4.3"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51ee2dd2e4f378392eeff5d51618cd9a63166a2513846bbc55f21cfacd9199d4"
+checksum = "816ec7294445779408f36fe57bc5b7fc1cf59664059096c65f905c1c61f58069"
 dependencies = [
  "bytes",
  "fnv",
@@ -927,7 +927,7 @@ dependencies = [
  "futures-channel",
  "futures-core",
  "futures-util",
- "h2 0.3.25",
+ "h2 0.3.26",
  "http 0.2.12",
  "http-body 0.4.6",
  "httparse",
@@ -950,7 +950,7 @@ dependencies = [
  "bytes",
  "futures-channel",
  "futures-util",
- "h2 0.4.3",
+ "h2 0.4.4",
  "http 1.1.0",
  "http-body 1.0.0",
  "httparse",
@@ -1690,7 +1690,8 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.11.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#4c778b6c79e7126e938e30b1af7d877f3de3d813"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8a703227b959fc4ebdb45d5372d21d29d1c013a9716f8559c5a6b0638d00862b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1711,7 +1712,8 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.11.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#4c778b6c79e7126e938e30b1af7d877f3de3d813"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e5a22b36de4c049cb5128ab2cb6437aae101bf77de0ddf00333399bc0a2a15a3"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1744,7 +1746,8 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.11.0"
-source = "git+https://github.com/cloudwego/pilota?branch=main#4c778b6c79e7126e938e30b1af7d877f3de3d813"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2094852920dea4b1edcf4c3617bbcdfa4a9f1eae4b59cb5ab73d25426110d74"
 dependencies = [
  "nom",
 ]
@@ -2032,7 +2035,7 @@ dependencies = [
  "encoding_rs",
  "futures-core",
  "futures-util",
- "h2 0.3.25",
+ "h2 0.3.26",
  "http 0.2.12",
  "http-body 0.4.6",
  "hyper 0.14.28",
@@ -2148,11 +2151,11 @@ dependencies = [
 
 [[package]]
 name = "rustls-pemfile"
-version = "2.1.1"
+version = "2.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f48172685e6ff52a556baa527774f61fcaa884f59daf3375c62a3f1cd2549dab"
+checksum = "29993a25686778eb88d4189742cd713c9bce943bc54251a33509dc63cbacf73d"
 dependencies = [
- "base64 0.21.7",
+ "base64 0.22.0",
  "rustls-pki-types",
 ]
 
@@ -2985,7 +2988,7 @@ dependencies = [
  "pin-project",
  "rand",
  "rustls 0.22.3",
- "rustls-pemfile 2.1.1",
+ "rustls-pemfile 2.1.2",
  "rustls-pki-types",
  "socket2",
  "thiserror",
@@ -3078,7 +3081,7 @@ dependencies = [
  "flate2",
  "futures",
  "futures-util",
- "h2 0.4.3",
+ "h2 0.4.4",
  "hex",
  "http 1.1.0",
  "http-body 1.0.0",
