@@ -1,7 +1,7 @@
 use std::{
     collections::HashMap,
     fs::{create_dir_all, File, OpenOptions},
-    io::Seek,
+    io::{Read, Seek, Write},
     path::{Path, PathBuf},
     process::Command,
 };
@@ -32,13 +32,30 @@ pub fn ensure_cache_path() -> std::io::Result<()> {
     ensure_path(&DEFAULT_DIR)
 }
 
-pub fn read_config_from_file(f: &File) -> Result<SingleConfig, serde_yaml::Error> {
+pub fn read_config_from_file(f: &mut File) -> Result<SingleConfig, serde_yaml::Error> {
     match f.metadata() {
         Ok(metadata) => {
             if metadata.len() == 0 {
                 Ok(SingleConfig::new())
             } else {
-                serde_yaml::from_reader(f)
+                let mut s = String::with_capacity(4096); // should be enough for most cases
+                f.read_to_string(&mut s).map_err(|e| {
+                    serde_yaml::Error::custom(format!("failed to read config file, err: {}", e))
+                })?;
+                match serde_yaml::from_str(s.as_str()) {
+                    Ok(config) => Ok(config),
+                    Err(e) => {
+                        // try to unmarshal by the old format
+                        if serde_yaml::from_str::<'_, crate::legacy::model::Config>(&s).is_ok() {
+                            Err(serde_yaml::Error::custom(
+                                "the config file is in legacy format, please migrate it to the \
+                                 new format first, refer: https://www.cloudwego.io/docs/volo/guide/config/",
+                            ))
+                        } else {
+                            Err(e)
+                        }
+                    }
+                }
             }
         }
         Err(e) => {
@@ -254,14 +271,18 @@ pub fn with_config<F, R>(func: F) -> anyhow::Result<R>
 where
     F: FnOnce(&mut SingleConfig) -> anyhow::Result<R>,
 {
+    const DOC_HINT: &str = "# Please refer to https://www.cloudwego.io/docs/volo/guide/config/ \
+                            for the configuration file format.\n";
+
     // open config file and read
     let mut f = open_config_file(DEFAULT_CONFIG_FILE).context("open config file")?;
-    let mut config = read_config_from_file(&f).context("read config file")?;
+    let mut config = read_config_from_file(&mut f).context("read config file")?;
 
     let r = func(&mut config)?;
 
     // write back to config file
     f.rewind()?;
+    f.write_all(DOC_HINT.as_bytes())?;
     serde_yaml::to_writer(&mut f, &config).context("write back config file")?;
     let len = f.stream_position()?;
     f.set_len(len)?;

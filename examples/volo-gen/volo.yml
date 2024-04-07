@@ -1,3 +1,4 @@
+# Please refer to https://www.cloudwego.io/docs/volo/guide/config/ for the configuration file format.
 entries:
   proto:
     filename: proto_gen.rs
@@ -6,29 +7,29 @@ entries:
       protobuf:
         url: https://github.com/protocolbuffers/protobuf.git
         ref: HEAD
-        lock: 704d0454ddc58da683e8cec22896ff3498089549
+        lock: cb93f9aa6e81329e368f09ded42d17c3f26442f2
     services:
-      - idl:
-          source: local
-          path: ../proto/echo.proto
-          includes:
-            - ../proto
-      - idl:
-          source: local
-          path: ../proto/streaming.proto
-          includes:
-            - ../proto
-      - idl:
-          source: local
-          path: ../proto/hello.proto
-          includes:
-            - ../proto
-      - idl:
-          source: git
-          repo: protobuf
-          path: examples/addressbook.proto
-          includes:
-            - examples
+    - idl:
+        source: local
+        path: ../proto/echo.proto
+        includes:
+        - ../proto
+    - idl:
+        source: local
+        path: ../proto/streaming.proto
+        includes:
+        - ../proto
+    - idl:
+        source: local
+        path: ../proto/hello.proto
+        includes:
+        - ../proto
+    - idl:
+        source: git
+        repo: protobuf
+        path: examples/addressbook.proto
+        includes:
+        - examples
   thrift:
     filename: thrift_gen.rs
     protocol: thrift
@@ -38,18 +39,18 @@ entries:
         ref: HEAD
         lock: 9bd1f1bee7bf59080492bbd3213ca1fed57ab4d6
     services:
-      - idl:
-          source: local
-          path: ../thrift_idl/hello.thrift
-      - idl:
-          source: local
-          path: ../thrift_idl/echo.thrift
-      - idl:
-          source: local
-          path: ../thrift_idl/echo_unknown.thrift
-        codegen_option:
-          keep_unknown_fields: true
-      - idl:
-          source: git
-          repo: thrift
-          path: test/Service.thrift
+    - idl:
+        source: local
+        path: ../thrift_idl/hello.thrift
+    - idl:
+        source: local
+        path: ../thrift_idl/echo.thrift
+    - idl:
+        source: local
+        path: ../thrift_idl/echo_unknown.thrift
+      codegen_option:
+        keep_unknown_fields: true
+    - idl:
+        source: git
+        repo: thrift
+        path: test/Service.thrift
