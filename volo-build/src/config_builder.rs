@@ -156,8 +156,8 @@ impl ConfigBuilder {
 
     pub fn write(self) -> anyhow::Result<()> {
         println!("cargo:rerun-if-changed={}", self.filename.display());
-        let f = open_config_file(self.filename.clone())?;
-        let config = read_config_from_file(&f)?;
+        let mut f = open_config_file(self.filename.clone())?;
+        let config = read_config_from_file(&mut f)?;
         config
             .entries
             .into_iter()

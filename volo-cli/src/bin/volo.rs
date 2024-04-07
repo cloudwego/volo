@@ -11,6 +11,31 @@ fn main() {
     }
     pretty_env_logger::init();
 
+    if std::env::var("VOLO_DISABLE_UPDATE_CHECK").is_ok() {
+        debug!("Update check is disabled by env var VOLO_DISABLE_UPDATE_CHECK");
+    } else {
+        // detect new version and notify the user
+        let pkg_name = env!("CARGO_PKG_NAME");
+        let current_version = env!("CARGO_PKG_VERSION");
+
+        let informer = update_informer::new(registry::Crates, pkg_name, current_version);
+        if let Some(version) = informer.check_version().ok().flatten() {
+            let outdated_msg = format!(
+                "A new release of {pkg_name} is available: v{current_version} -> {new_version}",
+                pkg_name = pkg_name.italic().cyan(),
+                current_version = current_version,
+                new_version = version.to_string().green()
+            );
+
+            let update_command = format!("cargo install {pkg_name}").yellow();
+
+            let update_msg =
+                format!("You can use '{update_command}' to update to the latest version.",);
+
+            println!("\n{outdated_msg}\n{update_msg}\n");
+        }
+    }
+
     let cmd = model::RootCommand::parse();
     // set log level according to verbose
     match cmd.verbose {
@@ -22,27 +47,6 @@ fn main() {
     let res = cmd.run();
     if let Err(e) = res.as_ref() {
         error!("{}", e);
-    }
-
-    // detect new version and notify the user
-    let pkg_name = env!("CARGO_PKG_NAME");
-    let current_version = env!("CARGO_PKG_VERSION");
-
-    let informer = update_informer::new(registry::Crates, pkg_name, current_version);
-    if let Some(version) = informer.check_version().ok().flatten() {
-        let outdated_msg = format!(
-            "A new release of {pkg_name} is available: v{current_version} -> {new_version}",
-            pkg_name = pkg_name.italic().cyan(),
-            current_version = current_version,
-            new_version = version.to_string().green()
-        );
-
-        let update_command = format!("cargo install {pkg_name}").yellow();
-
-        let update_msg =
-            format!("You can use '{update_command}' to update to the latest version.",);
-
-        println!("\n{outdated_msg}\n{update_msg}");
     }
 
     if res.is_err() {
