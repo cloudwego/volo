@@ -323,32 +323,41 @@ pub fn strip_slash_prefix(p: &Path) -> PathBuf {
 }
 
 pub fn init_local_service(idl: impl AsRef<Path>, includes: &[PathBuf]) -> anyhow::Result<Service> {
-    let includes = includes
-        .iter()
-        .map(|i| {
-            if i.is_absolute() {
-                i.clone()
-            } else {
-                PathBuf::new().join("../").join(i.clone())
-            }
-        })
-        .collect();
-    let path = if idl.as_ref().is_absolute() {
-        idl.as_ref().to_path_buf()
-    } else {
-        PathBuf::new().join("../").join(idl.as_ref())
-    };
-    let local_idl = Idl {
+    let raw_idl = Idl {
         source: Source::Local,
-        path,
-        includes,
+        path: PathBuf::new().join(idl.as_ref()),
+        includes: includes.to_vec(),
     };
     // only ensure readable when idl is from local
-    local_idl.ensure_readable()?;
+    raw_idl.ensure_readable()?;
+
     Ok(Service {
-        idl: local_idl,
+        idl: raw_idl,
         codegen_option: Default::default(),
     })
+}
+
+// the yml file will move into the volo-gen directory generated at the init cmd execution path,
+// so the path of the idl file and includes should be modified to relative path by add '../' if the
+// raw is relative
+pub fn modify_local_init_service_path_relative_to_yml(service: &mut Service) {
+    if let Source::Local = service.idl.source {
+        if service.idl.path.is_relative() {
+            service.idl.path = PathBuf::new().join("../").join(service.idl.path.clone());
+        }
+        service.idl.includes = service
+            .idl
+            .includes
+            .iter()
+            .map(|i| {
+                if i.is_relative() {
+                    PathBuf::new().join("../").join(i.clone())
+                } else {
+                    i.clone()
+                }
+            })
+            .collect();
+    }
 }
 
 pub fn init_git_repo(
