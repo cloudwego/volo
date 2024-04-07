@@ -70,7 +70,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                 );
 
                 // it is promised safe here, because span only reads cx before handling polling
-                let tracing_cx = unsafe { std::mem::transmute(&cx) };
+                let tracing_cx = unsafe { std::mem::transmute::<&crate::context::ServerContext, &crate::context::ServerContext>(&cx) };
 
                 let result = async {
                     match msg {
