@@ -34,7 +34,7 @@ required-features = ["__tls"]
 
 # compression
 [[bin]]
-name = "compresion-grpc-server"
+name = "compression-grpc-server"
 path = "src/compression/grpc_server.rs"
 [[bin]]
 name = "compression-grpc-client"
