@@ -5,9 +5,9 @@ use bytes::Bytes;
 use faststr::FastStr;
 use http::{header, request::Parts, Method, StatusCode, Uri};
 use http_body::Frame;
-use motore::{layer::layer_fn, service::Service};
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
+use volo::service::service_fn;
 use volo_http::{
     body::Body,
     context::{RequestPartsExt, ServerContext},
@@ -21,7 +21,7 @@ use volo_http::{
         layer::{FilterLayer, TimeoutLayer},
         middleware::{self, Next},
         param::Params,
-        route::{from_handler, from_service, get, post, service_fn, MethodRouter, Router},
+        route::{get, get_service, post, Router},
         IntoResponse, Server,
     },
     Address,
@@ -202,18 +202,16 @@ fn user_json_router() -> Router {
 fn user_form_router() -> Router {
     Router::new().route(
         "/user/login",
-        MethodRouter::builder()
-            // curl "http://localhost:8080/user/login?username=admin&password=admin"
-            // curl "http://localhost:8080/user/login?username=admin&password=password"
-            .get(from_handler(get_with_query))
+        // curl "http://localhost:8080/user/login?username=admin&password=admin"
+        // curl "http://localhost:8080/user/login?username=admin&password=password"
+        get(get_with_query)
             // curl http://localhost:8080/user/login \
             //     -X POST \
             //     -d 'username=admin&password=admin'
             // curl http://localhost:8080/user/login \
             //     -X POST \
             //     -d 'username=admin&password=password'
-            .post(from_handler(post_with_form))
-            .build(),
+            .post(post_with_form),
     )
 }
 
@@ -221,13 +219,7 @@ fn test_router() -> Router {
     Router::new()
         // curl http://127.0.0.1:8080/test/extract
         // curl http://127.0.0.1:8080/test/extract -X POST -d "114514"
-        .route(
-            "/test/extract",
-            MethodRouter::builder()
-                .get(from_handler(get_and_post))
-                .post(from_handler(get_and_post))
-                .build(),
-        )
+        .route("/test/extract", get(get_and_post).post(get_and_post))
         // curl http://127.0.0.1:8080/test/timeout
         .route(
             "/test/timeout",
@@ -238,12 +230,7 @@ fn test_router() -> Router {
         // curl http://127.0.0.1:8080/test/extension
         .route("/test/extension", get(extension))
         // curl http://127.0.0.1:8080/test/service_fn
-        .route(
-            "/test/service_fn",
-            MethodRouter::builder()
-                .get(service_fn(service_fn_test))
-                .build(),
-        )
+        .route("/test/service_fn", get_service(service_fn(service_fn_test)))
         // curl -v http://127.0.0.1:8080/test/stream
         .route("/test/stream", get(stream_test))
         // curl -v http://127.0.0.1:8080/test/body
@@ -253,12 +240,7 @@ fn test_router() -> Router {
         // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for=192.0.2.60;proto=http;by=203.0.113.43'
         // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for=192.0.2.43, for=198.51.100.17'
         // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for=192.0.2.43, for=198.51.100.17, host=example.com'
-        .route(
-            "/test/forwarded",
-            MethodRouter::builder()
-                .get(service_fn(forwarded_getter))
-                .build(),
-        )
+        .route("/test/forwarded", get_service(service_fn(forwarded_getter)))
         // curl -v http://127.0.0.1:8080/test/full_uri
         .route("/test/full_uri", get(full_uri))
         // curl -v http://127.0.0.1:8080/test/anyaddr?reject_me
@@ -269,96 +251,6 @@ fn test_router() -> Router {
                 Ok(())
             }
         }))
-}
-
-#[derive(Clone)]
-enum ErrTestService<T> {
-    Val(T),
-    Err(usize),
-}
-
-impl<T> Service<ServerContext, ServerRequest> for ErrTestService<T>
-where
-    T: IntoResponse + Clone + Send + Sync,
-{
-    type Response = T;
-    type Error = usize;
-
-    async fn call(
-        &self,
-        _: &mut ServerContext,
-        _: ServerRequest,
-    ) -> Result<Self::Response, Self::Error> {
-        match self {
-            Self::Val(val) => Ok(val.clone()),
-            Self::Err(err) => Err(*err),
-        }
-    }
-}
-
-#[derive(Clone)]
-struct ErrMapService<S> {
-    inner: S,
-}
-
-impl<S, Resp> Service<ServerContext, ServerRequest> for ErrMapService<S>
-where
-    S: Service<ServerContext, ServerRequest, Response = Resp, Error = usize> + Clone + Send + Sync,
-    Resp: IntoResponse,
-{
-    type Response = ServerResponse;
-    type Error = Infallible;
-
-    async fn call(
-        &self,
-        cx: &mut ServerContext,
-        req: ServerRequest,
-    ) -> Result<Self::Response, Self::Error> {
-        match self.inner.call(cx, req).await {
-            Ok(resp) => Ok(resp.into_response()),
-            Err(val) => {
-                let status = if val == 0 {
-                    StatusCode::OK
-                } else {
-                    StatusCode::IM_A_TEAPOT
-                };
-                Ok(status.into_response())
-            }
-        }
-    }
-}
-
-fn err_router() -> Router {
-    fn map_err_layer<Resp, S>(
-        s: S,
-    ) -> impl Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-           + Clone
-           + Send
-           + Sync
-    where
-        S: Service<ServerContext, ServerRequest, Response = Resp, Error = usize>
-            + Clone
-            + Send
-            + Sync,
-        Resp: IntoResponse,
-    {
-        ErrMapService { inner: s }
-    }
-
-    Router::new()
-        .route(
-            "/err/str",
-            MethodRouter::builder()
-                .get(from_service(ErrTestService::Val(String::from("114514"))))
-                .build(),
-        )
-        .route(
-            "/err/err",
-            MethodRouter::builder()
-                .get(from_service(ErrTestService::<()>::Err(1)))
-                .build(),
-        )
-        .layer(layer_fn(map_err_layer))
 }
 
 // You can use the following commands for testing cookies
@@ -438,7 +330,6 @@ async fn main() {
         .merge(user_json_router())
         .merge(user_form_router())
         .merge(test_router())
-        .merge(err_router())
         .layer(Extension(Arc::new(State {
             foo: "Foo".to_string(),
             bar: 114514,
