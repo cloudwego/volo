@@ -1,6 +1,10 @@
 use itertools::Itertools;
 use pilota_build::{
-    codegen::thrift::DecodeHelper, db::RirDatabase, rir, rir::Method, tags::RustWrapperArc,
+    codegen::thrift::DecodeHelper,
+    db::RirDatabase,
+    rir::{self, Method},
+    tags::RustWrapperArc,
+    ty::TyKind,
     CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
 };
 use quote::format_ident;
@@ -639,11 +643,14 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         method: &Method,
     ) -> String {
         let name = self.cx().rust_name(method.def_id);
-        let ret_ty = self
+        let mut ret_ty = self
             .inner
             .codegen_item_ty(method.ret.kind.clone())
-            .global_path();
-        let mut ret_ty = format!("volo_gen{ret_ty}");
+            .global_path()
+            .to_string();
+        if need_prepend_volo_gen_path(&method.ret.kind) {
+            ret_ty = format!("volo_gen{ret_ty}");
+        }
         if let Some(RustWrapperArc(true)) = self
             .cx()
             .tags(method.ret.tags_id)
@@ -685,6 +692,14 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
     fn cx(&self) -> &Context {
         self.inner.cx()
+    }
+}
+
+fn need_prepend_volo_gen_path(ty: &TyKind) -> bool {
+    match ty {
+        TyKind::Arc(t) => need_prepend_volo_gen_path(&t.kind),
+        TyKind::Path(_) => true,
+        _ => false,
     }
 }
 

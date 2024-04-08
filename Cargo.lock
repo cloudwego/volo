@@ -233,9 +233,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.0.90"
+version = "1.0.91"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cd6604a82acf3039f1144f54b8eb34e91ffba622051189e71b781822d5ee1f5"
+checksum = "1fd97381a8cc6493395a5afc4c691c1084b3768db713b73aa215217aa245d153"
 dependencies = [
  "jobserver",
  "libc",
@@ -1828,9 +1828,9 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.11.0"
+version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5a22b36de4c049cb5128ab2cb6437aae101bf77de0ddf00333399bc0a2a15a3"
+checksum = "2196cb66f51880de95a2b01609fe53c3f6af000389a25de9c8e10c578620b1d4"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3136,7 +3136,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.10.2"
+version = "0.10.3"
 dependencies = [
  "ahash",
  "anyhow",
