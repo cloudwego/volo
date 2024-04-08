@@ -3,7 +3,6 @@ use faststr::FastStr;
 use paste::paste;
 use volo::{
     context::{Context, Reusable, Role, RpcCx, RpcInfo},
-    net::Address,
     newtype_impl_context,
 };
 
@@ -14,8 +13,9 @@ use crate::utils::macros::impl_deref_and_deref_mut;
 pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 impl ClientContext {
-    pub fn new(target: Address, #[cfg(feature = "__tls")] tls: bool) -> Self {
-        let mut cx = RpcCx::new(
+    #[allow(clippy::new_without_default)]
+    pub fn new(#[cfg(feature = "__tls")] tls: bool) -> Self {
+        Self(RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Client),
             ClientCxInner {
                 #[cfg(feature = "__tls")]
@@ -23,9 +23,7 @@ impl ClientContext {
                 stats: ClientStats::default(),
                 common_stats: CommonStats::default(),
             },
-        );
-        cx.rpc_info_mut().callee_mut().set_address(target);
-        Self(cx)
+        ))
     }
 
     pub fn enable_stat(&mut self, stat: bool) {
@@ -77,6 +75,8 @@ pub struct Config {
     pub callee_name: CalleeName,
     pub stat_enable: bool,
     pub fail_on_error_status: bool,
+    #[cfg(feature = "__tls")]
+    pub disable_tls: bool,
 }
 
 impl Default for Config {
@@ -86,6 +86,8 @@ impl Default for Config {
             callee_name: CalleeName::default(),
             stat_enable: true,
             fail_on_error_status: false,
+            #[cfg(feature = "__tls")]
+            disable_tls: false,
         }
     }
 }

@@ -18,6 +18,7 @@ use crate::{
     response::ClientResponse,
 };
 
+#[derive(Clone)]
 pub struct ClientTransport {
     client: http1::Builder,
     mk_conn: DefaultMakeTransport,
