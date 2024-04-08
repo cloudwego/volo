@@ -5,6 +5,7 @@ use http::{
     StatusCode,
 };
 use hyper::body::Incoming;
+use mime::Mime;
 use serde::de::DeserializeOwned;
 
 use super::{deserialize, Error, Json};
@@ -44,26 +45,36 @@ where
 }
 
 fn json_content_type(headers: &HeaderMap) -> bool {
-    let content_type = if let Some(content_type) = headers.get(header::CONTENT_TYPE) {
-        content_type
-    } else {
-        return false;
+    let content_type = match headers.get(header::CONTENT_TYPE) {
+        Some(content_type) => content_type,
+        None => {
+            return false;
+        }
     };
 
-    let content_type = if let Ok(content_type) = content_type.to_str() {
-        content_type
-    } else {
-        return false;
+    let content_type = match content_type.to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            return false;
+        }
     };
 
-    let mime = if let Ok(mime) = content_type.parse::<mime::Mime>() {
-        mime
-    } else {
-        return false;
+    let mime_type = match content_type.parse::<Mime>() {
+        Ok(mime_type) => mime_type,
+        Err(_) => {
+            return false;
+        }
     };
 
-    let is_json_content_type = mime.type_() == "application"
-        && (mime.subtype() == "json" || mime.suffix().map_or(false, |name| name == "json"));
+    // `application/json` or `application/json+foo`
+    if mime_type.type_() == mime::APPLICATION && mime_type.subtype() == mime::JSON {
+        return true;
+    }
 
-    is_json_content_type
+    // `application/foo+json`
+    if mime_type.suffix() == Some(mime::JSON) {
+        return true;
+    }
+
+    false
 }
