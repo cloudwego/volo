@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.2.0-rc.3"
+version = "0.2.0-rc.4"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -64,7 +64,6 @@ cookie = { workspace = true, optional = true, features = ["percent-encode"] }
 
 # serde and form, query, json
 serde = { workspace = true, optional = true }
-serde_html_form = { workspace = true, optional = true }
 serde_urlencoded = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 # sonic is a better replacement for json
@@ -93,7 +92,7 @@ cookie = ["dep:cookie"]
 
 __serde = ["dep:serde"] # a private feature for enabling `serde` by `serde_xxx`
 query = ["__serde", "dep:serde_urlencoded"]
-form = ["__serde", "dep:serde_html_form"]
+form = ["__serde", "dep:serde_urlencoded"]
 json = ["sonic_json"] # use `sonic_json` by default
 
 __json = [] # an empty and private feature for avoiding too many `cfg(any)`
