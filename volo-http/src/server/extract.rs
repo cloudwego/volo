@@ -8,10 +8,10 @@ use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use volo::{context::Context, net::Address};
 
-use super::{param::Params, IntoResponse};
+use super::IntoResponse;
 use crate::{
     context::ServerContext,
-    error::server::{body_collection_error, RejectionError},
+    error::server::{body_collection_error, ExtractBodyError},
     request::ServerRequest,
 };
 
@@ -122,31 +122,27 @@ impl FromContext for Method {
     }
 }
 
-impl FromContext for Params {
-    type Rejection = Infallible;
-
-    async fn from_context(
-        cx: &mut ServerContext,
-        _parts: &mut Parts,
-    ) -> Result<Params, Self::Rejection> {
-        Ok(cx.params().clone())
-    }
-}
-
 #[cfg(feature = "query")]
 impl<T> FromContext for Query<T>
 where
     T: serde::de::DeserializeOwned,
 {
-    type Rejection = RejectionError;
+    type Rejection = serde_urlencoded::de::Error;
 
     async fn from_context(
         _cx: &mut ServerContext,
         parts: &mut Parts,
     ) -> Result<Self, Self::Rejection> {
         let query = parts.uri.query().unwrap_or_default();
-        let param = serde_urlencoded::from_str(query).map_err(RejectionError::Query)?;
+        let param = serde_urlencoded::from_str(query)?;
         Ok(Query(param))
+    }
+}
+
+#[cfg(feature = "query")]
+impl IntoResponse for serde_urlencoded::de::Error {
+    fn into_response(self) -> crate::response::ServerResponse {
+        http::StatusCode::BAD_REQUEST.into_response()
     }
 }
 
@@ -193,7 +189,7 @@ impl FromRequest for ServerRequest {
 }
 
 impl FromRequest for Vec<u8> {
-    type Rejection = RejectionError;
+    type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
@@ -205,7 +201,7 @@ impl FromRequest for Vec<u8> {
 }
 
 impl FromRequest for Bytes {
-    type Rejection = RejectionError;
+    type Rejection = ExtractBodyError;
 
     async fn from_request(
         _cx: &mut ServerContext,
@@ -237,7 +233,7 @@ impl FromRequest for Bytes {
 }
 
 impl FromRequest for String {
-    type Rejection = RejectionError;
+    type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
@@ -247,7 +243,7 @@ impl FromRequest for String {
         let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
         // Check if the &[u8] is a valid string
-        let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::String)?;
+        let _ = simdutf8::basic::from_utf8(&vec).map_err(ExtractBodyError::String)?;
 
         // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
         Ok(unsafe { String::from_utf8_unchecked(vec) })
@@ -255,7 +251,7 @@ impl FromRequest for String {
 }
 
 impl FromRequest for FastStr {
-    type Rejection = RejectionError;
+    type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
@@ -265,7 +261,7 @@ impl FromRequest for FastStr {
         let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
         // Check if the &[u8] is a valid string
-        let _ = simdutf8::basic::from_utf8(&vec).map_err(RejectionError::String)?;
+        let _ = simdutf8::basic::from_utf8(&vec).map_err(ExtractBodyError::String)?;
 
         // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
         Ok(unsafe { FastStr::from_vec_u8_unchecked(vec) })
@@ -273,7 +269,7 @@ impl FromRequest for FastStr {
 }
 
 impl<T> FromRequest for MaybeInvalid<T> {
-    type Rejection = RejectionError;
+    type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
@@ -291,7 +287,7 @@ impl<T> FromRequest for Form<T>
 where
     T: serde::de::DeserializeOwned,
 {
-    type Rejection = RejectionError;
+    type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
@@ -300,7 +296,7 @@ where
     ) -> Result<Self, Self::Rejection> {
         let bytes = Bytes::from_request(cx, parts, body).await?;
         let form =
-            serde_urlencoded::from_bytes::<T>(bytes.as_ref()).map_err(RejectionError::Form)?;
+            serde_urlencoded::from_bytes::<T>(bytes.as_ref()).map_err(ExtractBodyError::Form)?;
 
         Ok(Form(form))
     }

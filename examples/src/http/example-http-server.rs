@@ -20,7 +20,7 @@ use volo_http::{
         extract::{Form, FromContext, MaybeInvalid, Query},
         layer::{FilterLayer, TimeoutLayer},
         middleware::{self, Next},
-        param::Params,
+        param::UrlParams,
         route::{get, get_service, post, Router},
         IntoResponse, Server,
     },
@@ -115,11 +115,12 @@ async fn timeout_test() {
     tokio::time::sleep(Duration::from_secs(10)).await
 }
 
-async fn echo(params: Params) -> Result<FastStr, StatusCode> {
-    if let Some(echo) = params.get("echo") {
-        return Ok(echo.to_owned());
-    }
-    Err(StatusCode::BAD_REQUEST)
+async fn echo(UrlParams(echo): UrlParams<String>) -> String {
+    echo
+}
+
+async fn add(UrlParams((p1, p2)): UrlParams<(usize, usize)>) -> String {
+    format!("{}", p1 + p2)
 }
 
 async fn stream_test() -> Body {
@@ -226,7 +227,10 @@ fn test_router() -> Router {
             get(timeout_test).layer(TimeoutLayer::new(Duration::from_secs(1))),
         )
         // curl -v http://127.0.0.1:8080/test/param/114514
-        .route("/test/param/:echo", get(echo))
+        .route("/test/param/{:echo}", get(echo))
+        // curl -v http://127.0.0.1:8080/test/param/114/514
+        // curl -v http://127.0.0.1:8080/test/param/114/51A (400 Bad Request)
+        .route("/test/param/{:p1}/{:p2}", get(add))
         // curl http://127.0.0.1:8080/test/extension
         .route("/test/extension", get(extension))
         // curl http://127.0.0.1:8080/test/service_fn
