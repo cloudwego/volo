@@ -708,27 +708,13 @@ where
         req.headers_mut().extend(self.inner.headers.clone());
 
         let has_metainfo = METAINFO.try_with(|_| {}).is_ok();
-        let stat_enabled = cx.stat_enabled();
 
-        let mk_call = async {
-            if stat_enabled {
-                cx.common_stats.record_process_start_at();
-            }
-
-            let res = self.service.call(cx, req).await;
-
-            if stat_enabled {
-                cx.common_stats.record_process_end_at();
-            }
-            res
-        };
+        let fut = self.service.call(cx, req);
 
         if has_metainfo {
-            mk_call.await
+            fut.await
         } else {
-            METAINFO
-                .scope(RefCell::new(MetaInfo::default()), mk_call)
-                .await
+            METAINFO.scope(RefCell::new(MetaInfo::default()), fut).await
         }
     }
 }

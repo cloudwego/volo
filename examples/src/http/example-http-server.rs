@@ -307,17 +307,6 @@ async fn headers_map_response(response: ServerResponse) -> impl IntoResponse {
     )
 }
 
-fn tracer(cx: &ServerContext) {
-    tracing::info!(
-        "process start at {:?}, end at {:?}, req size: {:?}, resp size: {:?}, resp status: {:?}",
-        cx.common_stats.process_start_at().unwrap(),
-        cx.common_stats.process_end_at().unwrap(),
-        cx.common_stats.req_size().unwrap_or(&0),
-        cx.common_stats.resp_size().unwrap_or(&0),
-        cx.common_stats.status_code().unwrap(),
-    );
-}
-
 #[volo::main]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -343,9 +332,5 @@ async fn main() {
 
     println!("Listening on {addr}");
 
-    Server::new(app)
-        .stat_tracer(tracer)
-        .run(addr)
-        .await
-        .unwrap();
+    Server::new(app).run(addr).await.unwrap();
 }

@@ -49,27 +49,10 @@ where
             }
         }
 
-        let stat_enabled = cx.stat_enabled();
-
-        if stat_enabled {
-            if let Some(req_size) = exact_len {
-                cx.common_stats.set_req_size(req_size);
-            }
-        }
-
         tracing::trace!("sending request: {} {}", req.method(), req.uri());
         tracing::trace!("headers: {:?}", req.headers());
 
         let res = self.inner.call(cx, req).await;
-
-        if stat_enabled {
-            if let Ok(response) = res.as_ref() {
-                cx.common_stats.set_status_code(response.status());
-                if let Some(resp_size) = response.size_hint().exact() {
-                    cx.common_stats.set_resp_size(resp_size);
-                }
-            }
-        }
 
         if !cx.rpc_info().config().fail_on_error_status {
             return res;

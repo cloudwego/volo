@@ -63,7 +63,7 @@ macro_rules! impl_deref_and_deref_mut {
 
 macro_rules! impl_getter {
     ($name: ident, $type: ty, $($path: tt).+) => {
-        paste! {
+        paste::paste! {
             #[inline]
             pub fn $name(&self) -> &$type {
                 &self.$($path).+
@@ -80,7 +80,34 @@ macro_rules! impl_getter {
     };
 }
 
+#[allow(unused_macros)]
+macro_rules! stat_impl {
+    ($t: ident) => {
+        paste::paste! {
+            /// This is unstable now and may be changed in the future.
+            #[inline]
+            pub fn $t(&self) -> Option<DateTime<Local>> {
+                self.$t
+            }
+
+            /// This is unstable now and may be changed in the future.
+            #[doc(hidden)]
+            #[inline]
+            pub fn [<set_$t>](&mut self, t: DateTime<Local>) {
+                self.$t = Some(t)
+            }
+
+            /// This is unstable now and may be changed in the future.
+            #[inline]
+            pub fn [<record_ $t>](&mut self) {
+                self.$t = Some(Local::now())
+            }
+        }
+    };
+}
+
 pub(crate) use all_the_tuples;
 pub(crate) use all_the_tuples_no_last_special_case;
 pub(crate) use impl_deref_and_deref_mut;
 pub(crate) use impl_getter;
+pub(crate) use stat_impl;
