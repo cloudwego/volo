@@ -316,7 +316,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
         self
     }
 
-    /// Adds a new layer to the client.
+    /// Adds a new inner layer to the client.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
@@ -340,6 +340,40 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
             caller_name: self.caller_name,
             target: self.target,
             inner_layer: Stack::new(layer, self.inner_layer),
+            outer_layer: self.outer_layer,
+            mk_client: self.mk_client,
+            mk_lb: self.mk_lb,
+            _marker: self._marker,
+
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
+    /// Adds a new inner layer to the client.
+    ///
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_inner_front(baz)`, we will get: baz -> foo -> bar.
+    ///
+    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    pub fn layer_inner_front<Inner>(
+        self,
+        layer: Inner,
+    ) -> ClientBuilder<Stack<IL, Inner>, OL, C, LB, T, U> {
+        ClientBuilder {
+            http2_config: self.http2_config,
+            rpc_config: self.rpc_config,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            inner_layer: Stack::new(self.inner_layer, layer),
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
             mk_lb: self.mk_lb,
