@@ -47,7 +47,7 @@ pub mod route;
 
 #[doc(hidden)]
 pub mod prelude {
-    pub use super::{param::Params, route::Router, Server};
+    pub use super::{param::UrlParamsVec, route::Router, Server};
     #[cfg(feature = "cookie")]
     pub use crate::cookie::CookieJar;
 }

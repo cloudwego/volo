@@ -11,7 +11,7 @@ use serde::de::DeserializeOwned;
 use super::{deserialize, Error, Json};
 use crate::{
     context::ServerContext,
-    error::server::{invalid_content_type, RejectionError},
+    error::server::{invalid_content_type, ExtractBodyError},
     response::ServerResponse,
     server::{extract::FromRequest, IntoResponse},
 };
@@ -26,7 +26,7 @@ impl<T> FromRequest for Json<T>
 where
     T: DeserializeOwned,
 {
-    type Rejection = RejectionError;
+    type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
@@ -38,7 +38,7 @@ where
         }
 
         let bytes = Bytes::from_request(cx, parts, body).await?;
-        let json = deserialize(&bytes).map_err(RejectionError::Json)?;
+        let json = deserialize(&bytes).map_err(ExtractBodyError::Json)?;
 
         Ok(Json(json))
     }

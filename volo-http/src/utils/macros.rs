@@ -1,5 +1,5 @@
 #[rustfmt::skip]
-macro_rules! all_the_tuples {
+macro_rules! all_the_tuples_with_special_case {
     ($name:ident) => {
         $name!([], T1);
         $name!([T1], T2);
@@ -21,7 +21,7 @@ macro_rules! all_the_tuples {
 }
 
 #[rustfmt::skip]
-macro_rules! all_the_tuples_no_last_special_case {
+macro_rules! all_the_tuples {
     ($name:ident) => {
         $name!(T1);
         $name!(T1, T2);
@@ -107,7 +107,7 @@ macro_rules! stat_impl {
 }
 
 pub(crate) use all_the_tuples;
-pub(crate) use all_the_tuples_no_last_special_case;
+pub(crate) use all_the_tuples_with_special_case;
 pub(crate) use impl_deref_and_deref_mut;
 pub(crate) use impl_getter;
 pub(crate) use stat_impl;

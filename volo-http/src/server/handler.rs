@@ -18,7 +18,7 @@ use crate::{
     context::ServerContext,
     request::ServerRequest,
     response::ServerResponse,
-    utils::macros::{all_the_tuples, all_the_tuples_no_last_special_case},
+    utils::macros::{all_the_tuples, all_the_tuples_with_special_case},
 };
 
 pub trait Handler<T, E>: Sized {
@@ -78,7 +78,7 @@ macro_rules! impl_handler {
     };
 }
 
-all_the_tuples!(impl_handler);
+all_the_tuples_with_special_case!(impl_handler);
 
 pub struct HandlerService<H, T, E> {
     handler: H,
@@ -159,7 +159,7 @@ macro_rules! impl_handler_without_request {
     };
 }
 
-all_the_tuples_no_last_special_case!(impl_handler_without_request);
+all_the_tuples!(impl_handler_without_request);
 
 pub trait MiddlewareHandlerFromFn<'r, T, E>: Sized {
     type Future: Future<Output = ServerResponse> + Send + 'r;
@@ -214,7 +214,7 @@ macro_rules! impl_middleware_handler_from_fn {
     };
 }
 
-all_the_tuples!(impl_middleware_handler_from_fn);
+all_the_tuples_with_special_case!(impl_middleware_handler_from_fn);
 
 pub trait MiddlewareHandlerMapResponse<'r, T>: Sized {
     type Future: Future<Output = ServerResponse> + Send + 'r;
