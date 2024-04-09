@@ -53,7 +53,7 @@ const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO
 pub type ClientMetaService = MetaService<ClientTransport>;
 pub type DefaultClient = Client<ClientMetaService>;
 
-pub struct ClientBuilder<L, MkC, LB> {
+pub struct ClientBuilder<IL, OL, C, LB> {
     config: Config,
     http_config: ClientConfig,
     connector: DefaultMakeTransport,
@@ -61,14 +61,15 @@ pub struct ClientBuilder<L, MkC, LB> {
     caller_name: FastStr,
     target: TargetBuilder,
     headers: HeaderMap,
-    layer: L,
-    mk_client: MkC,
+    inner_layer: IL,
+    outer_layer: OL,
+    mk_client: C,
     mk_lb: LB,
     #[cfg(feature = "__tls")]
     tls_config: Option<volo::net::tls::TlsConnector>,
 }
 
-impl ClientBuilder<Identity, DefaultMkClient, DefaultLB> {
+impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
     /// Create a new client builder.
     pub fn new() -> Self {
         Self {
@@ -79,7 +80,8 @@ impl ClientBuilder<Identity, DefaultMkClient, DefaultLB> {
             caller_name: FastStr::empty(),
             target: Default::default(),
             headers: Default::default(),
-            layer: Identity::new(),
+            inner_layer: Identity::new(),
+            outer_layer: Identity::new(),
             mk_client: DefaultMkClient,
             mk_lb: Default::default(),
             #[cfg(feature = "__tls")]
@@ -88,18 +90,18 @@ impl ClientBuilder<Identity, DefaultMkClient, DefaultLB> {
     }
 }
 
-impl Default for ClientBuilder<Identity, DefaultMkClient, DefaultLB> {
+impl Default for ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<L, MkC, LB, DISC> ClientBuilder<L, MkC, LbConfig<LB, DISC>> {
+impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
     /// Set load balancer for the client.
     pub fn load_balance<NLB>(
         self,
         load_balance: NLB,
-    ) -> ClientBuilder<L, MkC, LbConfig<NLB, DISC>> {
+    ) -> ClientBuilder<IL, OL, C, LbConfig<NLB, DISC>> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
@@ -108,7 +110,8 @@ impl<L, MkC, LB, DISC> ClientBuilder<L, MkC, LbConfig<LB, DISC>> {
             caller_name: self.caller_name,
             target: self.target,
             headers: self.headers,
-            layer: self.layer,
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
             mk_client: self.mk_client,
             mk_lb: self.mk_lb.load_balance(load_balance),
             #[cfg(feature = "__tls")]
@@ -117,7 +120,7 @@ impl<L, MkC, LB, DISC> ClientBuilder<L, MkC, LbConfig<LB, DISC>> {
     }
 
     /// Set service discover for the client.
-    pub fn discover<NDISC>(self, discover: NDISC) -> ClientBuilder<L, MkC, LbConfig<LB, NDISC>> {
+    pub fn discover<NDISC>(self, discover: NDISC) -> ClientBuilder<IL, OL, C, LbConfig<LB, NDISC>> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
@@ -126,7 +129,8 @@ impl<L, MkC, LB, DISC> ClientBuilder<L, MkC, LbConfig<LB, DISC>> {
             caller_name: self.caller_name,
             target: self.target,
             headers: self.headers,
-            layer: self.layer,
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
             mk_client: self.mk_client,
             mk_lb: self.mk_lb.discover(discover),
             #[cfg(feature = "__tls")]
@@ -135,10 +139,10 @@ impl<L, MkC, LB, DISC> ClientBuilder<L, MkC, LbConfig<LB, DISC>> {
     }
 }
 
-impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
+impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// This is unstable now and may be changed in the future.
     #[doc(hidden)]
-    pub fn client_maker<MkC2>(self, new_mk_client: MkC2) -> ClientBuilder<L, MkC2, LB> {
+    pub fn client_maker<C2>(self, new_mk_client: C2) -> ClientBuilder<IL, OL, C2, LB> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
@@ -147,7 +151,8 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
             caller_name: self.caller_name,
             target: self.target,
             headers: self.headers,
-            layer: self.layer,
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
             mk_client: new_mk_client,
             mk_lb: self.mk_lb,
             #[cfg(feature = "__tls")]
@@ -165,8 +170,10 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
     ///
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
-    /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, L>, MkC, LB> {
+    /// After we call `.layer_inner(baz)`, we will get: foo -> bar -> baz.
+    ///
+    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    pub fn layer_inner<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, IL>, OL, C, LB> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
@@ -175,7 +182,8 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
             caller_name: self.caller_name,
             target: self.target,
             headers: self.headers,
-            layer: Stack::new(layer, self.layer),
+            inner_layer: Stack::new(layer, self.inner_layer),
+            outer_layer: self.outer_layer,
             mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             #[cfg(feature = "__tls")]
@@ -183,7 +191,7 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
         }
     }
 
-    /// Add a new front layer to the client.
+    /// Add a new inner layer to the client.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
@@ -193,8 +201,10 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
     ///
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
-    /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> ClientBuilder<Stack<L, Front>, MkC, LB> {
+    /// After we call `.layer_inner_front(baz)`, we will get: baz -> foo -> bar.
+    ///
+    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    pub fn layer_inner_front<Inner>(self, layer: Inner) -> ClientBuilder<Stack<IL, Inner>, OL, C, LB> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
@@ -203,7 +213,8 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
             caller_name: self.caller_name,
             target: self.target,
             headers: self.headers,
-            layer: Stack::new(self.layer, layer),
+            inner_layer: Stack::new(self.inner_layer, layer),
+            outer_layer: self.outer_layer,
             mk_client: self.mk_client,
             mk_lb: self.mk_lb,
             #[cfg(feature = "__tls")]
@@ -211,7 +222,20 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
         }
     }
 
-    pub fn mk_load_balance<NLB>(self, mk_load_balance: NLB) -> ClientBuilder<L, MkC, NLB> {
+    /// Add a new outer layer to the client.
+    ///
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_outer(baz)`, we will get: foo -> bar -> baz.
+    ///
+    /// The overall order for layers is: [outer] -> Timeout -> LoadBalance -> inner -> transport.
+    pub fn layer_outer<Outer>(self, layer: Outer) -> ClientBuilder<IL, Stack<Outer, OL>, C, LB> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
@@ -220,7 +244,58 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
             caller_name: self.caller_name,
             target: self.target,
             headers: self.headers,
-            layer: self.layer,
+            inner_layer: self.inner_layer,
+            outer_layer: Stack::new(layer, self.outer_layer),
+            mk_client: self.mk_client,
+            mk_lb: self.mk_lb,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
+    /// Add a new outer layer to the client.
+    ///
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_outer_front(baz)`, we will get: baz -> foo -> bar.
+    ///
+    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    pub fn layer_outer_front<Outer>(self, layer: Outer) -> ClientBuilder<IL, Stack<OL, Outer>, C, LB> {
+        ClientBuilder {
+            config: self.config,
+            http_config: self.http_config,
+            connector: self.connector,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            headers: self.headers,
+            inner_layer: self.inner_layer,
+            outer_layer: Stack::new(self.outer_layer, layer),
+            mk_client: self.mk_client,
+            mk_lb: self.mk_lb,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
+    /// Set a new load balance for the client.
+    pub fn mk_load_balance<NLB>(self, mk_load_balance: NLB) -> ClientBuilder<IL, OL, C, NLB> {
+        ClientBuilder {
+            config: self.config,
+            http_config: self.http_config,
+            connector: self.connector,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            headers: self.headers,
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
             mk_client: self.mk_client,
             mk_lb: mk_load_balance,
             #[cfg(feature = "__tls")]
@@ -459,14 +534,16 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
     }
 
     /// Build the HTTP client.
-    pub fn build(mut self) -> MkC::Target
+    pub fn build(mut self) -> C::Target
     where
-        L: Layer<MetaService<ClientTransport>>,
-        L::Service: Send + Sync + 'static,
+        IL: Layer<MetaService<ClientTransport>>,
+        IL::Service: Send + Sync + 'static,
         LB: MkLbLayer,
-        LB::Layer: Layer<L::Service>,
-        <LB::Layer as Layer<L::Service>>::Service: Send + Sync,
-        MkC: MkClient<Client<<LB::Layer as Layer<L::Service>>::Service>>,
+        LB::Layer: Layer<IL::Service>,
+        <LB::Layer as Layer<IL::Service>>::Service: Send + Sync,
+        OL: Layer<<LB::Layer as Layer<IL::Service>>::Service>,
+        OL::Service: Send + Sync + 'static,
+        C: MkClient<Client<OL::Service>>,
     {
         let service = MetaService::new(ClientTransport::new(
             self.http_config,
@@ -474,7 +551,7 @@ impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
             #[cfg(feature = "__tls")]
             self.tls_config.unwrap_or_default(),
         ));
-        let service = self.mk_lb.make().layer(self.layer.layer(service));
+        let service = self.outer_layer.layer(self.mk_lb.make().layer(self.inner_layer.layer(service)));
 
         let caller_name = match &self.config.caller_name {
             CallerName::PkgNameWithVersion => FastStr::from_static_str(PKG_NAME_WITH_VER),
@@ -560,7 +637,7 @@ macro_rules! method_requests {
 
 impl Client<()> {
     /// Create a new client builder.
-    pub fn builder() -> ClientBuilder<Identity, DefaultMkClient, DefaultLB> {
+    pub fn builder() -> ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
         ClientBuilder::new()
     }
 }
