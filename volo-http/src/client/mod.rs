@@ -204,7 +204,10 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// After we call `.layer_inner_front(baz)`, we will get: baz -> foo -> bar.
     ///
     /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
-    pub fn layer_inner_front<Inner>(self, layer: Inner) -> ClientBuilder<Stack<IL, Inner>, OL, C, LB> {
+    pub fn layer_inner_front<Inner>(
+        self,
+        layer: Inner,
+    ) -> ClientBuilder<Stack<IL, Inner>, OL, C, LB> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
@@ -266,7 +269,10 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// After we call `.layer_outer_front(baz)`, we will get: baz -> foo -> bar.
     ///
     /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
-    pub fn layer_outer_front<Outer>(self, layer: Outer) -> ClientBuilder<IL, Stack<OL, Outer>, C, LB> {
+    pub fn layer_outer_front<Outer>(
+        self,
+        layer: Outer,
+    ) -> ClientBuilder<IL, Stack<OL, Outer>, C, LB> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
@@ -551,7 +557,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             #[cfg(feature = "__tls")]
             self.tls_config.unwrap_or_default(),
         ));
-        let service = self.outer_layer.layer(self.mk_lb.make().layer(self.inner_layer.layer(service)));
+        let service = self
+            .outer_layer
+            .layer(self.mk_lb.make().layer(self.inner_layer.layer(service)));
 
         let caller_name = match &self.config.caller_name {
             CallerName::PkgNameWithVersion => FastStr::from_static_str(PKG_NAME_WITH_VER),

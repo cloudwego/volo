@@ -353,6 +353,45 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
         }
     }
 
+    /// Adds a new inner layer to the client.
+    ///
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_inner_front(baz)`, we will get: baz -> foo -> bar.
+    ///
+    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    pub fn layer_inner_front<Inner>(
+        self,
+        layer: Inner,
+    ) -> ClientBuilder<Stack<IL, Inner>, OL, C, Req, Resp, MkT, MkC, LB> {
+        ClientBuilder {
+            config: self.config,
+            pool: self.pool,
+            caller_name: self.caller_name,
+            callee_name: self.callee_name,
+            address: self.address,
+            inner_layer: Stack::new(self.inner_layer, layer),
+            outer_layer: self.outer_layer,
+            mk_client: self.mk_client,
+            _marker: PhantomData,
+            make_transport: self.make_transport,
+            make_codec: self.make_codec,
+            mk_lb: self.mk_lb,
+
+            disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
+
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
+        }
+    }
+
     /// Adds a new outer layer to the client.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
