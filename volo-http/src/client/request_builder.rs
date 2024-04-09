@@ -1,3 +1,5 @@
+#![deny(missing_docs)]
+
 use std::error::Error;
 
 use faststr::FastStr;
@@ -122,11 +124,13 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
 }
 
 impl<'a, S, B> RequestBuilder<'a, S, B> {
+    /// Set method for the request.
     pub fn method(mut self, method: Method) -> Self {
         *self.request.method_mut() = method;
         self
     }
 
+    /// Get the reference of method in the request.
     pub fn method_ref(&self) -> &Method {
         self.request.method()
     }
@@ -182,6 +186,7 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         Ok(self)
     }
 
+    /// Set query for the uri in request from object with `Serialize`.
     #[cfg(feature = "query")]
     pub fn set_query<T>(mut self, query: &T) -> Result<Self>
     where

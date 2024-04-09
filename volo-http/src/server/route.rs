@@ -1,3 +1,15 @@
+//! Route module for routing path to [`Service`]s or handlers.
+//!
+//! This module includes [`Router`], [`MethodRouter`] and [`Route`]. The call path is:
+//!
+//! `Router` -> `MethodRouter` -> `Route`.
+//!
+//! [`Router`] is the main router for routing path (uri) to [`MethodRouter`]s. [`MethodRouter`] is
+//! a router for routing method (GET, POST, ...) to [`Route`]s. [`Route`] is a handler or service
+//! for handling the request.
+
+#![deny(missing_docs)]
+
 use std::{collections::HashMap, convert::Infallible, error::Error, fmt, marker::PhantomData};
 
 use http::{Method, StatusCode};
@@ -7,6 +19,7 @@ use paste::paste;
 use super::{handler::Handler, IntoResponse};
 use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
+/// The route service used for [`Router`].
 pub type Route<E = Infallible> =
     motore::service::BoxCloneService<ServerContext, ServerRequest, ServerResponse, E>;
 
@@ -16,7 +29,7 @@ pub type Route<E = Infallible> =
 // To solve the problem, we refer to the implementation of `axum` and introduce a `RouteId` as a
 // bridge, the `matchit::Router` only handles some IDs and each ID corresponds to a `MethodRouter`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub(crate) struct RouteId(u32);
+struct RouteId(u32);
 
 impl RouteId {
     fn next() -> Self {
@@ -31,6 +44,8 @@ impl RouteId {
     }
 }
 
+/// The router for routing path to [`Service`]s or handlers.
+#[must_use]
 pub struct Router<E = Infallible> {
     matcher: Matcher,
     routes: HashMap<RouteId, MethodRouter<E>>,
@@ -48,6 +63,7 @@ where
 }
 
 impl<E> Router<E> {
+    /// Create a new router.
     pub fn new() -> Self
     where
         E: 'static,
@@ -60,6 +76,104 @@ impl<E> Router<E> {
         }
     }
 
+    /// Create a route for the given path with the given method router.
+    ///
+    /// The uri matcher is based on [`matchit`](https://docs.rs/matchit/0.8.0/matchit/).  It
+    /// supports normal path and parameterized path.
+    ///
+    /// # Examples
+    ///
+    /// ## Normal path
+    ///
+    /// ```no_run
+    /// use volo_http::server::route::{get, Router};
+    ///
+    /// async fn index() -> &'static str {
+    ///     "Hello, World"
+    /// }
+    ///
+    /// let router: Router = Router::new().route("/", get(index));
+    /// ```
+    ///
+    /// ## Path with Named Parameters
+    ///
+    /// Named parameters like `/{id}` match anything until the next `/` or the end of the path.
+    ///
+    /// The params can be extract by extractor `UrlParamsMap`:
+    ///
+    /// ```no_run
+    /// use volo::FastStr;
+    /// use volo_http::server::{
+    ///     param::UrlParamsMap,
+    ///     route::{get, Router},
+    /// };
+    ///
+    /// async fn param(map: UrlParamsMap) -> FastStr {
+    ///     map.get("id").unwrap().clone()
+    /// }
+    ///
+    /// let router: Router = Router::new().route("/user/{id}", get(param));
+    /// ```
+    ///
+    /// Or you can use `UrlParams` directly:
+    ///
+    /// ```no_run
+    /// use volo::FastStr;
+    /// use volo_http::server::{
+    ///     param::UrlParams,
+    ///     route::{get, Router},
+    /// };
+    ///
+    /// async fn param(UrlParams(id): UrlParams<String>) -> String {
+    ///     id
+    /// }
+    ///
+    /// let router: Router = Router::new().route("/user/{id}", get(param));
+    /// ```
+    ///
+    /// More than one params are also supported:
+    ///
+    /// ```no_run
+    /// use volo::FastStr;
+    /// use volo_http::server::{
+    ///     param::UrlParams,
+    ///     route::{get, Router},
+    /// };
+    ///
+    /// async fn param(UrlParams((user, post)): UrlParams<(usize, usize)>) -> String {
+    ///     format!("user id: {user}, post id: {post}")
+    /// }
+    ///
+    /// let router: Router = Router::new().route("/user/{user}/post/{post}", get(param));
+    /// ```
+    ///
+    /// ## Path with Catch-all Parameters
+    ///
+    /// Catch-all parameters start with `*` and match anything until the end of the path. They must
+    /// always be at the **end** of the route.
+    ///
+    /// ```no_run
+    /// use volo_http::server::{
+    ///     param::UrlParams,
+    ///     route::{get, Router},
+    /// };
+    ///
+    /// async fn index() -> &'static str {
+    ///     "Hello, World"
+    /// }
+    ///
+    /// async fn fallback(UrlParams(uri): UrlParams<String>) -> String {
+    ///     format!("Path `{uri}` is not available")
+    /// }
+    ///
+    /// let router: Router = Router::new()
+    ///     .route("/", get(index))
+    ///     .route("/index", get(index))
+    ///     .route("/{*fallback}", get(fallback));
+    /// ```
+    ///
+    /// For more usage methods, please refer to:
+    /// [`matchit`](https://docs.rs/matchit/0.8.0/matchit/).
     pub fn route<R>(mut self, uri: R, route: MethodRouter<E>) -> Self
     where
         R: Into<String>,
@@ -74,11 +188,73 @@ impl<E> Router<E> {
         self
     }
 
-    pub fn fallback_for_all(mut self, fallback: Fallback<E>) -> Self {
-        self.fallback = fallback;
+    /// Set a global fallback for router.
+    ///
+    /// If there is no route matches the current uri, router will call the fallback handler.
+    ///
+    /// Default is returning "404 Not Found".
+    pub fn fallback<H, T>(mut self, handler: H) -> Self
+    where
+        for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
+        T: 'static,
+        E: 'static,
+    {
+        self.fallback = Fallback::from_handler(handler);
         self
     }
 
+    /// Set a global fallback for router.
+    ///
+    /// If there is no route matches the current uri, router will call the fallback service.
+    ///
+    /// Default is returning "404 Not Found".
+    pub fn fallback_service<S>(mut self, service: S) -> Self
+    where
+        for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
+        S::Response: IntoResponse,
+    {
+        self.fallback = Fallback::from_service(service);
+        self
+    }
+
+    /// Merge another router to self.
+    ///
+    /// # Panics
+    ///
+    /// - Panics if the two router have routes with the same path.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    /// use volo_http::server::route::{get, Router};
+    ///
+    /// async fn index() -> &'static str {
+    ///     "Hello, World"
+    /// }
+    ///
+    /// fn foo_router() -> Router {
+    ///     Router::new()
+    ///         .route("/foo/", get(index))
+    ///         .route("/foo/index", get(index))
+    /// }
+    ///
+    /// fn bar_router() -> Router {
+    ///     Router::new()
+    ///         .route("/bar/", get(index))
+    ///         .route("/bar/index", get(index))
+    /// }
+    ///
+    /// fn baz_router() -> Router {
+    ///     Router::new()
+    ///         .route("/baz/", get(index))
+    ///         .route("/baz/index", get(index))
+    /// }
+    ///
+    /// let app = Router::new()
+    ///     .merge(foo_router())
+    ///     .merge(bar_router())
+    ///     .merge(baz_router());
+    /// ```
     pub fn merge(mut self, other: Self) -> Self {
         let Router {
             mut matcher,
@@ -94,11 +270,7 @@ impl<E> Router<E> {
         }
         for (route_id, method_router) in routes.drain() {
             if self.routes.insert(route_id, method_router).is_some() {
-                // Infallible
-                panic!(
-                    "Insert routes failed during merging router: Conflicting `RouteId`: \
-                     {route_id:?}"
-                );
+                unreachable!()
             }
         }
 
@@ -116,6 +288,9 @@ impl<E> Router<E> {
         self
     }
 
+    /// Add a new inner layer to all routes in router.
+    ///
+    /// The layer's `Service` should be `Clone + Send + Sync + 'static`.
     pub fn layer<L, E2>(self, l: L) -> Router<E2>
     where
         L: Layer<Route<E>> + Clone + Send + Sync + 'static,
@@ -217,6 +392,43 @@ impl fmt::Display for MatcherError {
 
 impl Error for MatcherError {}
 
+/// A method router that handle the request and dispatch it by its method.
+///
+/// There is no need to create [`MethodRouter`] directly, you can use specific method for creating
+/// it. What's more, the method router allows chaining additional handlers or services.
+///
+/// # Examples
+///
+/// ```no_run
+/// use std::convert::Infallible;
+///
+/// use volo::service::service_fn;
+/// use volo_http::{
+///     context::ServerContext,
+///     request::ServerRequest,
+///     server::route::{any, get, post_service, MethodRouter, Router},
+/// };
+///
+/// async fn index() -> &'static str {
+///     "Hello, World"
+/// }
+///
+/// async fn index_fn(
+///     cx: &mut ServerContext,
+///     req: ServerRequest,
+/// ) -> Result<&'static str, Infallible> {
+///     Ok("Hello, World")
+/// }
+///
+/// let _: MethodRouter = get(index);
+/// let _: MethodRouter = any(index);
+/// let _: MethodRouter = post_service(service_fn(index_fn));
+///
+/// let _: MethodRouter = get(index).post(index).options_service(service_fn(index_fn));
+///
+/// let app: Router = Router::new().route("/", get(index));
+/// let app: Router = Router::new().route("/", get(index).post(index).head(index));
+/// ```
 pub struct MethodRouter<E = Infallible> {
     options: MethodEndpoint<E>,
     get: MethodEndpoint<E>,
@@ -269,7 +481,7 @@ where
 }
 
 impl<E> MethodRouter<E> {
-    pub fn new() -> Self
+    fn new() -> Self
     where
         E: 'static,
     {
@@ -287,6 +499,9 @@ impl<E> MethodRouter<E> {
         }
     }
 
+    /// Add a new inner layer to all routes in this method router.
+    ///
+    /// The layer's `Service` should be `Clone + Send + Sync + 'static`.
     pub fn layer<L, E2>(self, l: L) -> MethodRouter<E2>
     where
         L: Layer<Route<E>> + Clone + Send + Sync + 'static,
@@ -351,6 +566,7 @@ macro_rules! for_all_methods {
 macro_rules! impl_method_register_for_builder {
     ($( $method:ident ),*) => {
         $(
+        #[doc = concat!("Route `", stringify!($method) ,"` requests to the given handler.")]
         pub fn $method<H, T>(mut self, handler: H) -> Self
         where
             for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
@@ -361,6 +577,7 @@ macro_rules! impl_method_register_for_builder {
         }
 
         paste! {
+        #[doc = concat!("Route `", stringify!($method) ,"` requests to the given service.")]
         pub fn [<$method _service>]<S>(mut self, service: S) -> MethodRouter<E>
         where
             for<'a> S: Service<ServerContext, ServerRequest, Error = E>
@@ -384,6 +601,12 @@ where
 {
     for_all_methods!(impl_method_register_for_builder);
 
+    /// Set a fallback handler for the route.
+    ///
+    /// If there is no method that the route can handle, method router will call the fallback
+    /// handler.
+    ///
+    /// Default is returning "405 Method Not Allowed".
     pub fn fallback<H, T>(mut self, handler: H) -> Self
     where
         for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
@@ -393,6 +616,12 @@ where
         self
     }
 
+    /// Set a fallback service for the route.
+    ///
+    /// If there is no method that the route can handle, method router will call the fallback
+    /// service.
+    ///
+    /// Default is returning "405 Method Not Allowed".
     pub fn fallback_service<S>(mut self, service: S) -> Self
     where
         for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
@@ -406,6 +635,7 @@ where
 macro_rules! impl_method_register {
     ($( $method:ident ),*) => {
         $(
+        #[doc = concat!("Route `", stringify!($method) ,"` requests to the given handler.")]
         pub fn $method<H, T, E>(handler: H) -> MethodRouter<E>
         where
             for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
@@ -419,6 +649,7 @@ macro_rules! impl_method_register {
         }
 
         paste! {
+        #[doc = concat!("Route `", stringify!($method) ,"` requests to the given service.")]
         pub fn [<$method _service>]<S, E>(service: S) -> MethodRouter<E>
         where
             for<'a> S: Service<ServerContext, ServerRequest, Error = E>
@@ -441,6 +672,7 @@ macro_rules! impl_method_register {
 
 for_all_methods!(impl_method_register);
 
+/// Route any method to the given handler.
 pub fn any<H, T, E>(handler: H) -> MethodRouter<E>
 where
     for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
@@ -453,15 +685,28 @@ where
     }
 }
 
+/// Route any method to the given service.
+pub fn any_service<S, E>(service: S) -> MethodRouter<E>
+where
+    for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
+    S::Response: IntoResponse,
+    E: IntoResponse + 'static,
+{
+    MethodRouter {
+        fallback: Fallback::from_service(service),
+        ..Default::default()
+    }
+}
+
 #[derive(Default)]
-pub enum MethodEndpoint<E = Infallible> {
+enum MethodEndpoint<E = Infallible> {
     #[default]
     None,
     Route(Route<E>),
 }
 
 impl<E> MethodEndpoint<E> {
-    pub fn from_handler<H, T>(handler: H) -> Self
+    fn from_handler<H, T>(handler: H) -> Self
     where
         for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
         T: 'static,
@@ -470,7 +715,7 @@ impl<E> MethodEndpoint<E> {
         Self::from_service(handler.into_service())
     }
 
-    pub fn from_service<S>(service: S) -> Self
+    fn from_service<S>(service: S) -> Self
     where
         for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
         S::Response: IntoResponse,
@@ -480,7 +725,7 @@ impl<E> MethodEndpoint<E> {
         ))
     }
 
-    pub(crate) fn map<F, E2>(self, f: F) -> MethodEndpoint<E2>
+    fn map<F, E2>(self, f: F) -> MethodEndpoint<E2>
     where
         F: FnOnce(Route<E>) -> Route<E2> + Clone + 'static,
     {
@@ -491,7 +736,7 @@ impl<E> MethodEndpoint<E> {
     }
 }
 
-pub enum Fallback<E = Infallible> {
+enum Fallback<E = Infallible> {
     Route(Route<E>),
 }
 
@@ -511,14 +756,14 @@ impl<E> Service<ServerContext, ServerRequest> for Fallback<E> {
 }
 
 impl<E> Fallback<E> {
-    pub(crate) fn from_status_code(status: StatusCode) -> Self
+    fn from_status_code(status: StatusCode) -> Self
     where
         E: 'static,
     {
         Self::from_service(RouteForStatusCode::new(status))
     }
 
-    pub fn from_handler<H, T>(handler: H) -> Self
+    fn from_handler<H, T>(handler: H) -> Self
     where
         for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
         T: 'static,
@@ -527,7 +772,7 @@ impl<E> Fallback<E> {
         Self::from_service(handler.into_service())
     }
 
-    pub fn from_service<S>(service: S) -> Self
+    fn from_service<S>(service: S) -> Self
     where
         for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
         S::Response: IntoResponse,
@@ -537,7 +782,7 @@ impl<E> Fallback<E> {
         ))
     }
 
-    pub(crate) fn map<F, E2>(self, f: F) -> Fallback<E2>
+    fn map<F, E2>(self, f: F) -> Fallback<E2>
     where
         F: FnOnce(Route<E>) -> Route<E2> + Clone + 'static,
     {
@@ -546,7 +791,7 @@ impl<E> Fallback<E> {
         }
     }
 
-    pub(crate) fn layer<L, E2>(self, l: L) -> Fallback<E2>
+    fn layer<L, E2>(self, l: L) -> Fallback<E2>
     where
         L: Layer<Route<E>> + Clone + Send + Sync + 'static,
         L::Service:

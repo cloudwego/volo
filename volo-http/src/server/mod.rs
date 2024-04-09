@@ -52,6 +52,29 @@ pub mod prelude {
     pub use crate::cookie::CookieJar;
 }
 
+/// High level HTTP server.
+///
+/// # Examples
+///
+/// ```compile_fail
+/// use std::net::SocketAddr;
+///
+/// use volo::net::Address;
+/// use volo_http::server::{
+///     route::{get, Router},
+///     Server,
+/// };
+///
+/// async fn index() -> &'static str {
+///     "Hello, World!"
+/// }
+///
+/// let app = Router::new().route("/", get(index));
+/// let addr = "[::]:8080".parse::<SocketAddr>().unwrap();
+/// let addr = Address::from(addr);
+///
+/// Server::new(app).run(addr).await.unwrap();
+/// ```
 pub struct Server<S, L> {
     service: S,
     layer: L,
