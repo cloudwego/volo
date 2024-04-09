@@ -2,8 +2,10 @@ use std::error::Error;
 
 use faststr::FastStr;
 use http::{
+    header,
+    header::{HeaderMap, HeaderName, HeaderValue},
     uri::{PathAndQuery, Scheme},
-    HeaderMap, HeaderName, HeaderValue, Method, Request, Uri, Version,
+    Method, Request, Uri, Version,
 };
 use motore::service::Service;
 use volo::net::Address;
@@ -60,6 +62,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
         Ok(builder)
     }
 
+    /// Set the request body.
     pub fn data<D>(mut self, data: D) -> Result<Self>
     where
         D: TryInto<Body>,
@@ -71,15 +74,47 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
         Ok(self)
     }
 
+    /// Set the request body as json from object with `Serialize`.
     #[cfg(feature = "__json")]
     pub fn json<T>(mut self, json: &T) -> Result<Self>
     where
         T: serde::Serialize,
     {
-        let (parts, _) = self.request.into_parts();
+        let (mut parts, _) = self.request.into_parts();
+        parts.headers.insert(
+            header::CONTENT_TYPE,
+            mime::APPLICATION_JSON
+                .essence_str()
+                .parse()
+                .expect("infallible"),
+        );
         self.request = Request::from_parts(
             parts,
             crate::json::serialize(json).map_err(builder_error)?.into(),
+        );
+
+        Ok(self)
+    }
+
+    /// Set the request body as form from object with `Serialize`.
+    #[cfg(feature = "form")]
+    pub fn form<T>(mut self, form: &T) -> Result<Self>
+    where
+        T: serde::Serialize,
+    {
+        let (mut parts, _) = self.request.into_parts();
+        parts.headers.insert(
+            header::CONTENT_TYPE,
+            mime::APPLICATION_WWW_FORM_URLENCODED
+                .essence_str()
+                .parse()
+                .expect("infallible"),
+        );
+        self.request = Request::from_parts(
+            parts,
+            serde_urlencoded::to_string(form)
+                .map_err(builder_error)?
+                .into(),
         );
 
         Ok(self)
@@ -144,6 +179,21 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         let uri = uri.try_into().map_err(builder_error)?;
         self.fill_target(&uri);
         *self.request.uri_mut() = uri;
+        Ok(self)
+    }
+
+    #[cfg(feature = "query")]
+    pub fn set_query<T>(mut self, query: &T) -> Result<Self>
+    where
+        T: serde::Serialize,
+    {
+        let mut path = self.request.uri().path().to_owned();
+        path.push('?');
+        let query_str = serde_urlencoded::to_string(query).map_err(builder_error)?;
+        path.push_str(&query_str);
+
+        *self.request.uri_mut() = Uri::from_maybe_shared(path).map_err(builder_error)?;
+
         Ok(self)
     }
 

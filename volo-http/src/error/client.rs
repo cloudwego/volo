@@ -4,6 +4,7 @@ use http::{StatusCode, Uri};
 use paste::paste;
 
 use super::BoxError;
+use crate::body::ResponseConvertError;
 
 pub type Result<T> = std::result::Result<T, ClientError>;
 
@@ -15,7 +16,7 @@ pub struct ClientError {
 }
 
 impl ClientError {
-    pub(crate) fn new<E>(kind: ErrorKind, error: Option<E>) -> Self
+    pub fn new<E>(kind: ErrorKind, error: Option<E>) -> Self
     where
         E: Into<BoxError>,
     {
@@ -75,6 +76,7 @@ pub enum ErrorKind {
     Builder,
     Context,
     Request,
+    LoadBalance,
     Status(StatusCode),
     Body,
 }
@@ -100,8 +102,21 @@ where
     ClientError::new(ErrorKind::Request, Some(error))
 }
 
+pub fn lb_error<E>(error: E) -> ClientError
+where
+    E: Into<BoxError>,
+{
+    ClientError::new(ErrorKind::LoadBalance, Some(error.into()))
+}
+
 pub fn status_error(status: StatusCode) -> ClientError {
     ClientError::new(ErrorKind::Status(status), None::<ClientError>)
+}
+
+impl From<ResponseConvertError> for ClientError {
+    fn from(value: ResponseConvertError) -> Self {
+        ClientError::new(ErrorKind::Body, Some(BoxError::from(value)))
+    }
 }
 
 impl std::fmt::Display for ErrorKind {
@@ -110,6 +125,7 @@ impl std::fmt::Display for ErrorKind {
             Self::Builder => f.write_str("builder error"),
             Self::Context => f.write_str("processing context error"),
             Self::Request => f.write_str("sending request error"),
+            Self::LoadBalance => f.write_str("load balance error"),
             Self::Status(ref status) => {
                 let prefix = if status.is_client_error() {
                     "HTTP status client error"
@@ -178,3 +194,4 @@ simple_error!(Builder => NoAddress => "missing target address");
 simple_error_with_url!(Builder => BadScheme => "bad scheme");
 simple_error_with_url!(Builder => BadHostName => "bad host name");
 simple_error!(Builder => UnreachableBuilderError => "unreachable builder error");
+simple_error!(LoadBalance => NoAvailableEndpoint => "no available endpoint");

@@ -300,7 +300,7 @@ where
     ) -> Result<Self, Self::Rejection> {
         let bytes = Bytes::from_request(cx, parts, body).await?;
         let form =
-            serde_html_form::from_bytes::<T>(bytes.as_ref()).map_err(RejectionError::Form)?;
+            serde_urlencoded::from_bytes::<T>(bytes.as_ref()).map_err(RejectionError::Form)?;
 
         Ok(Form(form))
     }

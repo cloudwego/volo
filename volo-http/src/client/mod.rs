@@ -15,6 +15,7 @@ use paste::paste;
 use volo::{
     client::MkClient,
     context::Context,
+    loadbalance::MkLbLayer,
     net::{
         dial::{DefaultMakeTransport, MakeTransport},
         Address,
@@ -22,6 +23,7 @@ use volo::{
 };
 
 use self::{
+    loadbalance::{DefaultLB, LbConfig},
     meta::MetaService,
     request_builder::RequestBuilder,
     transport::{ClientConfig, ClientTransport},
@@ -33,13 +35,14 @@ use crate::{
         ClientContext,
     },
     error::{
-        client::{builder_error, no_address, ClientError},
+        client::{builder_error, ClientError},
         BoxError,
     },
     request::ClientRequest,
     response::ClientResponse,
 };
 
+pub mod loadbalance;
 mod meta;
 mod request_builder;
 mod transport;
@@ -48,66 +51,111 @@ pub mod utils;
 const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO_PKG_VERSION"));
 
 pub type ClientMetaService = MetaService<ClientTransport>;
+pub type DefaultClient = Client<ClientMetaService>;
 
-pub struct ClientBuilder<L, MkC> {
+pub struct ClientBuilder<L, MkC, LB> {
     config: Config,
     http_config: ClientConfig,
-    transport_config: volo::net::dial::Config,
+    connector: DefaultMakeTransport,
     callee_name: FastStr,
     caller_name: FastStr,
     target: TargetBuilder,
     headers: HeaderMap,
     layer: L,
     mk_client: MkC,
+    mk_lb: LB,
     #[cfg(feature = "__tls")]
     tls_config: Option<volo::net::tls::TlsConnector>,
 }
 
-impl ClientBuilder<Identity, DefaultMkClient> {
+impl ClientBuilder<Identity, DefaultMkClient, DefaultLB> {
     /// Create a new client builder.
     pub fn new() -> Self {
         Self {
             config: Default::default(),
             http_config: Default::default(),
-            transport_config: Default::default(),
+            connector: Default::default(),
             callee_name: FastStr::empty(),
             caller_name: FastStr::empty(),
             target: Default::default(),
             headers: Default::default(),
             layer: Identity::new(),
             mk_client: DefaultMkClient,
+            mk_lb: Default::default(),
             #[cfg(feature = "__tls")]
             tls_config: None,
         }
     }
 }
 
-impl Default for ClientBuilder<Identity, DefaultMkClient> {
+impl Default for ClientBuilder<Identity, DefaultMkClient, DefaultLB> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<L, MkC> ClientBuilder<L, MkC> {
-    /// This is unstable now and may be changed in the future.
-    #[doc(hidden)]
-    pub fn client_maker<MkC2>(self, new_mk_client: MkC2) -> ClientBuilder<L, MkC2> {
+impl<L, MkC, LB, DISC> ClientBuilder<L, MkC, LbConfig<LB, DISC>> {
+    /// Set load balancer for the client.
+    pub fn load_balance<NLB>(
+        self,
+        load_balance: NLB,
+    ) -> ClientBuilder<L, MkC, LbConfig<NLB, DISC>> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
-            transport_config: self.transport_config,
+            connector: self.connector,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            headers: self.headers,
+            layer: self.layer,
+            mk_client: self.mk_client,
+            mk_lb: self.mk_lb.load_balance(load_balance),
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
+    /// Set service discover for the client.
+    pub fn discover<NDISC>(self, discover: NDISC) -> ClientBuilder<L, MkC, LbConfig<LB, NDISC>> {
+        ClientBuilder {
+            config: self.config,
+            http_config: self.http_config,
+            connector: self.connector,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            headers: self.headers,
+            layer: self.layer,
+            mk_client: self.mk_client,
+            mk_lb: self.mk_lb.discover(discover),
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+}
+
+impl<L, MkC, LB> ClientBuilder<L, MkC, LB> {
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn client_maker<MkC2>(self, new_mk_client: MkC2) -> ClientBuilder<L, MkC2, LB> {
+        ClientBuilder {
+            config: self.config,
+            http_config: self.http_config,
+            connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
             headers: self.headers,
             layer: self.layer,
             mk_client: new_mk_client,
+            mk_lb: self.mk_lb,
             #[cfg(feature = "__tls")]
-            tls_config: None,
+            tls_config: self.tls_config,
         }
     }
 
-    /// Add a new inner layer to the server.
+    /// Add a new inner layer to the client.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
@@ -118,23 +166,24 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, L>, MkC> {
+    pub fn layer<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, L>, MkC, LB> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
-            transport_config: self.transport_config,
+            connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
             headers: self.headers,
             layer: Stack::new(layer, self.layer),
             mk_client: self.mk_client,
+            mk_lb: self.mk_lb,
             #[cfg(feature = "__tls")]
-            tls_config: None,
+            tls_config: self.tls_config,
         }
     }
 
-    /// Add a new front layer to the server.
+    /// Add a new front layer to the client.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
     ///
@@ -145,19 +194,37 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> ClientBuilder<Stack<L, Front>, MkC> {
+    pub fn layer_front<Front>(self, layer: Front) -> ClientBuilder<Stack<L, Front>, MkC, LB> {
         ClientBuilder {
             config: self.config,
             http_config: self.http_config,
-            transport_config: self.transport_config,
+            connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
             headers: self.headers,
             layer: Stack::new(self.layer, layer),
             mk_client: self.mk_client,
+            mk_lb: self.mk_lb,
             #[cfg(feature = "__tls")]
-            tls_config: None,
+            tls_config: self.tls_config,
+        }
+    }
+
+    pub fn mk_load_balance<NLB>(self, mk_load_balance: NLB) -> ClientBuilder<L, MkC, NLB> {
+        ClientBuilder {
+            config: self.config,
+            http_config: self.http_config,
+            connector: self.connector,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            headers: self.headers,
+            layer: self.layer,
+            mk_client: self.mk_client,
+            mk_lb: mk_load_balance,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
         }
     }
 
@@ -290,16 +357,6 @@ impl<L, MkC> ClientBuilder<L, MkC> {
         &mut self.http_config
     }
 
-    /// Get a reference to the transport configuration of the client.
-    pub fn transport_config(&self) -> &volo::net::dial::Config {
-        &self.transport_config
-    }
-
-    /// Get a mutable reference to the transport configuration of the client.
-    pub fn transport_config_mut(&mut self) -> &mut volo::net::dial::Config {
-        &mut self.transport_config
-    }
-
     /// Set mode for setting `Host` in request headers, and server name when using TLS.
     ///
     /// Default is callee name.
@@ -328,6 +385,15 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     /// Default is false.
     pub fn fail_on_error_status(&mut self, fail_on_error_status: bool) -> &mut Self {
         self.config.fail_on_error_status = fail_on_error_status;
+        self
+    }
+
+    /// Disable TLS for the client.
+    ///
+    /// Default is false, when TLS related feature is enabled, TLS is enabled by default.
+    #[cfg(feature = "__tls")]
+    pub fn disable_tls(&mut self, disable: bool) -> &mut Self {
+        self.config.disable_tls = disable;
         self
     }
 
@@ -376,19 +442,19 @@ impl<L, MkC> ClientBuilder<L, MkC> {
 
     /// Set the maximum idle time for a connection.
     pub fn set_connect_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.transport_config.connect_timeout = Some(timeout);
+        self.connector.set_connect_timeout(Some(timeout));
         self
     }
 
     /// Set the maximum idle time for reading data from the connection.
     pub fn set_read_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.transport_config.read_timeout = Some(timeout);
+        self.connector.set_read_timeout(Some(timeout));
         self
     }
 
     /// Set the maximum idle time for writing data to the connection.
     pub fn set_write_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.transport_config.write_timeout = Some(timeout);
+        self.connector.set_write_timeout(Some(timeout));
         self
     }
 
@@ -397,20 +463,18 @@ impl<L, MkC> ClientBuilder<L, MkC> {
     where
         L: Layer<MetaService<ClientTransport>>,
         L::Service: Send + Sync + 'static,
-        MkC: MkClient<Client<L::Service>>,
+        LB: MkLbLayer,
+        LB::Layer: Layer<L::Service>,
+        <LB::Layer as Layer<L::Service>>::Service: Send + Sync,
+        MkC: MkClient<Client<<LB::Layer as Layer<L::Service>>::Service>>,
     {
-        let mut default_mk_conn = DefaultMakeTransport::new();
-        default_mk_conn.set_connect_timeout(self.transport_config.connect_timeout);
-        default_mk_conn.set_read_timeout(self.transport_config.read_timeout);
-        default_mk_conn.set_write_timeout(self.transport_config.write_timeout);
-
-        let transport = ClientTransport::new(
+        let service = MetaService::new(ClientTransport::new(
             self.http_config,
-            default_mk_conn,
+            self.connector,
             #[cfg(feature = "__tls")]
             self.tls_config.unwrap_or_default(),
-        );
-        let service = self.layer.layer(MetaService::new(transport));
+        ));
+        let service = self.mk_lb.make().layer(self.layer.layer(service));
 
         let caller_name = match &self.config.caller_name {
             CallerName::PkgNameWithVersion => FastStr::from_static_str(PKG_NAME_WITH_VER),
@@ -422,7 +486,7 @@ impl<L, MkC> ClientBuilder<L, MkC> {
                     env!("CARGO_PKG_VERSION")
                 ))
             }
-            CallerName::Specified(val) => val.to_owned(),
+            CallerName::Specified(val) => val.clone(),
             _ => FastStr::empty(),
         };
         if !caller_name.is_empty() && self.headers.get(header::USER_AGENT).is_none() {
@@ -496,7 +560,7 @@ macro_rules! method_requests {
 
 impl Client<()> {
     /// Create a new client builder.
-    pub fn builder() -> ClientBuilder<Identity, DefaultMkClient> {
+    pub fn builder() -> ClientBuilder<Identity, DefaultMkClient, DefaultLB> {
         ClientBuilder::new()
     }
 }
@@ -587,26 +651,39 @@ impl<S> Client<S> {
         let target = target
             .into_target(&self.inner)
             .await?
-            .or_else(|| self.inner.default_target.clone())
-            .ok_or_else(no_address)?;
-        let callee_name = target.callee_name;
+            .or_else(|| self.inner.default_target.clone());
 
-        if let Ok(host) = HeaderValue::from_maybe_shared(callee_name.clone()) {
-            request.headers_mut().insert(header::HOST, host);
-        }
+        let (callee_name, mut cx) = match target {
+            Some(target) => {
+                let mut cx = ClientContext::new(
+                    #[cfg(feature = "__tls")]
+                    target.use_tls,
+                );
+                cx.rpc_info_mut().callee_mut().set_address(target.addr);
+                (target.callee_name, cx)
+            }
+            None => (
+                self.inner.callee_name.clone(),
+                ClientContext::new(
+                    #[cfg(feature = "__tls")]
+                    !self.inner.config.disable_tls,
+                ),
+            ),
+        };
 
         tracing::trace!(
             "create a request with caller_name: {caller_name}, callee_name: {callee_name}"
         );
 
-        let mut cx = ClientContext::new(
-            target.addr,
-            #[cfg(feature = "__tls")]
-            target.use_tls,
-        );
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
-        cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
+        cx.rpc_info_mut()
+            .callee_mut()
+            .set_service_name(callee_name.clone());
         cx.rpc_info_mut().set_config(self.inner.config.clone());
+
+        if let Ok(host) = HeaderValue::from_maybe_shared(callee_name) {
+            request.headers_mut().insert(header::HOST, host);
+        }
 
         self.call(&mut cx, request).await
     }

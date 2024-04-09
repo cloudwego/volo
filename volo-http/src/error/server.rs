@@ -12,7 +12,7 @@ pub enum RejectionError {
     #[cfg(feature = "query")]
     Query(serde_urlencoded::de::Error),
     #[cfg(feature = "form")]
-    Form(serde_html_form::de::Error),
+    Form(serde_urlencoded::de::Error),
 }
 
 impl IntoResponse for RejectionError {
