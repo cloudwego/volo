@@ -1,13 +1,11 @@
 use chrono::{DateTime, Local};
 use faststr::FastStr;
-use paste::paste;
 use volo::{
     context::{Context, Reusable, Role, RpcCx, RpcInfo},
     newtype_impl_context,
 };
 
-use super::CommonStats;
-use crate::utils::macros::impl_deref_and_deref_mut;
+use crate::utils::macros::{impl_deref_and_deref_mut, stat_impl};
 
 #[derive(Debug)]
 pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
@@ -21,7 +19,6 @@ impl ClientContext {
                 #[cfg(feature = "__tls")]
                 tls,
                 stats: ClientStats::default(),
-                common_stats: CommonStats::default(),
             },
         ))
     }
@@ -46,8 +43,6 @@ pub struct ClientCxInner {
 
     /// This is unstable now and may be changed in the future.
     pub stats: ClientStats,
-    /// This is unstable now and may be changed in the future.
-    pub common_stats: CommonStats,
 }
 
 impl ClientCxInner {

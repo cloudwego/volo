@@ -4,14 +4,12 @@ use http::{
     request::Parts,
     uri::{Authority, PathAndQuery, Scheme, Uri},
 };
-use paste::paste;
 use volo::{
     context::{Context, Reusable, Role, RpcCx, RpcInfo},
     net::Address,
     newtype_impl_context,
 };
 
-use super::CommonStats;
 use crate::{
     server::param::Params,
     utils::{
@@ -29,20 +27,10 @@ impl ServerContext {
             RpcInfo::<Config>::with_role(Role::Server),
             ServerCxInner {
                 params: Params::default(),
-                stats: ServerStats::default(),
-                common_stats: CommonStats::default(),
             },
         );
         cx.rpc_info_mut().caller_mut().set_address(peer);
         Self(cx)
-    }
-
-    pub fn enable_stat(&mut self, enable: bool) {
-        self.rpc_info_mut().config_mut().stat_enable = enable;
-    }
-
-    pub(crate) fn stat_enabled(&self) -> bool {
-        self.rpc_info().config().stat_enable
     }
 }
 
@@ -53,38 +41,17 @@ newtype_impl_context!(ServerContext, Config, 0);
 #[derive(Clone, Debug)]
 pub struct ServerCxInner {
     pub params: Params,
-
-    /// This is unstable now and may be changed in the future.
-    pub stats: ServerStats,
-    /// This is unstable now and may be changed in the future.
-    pub common_stats: CommonStats,
 }
 
 impl ServerCxInner {
     impl_getter!(params, Params);
 }
 
-/// This is unstable now and may be changed in the future.
-#[derive(Debug, Default, Clone)]
-pub struct ServerStats {}
-
-impl ServerStats {}
-
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub(crate) stat_enable: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self { stat_enable: true }
-    }
-}
+#[derive(Clone, Debug, Default)]
+pub struct Config {}
 
 impl Reusable for Config {
-    fn clear(&mut self) {
-        self.stat_enable = true;
-    }
+    fn clear(&mut self) {}
 }
 
 pub trait RequestPartsExt {
