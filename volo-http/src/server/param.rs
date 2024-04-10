@@ -12,13 +12,15 @@ use crate::{
     utils::macros::all_the_tuples,
 };
 
+pub type UrlParamsVec = PathParamsVec;
+pub type UrlParamsMap = PathParamsMap;
+pub type UrlParams<T> = PathParams<T>;
+pub type UrlParamsRejection = PathParamsRejection;
+
 #[derive(Clone, Debug, Default)]
 pub struct PathParamsVec {
     inner: Vec<(FastStr, FastStr)>,
 }
-
-#[deprecated]
-pub type UrlParamsVec = PathParamsVec;
 
 impl PathParamsVec {
     pub(crate) fn extend(&mut self, params: Params) {
@@ -61,9 +63,6 @@ impl FromContext for PathParamsVec {
 pub struct PathParamsMap {
     inner: AHashMap<FastStr, FastStr>,
 }
-
-#[deprecated]
-pub type UrlParamsMap = PathParamsMap;
 
 impl Deref for PathParamsMap {
     type Target = AHashMap<FastStr, FastStr>;
@@ -134,9 +133,6 @@ impl_from_path_param!(FastStr);
 #[derive(Debug, Default, Clone)]
 pub struct PathParams<T>(pub T);
 
-#[deprecated]
-pub type UrlParams<T> = PathParams<T>;
-
 impl<T> FromContext for PathParams<T>
 where
     T: FromPathParam,
@@ -192,9 +188,6 @@ pub enum PathParamsRejection {
     LengthMismatch,
     ParseError(BoxError),
 }
-
-#[deprecated]
-pub type UrlParamsRejection = PathParamsRejection;
 
 impl fmt::Display for PathParamsRejection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
