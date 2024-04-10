@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.2.0-rc.4"
+version = "0.2.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -71,6 +71,7 @@ sonic-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
 serde = { version = "1", features = ["derive"] }
+volo = { version = "0.10", path = "../volo" }
 
 [features]
 default = []

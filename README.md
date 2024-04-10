@@ -24,9 +24,10 @@ Volo mainly consists of six crates:
 1. The [`volo`][volo] crate, which contains the common components of the framework.
 2. The [`volo-thrift`][volo-thrift] crate, which provides the Thrift RPC implementation.
 3. The [`volo-grpc`][volo-grpc] crate, which provides the gRPC implementation.
-4. The [`volo-build`][volo-build] crate, which generates thrift and protobuf code.
-5. The [`volo-cli`][volo-cli] crate, which provides the CLI interface to bootstrap a new project and manages the idl files.
-6. The [`volo-macros`][volo-macros] crate, which provides the macros for the framework.
+4. The [`volo-http`][volo-http] crate, which provides the HTTP implementation.
+5. The [`volo-build`][volo-build] crate, which generates thrift and protobuf code.
+6. The [`volo-cli`][volo-cli] crate, which provides the CLI interface to bootstrap a new project and manages the idl files.
+7. The [`volo-macros`][volo-macros] crate, which provides the macros for the framework.
 
 ### Features
 
@@ -66,9 +67,11 @@ For more information, you may refer to [our guide](https://www.cloudwego.io/zh/d
 
 ## Tutorial
 
-Volo-Thrift: https://www.cloudwego.io/zh/docs/volo/volo-thrift/getting-started/
+Volo-Thrift: <https://www.cloudwego.io/zh/docs/volo/volo-thrift/getting-started/>
 
-Volo-gRPC: https://www.cloudwego.io/zh/docs/volo/volo-grpc/getting-started/
+Volo-gRPC: <https://www.cloudwego.io/zh/docs/volo/volo-grpc/getting-started/>
+
+Volo-HTTP: Work In Progess
 
 ## Examples
 
@@ -117,6 +120,7 @@ For the full list, you may refer to the [CREDITS.md](https://github.com/cloudweg
 [volo]: https://docs.rs/volo
 [volo-thrift]: https://docs.rs/volo-thrift
 [volo-grpc]: https://docs.rs/volo-grpc
+[volo-http]: https://docs.rs/volo-http
 [volo-build]: https://docs.rs/volo-build
 [volo-cli]: https://crates.io/crates/volo-cli
 [volo-macros]: https://docs.rs/volo-macros
