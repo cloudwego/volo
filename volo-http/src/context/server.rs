@@ -11,7 +11,7 @@ use volo::{
 };
 
 use crate::{
-    server::param::UrlParamsVec,
+    server::param::PathParamsVec,
     utils::{
         consts::{HTTPS_DEFAULT_PORT, HTTP_DEFAULT_PORT},
         macros::{impl_deref_and_deref_mut, impl_getter},
@@ -26,7 +26,7 @@ impl ServerContext {
         let mut cx = RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Server),
             ServerCxInner {
-                params: UrlParamsVec::default(),
+                params: PathParamsVec::default(),
             },
         );
         cx.rpc_info_mut().caller_mut().set_address(peer);
@@ -40,11 +40,11 @@ newtype_impl_context!(ServerContext, Config, 0);
 
 #[derive(Clone, Debug)]
 pub struct ServerCxInner {
-    pub params: UrlParamsVec,
+    pub params: PathParamsVec,
 }
 
 impl ServerCxInner {
-    impl_getter!(params, UrlParamsVec);
+    impl_getter!(params, PathParamsVec);
 }
 
 #[derive(Clone, Debug, Default)]
