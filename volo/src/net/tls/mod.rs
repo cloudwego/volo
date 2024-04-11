@@ -15,10 +15,7 @@ use super::{
     conn::ConnStream,
     dial::{make_tcp_connection, Config, MakeTransport},
 };
-use crate::net::{
-    conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
-    Address,
-};
+use crate::net::{conn::Conn, Address};
 
 #[cfg(feature = "native-tls")]
 mod native_tls;
@@ -294,13 +291,10 @@ impl UnaryService<Address> for TlsMakeTransport {
 }
 
 impl MakeTransport for TlsMakeTransport {
-    type ReadHalf = OwnedReadHalf;
-    type WriteHalf = OwnedWriteHalf;
+    type Conn = Conn;
 
-    async fn make_transport(&self, addr: Address) -> Result<(Self::ReadHalf, Self::WriteHalf)> {
-        let conn = self.make_connection(addr).await?;
-        let (read, write) = conn.stream.into_split();
-        Ok((read, write))
+    async fn make_transport(&self, addr: Address) -> Result<Self::Conn> {
+        self.make_connection(addr).await
     }
 
     fn set_connect_timeout(&mut self, timeout: Option<Duration>) {

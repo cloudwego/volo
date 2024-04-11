@@ -5,25 +5,20 @@ use socket2::{Domain, Protocol, Socket, Type};
 #[cfg(target_family = "unix")]
 use tokio::net::UnixStream;
 use tokio::{
-    io::{AsyncRead, AsyncWrite},
     net::{TcpSocket, TcpStream},
     time::{timeout, Duration},
 };
 
 use super::{
-    conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
+    conn::{Conn, ConnExt},
     Address,
 };
 
-/// [`MakeTransport`] creates an [`AsyncRead`] and an [`AsyncWrite`] for the given [`Address`].
+/// [`MakeTransport`] creates a [`Conn`] for the given [`Address`].
 pub trait MakeTransport: Clone + Send + Sync + 'static {
-    type ReadHalf: AsyncRead + Send + Sync + Unpin + 'static;
-    type WriteHalf: AsyncWrite + Send + Sync + Unpin + 'static;
+    type Conn: ConnExt;
 
-    fn make_transport(
-        &self,
-        addr: Address,
-    ) -> impl Future<Output = io::Result<(Self::ReadHalf, Self::WriteHalf)>> + Send;
+    fn make_transport(&self, addr: Address) -> impl Future<Output = io::Result<Self::Conn>> + Send;
     fn set_connect_timeout(&mut self, timeout: Option<Duration>);
     fn set_read_timeout(&mut self, timeout: Option<Duration>);
     fn set_write_timeout(&mut self, timeout: Option<Duration>);
@@ -77,14 +72,10 @@ impl DefaultMakeTransport {
 }
 
 impl MakeTransport for DefaultMakeTransport {
-    type ReadHalf = OwnedReadHalf;
+    type Conn = Conn;
 
-    type WriteHalf = OwnedWriteHalf;
-
-    async fn make_transport(&self, addr: Address) -> io::Result<(Self::ReadHalf, Self::WriteHalf)> {
-        let conn = self.make_connection(addr).await?;
-        let (read, write) = conn.stream.into_split();
-        Ok((read, write))
+    async fn make_transport(&self, addr: Address) -> io::Result<Conn> {
+        self.make_connection(addr).await
     }
 
     fn set_connect_timeout(&mut self, timeout: Option<Duration>) {

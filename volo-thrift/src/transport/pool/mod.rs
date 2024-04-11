@@ -29,7 +29,10 @@ use tokio::{
     sync::oneshot,
     time::{interval, Duration, Instant, Interval},
 };
-use volo::Unwrap;
+use volo::{net::Address, Unwrap};
+
+use super::pingpong::ThriftTransport;
+use crate::codec::{Decoder, Encoder};
 
 pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + 'static {}
 
@@ -412,6 +415,67 @@ struct Idle<T> {
     idle_at: Instant,
 }
 
+pub enum Transport<K: Key, T: Poolable> {
+    Pooled(Pooled<K, T>),
+    UnPooled(T),
+}
+
+impl<E: Encoder, D: Decoder> Transport<Address, ThriftTransport<E, D>> {
+    pub async fn reuse(self) {
+        match self {
+            Transport::Pooled(pooled) => {
+                pooled.reuse();
+            }
+            Transport::UnPooled(t) => {
+                t.reuse().await;
+            }
+        }
+    }
+}
+
+impl<K: Key, T: Poolable> From<Pooled<K, T>> for Transport<K, T> {
+    fn from(pooled: Pooled<K, T>) -> Self {
+        Transport::Pooled(pooled)
+    }
+}
+
+impl<K: Key, T: Poolable> From<T> for Transport<K, T> {
+    fn from(t: T) -> Self {
+        Transport::UnPooled(t)
+    }
+}
+
+impl<K: Key, T: Poolable> AsRef<T> for Transport<K, T> {
+    fn as_ref(&self) -> &T {
+        match self {
+            Transport::Pooled(pooled) => pooled.t.as_ref().expect("not dropped"),
+            Transport::UnPooled(t) => t,
+        }
+    }
+}
+
+impl<K: Key, T: Poolable> AsMut<T> for Transport<K, T> {
+    fn as_mut(&mut self) -> &mut T {
+        match self {
+            Transport::Pooled(pooled) => pooled.t.as_mut().expect("not dropped"),
+            Transport::UnPooled(t) => t,
+        }
+    }
+}
+
+impl<K: Key, T: Poolable> Deref for Transport<K, T> {
+    type Target = T;
+    fn deref(&self) -> &T {
+        self.as_ref()
+    }
+}
+
+impl<K: Key, T: Poolable> DerefMut for Transport<K, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.as_mut()
+    }
+}
+
 #[pin_project]
 pub struct Pooled<K: Key, T: Poolable> {
     key: Option<K>,
@@ -446,31 +510,6 @@ impl<K: Key, T: Poolable> Pooled<K, T> {
                 }
             }
         }
-    }
-}
-
-impl<K: Key, T: Poolable> AsRef<T> for Pooled<K, T> {
-    fn as_ref(&self) -> &T {
-        self.t.as_ref().expect("not dropped")
-    }
-}
-
-impl<K: Key, T: Poolable> AsMut<T> for Pooled<K, T> {
-    fn as_mut(&mut self) -> &mut T {
-        self.t.as_mut().expect("not dropped")
-    }
-}
-
-impl<K: Key, T: Poolable> Deref for Pooled<K, T> {
-    type Target = T;
-    fn deref(&self) -> &T {
-        self.as_ref()
-    }
-}
-
-impl<K: Key, T: Poolable> DerefMut for Pooled<K, T> {
-    fn deref_mut(&mut self) -> &mut T {
-        self.as_mut()
     }
 }
 

@@ -8,7 +8,10 @@ use motore::service::Service;
 use pilota::thrift::ThriftException;
 use tokio::sync::futures::Notified;
 use tracing::*;
-use volo::{net::Address, volo_unreachable};
+use volo::{
+    net::{shm::ShmExt, Address},
+    volo_unreachable,
+};
 
 use crate::{
     codec::{Decoder, Encoder},
@@ -29,6 +32,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
     stat_tracer: Arc<[crate::server::TraceFn]>,
     peer_addr: Option<Address>,
     span_provider: SP,
+    stream: Option<Box<dyn ShmExt>>,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
     Svc::Error: Into<ServerError>,
@@ -68,6 +72,10 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     cx,
                     peer_addr
                 );
+
+                if let Some(stream) = &stream {
+                    stream.release_previous_read();
+                }
 
                 // it is promised safe here, because span only reads cx before handling polling
                 let tracing_cx = unsafe {
@@ -178,6 +186,9 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                 .instrument(span_provider.on_serve(tracing_cx))
                 .await;
                 if result.is_err() {
+                    if let Some(mut stream) = stream {
+                        _ = stream.close().await;
+                    }
                     break;
                 }
             }

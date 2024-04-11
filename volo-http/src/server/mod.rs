@@ -28,7 +28,11 @@ use tokio::sync::Notify;
 use volo::net::{conn::ConnStream, tls::Acceptor, tls::ServerTlsConfig};
 use volo::{
     context::Context,
-    net::{conn::Conn, incoming::Incoming, Address, MakeIncoming},
+    net::{
+        conn::{Conn, ConnExt},
+        incoming::Incoming,
+        Address, MakeIncoming,
+    },
 };
 
 use crate::{
@@ -270,6 +274,7 @@ impl<S, L> Server<S, L> {
             Service<ServerContext, ServerRequest, Error = Infallible> + Send + Sync + 'static,
         <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
         MI: MakeIncoming,
+        MI::Incoming: Incoming<Conn = volo::net::conn::Conn>,
     {
         let server = Arc::new(self.server);
         let service = Arc::new(self.layer.layer(self.service));
@@ -367,7 +372,7 @@ async fn serve<I, S, E>(
     exit_notify: Arc<Notify>,
     #[cfg(feature = "__tls")] tls_config: Option<ServerTlsConfig>,
 ) where
-    I: Incoming,
+    I: Incoming<Conn = volo::net::conn::Conn>,
     S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'static,
     S::Response: IntoResponse,
     E: IntoResponse,
@@ -399,7 +404,7 @@ async fn serve<I, S, E>(
             }
         };
 
-        let peer = match conn.info.peer_addr {
+        let peer = match conn.peer_addr() {
             Some(ref peer) => {
                 tracing::trace!("accept connection from: {peer:?}");
                 peer.clone()

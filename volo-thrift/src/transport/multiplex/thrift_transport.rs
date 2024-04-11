@@ -9,10 +9,7 @@ use std::{
 use metainfo::MetaInfo;
 use pilota::thrift::{ApplicationException, ApplicationExceptionKind};
 use pin_project::pin_project;
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    sync::{oneshot, Mutex},
-};
+use tokio::sync::{oneshot, Mutex};
 use volo::{
     context::{Role, RpcInfo},
     net::Address,
@@ -67,8 +64,8 @@ where
     E: Encoder,
 {
     pub fn new<
-        R: AsyncRead + Send + Sync + Unpin + 'static,
-        W: AsyncWrite + Send + Sync + Unpin + 'static,
+        R: Send + Sync + Unpin + 'static,
+        W: Send + Sync + Unpin + 'static,
         MkC: MakeCodec<R, W, Encoder = E>,
     >(
         read_half: R,
