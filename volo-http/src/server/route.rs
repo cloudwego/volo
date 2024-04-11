@@ -99,32 +99,32 @@ impl<E> Router<E> {
     ///
     /// Named parameters like `/{id}` match anything until the next `/` or the end of the path.
     ///
-    /// The params can be extract by extractor `UrlParamsMap`:
+    /// The params can be extract by extractor `PathParamsMap`:
     ///
     /// ```no_run
     /// use volo::FastStr;
     /// use volo_http::server::{
-    ///     param::UrlParamsMap,
+    ///     param::PathParamsMap,
     ///     route::{get, Router},
     /// };
     ///
-    /// async fn param(map: UrlParamsMap) -> FastStr {
+    /// async fn param(map: PathParamsMap) -> FastStr {
     ///     map.get("id").unwrap().clone()
     /// }
     ///
     /// let router: Router = Router::new().route("/user/{id}", get(param));
     /// ```
     ///
-    /// Or you can use `UrlParams` directly:
+    /// Or you can use `PathParams` directly:
     ///
     /// ```no_run
     /// use volo::FastStr;
     /// use volo_http::server::{
-    ///     param::UrlParams,
+    ///     param::PathParams,
     ///     route::{get, Router},
     /// };
     ///
-    /// async fn param(UrlParams(id): UrlParams<String>) -> String {
+    /// async fn param(PathParams(id): PathParams<String>) -> String {
     ///     id
     /// }
     ///
@@ -136,11 +136,11 @@ impl<E> Router<E> {
     /// ```no_run
     /// use volo::FastStr;
     /// use volo_http::server::{
-    ///     param::UrlParams,
+    ///     param::PathParams,
     ///     route::{get, Router},
     /// };
     ///
-    /// async fn param(UrlParams((user, post)): UrlParams<(usize, usize)>) -> String {
+    /// async fn param(PathParams((user, post)): PathParams<(usize, usize)>) -> String {
     ///     format!("user id: {user}, post id: {post}")
     /// }
     ///
@@ -154,7 +154,7 @@ impl<E> Router<E> {
     ///
     /// ```no_run
     /// use volo_http::server::{
-    ///     param::UrlParams,
+    ///     param::PathParams,
     ///     route::{get, Router},
     /// };
     ///
@@ -162,7 +162,7 @@ impl<E> Router<E> {
     ///     "Hello, World"
     /// }
     ///
-    /// async fn fallback(UrlParams(uri): UrlParams<String>) -> String {
+    /// async fn fallback(PathParams(uri): PathParams<String>) -> String {
     ///     format!("Path `{uri}` is not available")
     /// }
     ///

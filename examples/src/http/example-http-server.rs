@@ -20,7 +20,7 @@ use volo_http::{
         extract::{Form, FromContext, MaybeInvalid, Query},
         layer::{FilterLayer, TimeoutLayer},
         middleware::{self, Next},
-        param::UrlParams,
+        param::PathParams,
         route::{get, get_service, post, Router},
         IntoResponse, Server,
     },
@@ -115,11 +115,11 @@ async fn timeout_test() {
     tokio::time::sleep(Duration::from_secs(10)).await
 }
 
-async fn echo(UrlParams(echo): UrlParams<String>) -> String {
+async fn echo(PathParams(echo): PathParams<String>) -> String {
     echo
 }
 
-async fn add(UrlParams((p1, p2)): UrlParams<(usize, usize)>) -> String {
+async fn add(PathParams((p1, p2)): PathParams<(usize, usize)>) -> String {
     format!("{}", p1 + p2)
 }
 
