@@ -85,7 +85,7 @@ where
     U: EntryMessage,
 {
     #[inline]
-    pub(crate) fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
+    pub fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
         let ident = TMessageIdentifier::new(
             self.meta.method.clone(),
             self.meta.msg_type,
@@ -112,10 +112,7 @@ where
     U: EntryMessage + Send,
 {
     #[inline]
-    pub(crate) fn encode<T: TOutputProtocol>(
-        &self,
-        protocol: &mut T,
-    ) -> Result<(), ThriftException> {
+    pub fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), ThriftException> {
         let ident = TMessageIdentifier::new(
             self.meta.method.clone(),
             self.meta.msg_type,
@@ -136,7 +133,7 @@ where
     }
 
     #[inline]
-    pub(crate) fn decode<Cx: ThriftContext, T: TInputProtocol>(
+    pub fn decode<Cx: ThriftContext, T: TInputProtocol>(
         protocol: &mut T,
         cx: &mut Cx,
     ) -> Result<Self, ThriftException> {
@@ -160,7 +157,7 @@ where
     }
 
     #[inline]
-    pub(crate) async fn decode_async<Cx: ThriftContext + Send, T: TAsyncInputProtocol>(
+    pub async fn decode_async<Cx: ThriftContext + Send, T: TAsyncInputProtocol>(
         protocol: &mut T,
         cx: &mut Cx,
     ) -> Result<Self, ThriftException> {

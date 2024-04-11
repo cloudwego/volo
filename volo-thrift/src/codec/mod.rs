@@ -1,7 +1,6 @@
 use std::future::Future;
 
 use pilota::thrift::ThriftException;
-use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
 
@@ -40,7 +39,7 @@ pub trait Encoder: Send + Sync + 'static {
     }
 }
 
-/// [`MakeCodec`] receives an [`AsyncRead`] and an [`AsyncWrite`] and returns a
+/// [`MakeCodec`] receives an [`R`] and an [`W`] and returns a
 /// [`Decoder`] and an [`Encoder`].
 ///
 /// The implementation of [`MakeCodec`] must make sure the [`Decoder`] and [`Encoder`]
@@ -52,8 +51,8 @@ pub trait Encoder: Send + Sync + 'static {
 /// The reason why we split the [`Decoder`] and [`Encoder`] is that we want to support multiplex.
 pub trait MakeCodec<R, W>: Clone + Send + 'static
 where
-    R: AsyncRead + Unpin + Send + Sync + 'static,
-    W: AsyncWrite + Unpin + Send + Sync + 'static,
+    R: Unpin + Send + Sync + 'static,
+    W: Unpin + Send + Sync + 'static,
 {
     type Encoder: Encoder;
     type Decoder: Decoder;

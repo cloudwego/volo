@@ -1,5 +1,6 @@
 use std::{
     io,
+    os::fd::{AsRawFd, RawFd},
     pin::Pin,
     task::{Context, Poll},
 };
@@ -12,7 +13,33 @@ use tokio::{
     net::{tcp, TcpStream},
 };
 
-use super::Address;
+use super::{shm::ShmExt, Address};
+
+pub trait ConnExt {
+    type ReadHalf: Unpin + Send + Sync + 'static;
+    type WriteHalf: Unpin + Send + Sync + 'static;
+
+    fn peer_addr(&self) -> Option<Address>;
+    fn inner(&self) -> Option<Box<dyn ShmExt>> {
+        None
+    }
+    fn into_split(self) -> (Self::ReadHalf, Self::WriteHalf);
+}
+
+impl ConnExt for Conn {
+    type ReadHalf = OwnedReadHalf;
+    type WriteHalf = OwnedWriteHalf;
+
+    #[inline]
+    fn peer_addr(&self) -> Option<Address> {
+        self.stream.peer_addr()
+    }
+
+    #[inline]
+    fn into_split(self) -> (Self::ReadHalf, Self::WriteHalf) {
+        self.stream.into_split()
+    }
+}
 
 #[derive(Clone)]
 pub struct ConnInfo {
@@ -333,7 +360,28 @@ impl ConnStream {
                 .ok(),
         }
     }
+
+    #[inline]
+    pub fn is_tcp(&self) -> bool {
+        matches!(self, Self::Tcp(_))
+    }
 }
+
+impl AsRawFd for ConnStream {
+    #[inline]
+    fn as_raw_fd(&self) -> RawFd {
+        match self {
+            Self::Tcp(s) => s.as_raw_fd(),
+            #[cfg(target_family = "unix")]
+            Self::Unix(s) => s.as_raw_fd(),
+            #[cfg(feature = "rustls")]
+            Self::Rustls(s) => s.as_raw_fd(),
+            #[cfg(feature = "native-tls")]
+            Self::NativeTls(s) => s.as_raw_fd(),
+        }
+    }
+}
+
 pub struct Conn {
     pub stream: ConnStream,
     pub info: ConnInfo,
