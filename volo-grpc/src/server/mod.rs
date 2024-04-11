@@ -262,6 +262,7 @@ impl<L> Server<L> {
             + Sync
             + 'static,
         <L::Service as Service<ServerContext, Request<BodyIncoming>>>::Error: Into<Status> + Send,
+        A::Incoming: Incoming<Conn = volo::net::conn::Conn>,
     {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
@@ -379,6 +380,7 @@ impl<L> Server<L> {
             + Sync
             + 'static,
         <L::Service as Service<ServerContext, Request<BodyIncoming>>>::Error: Into<Status> + Send,
+        A::Incoming: Incoming<Conn = volo::net::conn::Conn>,
     {
         self.run_with_shutdown(incoming, tokio::signal::ctrl_c())
             .await
