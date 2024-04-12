@@ -1,4 +1,4 @@
-use volo_http::route::{{get, Router}};
+use volo_http::server::route::{{get, Router}};
 
 async fn index_handler() -> &'static str {{
     "It Works!\n"
