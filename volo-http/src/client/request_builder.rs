@@ -24,6 +24,7 @@ use crate::{
     response::ClientResponse,
 };
 
+/// The builder for building a request.
 pub struct RequestBuilder<'a, S, B = Body> {
     client: &'a Client<S>,
     target: TargetBuilder,

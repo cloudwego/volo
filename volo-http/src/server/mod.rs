@@ -35,21 +35,22 @@ use crate::{
     response::ServerResponse,
 };
 
-mod into_response;
-pub use self::into_response::IntoResponse;
-
 pub mod extract;
 mod handler;
+mod into_response;
 pub mod layer;
 pub mod middleware;
 pub mod param;
 pub mod route;
 
+pub use self::{into_response::IntoResponse, route::Router};
+
 #[doc(hidden)]
 pub mod prelude {
-    pub use super::{param::PathParamsVec, route::Router, Server};
-    #[cfg(feature = "cookie")]
-    pub use crate::cookie::CookieJar;
+    #[cfg(feature = "__tls")]
+    pub use volo::net::tls::ServerTlsConfig;
+
+    pub use super::{param::PathParams, route::Router, Server};
 }
 
 /// High level HTTP server.

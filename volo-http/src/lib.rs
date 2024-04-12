@@ -27,6 +27,8 @@ pub mod prelude {
     pub use hyper;
     pub use volo::net::Address;
 
+    #[cfg(feature = "client")]
+    pub use crate::client::prelude::*;
     pub use crate::extension::Extension;
     #[cfg(feature = "__json")]
     pub use crate::json::Json;

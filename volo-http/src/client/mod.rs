@@ -25,7 +25,6 @@ use volo::{
 use self::{
     loadbalance::{DefaultLB, LbConfig},
     meta::MetaService,
-    request_builder::RequestBuilder,
     transport::{ClientConfig, ClientTransport},
     utils::{Target, TargetBuilder},
 };
@@ -47,6 +46,13 @@ mod meta;
 mod request_builder;
 mod transport;
 pub mod utils;
+
+pub use request_builder::RequestBuilder;
+
+#[doc(hidden)]
+pub mod prelude {
+    pub use super::{Client, ClientBuilder};
+}
 
 const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO_PKG_VERSION"));
 

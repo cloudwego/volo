@@ -8,7 +8,7 @@ edition = "2021"
 [dependencies]
 # we recommend to use the latest framework version for new features and bug fixes
 volo = "*"
-volo-http = "*"
+volo-http = {{ version = "*", features = ["default_server"] }}
 
 tokio = {{ version = "1", features = ["full"] }}
 
