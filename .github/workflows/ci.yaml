@@ -22,6 +22,25 @@ jobs:
     steps:
       - run: exit 0
 
+  lint:
+    runs-on: [self-hosted, X64]
+
+    strategy:
+      matrix:
+        rust: [nightly]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          components: rustfmt,clippy
+          toolchain: ${{matrix.rust}}
+      - uses: actions-rs/clippy-check@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Format check
+        run: |
+          cargo fmt -- --check
+
   test-linux:
     runs-on: [self-hosted, X64]
 
@@ -144,21 +163,30 @@ jobs:
           cargo clippy -- --deny warnings
           cargo test
 
-  lint:
+  test-cli:
     runs-on: [self-hosted, X64]
 
     strategy:
       matrix:
-        rust: [nightly]
+        rust: [stable]
     steps:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
         with:
-          components: rustfmt,clippy
           toolchain: ${{matrix.rust}}
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Format check
+      - name: Cli tests
         run: |
-          cargo fmt -- --check
+          mkdir -p /tmp/volo-cli-test/{thrift/idl,grpc/idl,http}
+          cp examples/thrift_idl/echo.thrift /tmp/volo-cli-test/thrift/idl
+          cp examples/proto/echo.proto /tmp/volo-cli-test/grpc/idl
+          cargo build -p volo-cli
+          cp target/debug/volo /tmp/volo-cli-test/volo
+          cd /tmp/volo-cli-test/thrift
+          ../volo init thrift-test idl/echo.thrift
+          cargo build
+          cd /tmp/volo-cli-test/grpc
+          ../volo init --includes idl grpc-test idl/echo.proto
+          cargo build
+          cd /tmp/volo-cli-test/http
+          ../volo http init http-test
+          cargo build
