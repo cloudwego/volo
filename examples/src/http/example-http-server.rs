@@ -224,7 +224,10 @@ fn test_router() -> Router {
         // curl http://127.0.0.1:8080/test/timeout
         .route(
             "/test/timeout",
-            get(timeout_test).layer(TimeoutLayer::new(Duration::from_secs(1))),
+            get(timeout_test).layer(TimeoutLayer::new(
+                Duration::from_secs(1),
+                |_: &ServerContext| StatusCode::INTERNAL_SERVER_ERROR,
+            )),
         )
         // curl -v http://127.0.0.1:8080/test/param/114514
         .route("/test/param/{:echo}", get(echo))
@@ -311,6 +314,11 @@ async fn headers_map_response(response: ServerResponse) -> impl IntoResponse {
     )
 }
 
+fn timeout_handler(_: &ServerContext) -> StatusCode {
+    tracing::error!("timeout");
+    StatusCode::REQUEST_TIMEOUT
+}
+
 #[volo::main]
 async fn main() {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
@@ -329,7 +337,7 @@ async fn main() {
         })))
         .layer(middleware::from_fn(tracing_from_fn))
         .layer(middleware::map_response(headers_map_response))
-        .layer(TimeoutLayer::new(Duration::from_secs(5)));
+        .layer(TimeoutLayer::new(Duration::from_secs(5), timeout_handler));
 
     let addr: SocketAddr = "[::]:8080".parse().unwrap();
     let addr = volo::net::Address::from(addr);
