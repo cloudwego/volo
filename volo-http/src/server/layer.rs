@@ -1,6 +1,5 @@
 use std::{marker::PhantomData, time::Duration};
 
-use http::StatusCode;
 use motore::{layer::Layer, service::Service};
 
 use super::{handler::HandlerWithoutRequest, IntoResponse};
@@ -84,48 +83,66 @@ where
 }
 
 #[derive(Clone)]
-pub struct TimeoutLayer {
+pub struct TimeoutLayer<H> {
     duration: Duration,
+    handler: H,
 }
 
-impl TimeoutLayer {
-    pub fn new(duration: Duration) -> Self {
-        Self { duration }
+impl<H> TimeoutLayer<H> {
+    pub fn new(duration: Duration, handler: H) -> Self {
+        Self { duration, handler }
     }
 }
 
-impl<S> Layer<S> for TimeoutLayer
+impl<S, H> Layer<S> for TimeoutLayer<H>
 where
     S: Send + Sync + 'static,
 {
-    type Service = Timeout<S>;
+    type Service = Timeout<S, H>;
 
     fn layer(self, inner: S) -> Self::Service {
         Timeout {
             service: inner,
             duration: self.duration,
+            handler: self.handler,
         }
     }
 }
 
-#[derive(Clone)]
-pub struct Timeout<S> {
-    service: S,
-    duration: Duration,
+trait TimeoutHandler<'r> {
+    fn call(self, cx: &'r ServerContext) -> ServerResponse;
 }
 
-impl<S> Service<ServerContext, ServerRequest> for Timeout<S>
+impl<'r, F, R> TimeoutHandler<'r> for F
+where
+    F: FnOnce(&'r ServerContext) -> R + 'r,
+    R: IntoResponse + 'r,
+{
+    fn call(self, cx: &'r ServerContext) -> ServerResponse {
+        self(cx).into_response()
+    }
+}
+
+#[derive(Clone)]
+pub struct Timeout<S, H> {
+    service: S,
+    duration: Duration,
+    handler: H,
+}
+
+impl<S, H> Service<ServerContext, ServerRequest> for Timeout<S, H>
 where
     S: Service<ServerContext, ServerRequest> + Send + Sync + 'static,
     S::Response: IntoResponse,
     S::Error: IntoResponse,
+    H: for<'r> TimeoutHandler<'r> + Clone + Sync,
 {
     type Response = ServerResponse;
     type Error = S::Error;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ServerContext,
+    async fn call(
+        &self,
+        cx: &mut ServerContext,
         req: ServerRequest,
     ) -> Result<Self::Response, Self::Error> {
         let fut_service = self.service.call(cx, req);
@@ -134,7 +151,7 @@ where
         tokio::select! {
             resp = fut_service => resp.map(IntoResponse::into_response),
             _ = fut_timeout => {
-                Ok(StatusCode::REQUEST_TIMEOUT.into_response())
+                Ok((self.handler.clone()).call(cx))
             },
         }
     }
