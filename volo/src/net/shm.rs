@@ -1,6 +1,6 @@
 #[async_trait::async_trait]
 pub trait ShmExt: Send + Sync {
-    fn release_previous_read(&self) {}
+    fn release_read_and_reuse(&self) {}
 
     async fn close(&mut self) -> Result<(), anyhow::Error> {
         Ok(())
