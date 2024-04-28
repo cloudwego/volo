@@ -74,7 +74,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                 );
 
                 if let Some(stream) = &stream {
-                    stream.release_previous_read();
+                    stream.release_read_and_reuse();
                 }
 
                 // it is promised safe here, because span only reads cx before handling polling
