@@ -123,10 +123,15 @@ where
         let shmipc_target = rpc_info.callee().shmipc_address();
         let oneway = cx.message_type == TMessageType::OneWay;
         cx.stats.record_make_transport_start_at();
-        let mut transport = self
-            .make_transport
-            .call((target, shmipc_target.clone(), Ver::PingPong))
-            .await?;
+        let mut transport = if !oneway {
+            self.make_transport
+                .call((target, shmipc_target.clone(), Ver::PingPong))
+                .await?
+        } else {
+            self.make_transport
+                .call((target, None, Ver::PingPong))
+                .await?
+        };
         cx.stats.record_make_transport_end_at();
         let resp = transport.send(cx, req, oneway).await;
         if let Ok(None) = resp {
