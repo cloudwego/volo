@@ -21,6 +21,7 @@ use super::{conn::Conn, Address};
 pub enum DefaultIncoming {
     Tcp(#[pin] TcpListenerStream),
     #[cfg(target_family = "unix")]
+    #[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
     Unix(#[pin] UnixListenerStream),
 }
 
@@ -33,6 +34,7 @@ impl MakeIncoming for DefaultIncoming {
 }
 
 #[cfg(target_family = "unix")]
+#[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
 impl From<UnixListener> for DefaultIncoming {
     fn from(l: UnixListener) -> Self {
         DefaultIncoming::Unix(UnixListenerStream::new(l))

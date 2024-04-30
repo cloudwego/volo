@@ -14,6 +14,7 @@ pub mod net;
 pub mod util;
 pub use hack::Unwrap;
 #[cfg(target_family = "unix")]
+#[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
 pub mod hotrestart;
 
 pub mod client;
@@ -23,7 +24,7 @@ mod macros;
 pub use faststr::FastStr;
 pub use metainfo::METAINFO;
 
-/// volo::spawn will spawn a task and derive the metainfo
+/// `volo::spawn` will spawn a task and derive the metainfo
 pub fn spawn<T>(future: T) -> tokio::task::JoinHandle<T::Output>
 where
     T: futures::Future + Send + 'static,
