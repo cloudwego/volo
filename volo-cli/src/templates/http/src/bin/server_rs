@@ -1,16 +1,22 @@
 use std::{{net::SocketAddr, time::Duration}};
 
 use volo_http::{{
+    context::ServerContext,
+    http::StatusCode,
+    server::{{layer::TimeoutLayer, Router, Server}},
     Address,
-    server::{{layer::TimeoutLayer, route::Router, Server}},
 }};
 use {name}::example_router;
+
+fn timeout_handler(_: &ServerContext) -> (StatusCode, &'static str) {{
+    (StatusCode::INTERNAL_SERVER_ERROR, "Timeout!\n")
+}}
 
 #[volo::main]
 async fn main() {{
     let app = Router::new()
         .merge(example_router())
-        .layer(TimeoutLayer::new(Duration::from_secs(1)));
+        .layer(TimeoutLayer::new(Duration::from_secs(1), timeout_handler));
 
     let addr = "[::]:8080".parse::<SocketAddr>().unwrap();
     let addr = Address::from(addr);

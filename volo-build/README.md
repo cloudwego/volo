@@ -17,7 +17,7 @@ volo-build = "*" # make sure you use a compatible version with `volo`
 
 Second, creates a `build.rs` file:
 
-```rust
+```rust,ignore
 fn main() {
     volo_build::Builder::default().write().unwrap();
 }
