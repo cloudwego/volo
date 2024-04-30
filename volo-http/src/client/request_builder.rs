@@ -1,6 +1,6 @@
 #![deny(missing_docs)]
 
-use std::error::Error;
+use std::{error::Error, time::Duration};
 
 use faststr::FastStr;
 use http::{
@@ -29,6 +29,7 @@ pub struct RequestBuilder<'a, S, B = Body> {
     client: &'a Client<S>,
     target: TargetBuilder,
     request: ClientRequest<B>,
+    timeout: Option<Duration>,
 }
 
 impl<'a, S> RequestBuilder<'a, S, Body> {
@@ -37,6 +38,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
             client,
             target: TargetBuilder::None,
             request: Request::new(Body::empty()),
+            timeout: None,
         }
     }
 
@@ -59,6 +61,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
                 .uri(rela_uri)
                 .body(Body::empty())
                 .map_err(builder_error)?,
+            timeout: None,
         };
         builder.fill_target(&uri);
 
@@ -302,12 +305,22 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
             client: self.client,
             target: self.target,
             request,
+            timeout: self.timeout,
         }
     }
 
     /// Get the reference of body in the request.
     pub fn body_ref(&self) -> &B {
         self.request.body()
+    }
+
+    /// Set the maximin idle time for the request.
+    ///
+    /// The whole request includes connecting, writting, and reading the whole HTTP protocol
+    /// headers (without reading response body).
+    pub fn set_request_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
     }
 }
 
@@ -321,6 +334,8 @@ where
 {
     /// Send the request and get the response.
     pub async fn send(self) -> Result<ClientResponse> {
-        self.client.send_request(self.target, self.request).await
+        self.client
+            .send_request(self.target, self.request, self.timeout)
+            .await
     }
 }

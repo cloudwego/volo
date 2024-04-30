@@ -106,8 +106,10 @@ impl TargetBuilder {
         if matches!(self, Self::None) {
             return Ok(None);
         }
-        let callee_name =
-            self.gen_callee_name(&client_inner.config.callee_name, &client_inner.callee_name);
+        let callee_name = self.gen_callee_name(
+            &client_inner.callee_name_mode,
+            &client_inner.default_callee_name,
+        );
         #[cfg(feature = "__tls")]
         let use_tls = self.is_tls();
         Ok(Some(Target {

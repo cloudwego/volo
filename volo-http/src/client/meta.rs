@@ -1,4 +1,4 @@
-use std::error::Error;
+use std::{error::Error, time::Duration};
 
 use http::header;
 use http_body::Body;
@@ -7,7 +7,7 @@ use volo::context::Context;
 
 use crate::{
     context::ClientContext,
-    error::client::{status_error, ClientError},
+    error::client::{status_error, timeout, ClientError},
     request::ClientRequest,
     response::ClientResponse,
 };
@@ -15,11 +15,18 @@ use crate::{
 #[derive(Clone)]
 pub struct MetaService<S> {
     inner: S,
+    config: MetaServiceConfig,
+}
+
+#[derive(Clone)]
+pub(super) struct MetaServiceConfig {
+    pub default_timeout: Option<Duration>,
+    pub fail_on_error_status: bool,
 }
 
 impl<S> MetaService<S> {
-    pub fn new(inner: S) -> Self {
-        Self { inner }
+    pub(super) fn new(inner: S, config: MetaServiceConfig) -> Self {
+        Self { inner, config }
     }
 }
 
@@ -52,9 +59,26 @@ where
         tracing::trace!("sending request: {} {}", req.method(), req.uri());
         tracing::trace!("headers: {:?}", req.headers());
 
-        let res = self.inner.call(cx, req).await;
+        let request_timeout = cx
+            .rpc_info()
+            .config()
+            .timeout
+            .or(self.config.default_timeout);
+        let fut = self.inner.call(cx, req);
+        let res = match request_timeout {
+            Some(duration) => {
+                let sleep = tokio::time::sleep(duration);
+                tokio::select! {
+                    res = fut => res,
+                    _ = sleep => {
+                        return Err(timeout());
+                    }
+                }
+            }
+            None => fut.await,
+        };
 
-        if !cx.rpc_info().config().fail_on_error_status {
+        if !self.config.fail_on_error_status {
             return res;
         }
 

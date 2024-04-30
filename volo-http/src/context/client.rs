@@ -1,7 +1,9 @@
+use std::time::Duration;
+
 use chrono::{DateTime, Local};
 use faststr::FastStr;
 use volo::{
-    context::{Context, Reusable, Role, RpcCx, RpcInfo},
+    context::{Reusable, Role, RpcCx, RpcInfo},
     newtype_impl_context,
 };
 
@@ -21,14 +23,6 @@ impl ClientContext {
                 stats: ClientStats::default(),
             },
         ))
-    }
-
-    pub fn enable_stat(&mut self, stat: bool) {
-        self.rpc_info_mut().config_mut().stat_enable = stat;
-    }
-
-    pub(crate) fn stat_enabled(&self) -> bool {
-        self.rpc_info().config().stat_enable
     }
 }
 
@@ -64,27 +58,9 @@ impl ClientStats {
     stat_impl!(transport_end_at);
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Config {
-    pub caller_name: CallerName,
-    pub callee_name: CalleeName,
-    pub stat_enable: bool,
-    pub fail_on_error_status: bool,
-    #[cfg(feature = "__tls")]
-    pub disable_tls: bool,
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Self {
-            caller_name: CallerName::default(),
-            callee_name: CalleeName::default(),
-            stat_enable: true,
-            fail_on_error_status: false,
-            #[cfg(feature = "__tls")]
-            disable_tls: false,
-        }
-    }
+    pub timeout: Option<Duration>,
 }
 
 #[derive(Clone, Debug, Default)]
