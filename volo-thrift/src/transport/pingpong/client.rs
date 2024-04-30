@@ -2,7 +2,10 @@ use std::{io, marker::PhantomData};
 
 use motore::service::{Service, UnaryService};
 use pilota::thrift::TransportException;
-use volo::net::{conn::ConnExt, dial::MakeTransport, Address};
+use volo::{
+    net::{conn::ConnExt, dial::MakeTransport, shm::TransportEndpoint, Address},
+    FastStr,
+};
 
 use crate::{
     codec::MakeCodec,
@@ -10,7 +13,7 @@ use crate::{
     protocol::TMessageType,
     transport::{
         pingpong::thrift_transport::ThriftTransport,
-        pool::{Config, PooledMakeTransport, Ver},
+        pool::{Config, PooledMakeTransport, Transport, Ver},
     },
     EntryMessage, ThriftMessage,
 };
@@ -128,6 +131,11 @@ where
             .call((target, shmipc_target.clone(), Ver::PingPong))
             .await?;
         cx.stats.record_make_transport_end_at();
+        if let Transport::UnPooled(_) = transport {
+            cx.rpc_info
+                .caller_mut()
+                .set_transport(volo::net::shm::Transport(FastStr::new("shmipc")))
+        }
         let resp = transport.send(cx, req, oneway).await;
         if let Ok(None) = resp {
             if !oneway {

@@ -9,8 +9,11 @@ use pilota::thrift::ThriftException;
 use tokio::sync::futures::Notified;
 use tracing::*;
 use volo::{
-    net::{shm::ShmExt, Address},
-    volo_unreachable,
+    net::{
+        shm::{ShmExt, TransportEndpoint},
+        Address,
+    },
+    volo_unreachable, FastStr,
 };
 
 use crate::{
@@ -53,7 +56,16 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     cache.pop().unwrap_or_default()
                 });
                 if let Some(peer_addr) = &peer_addr {
-                    cx.rpc_info.caller_mut().set_address(peer_addr.clone());
+                    if stream.is_none() {
+                        cx.rpc_info.caller_mut().set_address(peer_addr.clone());
+                    } else {
+                        cx.rpc_info
+                            .caller_mut()
+                            .set_transport(volo::net::shm::Transport(FastStr::new("shmipc")));
+                        cx.rpc_info
+                            .caller_mut()
+                            .set_shmipc_address(peer_addr.clone());
+                    }
                 }
 
                 let msg = tokio::select! {
