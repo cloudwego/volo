@@ -176,6 +176,7 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Cli tests
         run: |
+          rm -rf /tmp/volo-cli-test
           mkdir -p /tmp/volo-cli-test/{thrift/idl,grpc/idl,http}
           cp examples/thrift_idl/echo.thrift /tmp/volo-cli-test/thrift/idl
           cp examples/proto/echo.proto /tmp/volo-cli-test/grpc/idl
@@ -190,3 +191,4 @@ jobs:
           cd /tmp/volo-cli-test/http
           ../volo http init http-test
           cargo build
+          rm -rf /tmp/volo-cli-test
