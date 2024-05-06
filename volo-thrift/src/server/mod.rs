@@ -11,17 +11,10 @@ use motore::{
     BoxError,
 };
 use scopeguard::defer;
-use tokio::{
-    io::{AsyncRead, AsyncWrite},
-    sync::Notify,
-};
+use tokio::sync::Notify;
 use tracing::{info, trace};
 use volo::{
-    net::{
-        conn::{OwnedReadHalf, OwnedWriteHalf},
-        incoming::Incoming,
-        Address,
-    },
+    net::{conn::ConnExt, incoming::Incoming, shm::ShmExt, Address},
     service::BoxService,
 };
 
@@ -180,7 +173,10 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
     ) -> Result<(), BoxError>
     where
         L: Layer<BoxService<ServerContext, Req, S::Response, crate::ServerError>>,
-        MkC: MakeCodec<OwnedReadHalf, OwnedWriteHalf>,
+        MkC: MakeCodec<
+            <<MI::Incoming as Incoming>::Conn as ConnExt>::ReadHalf,
+            <<MI::Incoming as Incoming>::Conn as ConnExt>::WriteHalf,
+        >,
         L::Service: Service<ServerContext, Req, Response = S::Response, Error = crate::ServerError>
             + Send
             + 'static
@@ -221,9 +217,10 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
                 }
                 match incoming.accept().await {
                     Ok(Some(conn)) => {
-                        let peer_addr = conn.info.peer_addr;
+                        let peer_addr = conn.peer_addr();
                         trace!("[VOLO] accept connection from: {:?}", peer_addr);
-                        let (rh, wh) = conn.stream.into_split();
+                        let inner = conn.inner();
+                        let (rh, wh) = conn.into_split();
 
                         #[cfg(feature = "multiplex")]
                         if self.multiplex {
@@ -250,6 +247,7 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
                                 conn_cnt.clone(),
                                 peer_addr,
                                 self.span_provider.clone(),
+                                inner,
                             ));
                         }
                         #[cfg(not(feature = "multiplex"))]
@@ -264,6 +262,7 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
                             conn_cnt.clone(),
                             peer_addr,
                             self.span_provider.clone(),
+                            inner,
                         ));
                     }
                     // no more incoming connections
@@ -398,9 +397,10 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer_addr: Option<Address>,
     span_provider: SP,
+    stream: Option<Box<dyn ShmExt>>,
 ) where
-    R: AsyncRead + Unpin + Send + Sync + 'static,
-    W: AsyncWrite + Unpin + Send + Sync + 'static,
+    R: Unpin + Send + Sync + 'static,
+    W: Unpin + Send + Sync + 'static,
     Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static,
     Svc::Error: Send,
     Svc::Error: Into<crate::ServerError>,
@@ -429,6 +429,7 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
         stat_tracer,
         peer_addr,
         span_provider,
+        stream,
     )
     .await;
 }
@@ -446,8 +447,8 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
     conn_cnt: Arc<std::sync::atomic::AtomicUsize>,
     peer_addr: Option<Address>,
 ) where
-    R: AsyncRead + Unpin + Send + Sync + 'static,
-    W: AsyncWrite + Unpin + Send + Sync + 'static,
+    R: Unpin + Send + Sync + 'static,
+    W: Unpin + Send + Sync + 'static,
     Svc: Service<ServerContext, Req, Response = Resp> + Clone + Send + 'static + Sync,
     Svc::Error: Into<crate::ServerError> + Send,
     Req: EntryMessage + Send + 'static,

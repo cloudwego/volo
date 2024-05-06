@@ -1,6 +1,7 @@
 pub mod conn;
 pub mod dial;
 pub mod incoming;
+pub mod shm;
 #[cfg(feature = "__tls")]
 pub mod tls;
 
