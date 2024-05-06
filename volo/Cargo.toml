@@ -62,6 +62,8 @@ tokio-native-tls = { workspace = true, optional = true }
 
 [features]
 default = []
+unsafe_unchecked = [
+] # This will use unwrap_unchecked instead of unwrap in some places.
 
 __tls = []
 rustls = [
