@@ -73,10 +73,10 @@ impl VoloThriftBackend {
                 // "\"{methods_names}\" => {{ Self::{variant_names}({decode_variants}) }},");
 
                 format! {
-                    r#"Ok(match &*msg_ident.name {{
+                    r#"::std::result::Result::Ok(match &*msg_ident.name {{
                         {match_methods}
                         _ => {{
-                            return Err(::pilota::thrift::new_application_exception(::pilota::thrift::ApplicationExceptionKind::UNKNOWN_METHOD,  format!("unknown method {{}}", msg_ident.name)));
+                            return ::std::result::Result::Err(::pilota::thrift::new_application_exception(::pilota::thrift::ApplicationExceptionKind::UNKNOWN_METHOD,  format!("unknown method {{}}", msg_ident.name)));
                         }},
                     }})"#
                 }
@@ -175,10 +175,10 @@ impl VoloThriftBackend {
                 // "\"{methods_names}\" => {{ Self::{variant_names}({decode_item}) }},");
 
                 format!(
-                    r#"Ok(match &*msg_ident.name {{
+                    r#"::std::result::Result::Ok(match &*msg_ident.name {{
                         {match_methods}
                         _ => {{
-                            return Err(::pilota::thrift::new_application_exception(::pilota::thrift::ApplicationExceptionKind::UNKNOWN_METHOD,  format!("unknown method {{}}", msg_ident.name)));
+                            return ::std::result::Result::Err(::pilota::thrift::new_application_exception(::pilota::thrift::ApplicationExceptionKind::UNKNOWN_METHOD,  format!("unknown method {{}}", msg_ident.name)));
                         }},
                     }})"#
                 )
@@ -387,7 +387,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             let result_path = self.method_result_path(&service_name, m, true);
             let oneway = m.oneway;
             let none = if m.oneway {
-                "None => { Ok(()) }"
+                "None => { ::std::result::Result::Ok(()) }"
             } else {
                 "None => unreachable!()"
             };
@@ -406,17 +406,17 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 match &*e {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
                         let name = self.cx().rust_name(v.did);
-                        format!("Some({res_recv_name}::{enum_variant}({result_path}::{name}(ex))) => Ok(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))),")
+                        format!("Some({res_recv_name}::{enum_variant}({result_path}::{name}(ex))) => ::std::result::Result::Ok(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))),")
                     }).collect::<Vec<_>>(),
                     _ => panic!()
                 }
             }).join("");
 
             let mut resp_type_str = format!("{resp_type}");
-            let mut resp_str = "Ok(resp)";
+            let mut resp_str = "::std::result::Result::Ok(resp)";
             if !convert_exceptions.is_empty() {
                 resp_type_str = format!("::volo_thrift::MaybeException<{resp_type_str}, {exception}>");
-                resp_str = "Ok(::volo_thrift::MaybeException::Ok(resp))";
+                resp_str = "::std::result::Result::Ok(::volo_thrift::MaybeException::Ok(resp))";
             }
             client_methods.push(format! {
                 r#"pub async fn {name}(&self {req_fields}) -> ::std::result::Result<{resp_type_str}, ::volo_thrift::ClientError> {{
@@ -493,7 +493,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                                 let name = self.cx().rust_name(v.did);
                                 let exception = self.cx().cur_related_item_path(m.exceptions.as_ref().expect("must be exception here").did);
                                 format!(
-                                "Ok(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))) => {method_result_path}::{name}(ex),"
+                                "::std::result::Result::Ok(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))) => {method_result_path}::{name}(ex),"
                             )
                             })
                             .collect::<Vec<_>>(),
@@ -504,16 +504,16 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 if has_exception {
                     format! {
                         r#"match self.inner.{name}({args}).await {{
-                        Ok(::volo_thrift::MaybeException::Ok(resp)) => {method_result_path}::Ok(resp),
+                        ::std::result::Result::Ok(::volo_thrift::MaybeException::Ok(resp)) => {method_result_path}::Ok(resp),
                         {convert_exceptions}
-                        Err(err) => return Err(err),
+                        ::std::result::Result::Err(err) => return ::std::result::Result::Err(err),
                     }}"#
                     }
                 } else {
                     format! {
                         r#"match self.inner.{name}({args}).await {{
-                        Ok(resp) => {method_result_path}::Ok(resp),
-                        Err(err) => return Err(err),
+                        ::std::result::Result::Ok(resp) => {method_result_path}::Ok(resp),
+                        ::std::result::Result::Err(err) => return ::std::result::Result::Err(err),
                     }}"#
                     }
                 }
@@ -524,7 +524,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         let client_methods = client_methods.join("\n");
         let oneshot_client_methods = oneshot_client_methods.join("\n");
 
-        let handler = crate::join_multi_strs!("", |variants, user_handler| -> r#"{req_recv_name}::{variants}(args) => Ok(
+        let handler = crate::join_multi_strs!("", |variants, user_handler| -> r#"{req_recv_name}::{variants}(args) => ::std::result::Result::Ok(
             {res_send_name}::{variants}(
                 {user_handler}
             )),"#);
@@ -677,7 +677,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         format!(
             r#"async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, ::volo_thrift::ServerError>
             {{
-                Ok(Default::default())
+                ::std::result::Result::Ok(Default::default())
             }}"#
         )
     }

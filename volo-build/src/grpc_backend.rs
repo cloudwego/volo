@@ -80,18 +80,18 @@ impl VoloGrpcBackend {
 					tokio::spawn(async move {
 						while let Some(resp) = resp.next().await {
 							match tx.send(::std::result::Result::<_, ::volo_grpc::Status>::Ok(resp)).await {
-								Ok(_) => {}
-								Err(_) => {
+								::std::result::Result::Ok(_) => {}
+								::std::result::Result::Err(_) => {
 									break;
 								}
 							}
 						}
 					});
-					Ok(::volo_grpc::Response::new(Box::pin(::volo_grpc::codegen::ReceiverStream::new(rx))))
+					::std::result::Result::Ok(::volo_grpc::Response::new(Box::pin(::volo_grpc::codegen::ReceiverStream::new(rx))))
 				"#
             .into()
         } else {
-            "Ok(::volo_grpc::Response::new(Default::default()))".into()
+            "::std::result::Result::Ok(::volo_grpc::Response::new(Default::default()))".into()
         }
     }
 
@@ -146,14 +146,14 @@ impl VoloGrpcBackend {
             let mut message_stream = match message_stream {{
                 {resp_enum_name}::{variant_name}(stream) => stream,
                 #[allow(unreachable_patterns)]
-                _ => return Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
+                _ => return ::std::result::Result::Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
             }};"#
         );
 
         if streaming {
             format! {
                 r#"{resp_stream}
-                Ok(::volo_grpc::Response::from_parts(metadata, extensions, message_stream))"#
+                ::std::result::Result::Ok(::volo_grpc::Response::from_parts(metadata, extensions, message_stream))"#
             }
         } else {
             format! {
@@ -168,7 +168,7 @@ impl VoloGrpcBackend {
                 if let Some(trailers) = message_stream.trailers().await? {{
                     metadata.merge(trailers);
                 }}
-                Ok(::volo_grpc::Response::from_parts(metadata, extensions, message))"#
+                ::std::result::Result::Ok(::volo_grpc::Response::from_parts(metadata, extensions, message))"#
             }
         }.into()
     }
@@ -185,7 +185,7 @@ impl VoloGrpcBackend {
             let mut message_stream = match message_stream {{
                 {req_enum_name}::{variant_name}(stream) => stream,
                 #[allow(unreachable_patterns)]
-                _ => return Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
+                _ => return ::std::result::Result::Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
             }};"#
         );
         if streaming {
@@ -405,7 +405,7 @@ impl CodegenBackend for VoloGrpcBackend {
         let req_recv_from_body = crate::join_multi_strs!(
             "",
             |paths, enum_variant_names| -> "Some(\"{paths}\") => {{
-                Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind,compression_encoding)))
+                ::std::result::Result::Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind,compression_encoding)))
             }},"
         );
 
@@ -419,7 +419,7 @@ impl CodegenBackend for VoloGrpcBackend {
         let resp_recv_from_body = crate::join_multi_strs!(
             "",
             |paths, enum_variant_names| -> "Some(\"{paths}\") => {{
-                Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind, compression_encoding)))
+                ::std::result::Result::Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind, compression_encoding)))
             }}"
         );
 
@@ -444,7 +444,7 @@ impl CodegenBackend for VoloGrpcBackend {
                 fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::codegen::hyper::body::Incoming, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status> {{
                     match method {{
                         {req_recv_from_body}
-                        _ => Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
+                        _ => ::std::result::Result::Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
                     }}
                 }}
             }}
@@ -472,7 +472,7 @@ impl CodegenBackend for VoloGrpcBackend {
                 {{
                     match method {{
                         {resp_recv_from_body}
-                        _ => Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
+                        _ => ::std::result::Result::Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
                     }}
                 }}
             }}
@@ -558,7 +558,7 @@ impl CodegenBackend for VoloGrpcBackend {
                         {req_matches}
                         path => {{
                             let path = path.to_string();
-                            Err(::volo_grpc::Status::unimplemented(::std::format!("Unimplemented http path: {{}}", path)))
+                            ::std::result::Result::Err(::volo_grpc::Status::unimplemented(::std::format!("Unimplemented http path: {{}}", path)))
                         }}
                     }}
                 }}
