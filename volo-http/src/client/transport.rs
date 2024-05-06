@@ -8,7 +8,7 @@ use motore::{make::MakeConnection, service::Service};
 use volo::net::tls::Connector;
 use volo::{
     context::Context,
-    net::{conn::Conn, dial::DefaultMakeTransport},
+    net::{conn::Conn, dial::DefaultMakeTransport, Address},
 };
 
 use crate::{
@@ -22,83 +22,73 @@ use crate::{
 pub struct ClientTransport {
     client: http1::Builder,
     mk_conn: DefaultMakeTransport,
+    config: ClientTransportConfig,
     #[cfg(feature = "__tls")]
     tls_connector: volo::net::tls::TlsConnector,
 }
 
 impl ClientTransport {
-    pub fn new(
-        config: ClientConfig,
+    pub(super) fn new(
+        http_config: ClientConfig,
+        transport_config: ClientTransportConfig,
         mk_conn: DefaultMakeTransport,
         #[cfg(feature = "__tls")] tls_connector: volo::net::tls::TlsConnector,
     ) -> Self {
         let mut builder = http1::Builder::new();
         builder
-            .title_case_headers(config.title_case_headers)
-            .preserve_header_case(config.preserve_header_case);
-        if let Some(max_headers) = config.max_headers {
+            .title_case_headers(http_config.title_case_headers)
+            .preserve_header_case(http_config.preserve_header_case);
+        if let Some(max_headers) = http_config.max_headers {
             builder.max_headers(max_headers);
         }
 
         Self {
             client: builder,
             mk_conn,
+            config: transport_config,
             #[cfg(feature = "__tls")]
             tls_connector,
         }
     }
 
+    async fn connect_to(&self, address: Address) -> Result<Conn, ClientError> {
+        self.mk_conn.make_connection(address).await.map_err(|err| {
+            tracing::warn!("failed to make connection, error: {err}");
+            request_error(err)
+        })
+    }
+
     #[cfg(feature = "__tls")]
     async fn make_connection(&self, cx: &ClientContext) -> Result<Conn, ClientError> {
         let target_addr = cx.rpc_info().callee().address().ok_or_else(no_address)?;
-        match target_addr {
-            volo::net::Address::Ip(_) if cx.is_tls() => {
-                let target_name = cx.rpc_info().callee().service_name_ref();
-                tracing::debug!("connecting to tls target: {target_addr:?}, name: {target_name:?}");
-                let conn = self
-                    .mk_conn
-                    .make_connection(target_addr)
-                    .await
-                    .map_err(|err| {
-                        tracing::warn!("failed to make connection, error: {err}");
-                        request_error(err)
-                    })?;
-                let tcp_stream = match conn.stream {
-                    volo::net::conn::ConnStream::Tcp(tcp_stream) => tcp_stream,
-                    _ => unreachable!(),
-                };
-                self.tls_connector
-                    .connect(target_name, tcp_stream)
-                    .await
-                    .map_err(|err| {
-                        tracing::warn!("failed to make tls connection, error: {err}");
-                        request_error(err)
-                    })
-            }
-            _ => {
-                tracing::debug!("fallback to non-tls target: {target_addr:?}");
-                self.mk_conn
-                    .make_connection(target_addr)
-                    .await
-                    .map_err(|err| {
-                        tracing::warn!("failed to make connection, error: {err}");
-                        request_error(err)
-                    })
-            }
+        tracing::debug!("connecting to target: {target_addr:?}");
+        let is_ip_addr = matches!(target_addr, Address::Ip(_));
+        let conn = self.connect_to(target_addr).await;
+        if self.config.disable_tls || (!cx.is_tls()) || (!is_ip_addr) {
+            return conn;
         }
+        let conn = conn?;
+
+        let target_name = cx.rpc_info().callee().service_name_ref();
+        tracing::debug!("try to make tls handshake, name: {target_name:?}");
+        let tcp_stream = match conn.stream {
+            volo::net::conn::ConnStream::Tcp(tcp_stream) => tcp_stream,
+            _ => unreachable!(),
+        };
+        self.tls_connector
+            .connect(target_name, tcp_stream)
+            .await
+            .map_err(|err| {
+                tracing::warn!("failed to make tls connection, error: {err}");
+                request_error(err)
+            })
     }
 
     #[cfg(not(feature = "__tls"))]
     async fn make_connection(&self, cx: &ClientContext) -> Result<Conn, ClientError> {
         let target_addr = cx.rpc_info().callee().address().ok_or_else(no_address)?;
         tracing::debug!("connecting to target: {target_addr:?}");
-        self.mk_conn
-            .make_connection(target_addr)
-            .await
-            .map_err(|err| {
-                tracing::warn!("failed to make connection, error: {err}");
-                request_error(err)
-            })
+        self.connect_to(target_addr).await
     }
 
     async fn request<B>(
@@ -140,7 +130,7 @@ where
         cx: &mut ClientContext,
         req: ClientRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
-        let stat_enabled = cx.stat_enabled();
+        let stat_enabled = self.config.stat_enable;
 
         if stat_enabled {
             cx.stats.record_transport_start_at();
@@ -174,6 +164,29 @@ impl ClientConfig {
             title_case_headers: false,
             preserve_header_case: false,
             max_headers: None,
+        }
+    }
+}
+
+#[derive(Clone)]
+pub(super) struct ClientTransportConfig {
+    pub stat_enable: bool,
+    #[cfg(feature = "__tls")]
+    pub disable_tls: bool,
+}
+
+impl Default for ClientTransportConfig {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ClientTransportConfig {
+    pub fn new() -> Self {
+        Self {
+            stat_enable: true,
+            #[cfg(feature = "__tls")]
+            disable_tls: false,
         }
     }
 }

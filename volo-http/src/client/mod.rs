@@ -24,8 +24,8 @@ use volo::{
 
 use self::{
     loadbalance::{DefaultLB, LbConfig},
-    meta::MetaService,
-    transport::{ClientConfig, ClientTransport},
+    meta::{MetaService, MetaServiceConfig},
+    transport::{ClientConfig, ClientTransport, ClientTransportConfig},
     utils::{Target, TargetBuilder},
 };
 use crate::{
@@ -60,8 +60,8 @@ pub type ClientMetaService = MetaService<ClientTransport>;
 pub type DefaultClient = Client<ClientMetaService>;
 
 pub struct ClientBuilder<IL, OL, C, LB> {
-    config: Config,
     http_config: ClientConfig,
+    builder_config: BuilderConfig,
     connector: DefaultMakeTransport,
     callee_name: FastStr,
     caller_name: FastStr,
@@ -75,12 +75,36 @@ pub struct ClientBuilder<IL, OL, C, LB> {
     tls_config: Option<volo::net::tls::TlsConnector>,
 }
 
+struct BuilderConfig {
+    caller_name_mode: CallerName,
+    callee_name_mode: CalleeName,
+    timeout: Option<Duration>,
+    stat_enable: bool,
+    fail_on_error_status: bool,
+    #[cfg(feature = "__tls")]
+    disable_tls: bool,
+}
+
+impl Default for BuilderConfig {
+    fn default() -> Self {
+        Self {
+            caller_name_mode: CallerName::default(),
+            callee_name_mode: CalleeName::default(),
+            timeout: None,
+            stat_enable: true,
+            fail_on_error_status: false,
+            #[cfg(feature = "__tls")]
+            disable_tls: false,
+        }
+    }
+}
+
 impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
     /// Create a new client builder.
     pub fn new() -> Self {
         Self {
-            config: Default::default(),
             http_config: Default::default(),
+            builder_config: Default::default(),
             connector: Default::default(),
             callee_name: FastStr::empty(),
             caller_name: FastStr::empty(),
@@ -109,8 +133,8 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
         load_balance: NLB,
     ) -> ClientBuilder<IL, OL, C, LbConfig<NLB, DISC>> {
         ClientBuilder {
-            config: self.config,
             http_config: self.http_config,
+            builder_config: self.builder_config,
             connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
@@ -128,8 +152,8 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
     /// Set service discover for the client.
     pub fn discover<NDISC>(self, discover: NDISC) -> ClientBuilder<IL, OL, C, LbConfig<LB, NDISC>> {
         ClientBuilder {
-            config: self.config,
             http_config: self.http_config,
+            builder_config: self.builder_config,
             connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
@@ -150,8 +174,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     #[doc(hidden)]
     pub fn client_maker<C2>(self, new_mk_client: C2) -> ClientBuilder<IL, OL, C2, LB> {
         ClientBuilder {
-            config: self.config,
             http_config: self.http_config,
+            builder_config: self.builder_config,
             connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
@@ -181,8 +205,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
     pub fn layer_inner<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, IL>, OL, C, LB> {
         ClientBuilder {
-            config: self.config,
             http_config: self.http_config,
+            builder_config: self.builder_config,
             connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
@@ -215,8 +239,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         layer: Inner,
     ) -> ClientBuilder<Stack<IL, Inner>, OL, C, LB> {
         ClientBuilder {
-            config: self.config,
             http_config: self.http_config,
+            builder_config: self.builder_config,
             connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
@@ -246,8 +270,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// The overall order for layers is: [outer] -> Timeout -> LoadBalance -> inner -> transport.
     pub fn layer_outer<Outer>(self, layer: Outer) -> ClientBuilder<IL, Stack<Outer, OL>, C, LB> {
         ClientBuilder {
-            config: self.config,
             http_config: self.http_config,
+            builder_config: self.builder_config,
             connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
@@ -280,8 +304,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         layer: Outer,
     ) -> ClientBuilder<IL, Stack<OL, Outer>, C, LB> {
         ClientBuilder {
-            config: self.config,
             http_config: self.http_config,
+            builder_config: self.builder_config,
             connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
@@ -299,8 +323,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Set a new load balance for the client.
     pub fn mk_load_balance<NLB>(self, mk_load_balance: NLB) -> ClientBuilder<IL, OL, C, NLB> {
         ClientBuilder {
-            config: self.config,
             http_config: self.http_config,
+            builder_config: self.builder_config,
             connector: self.connector,
             callee_name: self.callee_name,
             caller_name: self.caller_name,
@@ -422,18 +446,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         &mut self.headers
     }
 
-    /// This is unstable now and may be changed in the future.
-    #[doc(hidden)]
-    pub fn config(&self) -> &Config {
-        &self.config
-    }
-
-    /// This is unstable now and may be changed in the future.
-    #[doc(hidden)]
-    pub fn config_mut(&mut self) -> &mut Config {
-        &mut self.config
-    }
-
     /// Get a reference to the HTTP configuration of the client.
     pub fn http_config(&self) -> &ClientConfig {
         &self.http_config
@@ -448,7 +460,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// Default is callee name.
     pub fn set_callee_name_mode(&mut self, mode: CalleeName) -> &mut Self {
-        self.config.callee_name = mode;
+        self.builder_config.callee_name_mode = mode;
         self
     }
 
@@ -456,14 +468,14 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// Default is the current crate name and version.
     pub fn set_caller_name_mode(&mut self, mode: CallerName) -> &mut Self {
-        self.config.caller_name = mode;
+        self.builder_config.caller_name_mode = mode;
         self
     }
 
     /// This is unstable now and may be changed in the future.
     #[doc(hidden)]
     pub fn stat_enable(&mut self, enable: bool) -> &mut Self {
-        self.config.stat_enable = enable;
+        self.builder_config.stat_enable = enable;
         self
     }
 
@@ -471,7 +483,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// Default is false.
     pub fn fail_on_error_status(&mut self, fail_on_error_status: bool) -> &mut Self {
-        self.config.fail_on_error_status = fail_on_error_status;
+        self.builder_config.fail_on_error_status = fail_on_error_status;
         self
     }
 
@@ -480,7 +492,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Default is false, when TLS related feature is enabled, TLS is enabled by default.
     #[cfg(feature = "__tls")]
     pub fn disable_tls(&mut self, disable: bool) -> &mut Self {
-        self.config.disable_tls = disable;
+        self.builder_config.disable_tls = disable;
         self
     }
 
@@ -545,6 +557,15 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         self
     }
 
+    /// Set the maximin idle time for the request.
+    ///
+    /// The whole request includes connecting, writting, and reading the whole HTTP protocol
+    /// headers (without reading response body).
+    pub fn set_request_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.builder_config.timeout = Some(timeout);
+        self
+    }
+
     /// Build the HTTP client.
     pub fn build(mut self) -> C::Target
     where
@@ -557,17 +578,30 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         OL::Service: Send + Sync + 'static,
         C: MkClient<Client<OL::Service>>,
     {
-        let service = MetaService::new(ClientTransport::new(
+        let transport_config = ClientTransportConfig {
+            stat_enable: self.builder_config.stat_enable,
+            #[cfg(feature = "__tls")]
+            disable_tls: self.builder_config.disable_tls,
+        };
+        let meta_config = MetaServiceConfig {
+            default_timeout: self.builder_config.timeout,
+            fail_on_error_status: self.builder_config.fail_on_error_status,
+        };
+        let transport = ClientTransport::new(
             self.http_config,
+            transport_config,
             self.connector,
             #[cfg(feature = "__tls")]
             self.tls_config.unwrap_or_default(),
-        ));
-        let service = self
-            .outer_layer
-            .layer(self.mk_lb.make().layer(self.inner_layer.layer(service)));
+        );
+        let meta_service = MetaService::new(transport, meta_config);
+        let service = self.outer_layer.layer(
+            self.mk_lb
+                .make()
+                .layer(self.inner_layer.layer(meta_service)),
+        );
 
-        let caller_name = match &self.config.caller_name {
+        let caller_name = match &self.builder_config.caller_name_mode {
             CallerName::PkgNameWithVersion => FastStr::from_static_str(PKG_NAME_WITH_VER),
             CallerName::OriginalCallerName => self.caller_name,
             CallerName::CallerNameWithVersion if !self.caller_name.is_empty() => {
@@ -591,7 +625,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         let default_target_is_tls = self.target.is_tls();
         let default_target_callee_name = self
             .target
-            .gen_callee_name(&self.config.callee_name, &self.callee_name);
+            .gen_callee_name(&self.builder_config.callee_name_mode, &self.callee_name);
         let default_target = if self.target.is_none() {
             None
         } else {
@@ -607,11 +641,11 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         };
 
         let client_inner = ClientInner {
-            callee_name: self.callee_name,
             caller_name,
+            callee_name_mode: self.builder_config.callee_name_mode,
+            default_callee_name: self.callee_name,
             default_target,
             headers: self.headers,
-            config: self.config,
         };
         let client = Client {
             service,
@@ -622,11 +656,11 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
 }
 
 pub(super) struct ClientInner {
-    callee_name: FastStr,
     caller_name: FastStr,
+    callee_name_mode: CalleeName,
+    default_callee_name: FastStr,
     default_target: Option<Target>,
     headers: HeaderMap,
-    config: Config,
 }
 
 #[derive(Clone)]
@@ -730,6 +764,7 @@ impl<S> Client<S> {
         &self,
         target: TargetBuilder,
         mut request: ClientRequest<B>,
+        timeout: Option<Duration>,
     ) -> Result<S::Response, S::Error>
     where
         S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
@@ -754,27 +789,26 @@ impl<S> Client<S> {
                 (target.callee_name, cx)
             }
             None => (
-                self.inner.callee_name.clone(),
+                self.inner.default_callee_name.clone(),
                 ClientContext::new(
+                    // Use HTTP by default
                     #[cfg(feature = "__tls")]
-                    !self.inner.config.disable_tls,
+                    false,
                 ),
             ),
         };
+        if let Ok(host) = HeaderValue::from_maybe_shared(callee_name.clone()) {
+            request.headers_mut().insert(header::HOST, host);
+        }
 
         tracing::trace!(
             "create a request with caller_name: {caller_name}, callee_name: {callee_name}"
         );
-
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
-        cx.rpc_info_mut()
-            .callee_mut()
-            .set_service_name(callee_name.clone());
-        cx.rpc_info_mut().set_config(self.inner.config.clone());
+        cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
 
-        if let Ok(host) = HeaderValue::from_maybe_shared(callee_name) {
-            request.headers_mut().insert(header::HOST, host);
-        }
+        let config = Config { timeout };
+        cx.rpc_info_mut().set_config(config);
 
         self.call(&mut cx, request).await
     }
