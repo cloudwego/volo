@@ -31,7 +31,7 @@ hickory-resolver.workspace = true
 http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
-hyper = { workspace = true, features = ["client", "server", "http1"] }
+hyper.workspace = true
 hyper-util = { workspace = true, features = ["tokio"] }
 lazy_static.workspace = true
 metainfo.workspace = true
@@ -79,11 +79,12 @@ default = []
 default_client = ["client", "json"]
 default_server = ["server", "query", "form", "json"]
 
-full = ["client", "server", "rustls", "cookie", "query", "form", "json"]
+full = ["client", "server", "rustls", "cookie", "query", "form", "json", "tls"]
 
-client = ["hyper/client"] # client core
-server = ["hyper/server", "dep:matchit"] # server core
+client = ["hyper/client", "hyper/http1"] # client core
+server = ["hyper/server", "hyper/http1", "dep:matchit"] # server core
 
+tls = ["rustls"]
 __tls = []
 rustls = ["__tls", "dep:tokio-rustls", "volo/rustls"]
 native-tls = ["__tls", "dep:tokio-native-tls", "volo/native-tls"]

@@ -191,7 +191,7 @@ macro_rules! simple_error_with_url {
 }
 
 simple_error!(Builder => NoAddress => "missing target address");
-simple_error_with_url!(Builder => BadScheme => "bad scheme");
+simple_error!(Builder => BadScheme => "bad scheme");
 simple_error_with_url!(Builder => BadHostName => "bad host name");
 simple_error!(Builder => UnreachableBuilderError => "unreachable builder error");
 simple_error!(Request => Timeout => "request timeout");

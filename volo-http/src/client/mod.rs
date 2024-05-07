@@ -26,7 +26,7 @@ use self::{
     loadbalance::{DefaultLB, LbConfig},
     meta::{MetaService, MetaServiceConfig},
     transport::{ClientConfig, ClientTransport, ClientTransportConfig},
-    utils::{Target, TargetBuilder},
+    utils::TargetBuilder,
 };
 use crate::{
     context::{
@@ -34,7 +34,7 @@ use crate::{
         ClientContext,
     },
     error::{
-        client::{builder_error, ClientError},
+        client::{builder_error, no_address, ClientError},
         BoxError,
     },
     request::ClientRequest,
@@ -629,30 +629,11 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             );
         }
 
-        #[cfg(feature = "__tls")]
-        let default_target_is_tls = self.target.is_tls();
-        let default_target_callee_name = self
-            .target
-            .gen_callee_name(&self.builder_config.callee_name_mode, &self.callee_name);
-        let default_target = if self.target.is_none() {
-            None
-        } else {
-            Some(Target {
-                addr: self
-                    .target
-                    .resolve_sync()
-                    .expect("failed to resolve default target of client"),
-                #[cfg(feature = "__tls")]
-                use_tls: default_target_is_tls,
-                callee_name: default_target_callee_name,
-            })
-        };
-
         let client_inner = ClientInner {
             caller_name,
             callee_name_mode: self.builder_config.callee_name_mode,
             default_callee_name: self.callee_name,
-            default_target,
+            default_target: self.target,
             headers: self.headers,
         };
         let client = Client {
@@ -667,7 +648,7 @@ pub(super) struct ClientInner {
     caller_name: FastStr,
     callee_name_mode: CalleeName,
     default_callee_name: FastStr,
-    default_target: Option<Target>,
+    default_target: TargetBuilder,
     headers: HeaderMap,
 }
 
@@ -728,8 +709,8 @@ impl<S> Client<S> {
     method_requests!(patch);
 
     /// Get the default target address of the client.
-    pub fn default_target(&self) -> Option<&Target> {
-        self.inner.default_target.as_ref()
+    pub fn default_target(&self) -> &TargetBuilder {
+        &self.inner.default_target
     }
 
     /// Send a request to the target address.
@@ -782,29 +763,24 @@ impl<S> Client<S> {
         B: Send + 'static,
     {
         let caller_name = self.inner.caller_name.clone();
-        let target = target
-            .into_target(&self.inner)
-            .await?
-            .or_else(|| self.inner.default_target.clone());
-
-        let (callee_name, mut cx) = match target {
-            Some(target) => {
-                let mut cx = ClientContext::new(
-                    #[cfg(feature = "__tls")]
-                    target.use_tls,
-                );
-                cx.rpc_info_mut().callee_mut().set_address(target.addr);
-                (target.callee_name, cx)
+        let target = match (&target, &self.inner.default_target) {
+            (TargetBuilder::None, TargetBuilder::None) => {
+                return Err(no_address());
             }
-            None => (
-                self.inner.default_callee_name.clone(),
-                ClientContext::new(
-                    // Use HTTP by default
-                    #[cfg(feature = "__tls")]
-                    false,
-                ),
-            ),
+            (TargetBuilder::None, default_target) => default_target,
+            (request_target, _) => request_target,
         };
+        let target = target
+            .to_target(&self.inner)
+            .await?
+            .ok_or_else(no_address)?;
+
+        let callee_name = target.callee_name;
+        let mut cx = ClientContext::new(
+            #[cfg(feature = "__tls")]
+            target.use_tls,
+        );
+        cx.rpc_info_mut().callee_mut().set_address(target.addr);
         if let Ok(host) = HeaderValue::from_maybe_shared(callee_name.clone()) {
             request.headers_mut().insert(header::HOST, host);
         }
@@ -869,4 +845,185 @@ where
     U::Error: Into<BoxError>,
 {
     ClientBuilder::new().build().get(uri)?.send().await
+}
+
+#[cfg(test)]
+mod client_tests {
+    use std::collections::HashMap;
+
+    use http::{header, uri::Scheme, StatusCode};
+    use serde::Deserialize;
+
+    use super::{get, utils::resolve, Client};
+    use crate::{body::BodyConversion, context::client::CalleeName};
+
+    #[allow(dead_code)]
+    #[derive(Deserialize)]
+    struct HttpBinResponse {
+        args: HashMap<String, String>,
+        headers: HashMap<String, String>,
+        origin: String,
+        url: String,
+    }
+
+    const HTTPBIN_GET: &str = "http://httpbin.org/get";
+    const HTTPBIN_GET_HTTPS: &str = "https://httpbin.org/get";
+    const USER_AGENT_KEY: &str = "User-Agent";
+    const USER_AGENT_VAL: &str = "volo-http-unit-test";
+
+    #[tokio::test]
+    async fn simple_get() {
+        let resp = get(HTTPBIN_GET)
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
+
+    #[tokio::test]
+    async fn client_builder_with_header() {
+        let mut builder = Client::builder();
+        builder.header(header::USER_AGENT, USER_AGENT_VAL).unwrap();
+        let client = builder.build();
+
+        let resp = client
+            .get(HTTPBIN_GET)
+            .unwrap()
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.headers.get(USER_AGENT_KEY).unwrap(), USER_AGENT_VAL);
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
+
+    #[tokio::test]
+    async fn client_builder_with_host() {
+        let mut builder = Client::builder();
+        builder.host("httpbin.org");
+        let client = builder.build();
+
+        let resp = client
+            .get("/get")
+            .unwrap()
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
+
+    #[tokio::test]
+    async fn client_builder_with_address() {
+        let addr = resolve(None, "httpbin.org", None).await.unwrap();
+        let mut builder = Client::builder();
+        builder
+            .address(addr, false)
+            .callee_name("httpbin.org")
+            .set_callee_name_mode(CalleeName::OriginalCalleeName);
+        let client = builder.build();
+
+        let resp = client
+            .get("/get")
+            .unwrap()
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
+
+    #[tokio::test]
+    async fn client_builder_with_https() {
+        let mut builder = Client::builder();
+        builder.scheme_host_and_port(Some(Scheme::HTTPS), "httpbin.org", None);
+        let client = builder.build();
+
+        let resp = client
+            .get("/get")
+            .unwrap()
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET_HTTPS);
+    }
+
+    #[tokio::test]
+    async fn client_builder_with_address_and_https() {
+        let addr = resolve(Some(&Scheme::HTTPS), "httpbin.org", None)
+            .await
+            .unwrap();
+        let mut builder = Client::builder();
+        builder
+            .address(addr, true)
+            .callee_name("httpbin.org")
+            .set_callee_name_mode(CalleeName::OriginalCalleeName);
+        let client = builder.build();
+
+        let resp = client
+            .get("/get")
+            .unwrap()
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET_HTTPS);
+    }
+
+    #[tokio::test]
+    async fn client_builder_with_port() {
+        let mut builder = Client::builder();
+        builder.scheme_host_and_port(None, "httpbin.org", Some(443));
+        let client = builder.build();
+
+        let resp = client.get("/get").unwrap().send().await.unwrap();
+        // Send HTTP request to the HTTPS port (443), `httpbin.org` will response `400 Bad
+        // Request`.
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn fail_on_status() {
+        let mut builder = Client::builder();
+        builder.host("httpbin.org").fail_on_error_status(true);
+        let client = builder.build();
+        client
+            .get("/post")
+            .unwrap()
+            .send()
+            .await
+            .expect_err("Request `/post` with GET should fail!");
+    }
+
+    #[tokio::test]
+    async fn client_disable_tls() {
+        let mut builder = Client::builder();
+        builder.disable_tls(true);
+        let client = builder.build();
+        client
+            .get("https://httpbin.org/post")
+            .unwrap()
+            .send()
+            .await
+            .expect_err("HTTPS request should fail when TLS is disabled!");
+    }
 }

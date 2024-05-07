@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
 
 use faststr::FastStr;
-use hickory_resolver::{AsyncResolver, Resolver, TokioAsyncResolver};
+use hickory_resolver::{AsyncResolver, TokioAsyncResolver};
 use http::uri::{Scheme, Uri};
 use lazy_static::lazy_static;
 use volo::net::Address;
@@ -14,9 +14,7 @@ use crate::{
 };
 
 lazy_static! {
-    static ref SYNC_RESOLVER: Resolver =
-        Resolver::from_system_conf().expect("failed to init dns resolver");
-    static ref ASYNC_RESOLVER: TokioAsyncResolver =
+    static ref RESOLVER: TokioAsyncResolver =
         AsyncResolver::tokio_from_system_conf().expect("failed to init dns resolver");
 }
 
@@ -57,8 +55,8 @@ impl TargetBuilder {
             Self::None => false,
             Self::Address { use_tls, .. } => *use_tls,
             Self::Host { scheme, .. } => {
-                // If scheme is none, use https by default
-                scheme.as_ref() == Some(&Scheme::HTTPS) || scheme.is_none()
+                // If scheme is none, use http by default
+                scheme.as_ref() == Some(&Scheme::HTTPS)
             }
         }
     }
@@ -88,23 +86,15 @@ impl TargetBuilder {
         }
     }
 
-    pub fn resolve_sync(self) -> Result<Address> {
+    pub async fn resolve(&self) -> Result<Address> {
         match self {
             Self::None => Err(no_address()),
-            Self::Address { addr, .. } => Ok(addr),
-            Self::Host { scheme, host, port } => resolve_sync(scheme, &host, port),
+            Self::Address { addr, .. } => Ok(addr.clone()),
+            Self::Host { scheme, host, port } => resolve(scheme.as_ref(), host, *port).await,
         }
     }
 
-    pub async fn resolve(self) -> Result<Address> {
-        match self {
-            Self::None => Err(no_address()),
-            Self::Address { addr, .. } => Ok(addr),
-            Self::Host { scheme, host, port } => resolve(scheme, &host, port).await,
-        }
-    }
-
-    pub(crate) async fn into_target(self, client_inner: &ClientInner) -> Result<Option<Target>> {
+    pub(crate) async fn to_target(&self, client_inner: &ClientInner) -> Result<Option<Target>> {
         if matches!(self, Self::None) {
             return Ok(None);
         }
@@ -127,7 +117,7 @@ fn get_port(scheme: Option<&Scheme>) -> Option<u16> {
     // `match` is unavailable here, ref:
     // https://doc.rust-lang.org/stable/std/marker/trait.StructuralPartialEq.html
     #[cfg(feature = "__tls")]
-    if scheme == Some(&Scheme::HTTPS) || scheme.is_none() {
+    if scheme == Some(&Scheme::HTTPS) {
         return Some(consts::HTTPS_DEFAULT_PORT);
     }
     if scheme == Some(&Scheme::HTTP) || scheme.is_none() {
@@ -137,54 +127,46 @@ fn get_port(scheme: Option<&Scheme>) -> Option<u16> {
     None
 }
 
-fn prepare_host_and_port(
-    scheme: Option<Scheme>,
-    host: &str,
+fn prepare_host_and_port<'a>(
+    scheme: Option<&'a Scheme>,
+    host: &'a str,
     port: Option<u16>,
-) -> Result<(&str, u16)> {
+) -> Result<(&'a str, u16)> {
     // Trim the brackets from the host name if it's an IPv6 address.
     //
-    // e.g., for `http://[::1]:8080/`, it can be trimed to `::1` rather than `[::1]`
+    // For example, for `http://[::1]:8080/`, the host is `[::1]`, but the IPv6 address is `::1`
+    // rather than `[::1]`
     let host = host.trim_start_matches('[').trim_end_matches(']');
     let port = match port {
         Some(port) => port,
-        None => get_port(scheme.as_ref()).ok_or_else(|| {
+        None => get_port(scheme).ok_or_else(|| {
             if let Some(scheme) = scheme {
                 if let Ok(uri) = Uri::try_from(format!("{}://{}", scheme, host)) {
-                    return bad_scheme(uri);
+                    bad_scheme().with_url(uri)
+                } else {
+                    bad_scheme()
                 }
+            } else {
+                unreachable_builder_error()
             }
-            unreachable_builder_error()
         })?,
     };
 
     Ok((host, port))
 }
 
-fn resolve_sync(scheme: Option<Scheme>, host: &str, port: Option<u16>) -> Result<Address> {
-    let (host, port) = prepare_host_and_port(scheme, host, port)?;
-
-    // The Resolver will try to parse the host as an IP address first, so we don't need
-    // to parse it manually.
-    if let Ok(resp) = SYNC_RESOLVER.lookup_ip(host) {
-        if let Some(addr) = resp.iter().next() {
-            return Ok(Address::Ip(SocketAddr::new(addr, port)));
-        }
-    };
-
-    Err(bad_host_name(
-        Uri::try_from(host).map_err(|_| unreachable_builder_error())?,
-    ))
-}
-
-async fn resolve(scheme: Option<Scheme>, host: &str, port: Option<u16>) -> Result<Address> {
+pub(super) async fn resolve(
+    scheme: Option<&Scheme>,
+    host: &str,
+    port: Option<u16>,
+) -> Result<Address> {
     let (host, port) = prepare_host_and_port(scheme, host, port)?;
 
     // The address may be a domain name, so we need to resolve it.
     //
     // Note that the Resolver will try to parse the host as an IP address first, so we don't need
     // to parse it manually.
-    if let Ok(resp) = ASYNC_RESOLVER.lookup_ip(host).await {
+    if let Ok(resp) = RESOLVER.lookup_ip(host).await {
         if let Some(addr) = resp.iter().next() {
             return Ok(Address::Ip(SocketAddr::new(addr, port)));
         }
