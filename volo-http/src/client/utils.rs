@@ -24,6 +24,7 @@ lazy_static! {
 pub struct Target {
     pub addr: Address,
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub use_tls: bool,
     pub(crate) callee_name: FastStr,
 }
@@ -50,6 +51,7 @@ impl TargetBuilder {
     }
 
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn is_tls(&self) -> bool {
         match self {
             Self::None => false,

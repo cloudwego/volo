@@ -103,6 +103,7 @@ impl<S> Server<S, Identity> {
 
 impl<S, L> Server<S, L> {
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     /// Enable TLS with the specified configuration.
     ///
     /// If not set, the server will not use TLS.

@@ -14,7 +14,11 @@ pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 impl ClientContext {
     #[allow(clippy::new_without_default)]
-    pub fn new(#[cfg(feature = "__tls")] tls: bool) -> Self {
+    pub fn new(
+        #[cfg(feature = "__tls")]
+        #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
+        tls: bool,
+    ) -> Self {
         Self(RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Client),
             ClientCxInner {
@@ -41,6 +45,7 @@ pub struct ClientCxInner {
 
 impl ClientCxInner {
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn is_tls(&self) -> bool {
         self.tls
     }
