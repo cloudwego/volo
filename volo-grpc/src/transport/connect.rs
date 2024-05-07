@@ -13,6 +13,7 @@ use hyper_util::client::legacy::connect::{Connected, Connection};
 use motore::{make::MakeConnection, service::UnaryService};
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 #[cfg(feature = "__tls")]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 use volo::net::tls::{ClientTlsConfig, TlsMakeTransport};
 use volo::net::{
     conn::Conn,
@@ -24,6 +25,7 @@ use volo::net::{
 pub enum Connector {
     Default(DefaultMakeTransport),
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     Tls(TlsMakeTransport),
 }
 
@@ -39,6 +41,7 @@ impl Connector {
     }
 
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn new_with_tls(cfg: Option<Config>, tls_config: ClientTlsConfig) -> Self {
         let mut mt = TlsMakeTransport::new(cfg.unwrap_or_default(), tls_config);
         if let Some(cfg) = cfg {

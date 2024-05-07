@@ -72,7 +72,8 @@ impl<U> ClientTransport<U> {
         }
     }
 
-    #[cfg(any(feature = "rustls", feature = "native-tls"))]
+    #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn new_with_tls(
         http2_config: &Http2Config,
         rpc_config: &Config,

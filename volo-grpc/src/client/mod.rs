@@ -454,6 +454,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
 
     /// Sets the [`ClientTlsConfig`] for the client.
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn tls_config(mut self, tls_config: volo::net::tls::ClientTlsConfig) -> Self {
         self.tls_config = Some(tls_config);
         self
