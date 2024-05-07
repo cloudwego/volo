@@ -2772,6 +2772,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "tokio-condvar"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7233b09174540ef9bf9fc8326bcad6ccebc631e7c9a1e2e48d956a133056f9d"
+dependencies = [
+ "tokio",
+]
+
+[[package]]
 name = "tokio-macros"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3302,6 +3311,7 @@ dependencies = [
  "sonic-rs",
  "thiserror",
  "tokio",
+ "tokio-condvar",
  "tracing",
  "volo",
 ]

@@ -103,7 +103,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                     }),
                                 );
                                 if let Err(e) = async {
-                                    let result = encoder.encode(&mut cx, msg).await;
+                                    let result = encoder.send(&mut cx, msg).await;
                                     span_provider.leave_encode(&cx);
                                     result
                                 }
@@ -145,7 +145,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                         thrift_exception_to_application_exception(e),
                                     ),
                                 );
-                                if let Err(e) = encoder.encode(&mut cx, msg).await {
+                                if let Err(e) = encoder.send(&mut cx, msg).await {
                                     error!(
                                         "[VOLO] server send error error: {:?}, cx: {:?}, \
                                          peer_addr: {:?}",

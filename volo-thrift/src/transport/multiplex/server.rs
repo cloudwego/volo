@@ -56,7 +56,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                         if let Err(e) = metainfo::METAINFO
                                             .scope(
                                                 RefCell::new(mi),
-                                                encoder.encode::<Resp, ServerContext>(&mut cx, msg),
+                                                encoder.send::<Resp, ServerContext>(&mut cx, msg),
                                             )
                                             .await
                                         {
