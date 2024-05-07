@@ -123,6 +123,7 @@ impl FromContext for Method {
 }
 
 #[cfg(feature = "query")]
+#[cfg_attr(docsrs, doc(cfg(feature = "query")))]
 impl<T> FromContext for Query<T>
 where
     T: serde::de::DeserializeOwned,
@@ -140,6 +141,7 @@ where
 }
 
 #[cfg(feature = "query")]
+#[cfg_attr(docsrs, doc(cfg(feature = "query")))]
 impl IntoResponse for serde_urlencoded::de::Error {
     fn into_response(self) -> crate::response::ServerResponse {
         http::StatusCode::BAD_REQUEST.into_response()
@@ -283,6 +285,7 @@ impl<T> FromRequest for MaybeInvalid<T> {
 }
 
 #[cfg(feature = "form")]
+#[cfg_attr(docsrs, doc(cfg(feature = "form")))]
 impl<T> FromRequest for Form<T>
 where
     T: serde::de::DeserializeOwned,

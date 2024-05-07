@@ -66,6 +66,7 @@ pub trait Acceptor: Sized {
 }
 
 #[cfg(feature = "rustls")]
+#[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
 impl Default for TlsConnector {
     fn default() -> Self {
         Self::Rustls(RustlsConnector::default())
@@ -73,6 +74,7 @@ impl Default for TlsConnector {
 }
 
 #[cfg(not(feature = "rustls"))]
+#[cfg_attr(docsrs, doc(cfg(not(feature = "rustls"))))]
 impl Default for TlsConnector {
     fn default() -> Self {
         Self::NativeTls(NativeTlsConnector::default())

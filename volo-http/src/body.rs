@@ -163,6 +163,7 @@ where
     }
 
     #[cfg(feature = "__json")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
     fn into_json<T>(self) -> impl Future<Output = Result<T, ResponseConvertError>> + Send
     where
         T: DeserializeOwned,
@@ -186,6 +187,7 @@ pub enum ResponseConvertError {
     BodyCollectionError,
     StringUtf8Error,
     #[cfg(feature = "__json")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
     JsonDeserializeError(crate::json::Error),
 }
 

@@ -10,8 +10,10 @@ pub enum ExtractBodyError {
     Common(CommonRejectionError),
     String(simdutf8::basic::Utf8Error),
     #[cfg(feature = "__json")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
     Json(crate::json::Error),
     #[cfg(feature = "form")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "form")))]
     Form(serde_urlencoded::de::Error),
 }
 

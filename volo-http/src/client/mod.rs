@@ -360,7 +360,13 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Set the target address of the client.
     ///
     /// If there is no target specified when building a request, client will use this address.
-    pub fn address<A>(&mut self, address: A, #[cfg(feature = "__tls")] use_tls: bool) -> &mut Self
+    pub fn address<A>(
+        &mut self,
+        address: A,
+        #[cfg(feature = "__tls")]
+        #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
+        use_tls: bool,
+    ) -> &mut Self
     where
         A: Into<Address>,
     {
@@ -428,6 +434,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
 
     /// Set tls config for the client.
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn set_tls_config<T>(&mut self, tls_config: T) -> &mut Self
     where
         T: Into<volo::net::tls::TlsConnector>,
@@ -491,6 +498,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// Default is false, when TLS related feature is enabled, TLS is enabled by default.
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn disable_tls(&mut self, disable: bool) -> &mut Self {
         self.builder_config.disable_tls = disable;
         self

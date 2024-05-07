@@ -172,6 +172,7 @@ impl ClientConfig {
 pub(super) struct ClientTransportConfig {
     pub stat_enable: bool,
     #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub disable_tls: bool,
 }
 

@@ -37,6 +37,7 @@ impl Deref for CookieJar {
 }
 
 #[cfg(feature = "server")]
+#[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 impl FromContext for CookieJar {
     type Rejection = Infallible;
 
