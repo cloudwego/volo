@@ -41,11 +41,20 @@ clippy_check() {
 	echo_and_run cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
 	echo_and_run cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
 	echo_and_run cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
-	echo_and_run cargo clippy -- --deny warnings
+	echo_and_run cargo clippy -p volo -- --deny warnings
+	echo_and_run cargo clippy -p volo-build -- --deny warnings
+	echo_and_run cargo clippy -p volo-cli -- --deny warnings
+	echo_and_run cargo clippy -p volo-macros -- --deny warnings
+	echo_and_run cargo clippy -p examples -- --deny warnings
 }
 
 unit_test() {
-	echo_and_run cargo test
+	echo_and_run cargo test -p volo-thrift
+	echo_and_run cargo test -p volo-grpc --features rustls
+	echo_and_run cargo test -p volo-http --features full
+	echo_and_run cargo test -p volo -- features rustls
+	echo_and_run cargo test -p volo-build
+	echo_and_run cargo test -p volo-cli
 }
 
 volo_cli_test() {

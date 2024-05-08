@@ -69,8 +69,17 @@ jobs:
           cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
           cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
           cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
-          cargo clippy -- --deny warnings
-          cargo test
+          cargo clippy -p volo -- --deny warnings
+          cargo clippy -p volo-build -- --deny warnings
+          cargo clippy -p volo-cli -- --deny warnings
+          cargo clippy -p volo-macros -- --deny warnings
+          cargo clippy -p examples -- --deny warnings
+          cargo test -p volo-thrift
+          cargo test -p volo-grpc --features rustls
+          cargo test -p volo-http --features full
+          cargo test -p volo --features rustls
+          cargo test -p volo-build
+          cargo test -p volo-cli
 
   test-linux-aarch64:
     runs-on: [self-hosted, arm]
@@ -100,8 +109,17 @@ jobs:
           cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
           cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
           cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
-          cargo clippy -- --deny warnings
-          cargo test
+          cargo clippy -p volo -- --deny warnings
+          cargo clippy -p volo-build -- --deny warnings
+          cargo clippy -p volo-cli -- --deny warnings
+          cargo clippy -p volo-macros -- --deny warnings
+          cargo clippy -p examples -- --deny warnings
+          cargo test -p volo-thrift
+          cargo test -p volo-grpc --features rustls
+          cargo test -p volo-http --features full
+          cargo test -p volo --features rustls
+          cargo test -p volo-build
+          cargo test -p volo-cli
 
   test-macos:
     runs-on: macos-latest
@@ -130,8 +148,17 @@ jobs:
           cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
           cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
           cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
-          cargo clippy -- --deny warnings
-          cargo test
+          cargo clippy -p volo -- --deny warnings
+          cargo clippy -p volo-build -- --deny warnings
+          cargo clippy -p volo-cli -- --deny warnings
+          cargo clippy -p volo-macros -- --deny warnings
+          cargo clippy -p examples -- --deny warnings
+          cargo test -p volo-thrift
+          cargo test -p volo-grpc --features rustls
+          cargo test -p volo-http --features full
+          cargo test -p volo --features rustls
+          cargo test -p volo-build
+          cargo test -p volo-cli
 
   test-windows:
     runs-on: windows-latest
@@ -160,8 +187,17 @@ jobs:
           cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
           cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
           cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
-          cargo clippy -- --deny warnings
-          cargo test
+          cargo clippy -p volo -- --deny warnings
+          cargo clippy -p volo-build -- --deny warnings
+          cargo clippy -p volo-cli -- --deny warnings
+          cargo clippy -p volo-macros -- --deny warnings
+          cargo clippy -p examples -- --deny warnings
+          cargo test -p volo-thrift
+          cargo test -p volo-grpc --features rustls
+          cargo test -p volo-http --features full
+          cargo test -p volo --features rustls
+          cargo test -p volo-build
+          cargo test -p volo-cli
 
   test-cli:
     runs-on: [self-hosted, X64]
