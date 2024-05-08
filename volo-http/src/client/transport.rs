@@ -60,11 +60,18 @@ impl ClientTransport {
 
     #[cfg(feature = "__tls")]
     async fn make_connection(&self, cx: &ClientContext) -> Result<Conn, ClientError> {
+        use crate::error::client::bad_scheme;
+
+        if self.config.disable_tls && cx.is_tls() {
+            // TLS is disabled but the request still use TLS
+            return Err(bad_scheme());
+        }
+
         let target_addr = cx.rpc_info().callee().address().ok_or_else(no_address)?;
         tracing::debug!("connecting to target: {target_addr:?}");
-        let is_ip_addr = matches!(target_addr, Address::Ip(_));
         let conn = self.connect_to(target_addr).await;
-        if self.config.disable_tls || (!cx.is_tls()) || (!is_ip_addr) {
+        if !cx.is_tls() {
+            // The request does not use TLS, just return it without TLS handshake
             return conn;
         }
         let conn = conn?;
