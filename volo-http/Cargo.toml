@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.2.2"
+version = "0.2.3"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
