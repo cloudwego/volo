@@ -71,7 +71,7 @@ Volo-Thrift: <https://www.cloudwego.io/zh/docs/volo/volo-thrift/getting-started/
 
 Volo-gRPC: <https://www.cloudwego.io/zh/docs/volo/volo-grpc/getting-started/>
 
-Volo-HTTP: Work In Progess
+Volo-HTTP: Work In Progress
 
 ## Examples
 
