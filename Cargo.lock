@@ -3239,6 +3239,7 @@ name = "volo-http"
 version = "0.2.3"
 dependencies = [
  "ahash",
+ "async-broadcast",
  "bytes",
  "chrono",
  "cookie",

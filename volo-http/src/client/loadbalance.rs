@@ -1,16 +1,21 @@
 //! This is a copy of `volo::loadbalance::layer` without the retry logic. Because retry needs the
 //! `Req` has `Clone` trait, but HTTP body may be a stream, which cannot be cloned. So we remove
 //! the retry related codes here.
+//!
+//! In addition, HTTP service can use DNS as service discover, so the default load balance uses a
+//! DNS resolver for pick a target address (the DNS resolver picks only one because it does not
+//! need load balance).
 
 use std::{fmt::Debug, sync::Arc};
 
 use motore::{layer::Layer, service::Service};
 use volo::{
     context::Context,
-    discovery::{Discover, DummyDiscover},
+    discovery::Discover,
     loadbalance::{random::WeightedRandomBalance, LoadBalance, MkLbLayer},
 };
 
+use super::dns_discover::DnsResolver;
 use crate::{
     context::ClientContext,
     error::{
@@ -21,9 +26,8 @@ use crate::{
     response::ClientResponse,
 };
 
-pub type DefaultLB =
-    LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>;
-pub type DefaultLBService<S> = LoadBalanceService<DummyDiscover, WeightedRandomBalance<()>, S>;
+pub type DefaultLB = LbConfig<WeightedRandomBalance<<DnsResolver as Discover>::Key>, DnsResolver>;
+pub type DefaultLBService<S> = LoadBalanceService<DnsResolver, WeightedRandomBalance<()>, S>;
 
 pub struct LbConfig<L, DISC> {
     load_balance: L,
@@ -32,7 +36,7 @@ pub struct LbConfig<L, DISC> {
 
 impl Default for DefaultLB {
     fn default() -> Self {
-        LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {})
+        LbConfig::new(WeightedRandomBalance::new(), DnsResolver)
     }
 }
 

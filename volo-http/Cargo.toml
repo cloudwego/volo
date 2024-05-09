@@ -22,6 +22,7 @@ maintenance = { status = "actively-developed" }
 volo = { version = "0.10", path = "../volo" }
 
 ahash.workspace = true
+async-broadcast.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 faststr.workspace = true

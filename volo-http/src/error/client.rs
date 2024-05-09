@@ -164,35 +164,8 @@ macro_rules! simple_error {
     };
 }
 
-macro_rules! simple_error_with_url {
-    ($(#[$attr:meta])* $kind:ident => $name:ident => $msg:literal) => {
-        $(#[$attr])*
-        #[derive(Debug)]
-        pub struct $name;
-
-        $(#[$attr])*
-        impl ::std::fmt::Display for $name {
-            fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
-                f.write_str($msg)
-            }
-        }
-
-        $(#[$attr])*
-        impl ::std::error::Error for $name {}
-
-        paste! {
-            $(#[$attr])*
-            pub(crate) fn [<$name:snake>](url: Uri) -> ClientError {
-                ClientError::new(ErrorKind::$kind, Some($name))
-                    .with_url(url)
-            }
-        }
-    };
-}
-
 simple_error!(Builder => NoAddress => "missing target address");
 simple_error!(Builder => BadScheme => "bad scheme");
-simple_error_with_url!(Builder => BadHostName => "bad host name");
-simple_error!(Builder => UnreachableBuilderError => "unreachable builder error");
+simple_error!(Builder => BadHostName => "bad host name");
 simple_error!(Request => Timeout => "request timeout");
 simple_error!(LoadBalance => NoAvailableEndpoint => "no available endpoint");

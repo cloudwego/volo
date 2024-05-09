@@ -11,12 +11,12 @@ use http::{
 use motore::service::Service;
 use volo::net::Address;
 
-use super::{utils::TargetBuilder, Client};
+use super::{dns_discover::Target, Client};
 use crate::{
     body::Body,
     context::ClientContext,
     error::{
-        client::{builder_error, Result},
+        client::{bad_scheme, builder_error, Result},
         BoxError, ClientError,
     },
     request::ClientRequest,
@@ -26,7 +26,7 @@ use crate::{
 /// The builder for building a request.
 pub struct RequestBuilder<'a, S, B = Body> {
     client: &'a Client<S>,
-    target: TargetBuilder,
+    target: Target,
     request: ClientRequest<B>,
     timeout: Option<Duration>,
 }
@@ -35,7 +35,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
     pub(crate) fn new(client: &'a Client<S>) -> Self {
         Self {
             client,
-            target: TargetBuilder::None,
+            target: Target::None,
             request: Request::new(Body::empty()),
             timeout: None,
         }
@@ -54,7 +54,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
 
         let mut builder = Self {
             client,
-            target: TargetBuilder::None,
+            target: Target::None,
             request: Request::builder()
                 .method(method)
                 .uri(rela_uri)
@@ -62,7 +62,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
                 .map_err(builder_error)?,
             timeout: None,
         };
-        builder.fill_target(&uri);
+        builder.fill_target(&uri)?;
 
         Ok(builder)
     }
@@ -140,14 +140,26 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         self.request.method()
     }
 
-    fn fill_target(&mut self, uri: &Uri) {
+    fn fill_target(&mut self, uri: &Uri) -> Result<()> {
         if let Some(host) = uri.host() {
-            self.target = TargetBuilder::Host {
-                scheme: uri.scheme().cloned(),
+            let scheme = uri.scheme();
+            if let Some(scheme) = scheme {
+                #[cfg(not(feature = "__tls"))]
+                if scheme == &Scheme::HTTPS {
+                    return Err(bad_scheme());
+                }
+                if scheme != &Scheme::HTTP {
+                    return Err(bad_scheme());
+                }
+            }
+            self.target = Target::Host {
+                #[cfg(feature = "__tls")]
+                https: scheme == Some(&Scheme::HTTPS),
                 host: FastStr::from_string(host.to_owned()),
                 port: uri.port_u16(),
             };
         }
+        Ok(())
     }
 
     /// Set uri for building request.
@@ -169,7 +181,7 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
             .map(PathAndQuery::to_owned)
             .unwrap_or_else(|| PathAndQuery::from_static("/"))
             .into();
-        self.fill_target(&uri);
+        self.fill_target(&uri)?;
         *self.request.uri_mut() = rela_uri;
         Ok(self)
     }
@@ -186,7 +198,7 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         U::Error: Into<BoxError>,
     {
         let uri = uri.try_into().map_err(builder_error)?;
-        self.fill_target(&uri);
+        self.fill_target(&uri)?;
         *self.request.uri_mut() = uri;
         Ok(self)
     }
@@ -255,31 +267,31 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         address: A,
         #[cfg(feature = "__tls")]
         #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
-        use_tls: bool,
+        https: bool,
     ) -> Self
     where
         A: Into<Address>,
     {
-        self.target = TargetBuilder::Address {
+        self.target = Target::Address {
             addr: address.into(),
             #[cfg(feature = "__tls")]
-            use_tls,
+            https,
         };
         self
     }
 
     /// Set the target host for the request.
     ///
-    /// If TLS is enabled, it will use https with port 443 by default, otherwise it will use http
-    /// with port 80 by default.
+    /// It uses http with port 80 by default.
     ///
     /// For setting the scheme and port, use `scheme_host_and_port` instead.
     pub fn host<IS>(mut self, host: IS) -> Self
     where
         IS: Into<FastStr>,
     {
-        self.target = TargetBuilder::Host {
-            scheme: None,
+        self.target = Target::Host {
+            #[cfg(feature = "__tls")]
+            https: false,
             host: host.into(),
             port: None,
         };
@@ -287,17 +299,16 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
     }
 
     /// Set the target scheme, host and port for the request.
-    pub fn scheme_host_and_port<IS>(
-        mut self,
-        scheme: Option<Scheme>,
-        host: IS,
-        port: Option<u16>,
-    ) -> Self
+    pub fn scheme_host_and_port<IS>(mut self, https: bool, host: IS, port: Option<u16>) -> Self
     where
         IS: Into<FastStr>,
     {
-        self.target = TargetBuilder::Host {
-            scheme,
+        if cfg!(not(feature = "__tls")) && https {
+            panic!("TLS is not enabled while target uses HTTPS");
+        }
+        self.target = Target::Host {
+            #[cfg(feature = "__tls")]
+            https,
             host: host.into(),
             port,
         };
@@ -348,8 +359,12 @@ where
     }
 }
 
+// The `httpbin.org` always responses a json data.
+#[cfg(feature = "__json")]
 #[cfg(test)]
 mod request_tests {
+    #![allow(unused)]
+
     use std::collections::HashMap;
 
     use serde::Deserialize;
@@ -366,6 +381,7 @@ mod request_tests {
         url: String,
     }
 
+    #[cfg(feature = "query")]
     #[tokio::test]
     async fn set_query() {
         let mut builder = Client::builder();

@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
-use faststr::FastStr;
 use volo::{
     context::{Reusable, Role, RpcCx, RpcInfo},
     newtype_impl_context,
@@ -13,20 +12,19 @@ use crate::utils::macros::{impl_deref_and_deref_mut, stat_impl};
 pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 impl ClientContext {
-    #[allow(clippy::new_without_default)]
-    pub fn new(
-        #[cfg(feature = "__tls")]
-        #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
-        tls: bool,
-    ) -> Self {
+    pub fn new() -> Self {
         Self(RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Client),
             ClientCxInner {
-                #[cfg(feature = "__tls")]
-                tls,
                 stats: ClientStats::default(),
             },
         ))
+    }
+}
+
+impl Default for ClientContext {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -36,19 +34,8 @@ impl_deref_and_deref_mut!(ClientContext, RpcCx<ClientCxInner, Config>, 0);
 
 #[derive(Debug)]
 pub struct ClientCxInner {
-    #[cfg(feature = "__tls")]
-    tls: bool,
-
     /// This is unstable now and may be changed in the future.
     pub stats: ClientStats,
-}
-
-impl ClientCxInner {
-    #[cfg(feature = "__tls")]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
-    pub fn is_tls(&self) -> bool {
-        self.tls
-    }
 }
 
 /// This is unstable now and may be changed in the future.
@@ -66,32 +53,6 @@ impl ClientStats {
 #[derive(Clone, Debug, Default)]
 pub struct Config {
     pub timeout: Option<Duration>,
-}
-
-#[derive(Clone, Debug, Default)]
-pub enum CallerName {
-    /// The crate name and version of the current crate.
-    #[default]
-    PkgNameWithVersion,
-    /// The original caller name.
-    OriginalCallerName,
-    /// The caller name and version of the current crate.
-    CallerNameWithVersion,
-    /// A specified String for the user agent.
-    Specified(FastStr),
-    /// Do not set `User-Agent` by the client.
-    None,
-}
-
-#[derive(Clone, Debug, Default)]
-pub enum CalleeName {
-    /// The target authority of URI.
-    #[default]
-    TargetName,
-    /// The original callee name.
-    OriginalCalleeName,
-    /// Do not set `Host` by the client.
-    None,
 }
 
 impl Reusable for Config {

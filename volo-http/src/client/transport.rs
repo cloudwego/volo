@@ -54,39 +54,46 @@ impl ClientTransport {
     async fn connect_to(&self, address: Address) -> Result<Conn, ClientError> {
         self.mk_conn.make_connection(address).await.map_err(|err| {
             tracing::warn!("failed to make connection, error: {err}");
+            println!("failed to make connection, error: {err}");
             request_error(err)
         })
     }
 
     #[cfg(feature = "__tls")]
     async fn make_connection(&self, cx: &ClientContext) -> Result<Conn, ClientError> {
+        use super::HttpsTag;
         use crate::error::client::bad_scheme;
 
-        if self.config.disable_tls && cx.is_tls() {
+        let callee = cx.rpc_info().callee();
+        let https = callee.contains::<HttpsTag>();
+
+        if self.config.disable_tls && https {
             // TLS is disabled but the request still use TLS
             return Err(bad_scheme());
         }
 
-        let target_addr = cx.rpc_info().callee().address().ok_or_else(no_address)?;
+        let target_addr = callee.address().ok_or_else(no_address)?;
         tracing::debug!("connecting to target: {target_addr:?}");
         let conn = self.connect_to(target_addr).await;
-        if !cx.is_tls() {
+        if !https {
             // The request does not use TLS, just return it without TLS handshake
             return conn;
         }
         let conn = conn?;
 
-        let target_name = cx.rpc_info().callee().service_name_ref();
+        let target_name = callee.service_name_ref();
         tracing::debug!("try to make tls handshake, name: {target_name:?}");
         let tcp_stream = match conn.stream {
             volo::net::conn::ConnStream::Tcp(tcp_stream) => tcp_stream,
             _ => unreachable!(),
         };
+        println!("target_name: {target_name}");
         self.tls_connector
             .connect(target_name, tcp_stream)
             .await
             .map_err(|err| {
                 tracing::warn!("failed to make tls connection, error: {err}");
+                println!("failed to make tls connection, error: {err}");
                 request_error(err)
             })
     }
@@ -112,11 +119,13 @@ impl ClientTransport {
         let io = TokioIo::new(conn);
         let (mut sender, conn) = self.client.handshake(io).await.map_err(|err| {
             tracing::warn!("failed to handshake, error: {err}");
+            println!("failed to handshake, error: {err}");
             request_error(err)
         })?;
         tokio::spawn(conn);
         let resp = sender.send_request(req).await.map_err(|err| {
             tracing::warn!("failed to send request, error: {err}");
+            println!("failed to send request, error: {err}");
             request_error(err)
         })?;
         Ok(resp)
