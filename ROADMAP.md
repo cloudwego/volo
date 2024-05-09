@@ -9,7 +9,7 @@ refused! We are always happy to receive patches for new cool features we haven't
 or didn't judge to be a priority. Please however understand that such patches might take longer
 for us to review.
 
-## Service Governence
+## Service Governance
 
 - [ ] Support OpenSergo
 
