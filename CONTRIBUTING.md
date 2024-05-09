@@ -50,7 +50,7 @@ participate in the discussion around bugs and participate in reviewing PRs.
 If you have reviewed existing documentation and still have questions or are
 having problems, you can either:
 
-1. Submit a new issue and describes your problem, or
+1. Submit a new issue and describe your problem, or
 2. Join the [Volo user group on Feishu](https://applink.feishu.cn/client/chat/chatter/add_by_link?link_token=b34v5470-8e4d-4c7d-bf50-8b2917af026b) and ask for help there.
 
 In exchange for receiving help, we expect you to contribute back a documentation
@@ -65,7 +65,7 @@ of your ability. Do not worry if you cannot answer every detail, just fill in
 what you can.
 
 The two most important pieces of information we need in order to properly
-evaluate the report is a description of the behavior you are seeing and a simple
+evaluate the report are a description of the behavior you are seeing and a simple
 test case we can use to recreate the problem on our own. If we cannot recreate
 the issue, it becomes impossible for us to fix.
 
@@ -370,7 +370,7 @@ There are also some tags that are used to provide additional information.
 
 ## Versioning Policy
 
-We adheres the [Semantic Versioning 2.0](https://semver.org/).
+We adhere to the [Semantic Versioning 2.0](https://semver.org/).
 
 ## Releasing
 
