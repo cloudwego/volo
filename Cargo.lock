@@ -3130,7 +3130,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.10.4"
+version = "0.10.5"
 dependencies = [
  "ahash",
  "anyhow",
@@ -3161,7 +3161,7 @@ dependencies = [
 
 [[package]]
 name = "volo-cli"
-version = "0.10.3"
+version = "0.10.2"
 dependencies = [
  "anyhow",
  "clap",
