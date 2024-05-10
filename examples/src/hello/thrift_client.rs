@@ -18,6 +18,8 @@ pub struct LogService<S>(S);
 async fn main() {
     let req = volo_gen::thrift_gen::hello::HelloRequest {
         name: "volo".into(),
+        common: None,
+        common2: None,
     };
     let resp = CLIENT
         .clone()

@@ -127,6 +127,11 @@ impl<MkB, Parser> Builder<MkB, Parser> {
             })
             .ok_or_else(|| anyhow!("please specify out_dir"))
     }
+
+    pub fn dedup(mut self, dedup_list: Vec<FastStr>) -> Self {
+        self.pilota_builder = self.pilota_builder.dedup(dedup_list);
+        self
+    }
 }
 
 impl<MkB, P> Builder<MkB, P>

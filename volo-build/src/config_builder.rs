@@ -138,6 +138,13 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.special_namings(namings)),
         }
     }
+
+    pub fn dedup(self, dedup_list: Vec<FastStr>) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.dedup(dedup_list)),
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.dedup(dedup_list)),
+        }
+    }
 }
 
 impl ConfigBuilder {
@@ -185,6 +192,7 @@ impl ConfigBuilder {
                     .add_services(service_builders)
                     .ignore_unused(!entry.common_option.touch_all)
                     .special_namings(entry.common_option.special_namings)
+                    .dedup(entry.common_option.dedups)
                     .write()?;
 
                 Ok(())
