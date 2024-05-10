@@ -54,3 +54,5 @@ entries:
         source: git
         repo: thrift
         path: test/Service.thrift
+    dedups:
+    - CommonReq
