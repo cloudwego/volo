@@ -8,6 +8,7 @@
 
 use std::{fmt::Debug, sync::Arc};
 
+use faststr::FastStr;
 use motore::{layer::Layer, service::Service};
 use volo::{
     context::Context,
@@ -15,7 +16,7 @@ use volo::{
     loadbalance::{random::WeightedRandomBalance, LoadBalance, MkLbLayer},
 };
 
-use super::dns_discover::DnsResolver;
+use super::discover::dns::DnsResolver;
 use crate::{
     context::ClientContext,
     error::{
@@ -27,7 +28,7 @@ use crate::{
 };
 
 pub type DefaultLB = LbConfig<WeightedRandomBalance<<DnsResolver as Discover>::Key>, DnsResolver>;
-pub type DefaultLBService<S> = LoadBalanceService<DnsResolver, WeightedRandomBalance<()>, S>;
+pub type DefaultLBService<S> = LoadBalanceService<DnsResolver, WeightedRandomBalance<FastStr>, S>;
 
 pub struct LbConfig<L, DISC> {
     load_balance: L,
@@ -36,7 +37,7 @@ pub struct LbConfig<L, DISC> {
 
 impl Default for DefaultLB {
     fn default() -> Self {
-        LbConfig::new(WeightedRandomBalance::new(), DnsResolver)
+        LbConfig::new(WeightedRandomBalance::new(), DnsResolver::default())
     }
 }
 

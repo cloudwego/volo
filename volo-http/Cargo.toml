@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.2.3"
+version = "0.2.4"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -34,7 +34,6 @@ http-body.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util = { workspace = true, features = ["tokio"] }
-lazy_static.workspace = true
 metainfo.workspace = true
 mime.workspace = true
 motore.workspace = true
