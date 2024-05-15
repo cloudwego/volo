@@ -399,7 +399,11 @@ pub fn get_idl_build_path_and_includes(
             .expect("git source requires the repo info for idl")
             .clone();
         let path = dir.join(strip_slash_prefix(idl.path.as_path()));
-        let includes = idl.includes.iter().map(|v| dir.join(v.clone())).collect();
+        let mut includes: Vec<PathBuf> = idl.includes.iter().map(|v| dir.join(v.clone())).collect();
+        // To resolve absolute path dependencies, go back two levels to the domain level
+        if let Some(path) = dir.parent().and_then(|d| d.parent()) {
+            includes.push(path.to_path_buf());
+        }
         (path, includes)
     } else {
         (idl.path.clone(), idl.includes.clone())

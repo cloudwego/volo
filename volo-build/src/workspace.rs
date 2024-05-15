@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use pilota_build::{IdlService, Plugin};
 use volo::FastStr;
 
@@ -60,6 +62,14 @@ where
             std::process::exit(1);
         };
 
+        // To resolve absolute path dependencies, go back two levels to the domain level
+        let mut include_dirs = Vec::with_capacity(repo_dir_map.len());
+        repo_dir_map.iter().for_each(|(_, v)| {
+            if let Some(path) = v.parent().and_then(|v| v.parent()) {
+                include_dirs.push(path.to_path_buf());
+            }
+        });
+
         let services = config
             .services
             .into_iter()
@@ -82,7 +92,9 @@ where
                 }
             })
             .collect();
-        self.ignore_unused(!config.common_option.touch_all)
+
+        self.include_dirs(include_dirs)
+            .ignore_unused(!config.common_option.touch_all)
             .dedup(config.common_option.dedups)
             .special_namings(config.common_option.special_namings)
             .common_crate_name(config.common_crate_name)
@@ -112,6 +124,11 @@ where
 
     pub fn special_namings(mut self, namings: impl IntoIterator<Item = FastStr>) -> Self {
         self.pilota_builder = self.pilota_builder.special_namings(namings);
+        self
+    }
+
+    pub fn include_dirs(mut self, include_dirs: Vec<PathBuf>) -> Self {
+        self.pilota_builder = self.pilota_builder.include_dirs(include_dirs);
         self
     }
 }
