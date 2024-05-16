@@ -3,13 +3,13 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use async_stream::stream;
 use bytes::Bytes;
 use faststr::FastStr;
-use http::{header, request::Parts, Method, StatusCode, Uri};
+use http::{header, request::Parts, Method, Request, StatusCode, Uri};
 use http_body::Frame;
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use volo::service::service_fn;
 use volo_http::{
-    body::Body,
+    body::{Body, BodyConversion},
     context::{RequestPartsExt, ServerContext},
     cookie::{self, CookieJar},
     extension::Extension,
@@ -96,6 +96,24 @@ async fn get_with_query(Query(info): Query<Login>) -> Result<String, StatusCode>
 
 async fn post_with_form(Form(info): Form<Login>) -> Result<String, StatusCode> {
     process_login(info)
+}
+
+async fn test_body_and_err(
+    _: &mut ServerContext,
+    _: ServerRequest<Bytes>,
+) -> Result<ServerResponse, ()> {
+    Ok(ServerResponse::default())
+}
+
+async fn map_body_and_err(
+    cx: &mut ServerContext,
+    req: ServerRequest,
+    next: Next<Bytes, ()>,
+) -> Result<ServerResponse, Infallible> {
+    let (parts, body) = req.into_parts();
+    let body = body.into_bytes().await.unwrap();
+    let req = Request::from_parts(parts, body);
+    Ok(next.run(cx, req).await.unwrap())
 }
 
 async fn get_and_post(
@@ -216,6 +234,15 @@ fn user_form_router() -> Router {
     )
 }
 
+fn body_error_router() -> Router {
+    Router::new()
+        .route(
+            "/body_err/test",
+            get_service(service_fn(test_body_and_err)).post_service(service_fn(test_body_and_err)),
+        )
+        .layer(middleware::from_fn(map_body_and_err))
+}
+
 fn test_router() -> Router {
     Router::new()
         // curl http://127.0.0.1:8080/test/extract
@@ -330,6 +357,7 @@ async fn main() {
         .merge(index_router())
         .merge(user_json_router())
         .merge(user_form_router())
+        .merge(body_error_router())
         .merge(test_router())
         .layer(Extension(Arc::new(State {
             foo: "Foo".to_string(),

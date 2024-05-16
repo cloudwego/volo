@@ -3,7 +3,8 @@ use std::{convert::Infallible, marker::PhantomData};
 use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::Future;
-use http::{header, request::Parts, Method, Uri};
+use http::{header, request::Parts, Method, Request, Uri};
+use http_body::Body;
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
 use volo::{context::Context, net::Address};
@@ -12,7 +13,6 @@ use super::IntoResponse;
 use crate::{
     context::ServerContext,
     error::server::{body_collection_error, ExtractBodyError},
-    request::ServerRequest,
 };
 
 mod private {
@@ -32,13 +32,13 @@ pub trait FromContext: Sized {
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
-pub trait FromRequest<M = private::ViaRequest>: Sized {
+pub trait FromRequest<B = Incoming, M = private::ViaRequest>: Sized {
     type Rejection: IntoResponse;
 
     fn from_request(
         cx: &mut ServerContext,
         parts: Parts,
-        body: Incoming,
+        body: B,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
@@ -148,8 +148,9 @@ impl IntoResponse for serde_urlencoded::de::Error {
     }
 }
 
-impl<T> FromRequest<private::ViaContext> for T
+impl<B, T> FromRequest<B, private::ViaContext> for T
 where
+    B: Send,
     T: FromContext + Sync,
 {
     type Rejection = T::Rejection;
@@ -157,58 +158,74 @@ where
     async fn from_request(
         cx: &mut ServerContext,
         mut parts: Parts,
-        _body: Incoming,
+        _: B,
     ) -> Result<Self, Self::Rejection> {
         T::from_context(cx, &mut parts).await
     }
 }
 
-impl<T> FromRequest for Option<T>
+impl<B, T> FromRequest<B> for Option<T>
 where
-    T: FromRequest<private::ViaRequest> + Sync,
+    B: Body + Send,
+    B::Data: Send,
+    B::Error: Send,
+    T: FromRequest<B, private::ViaRequest> + Sync,
 {
     type Rejection = Infallible;
 
     async fn from_request(
         cx: &mut ServerContext,
         parts: Parts,
-        body: Incoming,
+        body: B,
     ) -> Result<Self, Self::Rejection> {
         Ok(T::from_request(cx, parts, body).await.ok())
     }
 }
 
-impl FromRequest for ServerRequest {
+impl<B> FromRequest<B> for Request<B>
+where
+    B: Send,
+{
     type Rejection = Infallible;
 
     async fn from_request(
         _cx: &mut ServerContext,
         parts: Parts,
-        body: Incoming,
+        body: B,
     ) -> Result<Self, Self::Rejection> {
-        Ok(ServerRequest::from_parts(parts, body))
+        Ok(Request::from_parts(parts, body))
     }
 }
 
-impl FromRequest for Vec<u8> {
+impl<B> FromRequest<B> for Vec<u8>
+where
+    B: Body + Send,
+    B::Data: Send,
+    B::Error: Send,
+{
     type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
         parts: Parts,
-        body: Incoming,
+        body: B,
     ) -> Result<Self, Self::Rejection> {
         Ok(Bytes::from_request(cx, parts, body).await?.into())
     }
 }
 
-impl FromRequest for Bytes {
+impl<B> FromRequest<B> for Bytes
+where
+    B: Body + Send,
+    B::Data: Send,
+    B::Error: Send,
+{
     type Rejection = ExtractBodyError;
 
     async fn from_request(
-        _cx: &mut ServerContext,
+        _: &mut ServerContext,
         parts: Parts,
-        body: Incoming,
+        body: B,
     ) -> Result<Self, Self::Rejection> {
         let bytes = body
             .collect()
@@ -234,13 +251,18 @@ impl FromRequest for Bytes {
     }
 }
 
-impl FromRequest for String {
+impl<B> FromRequest<B> for String
+where
+    B: Body + Send,
+    B::Data: Send,
+    B::Error: Send,
+{
     type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
         parts: Parts,
-        body: Incoming,
+        body: B,
     ) -> Result<Self, Self::Rejection> {
         let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
@@ -252,13 +274,18 @@ impl FromRequest for String {
     }
 }
 
-impl FromRequest for FastStr {
+impl<B> FromRequest<B> for FastStr
+where
+    B: Body + Send,
+    B::Data: Send,
+    B::Error: Send,
+{
     type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
         parts: Parts,
-        body: Incoming,
+        body: B,
     ) -> Result<Self, Self::Rejection> {
         let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
@@ -270,13 +297,18 @@ impl FromRequest for FastStr {
     }
 }
 
-impl<T> FromRequest for MaybeInvalid<T> {
+impl<B, T> FromRequest<B> for MaybeInvalid<T>
+where
+    B: Body + Send,
+    B::Data: Send,
+    B::Error: Send,
+{
     type Rejection = ExtractBodyError;
 
     async fn from_request(
         cx: &mut ServerContext,
         parts: Parts,
-        body: Incoming,
+        body: B,
     ) -> Result<Self, Self::Rejection> {
         let vec = Vec::<u8>::from_request(cx, parts, body).await?;
 
@@ -286,8 +318,11 @@ impl<T> FromRequest for MaybeInvalid<T> {
 
 #[cfg(feature = "form")]
 #[cfg_attr(docsrs, doc(cfg(feature = "form")))]
-impl<T> FromRequest for Form<T>
+impl<B, T> FromRequest<B> for Form<T>
 where
+    B: Body + Send,
+    B::Data: Send,
+    B::Error: Send,
     T: serde::de::DeserializeOwned,
 {
     type Rejection = ExtractBodyError;
@@ -295,7 +330,7 @@ where
     async fn from_request(
         cx: &mut ServerContext,
         parts: Parts,
-        body: Incoming,
+        body: B,
     ) -> Result<Self, Self::Rejection> {
         let bytes = Bytes::from_request(cx, parts, body).await?;
         let form =

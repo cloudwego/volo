@@ -27,6 +27,12 @@ pub enum Body {
     Body(#[pin] BoxBody<Bytes, BoxError>),
 }
 
+impl Default for Body {
+    fn default() -> Self {
+        Body::empty()
+    }
+}
+
 impl Body {
     pub fn empty() -> Self {
         Self::Full(Full::new(Bytes::new()))

@@ -13,6 +13,7 @@
 use std::{collections::HashMap, convert::Infallible, error::Error, fmt, marker::PhantomData};
 
 use http::{Method, StatusCode};
+use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service, ServiceExt};
 use paste::paste;
 
@@ -20,8 +21,8 @@ use super::{handler::Handler, IntoResponse};
 use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
 /// The route service used for [`Router`].
-pub type Route<E = Infallible> =
-    motore::service::BoxCloneService<ServerContext, ServerRequest, ServerResponse, E>;
+pub type Route<B = Incoming, E = Infallible> =
+    motore::service::BoxCloneService<ServerContext, ServerRequest<B>, ServerResponse, E>;
 
 // The `matchit::Router` cannot be converted to `Iterator`, so using
 // `matchit::Router<MethodRouter>` is not convenient enough.
@@ -46,15 +47,16 @@ impl RouteId {
 
 /// The router for routing path to [`Service`]s or handlers.
 #[must_use]
-pub struct Router<E = Infallible> {
+pub struct Router<B = Incoming, E = Infallible> {
     matcher: Matcher,
-    routes: HashMap<RouteId, MethodRouter<E>>,
-    fallback: Fallback<E>,
+    routes: HashMap<RouteId, MethodRouter<B, E>>,
+    fallback: Fallback<B, E>,
     is_default_fallback: bool,
 }
 
-impl<E> Default for Router<E>
+impl<B, E> Default for Router<B, E>
 where
+    B: Send + 'static,
     E: 'static,
 {
     fn default() -> Self {
@@ -62,7 +64,11 @@ where
     }
 }
 
-impl<E> Router<E> {
+impl<B, E> Router<B, E>
+where
+    B: Send + 'static,
+    E: 'static,
+{
     /// Create a new router.
     pub fn new() -> Self
     where
@@ -174,7 +180,7 @@ impl<E> Router<E> {
     ///
     /// For more usage methods, please refer to:
     /// [`matchit`](https://docs.rs/matchit/0.8.0/matchit/).
-    pub fn route<R>(mut self, uri: R, route: MethodRouter<E>) -> Self
+    pub fn route<R>(mut self, uri: R, route: MethodRouter<B, E>) -> Self
     where
         R: Into<String>,
     {
@@ -195,7 +201,7 @@ impl<E> Router<E> {
     /// Default is returning "404 Not Found".
     pub fn fallback<H, T>(mut self, handler: H) -> Self
     where
-        for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
+        for<'a> H: Handler<T, B, E> + Clone + Send + Sync + 'a,
         T: 'static,
         E: 'static,
     {
@@ -210,7 +216,7 @@ impl<E> Router<E> {
     /// Default is returning "404 Not Found".
     pub fn fallback_service<S>(mut self, service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
+        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'a,
         S::Response: IntoResponse,
     {
         self.fallback = Fallback::from_service(service);
@@ -291,12 +297,13 @@ impl<E> Router<E> {
     /// Add a new inner layer to all routes in router.
     ///
     /// The layer's `Service` should be `Clone + Send + Sync + 'static`.
-    pub fn layer<L, E2>(self, l: L) -> Router<E2>
+    pub fn layer<L, B2, E2>(self, l: L) -> Router<B2, E2>
     where
-        L: Layer<Route<E>> + Clone + Send + Sync + 'static,
+        L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
         L::Service:
-            Service<ServerContext, ServerRequest, Error = E2> + Clone + Send + Sync + 'static,
-        <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
+            Service<ServerContext, ServerRequest<B2>, Error = E2> + Clone + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
+        B2: 'static,
     {
         let routes = self
             .routes
@@ -318,23 +325,27 @@ impl<E> Router<E> {
     }
 }
 
-impl Service<ServerContext, ServerRequest> for Router {
+impl<B, E> Service<ServerContext, ServerRequest<B>> for Router<B, E>
+where
+    B: Send + 'static,
+    E: 'static,
+{
     type Response = ServerResponse;
-    type Error = Infallible;
+    type Error = E;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest,
+        req: ServerRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         if let Ok(matched) = self.matcher.at(req.uri().clone().path()) {
             if let Some(route) = self.routes.get(matched.value) {
                 cx.params_mut().extend(matched.params);
-                return Ok(route.call(cx, req).await.into_response());
+                return route.call(cx, req).await;
             }
         }
 
-        Ok(self.fallback.call(cx, req).await.into_response())
+        self.fallback.call(cx, req).await
     }
 }
 
@@ -429,27 +440,30 @@ impl Error for MatcherError {}
 /// let app: Router = Router::new().route("/", get(index));
 /// let app: Router = Router::new().route("/", get(index).post(index).head(index));
 /// ```
-pub struct MethodRouter<E = Infallible> {
-    options: MethodEndpoint<E>,
-    get: MethodEndpoint<E>,
-    post: MethodEndpoint<E>,
-    put: MethodEndpoint<E>,
-    delete: MethodEndpoint<E>,
-    head: MethodEndpoint<E>,
-    trace: MethodEndpoint<E>,
-    connect: MethodEndpoint<E>,
-    patch: MethodEndpoint<E>,
-    fallback: Fallback<E>,
+pub struct MethodRouter<B = Incoming, E = Infallible> {
+    options: MethodEndpoint<B, E>,
+    get: MethodEndpoint<B, E>,
+    post: MethodEndpoint<B, E>,
+    put: MethodEndpoint<B, E>,
+    delete: MethodEndpoint<B, E>,
+    head: MethodEndpoint<B, E>,
+    trace: MethodEndpoint<B, E>,
+    connect: MethodEndpoint<B, E>,
+    patch: MethodEndpoint<B, E>,
+    fallback: Fallback<B, E>,
 }
 
-impl<E> Service<ServerContext, ServerRequest> for MethodRouter<E> {
+impl<B, E> Service<ServerContext, ServerRequest<B>> for MethodRouter<B, E>
+where
+    B: Send,
+{
     type Response = ServerResponse;
     type Error = E;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest,
+        req: ServerRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         let handler = match *req.method() {
             Method::OPTIONS => Some(&self.options),
@@ -471,8 +485,9 @@ impl<E> Service<ServerContext, ServerRequest> for MethodRouter<E> {
     }
 }
 
-impl<E> Default for MethodRouter<E>
+impl<B, E> Default for MethodRouter<B, E>
 where
+    B: Send + 'static,
     E: 'static,
 {
     fn default() -> Self {
@@ -480,11 +495,12 @@ where
     }
 }
 
-impl<E> MethodRouter<E> {
-    fn new() -> Self
-    where
-        E: 'static,
-    {
+impl<B, E> MethodRouter<B, E>
+where
+    B: Send + 'static,
+    E: 'static,
+{
+    fn new() -> Self {
         Self {
             options: MethodEndpoint::None,
             get: MethodEndpoint::None,
@@ -502,12 +518,13 @@ impl<E> MethodRouter<E> {
     /// Add a new inner layer to all routes in this method router.
     ///
     /// The layer's `Service` should be `Clone + Send + Sync + 'static`.
-    pub fn layer<L, E2>(self, l: L) -> MethodRouter<E2>
+    pub fn layer<L, B2, E2>(self, l: L) -> MethodRouter<B2, E2>
     where
-        L: Layer<Route<E>> + Clone + Send + Sync + 'static,
+        L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
         L::Service:
-            Service<ServerContext, ServerRequest, Error = E2> + Clone + Send + Sync + 'static,
-        <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
+            Service<ServerContext, ServerRequest<B2>, Error = E2> + Clone + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
+        B2: 'static,
     {
         let Self {
             options,
@@ -522,7 +539,7 @@ impl<E> MethodRouter<E> {
             fallback,
         } = self;
 
-        let layer_fn = move |route: Route<E>| {
+        let layer_fn = move |route: Route<B, E>| {
             Route::new(
                 l.clone()
                     .layer(route)
@@ -569,7 +586,8 @@ macro_rules! impl_method_register_for_builder {
         #[doc = concat!("Route `", stringify!($method) ,"` requests to the given handler.")]
         pub fn $method<H, T>(mut self, handler: H) -> Self
         where
-            for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
+            for<'a> H: Handler<T, B, E> + Clone + Send + Sync + 'a,
+            B: Send,
             T: 'static,
         {
             self.$method = MethodEndpoint::from_handler(handler);
@@ -578,9 +596,9 @@ macro_rules! impl_method_register_for_builder {
 
         paste! {
         #[doc = concat!("Route `", stringify!($method) ,"` requests to the given service.")]
-        pub fn [<$method _service>]<S>(mut self, service: S) -> MethodRouter<E>
+        pub fn [<$method _service>]<S>(mut self, service: S) -> MethodRouter<B, E>
         where
-            for<'a> S: Service<ServerContext, ServerRequest, Error = E>
+            for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E>
                 + Clone
                 + Send
                 + Sync
@@ -595,8 +613,9 @@ macro_rules! impl_method_register_for_builder {
     };
 }
 
-impl<E> MethodRouter<E>
+impl<B, E> MethodRouter<B, E>
 where
+    B: Send + 'static,
     E: IntoResponse + 'static,
 {
     for_all_methods!(impl_method_register_for_builder);
@@ -609,7 +628,7 @@ where
     /// Default is returning "405 Method Not Allowed".
     pub fn fallback<H, T>(mut self, handler: H) -> Self
     where
-        for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
+        for<'a> H: Handler<T, B, E> + Clone + Send + Sync + 'a,
         T: 'static,
     {
         self.fallback = Fallback::from_handler(handler);
@@ -624,7 +643,7 @@ where
     /// Default is returning "405 Method Not Allowed".
     pub fn fallback_service<S>(mut self, service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
+        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'a,
         S::Response: IntoResponse,
     {
         self.fallback = Fallback::from_service(service);
@@ -636,10 +655,11 @@ macro_rules! impl_method_register {
     ($( $method:ident ),*) => {
         $(
         #[doc = concat!("Route `", stringify!($method) ,"` requests to the given handler.")]
-        pub fn $method<H, T, E>(handler: H) -> MethodRouter<E>
+        pub fn $method<H, T, B, E>(handler: H) -> MethodRouter<B, E>
         where
-            for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
+            for<'a> H: Handler<T, B, E> + Clone + Send + Sync + 'a,
             T: 'static,
+            B: Send + 'static,
             E: IntoResponse + 'static,
         {
             MethodRouter {
@@ -650,14 +670,15 @@ macro_rules! impl_method_register {
 
         paste! {
         #[doc = concat!("Route `", stringify!($method) ,"` requests to the given service.")]
-        pub fn [<$method _service>]<S, E>(service: S) -> MethodRouter<E>
+        pub fn [<$method _service>]<S, B, E>(service: S) -> MethodRouter<B, E>
         where
-            for<'a> S: Service<ServerContext, ServerRequest, Error = E>
+            for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E>
                 + Clone
                 + Send
                 + Sync
                 + 'a,
             S::Response: IntoResponse,
+            B: Send + 'static,
             E: IntoResponse + 'static,
         {
             MethodRouter {
@@ -673,10 +694,11 @@ macro_rules! impl_method_register {
 for_all_methods!(impl_method_register);
 
 /// Route any method to the given handler.
-pub fn any<H, T, E>(handler: H) -> MethodRouter<E>
+pub fn any<H, T, B, E>(handler: H) -> MethodRouter<B, E>
 where
-    for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
+    for<'a> H: Handler<T, B, E> + Clone + Send + Sync + 'a,
     T: 'static,
+    B: Send + 'static,
     E: IntoResponse + 'static,
 {
     MethodRouter {
@@ -686,10 +708,11 @@ where
 }
 
 /// Route any method to the given service.
-pub fn any_service<S, E>(service: S) -> MethodRouter<E>
+pub fn any_service<S, B, E>(service: S) -> MethodRouter<B, E>
 where
-    for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
+    for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'a,
     S::Response: IntoResponse,
+    B: Send + 'static,
     E: IntoResponse + 'static,
 {
     MethodRouter {
@@ -699,16 +722,19 @@ where
 }
 
 #[derive(Default)]
-enum MethodEndpoint<E = Infallible> {
+enum MethodEndpoint<B = Incoming, E = Infallible> {
     #[default]
     None,
-    Route(Route<E>),
+    Route(Route<B, E>),
 }
 
-impl<E> MethodEndpoint<E> {
+impl<B, E> MethodEndpoint<B, E>
+where
+    B: Send + 'static,
+{
     fn from_handler<H, T>(handler: H) -> Self
     where
-        for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
+        for<'a> H: Handler<T, B, E> + Clone + Send + Sync + 'a,
         T: 'static,
         E: 'static,
     {
@@ -717,7 +743,7 @@ impl<E> MethodEndpoint<E> {
 
     fn from_service<S>(service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
+        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'a,
         S::Response: IntoResponse,
     {
         Self::Route(Route::new(
@@ -725,9 +751,9 @@ impl<E> MethodEndpoint<E> {
         ))
     }
 
-    fn map<F, E2>(self, f: F) -> MethodEndpoint<E2>
+    fn map<F, B2, E2>(self, f: F) -> MethodEndpoint<B2, E2>
     where
-        F: FnOnce(Route<E>) -> Route<E2> + Clone + 'static,
+        F: FnOnce(Route<B, E>) -> Route<B2, E2> + Clone + 'static,
     {
         match self {
             Self::None => MethodEndpoint::None,
@@ -736,18 +762,21 @@ impl<E> MethodEndpoint<E> {
     }
 }
 
-enum Fallback<E = Infallible> {
-    Route(Route<E>),
+enum Fallback<B = Incoming, E = Infallible> {
+    Route(Route<B, E>),
 }
 
-impl<E> Service<ServerContext, ServerRequest> for Fallback<E> {
+impl<B, E> Service<ServerContext, ServerRequest<B>> for Fallback<B, E>
+where
+    B: Send,
+{
     type Response = ServerResponse;
     type Error = E;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest,
+        req: ServerRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         match self {
             Self::Route(route) => route.call(cx, req).await,
@@ -755,26 +784,26 @@ impl<E> Service<ServerContext, ServerRequest> for Fallback<E> {
     }
 }
 
-impl<E> Fallback<E> {
-    fn from_status_code(status: StatusCode) -> Self
-    where
-        E: 'static,
-    {
+impl<B, E> Fallback<B, E>
+where
+    B: Send + 'static,
+    E: 'static,
+{
+    fn from_status_code(status: StatusCode) -> Self {
         Self::from_service(RouteForStatusCode::new(status))
     }
 
     fn from_handler<H, T>(handler: H) -> Self
     where
-        for<'a> H: Handler<T, E> + Clone + Send + Sync + 'a,
+        H: Handler<T, B, E> + Clone + Send + Sync + 'static,
         T: 'static,
-        E: 'static,
     {
         Self::from_service(handler.into_service())
     }
 
     fn from_service<S>(service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'a,
+        S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'static,
         S::Response: IntoResponse,
     {
         Self::Route(Route::new(
@@ -782,23 +811,24 @@ impl<E> Fallback<E> {
         ))
     }
 
-    fn map<F, E2>(self, f: F) -> Fallback<E2>
+    fn map<F, B2, E2>(self, f: F) -> Fallback<B2, E2>
     where
-        F: FnOnce(Route<E>) -> Route<E2> + Clone + 'static,
+        F: FnOnce(Route<B, E>) -> Route<B2, E2> + Clone + 'static,
     {
         match self {
             Self::Route(route) => Fallback::Route(f(route)),
         }
     }
 
-    fn layer<L, E2>(self, l: L) -> Fallback<E2>
+    fn layer<L, B2, E2>(self, l: L) -> Fallback<B2, E2>
     where
-        L: Layer<Route<E>> + Clone + Send + Sync + 'static,
+        L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
         L::Service:
-            Service<ServerContext, ServerRequest, Error = E2> + Clone + Send + Sync + 'static,
-        <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
+            Service<ServerContext, ServerRequest<B2>, Error = E2> + Clone + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
+        B2: 'static,
     {
-        self.map(move |route: Route<E>| {
+        self.map(move |route: Route<B, E>| {
             Route::new(
                 l.clone()
                     .layer(route)
@@ -808,12 +838,12 @@ impl<E> Fallback<E> {
     }
 }
 
-struct RouteForStatusCode<E> {
+struct RouteForStatusCode<B, E> {
     status: StatusCode,
-    _marker: PhantomData<fn(E)>,
+    _marker: PhantomData<fn(B, E)>,
 }
 
-impl<E> Clone for RouteForStatusCode<E> {
+impl<B, E> Clone for RouteForStatusCode<B, E> {
     fn clone(&self) -> Self {
         Self {
             status: self.status,
@@ -822,7 +852,7 @@ impl<E> Clone for RouteForStatusCode<E> {
     }
 }
 
-impl<E> RouteForStatusCode<E> {
+impl<B, E> RouteForStatusCode<B, E> {
     fn new(status: StatusCode) -> Self {
         Self {
             status,
@@ -831,14 +861,17 @@ impl<E> RouteForStatusCode<E> {
     }
 }
 
-impl<E> Service<ServerContext, ServerRequest> for RouteForStatusCode<E> {
+impl<B, E> Service<ServerContext, ServerRequest<B>> for RouteForStatusCode<B, E>
+where
+    B: Send,
+{
     type Response = ServerResponse;
     type Error = E;
 
     async fn call(
         &self,
         _: &mut ServerContext,
-        _: ServerRequest,
+        _: ServerRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         Ok(self.status.into_response())
     }

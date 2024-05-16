@@ -7,6 +7,7 @@ use std::{
 
 use futures_util::future::BoxFuture;
 use http::request::Parts;
+use http_body::Body;
 use motore::service::Service;
 
 use super::{
@@ -21,14 +22,14 @@ use crate::{
     utils::macros::{all_the_tuples, all_the_tuples_with_special_case},
 };
 
-pub trait Handler<T, E>: Sized {
+pub trait Handler<T, B, E>: Sized {
     fn handle(
         self,
         cx: &mut ServerContext,
-        req: ServerRequest,
+        req: ServerRequest<B>,
     ) -> impl Future<Output = ServerResponse> + Send;
 
-    fn into_service(self) -> HandlerService<Self, T, E> {
+    fn into_service(self) -> HandlerService<Self, T, B, E> {
         HandlerService {
             handler: self,
             _marker: PhantomData,
@@ -36,13 +37,14 @@ pub trait Handler<T, E>: Sized {
     }
 }
 
-impl<F, Fut, Res, E> Handler<((),), E> for F
+impl<F, Fut, Res, B, E> Handler<((),), B, E> for F
 where
     F: FnOnce() -> Fut + Clone + Send,
     Fut: Future<Output = Res> + Send,
     Res: IntoResponse,
+    B: Send,
 {
-    async fn handle(self, _cx: &mut ServerContext, _req: ServerRequest) -> ServerResponse {
+    async fn handle(self, _cx: &mut ServerContext, _: ServerRequest<B>) -> ServerResponse {
         self().await.into_response()
     }
 }
@@ -52,15 +54,18 @@ macro_rules! impl_handler {
         [$($ty:ident),*], $last:ident
     ) => {
         #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<F, Fut, Res, M, $($ty,)* $last, E> Handler<(M, $($ty,)* $last,), E> for F
+        impl<F, Fut, Res, M, $($ty,)* $last, B, E> Handler<(M, $($ty,)* $last,), B, E> for F
         where
             F: FnOnce($($ty,)* $last) -> Fut + Clone + Send,
             Fut: Future<Output = Res> + Send,
             Res: IntoResponse,
             $( for<'r> $ty: FromContext + Send + 'r, )*
-            for<'r> $last: FromRequest<M> + Send + 'r,
+            for<'r> $last: FromRequest<B, M> + Send + 'r,
+            B: Body + Send,
+            B::Data: Send,
+            B::Error: Send,
         {
-            async fn handle(self, cx: &mut ServerContext, req: ServerRequest) -> ServerResponse {
+            async fn handle(self, cx: &mut ServerContext, req: ServerRequest<B>) -> ServerResponse {
                 let (mut parts, body) = req.into_parts();
                 $(
                     let $ty = match $ty::from_context(cx, &mut parts).await {
@@ -80,12 +85,12 @@ macro_rules! impl_handler {
 
 all_the_tuples_with_special_case!(impl_handler);
 
-pub struct HandlerService<H, T, E> {
+pub struct HandlerService<H, T, B, E> {
     handler: H,
-    _marker: PhantomData<fn(T, E)>,
+    _marker: PhantomData<fn(T, B, E)>,
 }
 
-impl<H, T, E> Clone for HandlerService<H, T, E>
+impl<H, T, B, E> Clone for HandlerService<H, T, B, E>
 where
     H: Clone,
 {
@@ -97,9 +102,10 @@ where
     }
 }
 
-impl<H, T, E> Service<ServerContext, ServerRequest> for HandlerService<H, T, E>
+impl<H, T, B, E> Service<ServerContext, ServerRequest<B>> for HandlerService<H, T, B, E>
 where
-    H: Handler<T, E> + Clone + Send + Sync,
+    H: Handler<T, B, E> + Clone + Send + Sync,
+    B: Send,
 {
     type Response = ServerResponse;
     type Error = E;
@@ -107,7 +113,7 @@ where
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest,
+        req: ServerRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         Ok(self.handler.clone().handle(cx, req).await)
     }
@@ -126,11 +132,7 @@ where
     F: FnOnce() -> Fut + Clone + Send,
     Fut: Future<Output = Ret> + Send,
 {
-    async fn handle(
-        self,
-        _context: &mut ServerContext,
-        _parts: &mut Parts,
-    ) -> Result<Ret, ServerResponse> {
+    async fn handle(self, _: &mut ServerContext, _: &mut Parts) -> Result<Ret, ServerResponse> {
         Ok(self().await)
     }
 }
@@ -161,10 +163,15 @@ macro_rules! impl_handler_without_request {
 
 all_the_tuples!(impl_handler_without_request);
 
-pub trait MiddlewareHandlerFromFn<'r, T, E>: Sized {
+pub trait MiddlewareHandlerFromFn<'r, T, B, E, B2, E2>: Sized {
     type Future: Future<Output = ServerResponse> + Send + 'r;
 
-    fn handle(&self, cx: &'r mut ServerContext, req: ServerRequest, next: Next<E>) -> Self::Future;
+    fn handle(
+        &self,
+        cx: &'r mut ServerContext,
+        req: ServerRequest<B>,
+        next: Next<B2, E2>,
+    ) -> Self::Future;
 }
 
 macro_rules! impl_middleware_handler_from_fn {
@@ -172,22 +179,27 @@ macro_rules! impl_middleware_handler_from_fn {
         [$($ty:ident),*], $last:ident
     ) => {
         #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<'r, F, Fut, Res, M, $($ty,)* $last, E> MiddlewareHandlerFromFn<'r, (M, $($ty,)* $last), E> for F
+        impl<'r, F, Fut, Res, M, $($ty,)* $last, B, E, B2, E2> MiddlewareHandlerFromFn<'r, (M, $($ty,)* $last), B, E, B2, E2> for F
         where
-            F: Fn($($ty,)* &'r mut ServerContext, $last, Next<E>) -> Fut + Copy + Send + Sync + 'static,
+            F: Fn($($ty,)* &'r mut ServerContext, $last, Next<B2, E2>) -> Fut + Copy + Send + Sync + 'static,
             Fut: Future<Output = Res> + Send + 'r,
             Res: IntoResponse + 'r,
             $( $ty: FromContext + Send + 'r, )*
-            $last: FromRequest<M> + Send + 'r,
+            $last: FromRequest<B, M> + Send + 'r,
+            B: Body + Send + 'r,
+            B::Data: Send,
+            B::Error: Send,
             E: IntoResponse + 'r,
+            B2: Send + 'r,
+            E2: 'r,
         {
             type Future = ResponseFuture<'r, ServerResponse>;
 
             fn handle(
                 &self,
                 cx: &'r mut ServerContext,
-                req: ServerRequest,
-                next: Next<E>,
+                req: ServerRequest<B>,
+                next: Next<B2, E2>,
             ) -> Self::Future {
                 let f = *self;
 

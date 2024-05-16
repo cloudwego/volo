@@ -1,5 +1,6 @@
 use std::{convert::Infallible, marker::PhantomData};
 
+use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service, ServiceExt};
 
 use super::{
@@ -9,12 +10,13 @@ use super::{
 };
 use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
-pub struct FromFnLayer<F, T, R, E> {
+pub struct FromFnLayer<F, T, R, B, E, B2, E2> {
     f: F,
-    _marker: PhantomData<fn(T, R, E)>,
+    #[allow(clippy::type_complexity)]
+    _marker: PhantomData<fn(T, R, B, E, B2, E2)>,
 }
 
-impl<F, T, R, E> Clone for FromFnLayer<F, T, R, E>
+impl<F, T, R, B, E, B2, E2> Clone for FromFnLayer<F, T, R, B, E, B2, E2>
 where
     F: Clone,
 {
@@ -26,16 +28,16 @@ where
     }
 }
 
-pub fn from_fn<F, T, R, E>(f: F) -> FromFnLayer<F, T, R, E> {
+pub fn from_fn<F, T, R, B, E, B2, E2>(f: F) -> FromFnLayer<F, T, R, B, E, B2, E2> {
     FromFnLayer {
         f,
         _marker: PhantomData,
     }
 }
 
-impl<S, F, T, R, E> Layer<S> for FromFnLayer<F, T, R, E>
+impl<S, F, T, R, B, E, B2, E2> Layer<S> for FromFnLayer<F, T, R, B, E, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest, Response = R, Error = E>
+    S: Service<ServerContext, ServerRequest<B2>, Response = R, Error = E2>
         + Clone
         + Send
         + Sync
@@ -43,7 +45,8 @@ where
     R: IntoResponse,
     F: Clone,
 {
-    type Service = FromFn<motore::service::MapResponse<S, fn(R) -> ServerResponse>, F, T, E>;
+    type Service =
+        FromFn<motore::service::MapResponse<S, fn(R) -> ServerResponse>, F, T, B, E, B2, E2>;
 
     fn layer(self, service: S) -> Self::Service {
         FromFn {
@@ -54,13 +57,14 @@ where
     }
 }
 
-pub struct FromFn<S, F, T, E> {
+pub struct FromFn<S, F, T, B, E, B2, E2> {
     service: S,
     f: F,
-    _marker: PhantomData<fn(T, E)>,
+    #[allow(clippy::type_complexity)]
+    _marker: PhantomData<fn(T, B, E, B2, E2)>,
 }
 
-impl<S, F, T, E> Clone for FromFn<S, F, T, E>
+impl<S, F, T, B, E, B2, E2> Clone for FromFn<S, F, T, B, E, B2, E2>
 where
     S: Clone,
     F: Clone,
@@ -74,15 +78,18 @@ where
     }
 }
 
-impl<S, F, T, E> Service<ServerContext, ServerRequest> for FromFn<S, F, T, E>
+impl<S, F, T, B, E, B2, E2> Service<ServerContext, ServerRequest<B>>
+    for FromFn<S, F, T, B, E, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = E>
+    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
         + Clone
         + Send
         + Sync
         + 'static,
-    F: for<'r> MiddlewareHandlerFromFn<'r, T, E> + Clone + Sync,
+    F: for<'r> MiddlewareHandlerFromFn<'r, T, B, E, B2, E2> + Clone + Sync,
+    B: Send + 'static,
     E: IntoResponse,
+    B2: Send + 'static,
 {
     type Response = S::Response;
     type Error = E;
@@ -90,7 +97,7 @@ where
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: ServerRequest,
+        req: ServerRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         let next = Next {
             service: Route::new(self.service.clone()),
@@ -99,15 +106,15 @@ where
     }
 }
 
-pub struct Next<E = Infallible> {
-    service: Route<E>,
+pub struct Next<B = Incoming, E = Infallible> {
+    service: Route<B, E>,
 }
 
-impl<E> Next<E> {
+impl<B, E> Next<B, E> {
     pub async fn run(
         self,
         cx: &mut ServerContext,
-        req: ServerRequest,
+        req: ServerRequest<B>,
     ) -> Result<ServerResponse, E> {
         self.service.call(cx, req).await
     }
@@ -172,9 +179,10 @@ where
     }
 }
 
-impl<S, F, T> Service<ServerContext, ServerRequest> for MapResponse<S, F, T>
+impl<S, Req, F, T> Service<ServerContext, Req> for MapResponse<S, F, T>
 where
-    S: Service<ServerContext, ServerRequest> + Clone + Send + Sync + 'static,
+    Req: Send,
+    S: Service<ServerContext, Req> + Clone + Send + Sync + 'static,
     S::Response: IntoResponse,
     S::Error: IntoResponse,
     F: for<'r> MiddlewareHandlerMapResponse<'r, T> + Clone + Sync,
@@ -182,11 +190,7 @@ where
     type Response = ServerResponse;
     type Error = S::Error;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ServerContext,
-        req: ServerRequest,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn call(&self, cx: &mut ServerContext, req: Req) -> Result<Self::Response, Self::Error> {
         let response = match self.service.call(cx, req).await {
             Ok(resp) => resp.into_response(),
             Err(e) => e.into_response(),
