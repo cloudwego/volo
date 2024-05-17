@@ -247,9 +247,9 @@ impl<S, L> Server<S, L> {
     }
 
     /// The main entry point for the server.
-    pub async fn run<MI, E>(self, mk_incoming: MI) -> Result<(), BoxError>
+    pub async fn run<MI, B, E>(self, mk_incoming: MI) -> Result<(), BoxError>
     where
-        S: Service<ServerContext, ServerRequest, Error = E> + Send + Sync + 'static,
+        S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'static,
         S::Response: IntoResponse,
         E: IntoResponse,
         L: Layer<S> + Send + Sync + 'static,
