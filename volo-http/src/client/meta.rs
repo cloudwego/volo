@@ -1,6 +1,5 @@
 use std::{error::Error, time::Duration};
 
-use http::header;
 use http_body::Body;
 use motore::service::Service;
 use volo::context::Context;
@@ -46,19 +45,8 @@ where
     async fn call(
         &self,
         cx: &mut ClientContext,
-        mut req: ClientRequest<B>,
+        req: ClientRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
-        // `Content-Length` must be set here because the body may be changed in previous layer(s).
-        let exact_len = req.body().size_hint().exact();
-        if let Some(len) = exact_len {
-            if len > 0 && req.headers().get(header::CONTENT_LENGTH).is_none() {
-                req.headers_mut().insert(header::CONTENT_LENGTH, len.into());
-            }
-        }
-
-        tracing::trace!("sending request: {} {}", req.method(), req.uri());
-        tracing::trace!("headers: {:?}", req.headers());
-
         let request_timeout = cx
             .rpc_info()
             .config()
@@ -71,6 +59,7 @@ where
                 tokio::select! {
                     res = fut => res,
                     _ = sleep => {
+                        tracing::error!("[Volo-HTTP]: request timeout.");
                         return Err(timeout());
                     }
                 }
