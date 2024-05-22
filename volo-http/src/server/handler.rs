@@ -148,7 +148,11 @@ macro_rules! impl_handler_without_request {
             Fut: Future<Output = Ret> + Send,
             $( for<'r> $ty: FromContext + Send + 'r, )*
         {
-            async fn handle(self, cx: &mut ServerContext, parts: &mut Parts) -> Result<Ret, ServerResponse> {
+            async fn handle(
+                self,
+                cx: &mut ServerContext,
+                parts: &mut Parts,
+            ) -> Result<Ret, ServerResponse> {
                 $(
                     let $ty = match $ty::from_context(cx, parts).await {
                         Ok(value) => value,
@@ -163,7 +167,7 @@ macro_rules! impl_handler_without_request {
 
 all_the_tuples!(impl_handler_without_request);
 
-pub trait MiddlewareHandlerFromFn<'r, T, B, E, B2, E2>: Sized {
+pub trait MiddlewareHandlerFromFn<'r, T, B, B2, E2>: Sized {
     type Future: Future<Output = ServerResponse> + Send + 'r;
 
     fn handle(
@@ -174,22 +178,48 @@ pub trait MiddlewareHandlerFromFn<'r, T, B, E, B2, E2>: Sized {
     ) -> Self::Future;
 }
 
+impl<'r, F, Fut, Res, B, B2, E2> MiddlewareHandlerFromFn<'r, (), B, B2, E2> for F
+where
+    F: Fn(&'r mut ServerContext, ServerRequest<B>, Next<B2, E2>) -> Fut + Copy + Send + Sync + 'r,
+    Fut: Future<Output = Res> + Send + 'r,
+    Res: IntoResponse + 'r,
+    B: Send + 'r,
+    B2: Send + 'r,
+    E2: 'r,
+{
+    type Future = ResponseFuture<'r, ServerResponse>;
+
+    fn handle(
+        &self,
+        cx: &'r mut ServerContext,
+        req: ServerRequest<B>,
+        next: Next<B2, E2>,
+    ) -> Self::Future {
+        let f = *self;
+
+        let future = Box::pin(async move { f(cx, req, next).await.into_response() });
+
+        ResponseFuture { inner: future }
+    }
+}
+
 macro_rules! impl_middleware_handler_from_fn {
     (
-        [$($ty:ident),*], $last:ident
+        $($ty:ident),* $(,)?
     ) => {
         #[allow(non_snake_case, unused_mut, unused_variables)]
-        impl<'r, F, Fut, Res, M, $($ty,)* $last, B, E, B2, E2> MiddlewareHandlerFromFn<'r, (M, $($ty,)* $last), B, E, B2, E2> for F
+        impl<'r, F, Fut, Res, $($ty,)* B, B2, E2>
+            MiddlewareHandlerFromFn<'r, ($($ty,)*), B, B2, E2> for F
         where
-            F: Fn($($ty,)* &'r mut ServerContext, $last, Next<B2, E2>) -> Fut + Copy + Send + Sync + 'static,
+            F: Fn($($ty,)* &'r mut ServerContext, ServerRequest<B>, Next<B2, E2>) -> Fut
+                + Copy
+                + Send
+                + Sync
+                + 'r,
             Fut: Future<Output = Res> + Send + 'r,
             Res: IntoResponse + 'r,
             $( $ty: FromContext + Send + 'r, )*
-            $last: FromRequest<B, M> + Send + 'r,
-            B: Body + Send + 'r,
-            B::Data: Send,
-            B::Error: Send,
-            E: IntoResponse + 'r,
+            B: Send + 'r,
             B2: Send + 'r,
             E2: 'r,
         {
@@ -211,11 +241,8 @@ macro_rules! impl_middleware_handler_from_fn {
                             Err(rejection) => return rejection.into_response(),
                         };
                     )*
-                    let $last = match $last::from_request(cx, parts, body).await {
-                        Ok(value) => value,
-                        Err(rejection) => return rejection.into_response(),
-                    };
-                    f($($ty,)* cx, $last, next).await.into_response()
+                    let req = ServerRequest::from_parts(parts, body);
+                    f($($ty,)* cx, req, next).await.into_response()
                 });
 
                 ResponseFuture {
@@ -226,45 +253,44 @@ macro_rules! impl_middleware_handler_from_fn {
     };
 }
 
-all_the_tuples_with_special_case!(impl_middleware_handler_from_fn);
+all_the_tuples!(impl_middleware_handler_from_fn);
 
-pub trait MiddlewareHandlerMapResponse<'r, T>: Sized {
-    type Future: Future<Output = ServerResponse> + Send + 'r;
-
-    fn handle(&self, cx: &'r mut ServerContext, response: ServerResponse) -> Self::Future;
+pub trait MiddlewareHandlerMapResponse<'r, T, R1, R2>: Sized {
+    type Future: Future<Output = R2> + Send + 'r;
+    fn handle(&self, cx: &'r mut ServerContext, resp: R1) -> Self::Future;
 }
 
-impl<'r, F, Fut, Res> MiddlewareHandlerMapResponse<'r, ((),)> for F
+impl<'r, F, Fut, R1, R2> MiddlewareHandlerMapResponse<'r, ((),), R1, R2> for F
 where
-    F: Fn(ServerResponse) -> Fut + Copy + Send + Sync + 'static,
-    Fut: Future<Output = Res> + Send + 'r,
-    Res: IntoResponse + 'r,
+    F: Fn(R1) -> Fut + Copy + Send + Sync + 'r,
+    Fut: Future<Output = R2> + Send + 'r,
+    R2: 'r,
 {
-    type Future = ResponseFuture<'r, ServerResponse>;
+    type Future = ResponseFuture<'r, R2>;
 
-    fn handle(&self, _context: &'r mut ServerContext, response: ServerResponse) -> Self::Future {
+    fn handle(&self, _: &'r mut ServerContext, resp: R1) -> Self::Future {
         let f = *self;
 
-        let future = Box::pin(async move { f(response).await.into_response() });
-
-        ResponseFuture { inner: future }
+        ResponseFuture {
+            inner: Box::pin(f(resp)),
+        }
     }
 }
 
-impl<'r, F, Fut, Res> MiddlewareHandlerMapResponse<'r, (ServerContext,)> for F
+impl<'r, F, Fut, R1, R2> MiddlewareHandlerMapResponse<'r, (ServerContext,), R1, R2> for F
 where
-    F: Fn(&mut ServerContext, ServerResponse) -> Fut + Copy + Send + Sync + 'static,
-    Fut: Future<Output = Res> + Send + 'r,
-    Res: IntoResponse + 'r,
+    F: Fn(&mut ServerContext, R1) -> Fut + Copy + Send + Sync + 'r,
+    Fut: Future<Output = R2> + Send + 'r,
+    R2: 'r,
 {
-    type Future = ResponseFuture<'r, ServerResponse>;
+    type Future = ResponseFuture<'r, R2>;
 
-    fn handle(&self, context: &'r mut ServerContext, response: ServerResponse) -> Self::Future {
+    fn handle(&self, cx: &'r mut ServerContext, resp: R1) -> Self::Future {
         let f = *self;
 
-        let future = Box::pin(async move { f(context, response).await.into_response() });
-
-        ResponseFuture { inner: future }
+        ResponseFuture {
+            inner: Box::pin(f(cx, resp)),
+        }
     }
 }
 

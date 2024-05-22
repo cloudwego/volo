@@ -100,20 +100,31 @@ async fn post_with_form(Form(info): Form<Login>) -> Result<String, StatusCode> {
 
 async fn test_body_and_err(
     _: &mut ServerContext,
-    _: ServerRequest<Bytes>,
-) -> Result<ServerResponse, ()> {
+    _: ServerRequest<FastStr>,
+) -> Result<ServerResponse, StatusCode> {
     Ok(ServerResponse::default())
 }
 
-async fn map_body_and_err(
+async fn map_body_and_err_inner(
+    cx: &mut ServerContext,
+    req: ServerRequest<Bytes>,
+    next: Next<FastStr, StatusCode>,
+) -> ServerResponse {
+    let (parts, body) = req.into_parts();
+    let body = FastStr::from_bytes(body).unwrap_or_default();
+    let req = Request::from_parts(parts, body);
+    next.run(cx, req).await.into_response()
+}
+
+async fn map_body_and_err_outer(
     cx: &mut ServerContext,
     req: ServerRequest,
-    next: Next<Bytes, ()>,
-) -> Result<ServerResponse, Infallible> {
+    next: Next<Bytes>,
+) -> ServerResponse {
     let (parts, body) = req.into_parts();
     let body = body.into_bytes().await.unwrap();
     let req = Request::from_parts(parts, body);
-    Ok(next.run(cx, req).await.unwrap())
+    next.run(cx, req).await.unwrap()
 }
 
 async fn get_and_post(
@@ -240,7 +251,8 @@ fn body_error_router() -> Router {
             "/body_err/test",
             get_service(service_fn(test_body_and_err)).post_service(service_fn(test_body_and_err)),
         )
-        .layer(middleware::from_fn(map_body_and_err))
+        .layer(middleware::from_fn(map_body_and_err_inner))
+        .layer(middleware::from_fn(map_body_and_err_outer))
 }
 
 fn test_router() -> Router {
