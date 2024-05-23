@@ -3,7 +3,7 @@ use std::{convert::Infallible, marker::PhantomData};
 use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::Future;
-use http::{header, request::Parts, Method, Request, Uri};
+use http::{header, request::Parts, HeaderMap, Method, Request, Uri};
 use http_body::Body;
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
@@ -106,7 +106,7 @@ impl FromContext for Uri {
     async fn from_context(
         _cx: &mut ServerContext,
         parts: &mut Parts,
-    ) -> Result<Uri, Self::Rejection> {
+    ) -> Result<Self, Self::Rejection> {
         Ok(parts.uri.to_owned())
     }
 }
@@ -117,8 +117,19 @@ impl FromContext for Method {
     async fn from_context(
         _cx: &mut ServerContext,
         parts: &mut Parts,
-    ) -> Result<Method, Self::Rejection> {
+    ) -> Result<Self, Self::Rejection> {
         Ok(parts.method.to_owned())
+    }
+}
+
+impl FromContext for HeaderMap {
+    type Rejection = Infallible;
+
+    async fn from_context(
+        _cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(parts.headers.to_owned())
     }
 }
 
