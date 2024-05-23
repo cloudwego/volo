@@ -1,7 +1,7 @@
 use std::{convert::Infallible, marker::PhantomData};
 
 use hyper::body::Incoming;
-use motore::{layer::Layer, service::Service, ServiceExt};
+use motore::{layer::Layer, service::Service};
 
 use super::{
     handler::{MiddlewareHandlerFromFn, MiddlewareHandlerMapResponse},
@@ -10,13 +10,13 @@ use super::{
 };
 use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
-pub struct FromFnLayer<F, T, R, B, E, B2, E2> {
+pub struct FromFnLayer<F, T, B, B2, E2> {
     f: F,
     #[allow(clippy::type_complexity)]
-    _marker: PhantomData<fn(T, R, B, E, B2, E2)>,
+    _marker: PhantomData<fn(T, B, B2, E2)>,
 }
 
-impl<F, T, R, B, E, B2, E2> Clone for FromFnLayer<F, T, R, B, E, B2, E2>
+impl<F, T, B, B2, E2> Clone for FromFnLayer<F, T, B, B2, E2>
 where
     F: Clone,
 {
@@ -28,43 +28,40 @@ where
     }
 }
 
-pub fn from_fn<F, T, R, B, E, B2, E2>(f: F) -> FromFnLayer<F, T, R, B, E, B2, E2> {
+pub fn from_fn<F, T, B, B2, E2>(f: F) -> FromFnLayer<F, T, B, B2, E2> {
     FromFnLayer {
         f,
         _marker: PhantomData,
     }
 }
 
-impl<S, F, T, R, B, E, B2, E2> Layer<S> for FromFnLayer<F, T, R, B, E, B2, E2>
+impl<S, F, T, B, B2, E2> Layer<S> for FromFnLayer<F, T, B, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest<B2>, Response = R, Error = E2>
+    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
         + Clone
         + Send
         + Sync
         + 'static,
-    R: IntoResponse,
     F: Clone,
 {
-    type Service =
-        FromFn<motore::service::MapResponse<S, fn(R) -> ServerResponse>, F, T, B, E, B2, E2>;
+    type Service = FromFn<S, F, T, B, B2, E2>;
 
     fn layer(self, service: S) -> Self::Service {
         FromFn {
-            service: service.map_response(IntoResponse::into_response),
+            service,
             f: self.f.clone(),
             _marker: PhantomData,
         }
     }
 }
 
-pub struct FromFn<S, F, T, B, E, B2, E2> {
+pub struct FromFn<S, F, T, B, B2, E2> {
     service: S,
     f: F,
-    #[allow(clippy::type_complexity)]
-    _marker: PhantomData<fn(T, B, E, B2, E2)>,
+    _marker: PhantomData<fn(T, B, B2, E2)>,
 }
 
-impl<S, F, T, B, E, B2, E2> Clone for FromFn<S, F, T, B, E, B2, E2>
+impl<S, F, T, B, B2, E2> Clone for FromFn<S, F, T, B, B2, E2>
 where
     S: Clone,
     F: Clone,
@@ -78,31 +75,29 @@ where
     }
 }
 
-impl<S, F, T, B, E, B2, E2> Service<ServerContext, ServerRequest<B>>
-    for FromFn<S, F, T, B, E, B2, E2>
+impl<S, F, T, B, B2, E2> Service<ServerContext, ServerRequest<B>> for FromFn<S, F, T, B, B2, E2>
 where
     S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
         + Clone
         + Send
         + Sync
         + 'static,
-    F: for<'r> MiddlewareHandlerFromFn<'r, T, B, E, B2, E2> + Clone + Sync,
-    B: Send + 'static,
-    E: IntoResponse,
-    B2: Send + 'static,
+    F: for<'r> MiddlewareHandlerFromFn<'r, T, B, B2, E2> + Sync,
+    B: Send,
+    B2: 'static,
 {
-    type Response = S::Response;
-    type Error = E;
+    type Response = ServerResponse;
+    type Error = Infallible;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ServerContext,
+    async fn call(
+        &self,
+        cx: &mut ServerContext,
         req: ServerRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         let next = Next {
             service: Route::new(self.service.clone()),
         };
-        Ok(self.f.handle(cx, req, next).await)
+        Ok(self.f.handle(cx, req, next).await.into_response())
     }
 }
 
@@ -120,12 +115,12 @@ impl<B, E> Next<B, E> {
     }
 }
 
-pub struct MapResponseLayer<F, T> {
+pub struct MapResponseLayer<F, T, R1, R2> {
     f: F,
-    _marker: PhantomData<fn(T)>,
+    _marker: PhantomData<fn(T, R1, R2)>,
 }
 
-impl<F, T> Clone for MapResponseLayer<F, T>
+impl<F, T, R1, R2> Clone for MapResponseLayer<F, T, R1, R2>
 where
     F: Clone,
 {
@@ -137,18 +132,18 @@ where
     }
 }
 
-pub fn map_response<F, T>(f: F) -> MapResponseLayer<F, T> {
+pub fn map_response<F, T, R1, R2>(f: F) -> MapResponseLayer<F, T, R1, R2> {
     MapResponseLayer {
         f,
         _marker: PhantomData,
     }
 }
 
-impl<S, F, T> Layer<S> for MapResponseLayer<F, T>
+impl<S, F, T, R1, R2> Layer<S> for MapResponseLayer<F, T, R1, R2>
 where
     F: Clone,
 {
-    type Service = MapResponse<S, F, T>;
+    type Service = MapResponse<S, F, T, R1, R2>;
 
     fn layer(self, service: S) -> Self::Service {
         MapResponse {
@@ -159,13 +154,13 @@ where
     }
 }
 
-pub struct MapResponse<S, F, T> {
+pub struct MapResponse<S, F, T, R1, R2> {
     service: S,
     f: F,
-    _marker: PhantomData<fn(T)>,
+    _marker: PhantomData<fn(T, R1, R2)>,
 }
 
-impl<S, F, T> Clone for MapResponse<S, F, T>
+impl<S, F, T, R1, R2> Clone for MapResponse<S, F, T, R1, R2>
 where
     S: Clone,
     F: Clone,
@@ -179,23 +174,18 @@ where
     }
 }
 
-impl<S, Req, F, T> Service<ServerContext, Req> for MapResponse<S, F, T>
+impl<S, F, T, Req, R1, R2> Service<ServerContext, Req> for MapResponse<S, F, T, R1, R2>
 where
+    S: Service<ServerContext, Req, Response = R1> + Clone + Send + Sync,
+    F: for<'r> MiddlewareHandlerMapResponse<'r, T, R1, R2> + Clone + Sync,
     Req: Send,
-    S: Service<ServerContext, Req> + Clone + Send + Sync + 'static,
-    S::Response: IntoResponse,
-    S::Error: IntoResponse,
-    F: for<'r> MiddlewareHandlerMapResponse<'r, T> + Clone + Sync,
 {
-    type Response = ServerResponse;
+    type Response = R2;
     type Error = S::Error;
 
     async fn call(&self, cx: &mut ServerContext, req: Req) -> Result<Self::Response, Self::Error> {
-        let response = match self.service.call(cx, req).await {
-            Ok(resp) => resp.into_response(),
-            Err(e) => e.into_response(),
-        };
+        let resp = self.service.call(cx, req).await?;
 
-        Ok(self.f.handle(cx, response).await)
+        Ok(self.f.handle(cx, resp).await)
     }
 }
