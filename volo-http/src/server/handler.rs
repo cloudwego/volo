@@ -7,7 +7,6 @@ use std::{
 
 use futures_util::future::BoxFuture;
 use http::request::Parts;
-use http_body::Body;
 use motore::service::Service;
 
 use super::{
@@ -61,9 +60,7 @@ macro_rules! impl_handler {
             Res: IntoResponse,
             $( for<'r> $ty: FromContext + Send + 'r, )*
             for<'r> $last: FromRequest<B, M> + Send + 'r,
-            B: Body + Send,
-            B::Data: Send,
-            B::Error: Send,
+            B: Send,
         {
             async fn handle(self, cx: &mut ServerContext, req: ServerRequest<B>) -> ServerResponse {
                 let (mut parts, body) = req.into_parts();

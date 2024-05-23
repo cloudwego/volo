@@ -166,9 +166,7 @@ where
 
 impl<B, T> FromRequest<B> for Option<T>
 where
-    B: Body + Send,
-    B::Data: Send,
-    B::Error: Send,
+    B: Send,
     T: FromRequest<B, private::ViaRequest> + Sync,
 {
     type Rejection = Infallible;
