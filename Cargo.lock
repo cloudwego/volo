@@ -3293,7 +3293,7 @@ version = "0.10.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.10.0"
+version = "0.10.1"
 dependencies = [
  "ahash",
  "anyhow",
