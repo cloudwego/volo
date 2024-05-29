@@ -1,5 +1,6 @@
 use std::{future::Future, sync::Arc};
 
+use bytes::{Buf, Bytes};
 pub use pilota::thrift::Message;
 use pilota::thrift::{
     TAsyncInputProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier, TOutputProtocol,
@@ -52,5 +53,33 @@ where
     #[inline]
     fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize {
         (**self).size(protocol)
+    }
+}
+
+impl EntryMessage for Bytes {
+    fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), ThriftException> {
+        protocol.write_bytes_without_len(self.clone())
+    }
+
+    fn decode<T: TInputProtocol>(
+        protocol: &mut T,
+        _msg_ident: &TMessageIdentifier,
+    ) -> Result<Self, ThriftException> {
+        let ptr = protocol.buf().chunk().as_ptr();
+        let len = protocol.buf().remaining();
+        let buf = protocol.get_bytes(Some(ptr), len)?;
+
+        Ok(buf)
+    }
+
+    async fn decode_async<T: TAsyncInputProtocol>(
+        _protocol: &mut T,
+        _msg_ident: &TMessageIdentifier,
+    ) -> Result<Self, ThriftException> {
+        unreachable!();
+    }
+
+    fn size<T: TLengthProtocol>(&self, _protocol: &mut T) -> usize {
+        self.as_ref().len()
     }
 }
