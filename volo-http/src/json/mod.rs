@@ -7,8 +7,6 @@ pub use sonic_rs::Error;
 #[cfg(all(feature = "serde_json", feature = "sonic_json"))]
 compile_error!("features `serde_json` and `sonic_json` cannot be enabled at the same time.");
 
-use crate::body::Body;
-
 #[cfg(feature = "server")]
 mod server;
 
@@ -40,14 +38,3 @@ where
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Json<T>(pub T);
-
-impl<T> TryFrom<Json<T>> for Body
-where
-    T: Serialize,
-{
-    type Error = Error;
-
-    fn try_from(value: Json<T>) -> Result<Self, Self::Error> {
-        serialize(&value.0).map(Body::from)
-    }
-}
