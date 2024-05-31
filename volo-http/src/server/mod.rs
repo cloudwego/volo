@@ -43,7 +43,10 @@ pub mod middleware;
 pub mod param;
 pub mod route;
 
-pub use self::{into_response::IntoResponse, route::Router};
+pub use self::{
+    into_response::{IntoResponse, Redirect},
+    route::Router,
+};
 
 #[doc(hidden)]
 pub mod prelude {

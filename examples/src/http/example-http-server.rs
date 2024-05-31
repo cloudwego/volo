@@ -22,7 +22,7 @@ use volo_http::{
         middleware::{self, Next},
         param::PathParams,
         route::{get, get_service, post, Router},
-        IntoResponse, Server,
+        IntoResponse, Redirect, Server,
     },
     Address,
 };
@@ -187,6 +187,10 @@ async fn full_uri(uri: FullUri) -> String {
     format!("{}\n", uri.0)
 }
 
+async fn redirect_to_index() -> Redirect {
+    Redirect::permanent_redirect("/")
+}
+
 async fn forwarded_getter(_: &mut ServerContext, req: ServerRequest) -> Result<String, Infallible> {
     let (parts, _) = req.into_parts();
     let forwarded = parts.forwarded();
@@ -289,6 +293,9 @@ fn test_router() -> Router {
         .route("/test/forwarded", get_service(service_fn(forwarded_getter)))
         // curl -v http://127.0.0.1:8080/test/full_uri
         .route("/test/full_uri", get(full_uri))
+        // curl -v http://127.0.0.1:8080/test/redirect
+        // curl -L http://127.0.0.1:8080/test/redirect
+        .route("/test/redirect", get(redirect_to_index))
         // curl -v http://127.0.0.1:8080/test/anyaddr?reject_me
         .layer(FilterLayer::new(|uri: Uri| async move {
             if uri.query().is_some() && uri.query().unwrap() == "reject_me" {
