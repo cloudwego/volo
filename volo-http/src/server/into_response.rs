@@ -1,7 +1,7 @@
 use std::{convert::Infallible, error::Error};
 
 use http::{
-    header::{HeaderValue, IntoHeaderName},
+    header::{self, HeaderValue, IntoHeaderName},
     HeaderMap, Response, StatusCode,
 };
 
@@ -129,5 +129,48 @@ where
             resp.headers_mut().extend(headers);
         }
         resp
+    }
+}
+
+#[cfg(feature = "form")]
+#[cfg_attr(docsrs, doc(cfg(feature = "form")))]
+impl<T> IntoResponse for super::extract::Form<T>
+where
+    T: serde::Serialize,
+{
+    fn into_response(self) -> ServerResponse {
+        let Ok(body) = serde_urlencoded::to_string(&self.0) else {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        };
+        let body = Body::from(body);
+
+        ServerResponse::builder()
+            .status(StatusCode::OK)
+            .header(
+                header::CONTENT_TYPE,
+                mime::APPLICATION_WWW_FORM_URLENCODED.essence_str(),
+            )
+            .body(body)
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+    }
+}
+
+#[cfg(feature = "__json")]
+#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+impl<T> IntoResponse for crate::json::Json<T>
+where
+    T: serde::Serialize,
+{
+    fn into_response(self) -> ServerResponse {
+        let Ok(body) = crate::json::serialize(&self.0) else {
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        };
+        let body = Body::from(body);
+
+        ServerResponse::builder()
+            .status(StatusCode::OK)
+            .header(header::CONTENT_TYPE, mime::APPLICATION_JSON.essence_str())
+            .body(body)
+            .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
     }
 }

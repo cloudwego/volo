@@ -1,12 +1,10 @@
 use std::net::SocketAddr;
 
-use http::header;
 use serde::{Deserialize, Serialize};
 use volo_http::{
     body::BodyConversion,
     client::{get, ClientBuilder},
     error::BoxError,
-    Json,
 };
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -89,15 +87,11 @@ async fn main() -> Result<(), BoxError> {
         "{:?}",
         client
             .post("/user/json_post")?
-            // `Content-Type` is needed!
-            //
-            // Without `Content-Type`, server will response with 415 Unsupported Media Type
-            .header(header::CONTENT_TYPE, "application/json")?
-            .data(Json(Person {
+            .json(&Person {
                 name: "Foo".to_string(),
                 age: 25,
                 phones: vec!["114514".to_string()],
-            }))?
+            })?
             .send()
             .await?
             .into_string()
