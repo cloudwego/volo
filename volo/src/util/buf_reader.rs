@@ -10,6 +10,8 @@ use std::{
 use pin_project::pin_project;
 use tokio::io::{AsyncBufRead, AsyncRead, AsyncReadExt, ReadBuf};
 
+use crate::net::ready::AsyncReady;
+
 // used by `BufReader` and `BufWriter`
 // https://github.com/rust-lang/rust/blob/master/library/std/src/sys_common/io.rs#L1
 const DEFAULT_BUF_SIZE: usize = 8 * 1024;
@@ -220,6 +222,12 @@ impl<R: AsyncRead> AsyncBufRead for BufReader<R> {
     fn consume(self: Pin<&mut Self>, amt: usize) {
         let me = self.project();
         *me.pos = cmp::min(*me.pos + amt, *me.len);
+    }
+}
+
+impl<R: AsyncReady + Sync> AsyncReady for BufReader<R> {
+    async fn ready(&self, interest: tokio::io::Interest) -> io::Result<tokio::io::Ready> {
+        self.inner.ready(interest).await
     }
 }
 

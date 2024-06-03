@@ -10,18 +10,14 @@ use std::{
     future::Future,
     hash::Hash,
     ops::{Deref, DerefMut},
-    pin::Pin,
-    sync::{Arc, Mutex, Weak},
-    task::{Context, Poll},
+    sync::{Arc, Weak},
 };
 
-use futures::{
-    future::{self, Either},
-    ready,
-};
+use futures::future::{self, Either};
 use linked_hash_map::LinkedHashMap;
 pub use make_transport::PooledMakeTransport;
 use motore::service::UnaryService;
+use parking_lot::Mutex;
 use pilota::thrift::TransportException;
 use pin_project::pin_project;
 use started::Started as _;
@@ -31,9 +27,9 @@ use tokio::{
 };
 use volo::Unwrap;
 
-pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + 'static {}
+pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {}
 
-impl<T> Key for T where T: Eq + Hash + Clone + Debug + Unpin + Send + 'static {}
+impl<T> Key for T where T: Eq + Hash + Clone + Debug + Unpin + Send + Sync + 'static {}
 
 /// A marker to identify what version a pooled connection is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -42,9 +38,9 @@ pub enum Ver {
     Multiplex,
 }
 
-pub trait Poolable: Sized {
+pub trait Poolable: Send + Sync + Sized {
     // check if the connection is opened
-    fn reusable(&self) -> bool;
+    fn reusable(&self) -> impl Future<Output = bool> + Send;
 
     /// Reserve this connection.
     ///
@@ -79,7 +75,7 @@ pub enum Reservation<T> {
 /// Connection Pool for reuse connections
 pub struct Pool<K: Key, T: Poolable> {
     // share between threads
-    inner: Arc<Mutex<Inner<K, T>>>,
+    inner: Arc<Inner<K, T>>,
 }
 
 impl<K: Key, T: Poolable> Clone for Pool<K, T> {
@@ -165,12 +161,12 @@ struct IdlePopper<'a, K: Key, T> {
 }
 
 impl<'a, K: Key, T: Poolable + 'a> IdlePopper<'a, K, T> {
-    fn pop(self, expiration: &Expiration) -> Option<Idle<T>> {
+    async fn pop(self, expiration: &Expiration) -> Option<Idle<T>> {
         while let Some(entry) = self.list.pop_front() {
             // If the connection has been closed, or is older than our idle
             // timeout, simply drop it and keep looking...
-            if !entry.inner.reusable() {
-                tracing::trace!("[VOLO] removing closed connection for {:?}", self.key);
+            if !entry.inner.reusable().await {
+                tracing::info!("[VOLO] removing closed connection for {:?}", self.key);
                 continue;
             }
             // TODO: Actually, since the `idle` list is pushed to the end always,
@@ -210,21 +206,21 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
     pub fn new(cfg: Option<Config>) -> Self {
         let cfg = cfg.unwrap_or_default();
         let (tx, rx) = oneshot::channel();
-        let inner = Arc::new(Mutex::new(Inner {
-            connecting: HashSet::new(),
-            idle: HashMap::new(),
-            waiters: HashMap::new(),
+        let inner = Arc::new(Inner {
+            connecting: Mutex::new(HashSet::new()),
+            idles: tokio::sync::Mutex::new(HashMap::new()),
+            waiters: Mutex::new(HashMap::new()),
             timeout: cfg.timeout,
             max_idle_per_key: cfg.max_idle_per_key,
             _pool_drop_rx: rx,
-        }));
+        });
 
         let idle_task = IdleTask {
             interval: interval(cfg.timeout),
             inner: Arc::downgrade(&inner),
             pool_drop_tx: tx,
         };
-        tokio::spawn(idle_task);
+        tokio::spawn(idle_task.clear_expired());
         Pool { inner }
     }
 
@@ -232,8 +228,8 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
     /// connections. This does nothing for PingPong.
     pub fn connecting(&self, key: &K, ver: Ver) -> Option<Connecting<K, T>> {
         if ver == Ver::Multiplex {
-            let mut inner = self.inner.lock().unwrap();
-            return if inner.connecting.insert(key.clone()) {
+            let mut connecting = self.inner.connecting.lock();
+            return if connecting.insert(key.clone()) {
                 let connecting = Connecting {
                     key: key.clone(),
                     pool: WeakOpt::downgrade(&self.inner),
@@ -267,31 +263,32 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
         MT::Error: Into<crate::ClientError> + Send,
     {
         let (rx, _waiter_token) = {
-            let mut inner = self.inner.lock().volo_unwrap();
+            let mut idles = self.inner.idles.lock().await;
             // 1. check the idle and opened connections
-            let expiration = Expiration::new(Some(inner.timeout));
-            let entry = inner.idle.get_mut(&key).and_then(|list| {
+            let expiration = Expiration::new(Some(self.inner.timeout));
+            let entry = if let Some(list) = idles.get_mut(&key) {
                 tracing::trace!("[VOLO] take? {:?}: expiration = {:?}", key, expiration.0);
                 {
                     let popper = IdlePopper { key: &key, list };
-                    popper.pop(&expiration)
+                    popper.pop(&expiration).await
                 }
-            });
+            } else {
+                None
+            };
+            drop(idles);
 
             if let Some(t) = entry {
                 return Ok(self.reuse(&key, t.inner));
             }
             // 2. no valid idle then add caller into waiters and make connection
-            let waiters = if let Some(waiter) = inner.waiters.get_mut(&key) {
+            let mut waiters = self.inner.waiters.lock();
+            let waiter_list = if let Some(waiter) = waiters.get_mut(&key) {
                 waiter
             } else {
-                inner
-                    .waiters
-                    .entry(key.clone())
-                    .or_insert_with(Default::default)
+                waiters.entry(key.clone()).or_default()
             };
             let (tx, rx) = oneshot::channel();
-            (rx, waiters.insert(tx))
+            (rx, waiter_list.insert(tx))
             // drop lock guard before await
         };
 
@@ -308,7 +305,7 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
                                     "[VOLO] make_transport finished for {:?}",
                                     &connecting.key
                                 );
-                                Ok(this.pooled(connecting, t))
+                                Ok(this.pooled(connecting, t).await)
                             }
                             Err(e) => Err(e),
                         },
@@ -352,13 +349,12 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
         }
     }
 
-    fn pooled(&self, mut connecting: Connecting<K, T>, value: T) -> Pooled<K, T> {
+    async fn pooled(&self, mut connecting: Connecting<K, T>, value: T) -> Pooled<K, T> {
         let (value, pool_ref) = {
             match value.reserve() {
                 Reservation::Shared(to_insert, to_return) => {
-                    let mut inner = self.inner.lock().unwrap();
-                    inner.put(connecting.key.clone(), to_insert);
-                    inner.connected(&connecting.key);
+                    self.inner.put(connecting.key.clone(), to_insert).await;
+                    self.inner.connected(&connecting.key);
                     connecting.pool = WeakOpt::none();
                     // Shared reservations don't need a reference to the pool,
                     // since the pool always keeps a copy.
@@ -394,7 +390,7 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
 
 pub struct Connecting<K: Key, T: Poolable> {
     key: K,
-    pool: WeakOpt<Mutex<Inner<K, T>>>,
+    pool: WeakOpt<Inner<K, T>>,
 }
 
 impl<K: Key, T> Connecting<K, T>
@@ -409,10 +405,7 @@ where
 impl<K: Key, T: Poolable> Drop for Connecting<K, T> {
     fn drop(&mut self) {
         if let Some(pool) = self.pool.upgrade() {
-            // No need to panic on drop, that could abort!
-            if let Ok(mut inner) = pool.lock() {
-                inner.connected(&self.key);
-            }
+            pool.connected(&self.key);
         }
     }
 }
@@ -428,11 +421,11 @@ pub struct Pooled<K: Key, T: Poolable> {
     #[pin]
     t: Option<T>,
     // shared transport no need pool ref
-    pool: WeakOpt<Mutex<Inner<K, T>>>,
+    pool: WeakOpt<Inner<K, T>>,
 }
 
 impl<K: Key, T: Poolable> Pooled<K, T> {
-    fn new(key: K, t: T, pool: WeakOpt<Mutex<Inner<K, T>>>) -> Self {
+    fn new(key: K, t: T, pool: WeakOpt<Inner<K, T>>) -> Self {
         Pooled {
             key: Some(key),
             t: Some(t),
@@ -440,9 +433,9 @@ impl<K: Key, T: Poolable> Pooled<K, T> {
         }
     }
 
-    pub(crate) fn reuse(mut self) {
+    pub(crate) async fn reuse(mut self) {
         let inner = self.t.take().volo_unwrap();
-        if !inner.reusable() {
+        if !inner.reusable().await {
             // If we *already* know the connection is done here,
             // it shouldn't be re-inserted back into the pool.
             return;
@@ -451,9 +444,7 @@ impl<K: Key, T: Poolable> Pooled<K, T> {
         let key = self.key.take().volo_unwrap();
         if let WeakOpt(Some(pool)) = self.pool {
             if let Some(pool) = pool.upgrade() {
-                if let Ok(mut pool) = pool.lock() {
-                    pool.put(key, inner);
-                }
+                pool.put(key, inner).await;
             }
         }
     }
@@ -523,11 +514,11 @@ struct Inner<K: Key, T: Poolable> {
     // A flag that a connection is being established, and the connection
     // should be shared. This prevents making multiple Multiplex connections
     // to the same host.
-    connecting: HashSet<K>,
+    connecting: Mutex<HashSet<K>>,
     // idle queue
-    idle: HashMap<K, VecDeque<Idle<T>>>,
+    idles: tokio::sync::Mutex<HashMap<K, VecDeque<Idle<T>>>>,
     // waiters wait for idle transport
-    waiters: HashMap<K, WaiterList<T>>,
+    waiters: Mutex<HashMap<K, WaiterList<T>>>,
     // idle timeout and check interval
     timeout: Duration,
     // idle count per key
@@ -539,68 +530,112 @@ struct Inner<K: Key, T: Poolable> {
 
 impl<K: Key, T: Poolable> Inner<K, T> {
     // clear expired idle
-    fn clear_expired(&mut self) {
+    async fn clear_expired(&self) {
         let timeout = self.timeout;
         let now = Instant::now();
-        self.idle.retain(|key, values| {
-            values.retain(|entry| {
-                // TODO: check has_idle && remove the (idle, waiters) key
-                if !entry.inner.reusable() {
-                    tracing::trace!("[VOLO] idle interval evicting closed for {:?}", key);
-                    return false;
-                }
-                if now - entry.idle_at > timeout {
-                    tracing::trace!("[VOLO] idle interval evicting expired for {:?}", key);
-                    return false;
-                }
+        let mut keys = Vec::new();
+        let mut idles = self.idles.lock().await;
 
-                true
-            });
-            !values.is_empty()
-        });
-    }
-}
+        for (key, values) in idles.iter_mut() {
+            // copied from .retain()
+            let len = values.len();
+            let mut idx = 0;
+            let mut cur = 0;
 
-impl<K: Key, T: Poolable> Inner<K, T> {
-    fn put(&mut self, key: K, t: T) {
-        // check the wait queue
-        let mut value = Some(t);
-        if let Some(waiters) = self.waiters.get_mut(&key) {
-            // find a waiter and send
-            while let Some(waiter) = waiters.pop() {
-                // check if waiter is dropped
-                if !waiter.is_closed() {
-                    let t = value.take().volo_unwrap();
-                    let t = match t.reserve() {
-                        Reservation::Shared(to_keep, to_send) => {
-                            value = Some(to_keep);
-                            to_send
-                        }
-                        Reservation::Unique(unique) => unique,
-                    };
-                    match waiter.send(t) {
-                        Ok(()) => {
-                            tracing::trace!("[VOLO] [pool put]: found waiter for {:?}", key);
-                            if value.is_none() {
-                                // Unique break
-                                break;
-                            }
-                        }
-                        Err(t) => {
-                            value = Some(t);
-                        }
-                    }
+            // Stage 1: All values are retained.
+            while cur < len {
+                if !f(&values[cur], key, now, timeout).await {
+                    cur += 1;
+                    break;
                 }
+                cur += 1;
+                idx += 1;
             }
-            // if waiters is empty then remove from waiters
-            if waiters.is_empty() {
-                self.waiters.remove(&key);
+            // Stage 2: Swap retained value into current idx.
+            while cur < len {
+                if !f(&values[cur], key, now, timeout).await {
+                    cur += 1;
+                    continue;
+                }
+
+                values.swap(idx, cur);
+                cur += 1;
+                idx += 1;
+            }
+            // Stage 3: Truncate all values after idx.
+            if cur != idx {
+                values.truncate(idx);
+            }
+
+            if values.is_empty() {
+                keys.push(key.clone());
             }
         }
 
+        for key in keys {
+            idles.remove(&key);
+        }
+    }
+}
+
+async fn f(idle: &Idle<impl Poolable>, key: &impl Key, now: Instant, timeout: Duration) -> bool {
+    // TODO: check has_idle && remove the (idle, waiters) key
+    if !idle.inner.reusable().await {
+        tracing::trace!("[VOLO] removing closed connection for {:?}", key);
+        return false;
+    }
+    if now - idle.idle_at > timeout {
+        tracing::trace!("[VOLO] removing expired connection for {:?}", key);
+        return false;
+    }
+    true
+}
+
+impl<K: Key, T: Poolable> Inner<K, T> {
+    async fn put(&self, key: K, t: T) {
+        // check the wait queue
+        let mut value = Some(t);
+        {
+            let mut waiters = self.waiters.lock();
+            if let Some(waiter_list) = waiters.get_mut(&key) {
+                // find a waiter and send
+                while let Some(waiter) = waiter_list.pop() {
+                    // check if waiter is dropped
+                    if !waiter.is_closed() {
+                        let t = value.take().volo_unwrap();
+                        let t = match t.reserve() {
+                            Reservation::Shared(to_keep, to_send) => {
+                                value = Some(to_keep);
+                                to_send
+                            }
+                            Reservation::Unique(unique) => unique,
+                        };
+                        match waiter.send(t) {
+                            Ok(()) => {
+                                tracing::trace!("[VOLO] [pool put]: found waiter for {:?}", key);
+                                if value.is_none() {
+                                    // Unique break
+                                    break;
+                                }
+                            }
+                            Err(t) => {
+                                value = Some(t);
+                            }
+                        }
+                    }
+                }
+                // if waiters is empty then remove from waiters
+                if waiter_list.is_empty() {
+                    waiters.remove(&key);
+                }
+            }
+            drop(waiters);
+        }
+
         // check if send to some waiter
+        let mut idles = self.idles.lock().await;
         if let Some(t) = value {
-            if t.can_share() && self.idle.contains_key(&key) {
+            if t.can_share() && idles.contains_key(&key) {
                 tracing::trace!(
                     "[VOLO] put; existing idle Shareable connection for {:?}",
                     key
@@ -609,7 +644,7 @@ impl<K: Key, T: Poolable> Inner<K, T> {
             }
             // means doesn't send success
             // then put back to idle list
-            let idle = self.idle.entry(key).or_default();
+            let idle = idles.entry(key).or_default();
             if idle.len() < self.max_idle_per_key {
                 idle.push_back(Idle {
                     inner: t,
@@ -621,53 +656,44 @@ impl<K: Key, T: Poolable> Inner<K, T> {
 
     /// A `Connecting` task is complete. Not necessarily successfully,
     /// but the lock is going away, so clean up.
-    fn connected(&mut self, key: &K) {
-        let existed = self.connecting.remove(key);
+    fn connected(&self, key: &K) {
+        let existed = self.connecting.lock().remove(key);
         debug_assert!(existed, "Connecting dropped, key not in pool.connecting");
         // cancel any waiters. if there are any, it's because
         // this Connecting task didn't complete successfully.
         // those waiters would never receive a connection.
-        self.waiters.remove(key);
+        self.waiters.lock().remove(key);
     }
 }
 
 // Idle refresh task
-#[pin_project]
 struct IdleTask<K: Key, T: Poolable> {
     // refresh interval
-    #[pin]
     interval: Interval,
     // pool
-    inner: Weak<Mutex<Inner<K, T>>>,
+    inner: Weak<Inner<K, T>>,
     // drop tx and rx recv error
-    #[pin]
     pool_drop_tx: oneshot::Sender<()>,
 }
 
-impl<K: Key, T: Poolable> Future for IdleTask<K, T> {
-    type Output = ();
-
-    // long loop for check transport timeout
-    fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut this = self.project();
+impl<K: Key, T: Poolable> IdleTask<K, T> {
+    async fn clear_expired(mut self) {
         loop {
-            match this.pool_drop_tx.as_mut().poll_closed(cx) {
-                Poll::Ready(()) => {
+            tokio::select! {
+                _ = self.interval.tick() => {
+                    if let Some(inner) = self.inner.upgrade() {
+                        tracing::trace!("[VOLO] idle interval checking for expired");
+                        inner.clear_expired().await;
+                    } else {
+                        return;
+                    }
+                }
+                _ = self.pool_drop_tx.closed() => {
                     tracing::trace!("[VOLO] pool closed, canceling idle interval");
-                    return Poll::Ready(());
+                    return;
                 }
-                Poll::Pending => (),
-            }
-            ready!(this.interval.as_mut().poll_tick(cx));
-            if let Some(inner) = this.inner.upgrade() {
-                if let Ok(mut inner) = inner.lock() {
-                    tracing::trace!("[VOLO] idle interval checking for expired");
-                    inner.clear_expired();
 
-                    continue;
-                }
             }
-            return Poll::Ready(());
         }
     }
 }
