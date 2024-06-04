@@ -1,16 +1,15 @@
 use std::net::SocketAddr;
 
+use volo_thrift::server::panic_handler::log_and_return_exception;
+
 pub struct S;
 
 impl volo_gen::thrift_gen::hello::HelloService for S {
     async fn hello(
         &self,
-        req: volo_gen::thrift_gen::hello::HelloRequest,
+        _req: volo_gen::thrift_gen::hello::HelloRequest,
     ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::ServerError> {
-        let resp = volo_gen::thrift_gen::hello::HelloResponse {
-            message: format!("Hello, {}!", req.name).into(),
-        };
-        Ok(resp)
+        panic!("panic in hello");
     }
 }
 
@@ -21,6 +20,7 @@ async fn main() {
     let addr = volo::net::Address::from(addr);
 
     volo_gen::thrift_gen::hello::HelloServiceServer::new(S)
+        .layer_front(volo::catch_panic::Layer::new(log_and_return_exception))
         .run(addr)
         .await
         .unwrap();
