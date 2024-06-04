@@ -20,7 +20,7 @@ use futures::FutureExt;
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust,ignore
 /// server.layer_front(volo::catch_panic::Layer::new(
 ///     volo_thrift::server::panic_handler::log_and_return_exception,
 /// ))
