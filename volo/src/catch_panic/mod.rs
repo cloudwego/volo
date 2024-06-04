@@ -140,6 +140,17 @@ where
     ) -> Result<S::Response, S::Error>;
 }
 
+/// A dummy handler that is only used for demo and testing.
+///
+/// **It MUST NOT be used in normal cases, because it will panic when called.**
+pub fn dummy_handler<Cx, Resp, Error>(
+    _cx: &mut Cx,
+    _payload: Box<dyn std::any::Any + Send>,
+    _panic_info: PanicInfo,
+) -> Result<Resp, Error> {
+    panic!("dummy_handler is only for demo and should not be called")
+}
+
 /// Impl this Handler for F so users can use a closure as the panic handler.
 impl<F, S, Cx, Req> Handler<S, Cx, Req> for F
 where
