@@ -91,7 +91,7 @@ impl fmt::Display for Location {
 }
 
 thread_local! {
-    static PANIC_INFO: std::cell::RefCell<Option<PanicInfo>> = std::cell::RefCell::new(None);
+    static PANIC_INFO: std::cell::RefCell<Option<PanicInfo>> = const { std::cell::RefCell::new(None) };
 }
 static PANIC_HOOK_INIT: std::sync::Once = std::sync::Once::new();
 
