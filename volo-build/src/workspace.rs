@@ -1,11 +1,11 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 
 use pilota_build::{IdlService, Plugin};
 use volo::FastStr;
 
 use crate::{
-    model::{GitSource, Repo, Source, WorkspaceConfig},
-    util::{download_repos_to_target, get_git_path, strip_slash_prefix},
+    model::{GitSource, Source, WorkspaceConfig},
+    util::{download_repos_to_target, strip_slash_prefix},
 };
 
 pub struct Builder<MkB, P> {
@@ -53,27 +53,14 @@ where
         };
 
         let target_dir = work_dir.join("target");
-        let mut repos = HashMap::<FastStr, Repo>::new();
-        for (k, v) in config.repos.iter() {
-            let path_res = get_git_path(v.url.as_str());
-            if path_res.is_err() {
-                eprintln!("failed to get git path for repo: {}", v.url);
-                std::process::exit(1);
-            }
-            let path = path_res.unwrap();
-            let path = target_dir.join(path);
-            if !path.exists() {
-                repos.insert(FastStr::new(k), v.clone());
-            }
-        }
-
-        let repo_dir_map =
-            if let Ok(repo_dir_map) = download_repos_to_target(&repos, target_dir.as_path()) {
-                repo_dir_map
-            } else {
-                eprintln!("failed to download repos");
-                std::process::exit(1);
-            };
+        let repo_dir_map = if let Ok(repo_dir_map) =
+            download_repos_to_target(&config.repos, target_dir.as_path())
+        {
+            repo_dir_map
+        } else {
+            eprintln!("failed to download repos");
+            std::process::exit(1);
+        };
 
         // To resolve absolute path dependencies, go back two levels to the domain level
         let mut include_dirs = Vec::with_capacity(repo_dir_map.len());
