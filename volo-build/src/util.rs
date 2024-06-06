@@ -89,28 +89,8 @@ pub fn download_files_from_git(task: Task) -> anyhow::Result<()> {
     ensure_path(&task.dir)?;
 
     git_archive(&task.repo, &task.lock, &task.dir)?;
-    let path = task.dir.join("lock");
 
-    let mut file = match File::create(&path) {
-        Err(e) => {
-            return Err(anyhow::anyhow!(format!(
-                "couldn't create lock file: {:?}",
-                e
-            )));
-        }
-
-        Ok(file) => file,
-    };
-
-    match file.write_all(task.lock.as_bytes()) {
-        Err(e) => {
-            return Err(anyhow::anyhow!(format!(
-                "couldn't write to lock file: {:?}",
-                e
-            )));
-        }
-        Ok(_) => return Ok(()),
-    }
+    Ok(())
 }
 
 pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
@@ -135,8 +115,27 @@ pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Resul
         repo.lock.to_string(),
     );
     download_files_from_git(task).with_context(|| format!("download repo {}", repo.url))?;
+    // write lock file
+    let path = dir.join("lock");
+    let mut file = match File::create(&path) {
+        Err(e) => {
+            return Err(anyhow::anyhow!(format!(
+                "couldn't create lock file: {:?}",
+                e
+            )));
+        }
+        Ok(file) => file,
+    };
 
-    Ok(dir)
+    match file.write_all(repo.lock.as_bytes()) {
+        Err(e) => {
+            return Err(anyhow::anyhow!(format!(
+                "couldn't write to lock file: {:?}",
+                e
+            )));
+        }
+        Ok(_) => return Ok(dir),
+    }
 }
 
 fn run_command(command: &mut Command) -> anyhow::Result<()> {
