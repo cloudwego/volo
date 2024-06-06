@@ -97,6 +97,7 @@ name = "http-tls-client"
 path = "src/http/http-tls-client.rs"
 required-features = ["__tls"]
 
+
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
@@ -118,18 +119,17 @@ pilota.workspace = true
 volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc" }
 volo-thrift = { path = "../volo-thrift", features = ["multiplex"] }
-volo-http = { path = "../volo-http", features = ["default_client", "default_server", "cookie"] }
+volo-http = { path = "../volo-http", features = [
+    "default_client",
+    "default_server",
+    "cookie",
+] }
 
 volo-gen = { path = "./volo-gen" }
 
 [features]
 __tls = []
-rustls = [
-    "__tls",
-    "volo/rustls",
-    "volo-grpc/rustls",
-    "volo-http/rustls",
-]
+rustls = ["__tls", "volo/rustls", "volo-grpc/rustls", "volo-http/rustls"]
 native-tls = [
     "__tls",
     "volo/native-tls",

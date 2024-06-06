@@ -1,4 +1,4 @@
 .vscode
 .idea
-/target
+target
 /test
