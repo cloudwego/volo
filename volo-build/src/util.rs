@@ -99,7 +99,7 @@ pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Resul
     // check if the repo is already downloaded
     let lock_path = dir.join(".lock");
     if dir.exists() && lock_path.exists() && lock_path.is_file() {
-        let mut file = File::open(lock_path).unwrap();
+        let mut file = File::open(lock_path.clone()).unwrap();
         let mut content = String::new();
         file.read_to_string(&mut content).unwrap();
         if content.trim() == repo.lock {
@@ -115,9 +115,9 @@ pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Resul
         repo.lock.to_string(),
     );
     download_files_from_git(task).with_context(|| format!("download repo {}", repo.url))?;
+
     // write lock file
-    let path = dir.join(".lock");
-    let mut file = match File::create(&path) {
+    let mut file = match File::create(&lock_path) {
         Err(e) => {
             return Err(anyhow::anyhow!(format!(
                 "couldn't create lock file: {:?}",
@@ -127,6 +127,8 @@ pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Resul
         Ok(file) => file,
     };
 
+    println!("repo {} downloaded", repo.url);
+    println!("lock: {} is written in {}", repo.lock, lock_path.display());
     match file.write_all(repo.lock.as_bytes()) {
         Err(e) => {
             return Err(anyhow::anyhow!(format!(
