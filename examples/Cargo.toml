@@ -19,6 +19,9 @@ path = "src/hello/grpc_client.rs"
 name = "hello-thrift-server"
 path = "src/hello/thrift_server.rs"
 [[bin]]
+name = "hello-thrift-server-panic"
+path = "src/hello/thrift_server_panic.rs"
+[[bin]]
 name = "hello-thrift-client"
 path = "src/hello/thrift_client.rs"
 
