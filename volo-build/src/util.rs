@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs::{create_dir_all, File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{Read, Seek, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -72,7 +72,7 @@ pub fn read_config_from_file(f: &mut File) -> Result<SingleConfig, serde_yaml::E
 }
 
 pub fn ensure_path(s: &Path) -> std::io::Result<()> {
-    create_dir_all(s)
+    fs::create_dir_all(s)
 }
 
 pub fn ensure_file(filename: &Path) -> std::io::Result<File> {
@@ -95,6 +95,13 @@ pub fn download_files_from_git(task: Task) -> anyhow::Result<()> {
 
 pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
     let dir = target_dir.as_ref().join(get_git_path(repo.url.as_str())?);
+
+    // check if the repo is already downloaded
+    let lock_path = dir.join(repo.lock.as_str());
+    if dir.exists() && lock_path.exists() {
+        return Ok(dir);
+    }
+
     let task = Task::new(
         vec![],
         dir.clone(),
@@ -102,6 +109,11 @@ pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Resul
         repo.lock.to_string(),
     );
     download_files_from_git(task).with_context(|| format!("download repo {}", repo.url))?;
+
+    // write lock file
+    File::create(lock_path.clone())
+        .with_context(|| format!("couldn't write to lock file: {:?}", lock_path.display()))?;
+
     Ok(dir)
 }
 
