@@ -97,7 +97,6 @@ name = "http-tls-client"
 path = "src/http/http-tls-client.rs"
 required-features = ["__tls"]
 
-
 [dependencies]
 anyhow.workspace = true
 async-stream.workspace = true
