@@ -37,6 +37,7 @@ use crate::{
 };
 
 mod layer;
+pub mod panic_handler;
 
 /// This is unstable now and may be changed in the future.
 #[doc(hidden)]

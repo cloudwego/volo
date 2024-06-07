@@ -7,6 +7,7 @@
 pub use motore::{layer, layer::Layer, service, Service};
 pub use tokio::main;
 
+pub mod catch_panic;
 pub mod context;
 pub mod discovery;
 pub mod loadbalance;
