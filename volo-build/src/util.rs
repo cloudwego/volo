@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    fs::{create_dir_all, File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{Read, Seek, Write},
     path::{Path, PathBuf},
     process::Command,
@@ -72,7 +72,7 @@ pub fn read_config_from_file(f: &mut File) -> Result<SingleConfig, serde_yaml::E
 }
 
 pub fn ensure_path(s: &Path) -> std::io::Result<()> {
-    create_dir_all(s)
+    fs::create_dir_all(s)
 }
 
 pub fn ensure_file(filename: &Path) -> std::io::Result<File> {
@@ -97,15 +97,9 @@ pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Resul
     let dir = target_dir.as_ref().join(get_git_path(repo.url.as_str())?);
 
     // check if the repo is already downloaded
-    let lock_path = dir.join(".lock");
-    if dir.exists() && lock_path.exists() && lock_path.is_file() {
-        let mut file = File::open(lock_path.clone()).unwrap();
-        let mut content = String::new();
-        file.read_to_string(&mut content).unwrap();
-        if content.trim() == repo.lock {
-            println!("repo {} already exists", repo.url);
-            return Ok(dir);
-        }
+    let lock_path = dir.join(repo.lock.as_str());
+    if dir.exists() && lock_path.exists() {
+        return Ok(dir);
     }
 
     let task = Task::new(
@@ -117,27 +111,10 @@ pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Resul
     download_files_from_git(task).with_context(|| format!("download repo {}", repo.url))?;
 
     // write lock file
-    let mut file = match File::create(&lock_path) {
-        Err(e) => {
-            return Err(anyhow::anyhow!(format!(
-                "couldn't create lock file: {:?}",
-                e
-            )));
-        }
-        Ok(file) => file,
-    };
+    File::create(lock_path.clone())
+        .with_context(|| format!("couldn't write to lock file: {:?}", lock_path.display()))?;
 
-    println!("repo {} downloaded", repo.url);
-    println!("lock: {} is written in {}", repo.lock, lock_path.display());
-    match file.write_all(repo.lock.as_bytes()) {
-        Err(e) => {
-            return Err(anyhow::anyhow!(format!(
-                "couldn't write to lock file: {:?}",
-                e
-            )));
-        }
-        Ok(_) => return Ok(dir),
-    }
+    Ok(dir)
 }
 
 fn run_command(command: &mut Command) -> anyhow::Result<()> {
