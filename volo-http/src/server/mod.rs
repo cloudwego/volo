@@ -40,6 +40,7 @@ mod handler;
 mod into_response;
 pub mod layer;
 pub mod middleware;
+pub mod panic_handler;
 pub mod param;
 pub mod route;
 
