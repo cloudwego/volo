@@ -28,6 +28,7 @@ use futures::FutureExt;
 ///
 /// Note: not all panics can be caught, for example, if users call `std::process::exit`,
 /// `std::process::abort` or set panic = "abort" in profile, the process will exit immediately.
+#[derive(Clone)]
 pub struct Layer<T> {
     panic_handler: T,
 }
@@ -185,6 +186,7 @@ impl<S, T> crate::layer::Layer<S> for Layer<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct Service<S, T> {
     inner: S,
     panic_handler: T,

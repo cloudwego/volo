@@ -7,7 +7,7 @@ use http::{header, request::Parts, Method, Request, StatusCode, Uri};
 use http_body::Frame;
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
-use volo::service::service_fn;
+use volo::{catch_panic, service::service_fn};
 use volo_http::{
     body::{Body, BodyConversion},
     context::{RequestPartsExt, ServerContext},
@@ -20,6 +20,7 @@ use volo_http::{
         extract::{Form, FromContext, MaybeInvalid, Query},
         layer::{FilterLayer, TimeoutLayer},
         middleware::{self, Next},
+        panic_handler::{always_internal_error, fixed_payload},
         param::PathParams,
         route::{get, get_service, post, Router},
         IntoResponse, Redirect, Server,
@@ -191,6 +192,10 @@ async fn redirect_to_index() -> Redirect {
     Redirect::permanent_redirect("/")
 }
 
+async fn trigger_panic() {
+    panic!("PANIC!")
+}
+
 async fn forwarded_getter(_: &mut ServerContext, req: ServerRequest) -> Result<String, Infallible> {
     let (parts, _) = req.into_parts();
     let forwarded = parts.forwarded();
@@ -296,6 +301,18 @@ fn test_router() -> Router {
         // curl -v http://127.0.0.1:8080/test/redirect
         // curl -L http://127.0.0.1:8080/test/redirect
         .route("/test/redirect", get(redirect_to_index))
+        // curl -v http://127.0.0.1:8080/test/panic_500
+        .route(
+            "/test/panic_500",
+            get(trigger_panic).layer(catch_panic::Layer::new(always_internal_error)),
+        )
+        // curl -v http://127.0.0.1:8080/test/panic_403
+        .route(
+            "/test/panic_403",
+            get(trigger_panic).layer(catch_panic::Layer::new(fixed_payload(
+                StatusCode::FORBIDDEN,
+            ))),
+        )
         // curl -v http://127.0.0.1:8080/test/anyaddr?reject_me
         .layer(FilterLayer::new(|uri: Uri| async move {
             if uri.query().is_some() && uri.query().unwrap() == "reject_me" {
