@@ -209,6 +209,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: dtolnay/rust-toolchain@master
         with:
+          components: rustfmt
           toolchain: ${{matrix.rust}}
       - name: Cli tests
         run: |
