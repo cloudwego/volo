@@ -43,6 +43,8 @@ pub mod middleware;
 pub mod panic_handler;
 pub mod param;
 pub mod route;
+#[cfg(test)]
+pub mod test_helpers;
 
 pub use self::{
     into_response::{IntoResponse, Redirect},
