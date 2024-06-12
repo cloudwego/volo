@@ -3,6 +3,7 @@ use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use async_stream::stream;
 use bytes::Bytes;
 use faststr::FastStr;
+use futures::Stream;
 use http::{header, request::Parts, Method, Request, StatusCode, Uri};
 use http_body::Frame;
 use serde::{Deserialize, Serialize};
@@ -22,6 +23,7 @@ use volo_http::{
         middleware::{self, Next},
         panic_handler::{always_internal_error, fixed_payload},
         param::PathParams,
+        response::sse::{Event, Sse},
         route::{get, get_service, post, Router},
         IntoResponse, Redirect, Server,
     },
@@ -196,6 +198,16 @@ async fn trigger_panic() {
     panic!("PANIC!")
 }
 
+async fn sse() -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
+    let stream = stream! {
+        loop {
+            yield Ok(Event::new().event("ping"));
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    };
+    Sse::new(stream)
+}
+
 async fn forwarded_getter(_: &mut ServerContext, req: ServerRequest) -> Result<String, Infallible> {
     let (parts, _) = req.into_parts();
     let forwarded = parts.forwarded();
@@ -313,6 +325,8 @@ fn test_router() -> Router {
                 StatusCode::FORBIDDEN,
             ))),
         )
+        // curl -L http://127.0.0.1:8080/test/redirect
+        .route("/test/sse", get(sse))
         // curl -v http://127.0.0.1:8080/test/anyaddr?reject_me
         .layer(FilterLayer::new(|uri: Uri| async move {
             if uri.query().is_some() && uri.query().unwrap() == "reject_me" {

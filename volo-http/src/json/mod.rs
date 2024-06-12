@@ -23,6 +23,26 @@ where
     res
 }
 
+#[cfg(feature = "sonic_json")]
+#[allow(dead_code)]
+pub(crate) fn serialize_to_writer<W, T>(writer: W, data: &T) -> Result<(), Error>
+where
+    W: sonic_rs::writer::WriteExt,
+    T: Serialize,
+{
+    sonic_rs::to_writer(writer, data)
+}
+
+#[cfg(feature = "serde_json")]
+#[allow(dead_code)]
+pub(crate) fn serialize_to_writer<W, T>(writer: W, data: &T) -> Result<(), Error>
+where
+    W: std::io::Write,
+    T: Serialize,
+{
+    serde_json::to_writer(writer, data)
+}
+
 pub(crate) fn deserialize<T>(data: &[u8]) -> Result<T, Error>
 where
     T: DeserializeOwned,
