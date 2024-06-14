@@ -37,17 +37,17 @@ use crate::{
 
 pub mod extract;
 mod handler;
-mod into_response;
 pub mod layer;
 pub mod middleware;
 pub mod panic_handler;
 pub mod param;
+pub mod response;
 pub mod route;
 #[cfg(test)]
 pub mod test_helpers;
 
 pub use self::{
-    into_response::{IntoResponse, Redirect},
+    response::{IntoResponse, Redirect},
     route::Router,
 };
 

@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.2.7"
+version = "0.2.8"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -34,6 +34,8 @@ http-body.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util = { workspace = true, features = ["tokio"] }
+itoa.workspace = true
+memchr.workspace = true
 metainfo.workspace = true
 mime.workspace = true
 motore.workspace = true
@@ -70,8 +72,8 @@ serde_json = { workspace = true, optional = true }
 sonic-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
-serde = { version = "1", features = ["derive"] }
-volo = { version = "0.10", path = "../volo" }
+async-stream.workspace = true
+serde = { workspace = true, features = ["derive"] }
 
 [features]
 default = []
