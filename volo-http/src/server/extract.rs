@@ -85,6 +85,20 @@ where
     }
 }
 
+impl<T> FromContext for Result<T, T::Rejection>
+where
+    T: FromContext,
+{
+    type Rejection = Infallible;
+
+    async fn from_context(
+        cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(T::from_context(cx, parts).await)
+    }
+}
+
 impl FromContext for Address {
     type Rejection = Infallible;
 
@@ -177,6 +191,22 @@ where
         body: B,
     ) -> Result<Self, Self::Rejection> {
         Ok(T::from_request(cx, parts, body).await.ok())
+    }
+}
+
+impl<B, T> FromRequest<B> for Result<T, T::Rejection>
+where
+    B: Send,
+    T: FromRequest<B, private::ViaRequest> + Sync,
+{
+    type Rejection = Infallible;
+
+    async fn from_request(
+        cx: &mut ServerContext,
+        parts: Parts,
+        body: B,
+    ) -> Result<Self, Self::Rejection> {
+        Ok(T::from_request(cx, parts, body).await)
     }
 }
 
@@ -335,5 +365,84 @@ where
             serde_urlencoded::from_bytes::<T>(bytes.as_ref()).map_err(ExtractBodyError::Form)?;
 
         Ok(Form(form))
+    }
+}
+
+#[cfg(test)]
+mod extract_tests {
+    #![deny(unused)]
+
+    use std::convert::Infallible;
+
+    use http::request::Parts;
+    use hyper::body::Incoming;
+
+    use super::{FromContext, FromRequest};
+    use crate::{context::ServerContext, server::handler::Handler};
+
+    struct SomethingFromCx;
+
+    impl FromContext for SomethingFromCx {
+        type Rejection = Infallible;
+        async fn from_context(
+            _: &mut ServerContext,
+            _: &mut Parts,
+        ) -> Result<Self, Self::Rejection> {
+            unimplemented!()
+        }
+    }
+
+    struct SomethingFromReq;
+
+    impl FromRequest for SomethingFromReq {
+        type Rejection = Infallible;
+        async fn from_request(
+            _: &mut ServerContext,
+            _: Parts,
+            _: Incoming,
+        ) -> Result<Self, Self::Rejection> {
+            unimplemented!()
+        }
+    }
+
+    #[test]
+    fn extractor() {
+        fn assert_handler<H, T>(_: H)
+        where
+            H: Handler<T, Incoming, Infallible>,
+        {
+        }
+
+        async fn only_cx(_: SomethingFromCx) {}
+        async fn only_req(_: SomethingFromReq) {}
+        async fn cx_and_req(_: SomethingFromCx, _: SomethingFromReq) {}
+        async fn many_cx_and_req(
+            _: SomethingFromCx,
+            _: SomethingFromCx,
+            _: SomethingFromCx,
+            _: SomethingFromReq,
+        ) {
+        }
+        async fn only_option_cx(_: Option<SomethingFromCx>) {}
+        async fn only_option_req(_: Option<SomethingFromReq>) {}
+        async fn only_result_cx(_: Result<SomethingFromCx, Infallible>) {}
+        async fn only_result_req(_: Result<SomethingFromReq, Infallible>) {}
+        async fn option_cx_req(_: Option<SomethingFromCx>, _: Option<SomethingFromReq>) {}
+        async fn result_cx_req(
+            _: Result<SomethingFromCx, Infallible>,
+            _: Result<SomethingFromReq, Infallible>,
+        ) {
+        }
+
+        assert_handler(only_cx);
+        assert_handler(only_req);
+        assert_handler(cx_and_req);
+        assert_handler(many_cx_and_req);
+        assert_handler(only_option_cx);
+        assert_handler(only_option_req);
+        assert_handler(only_result_cx);
+        assert_handler(only_result_req);
+        assert_handler(option_cx_req);
+        assert_handler(result_cx_req);
     }
 }

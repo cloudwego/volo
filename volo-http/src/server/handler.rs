@@ -305,3 +305,116 @@ where
         self.inner.as_mut().poll(cx)
     }
 }
+
+#[cfg(test)]
+mod handler_tests {
+    #![deny(unused)]
+
+    use std::convert::Infallible;
+
+    use faststr::FastStr;
+    use http::{method::Method, status::StatusCode, uri::Uri};
+    use hyper::body::Incoming;
+    use volo::net::Address;
+
+    use super::Handler;
+    use crate::{
+        context::ServerContext,
+        request::ServerRequest,
+        response::ServerResponse,
+        server::{
+            handler::{HandlerWithoutRequest, MiddlewareHandlerFromFn},
+            middleware::Next,
+        },
+    };
+
+    #[test]
+    fn normal_handlers() {
+        // If the param is not a handler, it will fail to compile.
+        fn assert_handler<H, T>(_: H)
+        where
+            H: Handler<T, Incoming, Infallible>,
+        {
+        }
+
+        async fn nothing() {}
+        async fn one_part(_: Uri) {}
+        async fn one_body(_: String) {}
+        async fn ret() -> String {
+            unimplemented!()
+        }
+        async fn many_things(_: Method, _: Uri, _: Address, _: String) -> String {
+            unimplemented!()
+        }
+
+        assert_handler(nothing);
+        assert_handler(one_part);
+        assert_handler(one_body);
+        assert_handler(ret);
+        assert_handler(many_things);
+    }
+
+    #[test]
+    fn handlers_without_req() {
+        fn assert_handler<H, T>(_: H)
+        where
+            H: HandlerWithoutRequest<T, String>,
+        {
+        }
+
+        async fn nothing() -> String {
+            unimplemented!()
+        }
+        async fn one_part(_: Uri) -> String {
+            unimplemented!()
+        }
+        async fn many_things(_: Method, _: Uri, _: Address) -> String {
+            unimplemented!()
+        }
+
+        assert_handler(nothing);
+        assert_handler(one_part);
+        assert_handler(many_things);
+    }
+
+    #[test]
+    fn from_fn_handlers() {
+        fn assert_handler<H, T, B1, B2, E>(_: H)
+        where
+            H: for<'r> MiddlewareHandlerFromFn<'r, T, B1, B2, E>,
+        {
+        }
+
+        async fn simple_mw(_: &mut ServerContext, _: ServerRequest, _: Next) -> ServerResponse {
+            unimplemented!()
+        }
+        async fn simple_mw_with_parts(
+            _: Method,
+            _: Uri,
+            _: &mut ServerContext,
+            _: ServerRequest,
+            _: Next,
+        ) -> ServerResponse {
+            unimplemented!()
+        }
+        async fn with_error(
+            _: &mut ServerContext,
+            _: ServerRequest,
+            _: Next<Incoming, StatusCode>,
+        ) -> ServerResponse {
+            unimplemented!()
+        }
+        async fn convert_body(
+            _: &mut ServerContext,
+            _: ServerRequest<FastStr>,
+            _: Next<String, StatusCode>,
+        ) -> ServerResponse {
+            unimplemented!()
+        }
+
+        assert_handler(simple_mw);
+        assert_handler(simple_mw_with_parts);
+        assert_handler(with_error);
+        assert_handler(convert_body);
+    }
+}

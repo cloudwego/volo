@@ -876,3 +876,141 @@ where
         Ok(self.status.into_response())
     }
 }
+
+#[cfg(test)]
+mod route_tests {
+    use http::{method::Method, status::StatusCode};
+
+    use super::{any, get, head, options, MethodRouter};
+    use crate::{body::Body, server::test_helpers::TestServer, Router, Server};
+
+    async fn always_ok() {}
+    async fn teapot() -> StatusCode {
+        StatusCode::IM_A_TEAPOT
+    }
+
+    #[tokio::test]
+    async fn method_router() {
+        async fn test_all_method<F>(router: MethodRouter<Option<Body>>, filter: F)
+        where
+            F: Fn(Method) -> bool,
+        {
+            let methods = [
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::HEAD,
+                Method::OPTIONS,
+                Method::CONNECT,
+                Method::PATCH,
+                Method::TRACE,
+            ];
+            for m in methods {
+                assert_eq!(
+                    router
+                        .call_route(m.clone(), None)
+                        .await
+                        .status()
+                        .is_success(),
+                    filter(m)
+                );
+            }
+        }
+
+        test_all_method(get(always_ok), |m| m == Method::GET).await;
+        test_all_method(head(always_ok), |m| m == Method::HEAD).await;
+        test_all_method(any(always_ok), |_| true).await;
+    }
+
+    #[tokio::test]
+    async fn method_fallback() {
+        async fn test_all_method<F>(router: MethodRouter<Option<Body>>, filter: F)
+        where
+            F: Fn(Method) -> bool,
+        {
+            let methods = [
+                Method::GET,
+                Method::POST,
+                Method::PUT,
+                Method::DELETE,
+                Method::HEAD,
+                Method::OPTIONS,
+                Method::CONNECT,
+                Method::PATCH,
+                Method::TRACE,
+            ];
+            for m in methods {
+                assert_eq!(
+                    router.call_route(m.clone(), None).await.status() == StatusCode::IM_A_TEAPOT,
+                    filter(m)
+                );
+            }
+        }
+
+        test_all_method(get(always_ok).fallback(teapot), |m| m != Method::GET).await;
+        test_all_method(options(always_ok).fallback(teapot), |m| {
+            m != Method::OPTIONS
+        })
+        .await;
+        test_all_method(any(teapot), |_| true).await;
+    }
+
+    #[tokio::test]
+    async fn url_match() {
+        async fn is_ok(server: &TestServer<Router<Option<Body>>, Option<Body>>, uri: &str) -> bool {
+            server.call_route(Method::GET, uri, None).await.status() == StatusCode::OK
+        }
+        let router: Router<Option<Body>> = Router::new()
+            .route("/", any(always_ok))
+            .route("/catch/{id}", any(always_ok))
+            .route("/catch/{id}/another", any(always_ok))
+            .route("/catch/{id}/another/{uid}", any(always_ok))
+            .route("/catch/{id}/another/{uid}/again", any(always_ok))
+            .route("/catch/{id}/another/{uid}/again/{tid}", any(always_ok))
+            .route("/catch_all/{*all}", any(always_ok));
+        let server = Server::new(router).into_test_server();
+
+        assert!(is_ok(&server, "/").await);
+        assert!(is_ok(&server, "/catch/114").await);
+        assert!(is_ok(&server, "/catch/514").await);
+        assert!(is_ok(&server, "/catch/ll45l4").await);
+        assert!(is_ok(&server, "/catch/ll45l4/another").await);
+        assert!(is_ok(&server, "/catch/ll45l4/another/1919").await);
+        assert!(is_ok(&server, "/catch/ll45l4/another/1919/again").await);
+        assert!(is_ok(&server, "/catch/ll45l4/another/1919/again/810").await);
+        assert!(is_ok(&server, "/catch_all/114").await);
+        assert!(is_ok(&server, "/catch_all/114/514/1919/810").await);
+
+        assert!(!is_ok(&server, "/catch").await);
+        assert!(!is_ok(&server, "/catch/114/").await);
+        assert!(!is_ok(&server, "/catch/114/another/514/").await);
+        assert!(!is_ok(&server, "/catch/11/another/45/again/14/").await);
+        assert!(!is_ok(&server, "/catch_all").await);
+        assert!(!is_ok(&server, "/catch_all/").await);
+    }
+
+    #[tokio::test]
+    async fn router_fallback() {
+        async fn is_teapot(
+            server: &TestServer<Router<Option<Body>>, Option<Body>>,
+            uri: &str,
+        ) -> bool {
+            server.call_route(Method::GET, uri, None).await.status() == StatusCode::IM_A_TEAPOT
+        }
+        let router: Router<Option<Body>> = Router::new()
+            .route("/", any(always_ok))
+            .route("/catch/{id}", any(always_ok))
+            .route("/catch_all/{*all}", any(always_ok))
+            .fallback(teapot);
+        let server = Server::new(router).into_test_server();
+
+        assert!(is_teapot(&server, "//").await);
+        assert!(is_teapot(&server, "/catch/").await);
+        assert!(is_teapot(&server, "/catch_all/").await);
+
+        assert!(!is_teapot(&server, "/catch/114").await);
+        assert!(!is_teapot(&server, "/catch_all/514").await);
+        assert!(!is_teapot(&server, "/catch_all/114/514/1919/810").await);
+    }
+}
