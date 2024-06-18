@@ -41,6 +41,19 @@ impl PathParamsVec {
             self.inner.push((k, v));
         }
     }
+
+    pub(crate) fn pop(&mut self) -> Option<(FastStr, FastStr)> {
+        self.inner.pop()
+    }
+}
+
+impl IntoIterator for PathParamsVec {
+    type Item = (FastStr, FastStr);
+    type IntoIter = std::vec::IntoIter<(FastStr, FastStr)>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
+    }
 }
 
 impl Deref for PathParamsVec {
@@ -69,6 +82,15 @@ impl Deref for PathParamsMap {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl IntoIterator for PathParamsMap {
+    type Item = (FastStr, FastStr);
+    type IntoIter = std::collections::hash_map::IntoIter<FastStr, FastStr>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.inner.into_iter()
     }
 }
 

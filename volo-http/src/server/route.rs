@@ -10,9 +10,12 @@
 
 #![deny(missing_docs)]
 
-use std::{collections::HashMap, convert::Infallible, error::Error, fmt, marker::PhantomData};
+use std::{
+    collections::HashMap, convert::Infallible, error::Error, fmt, future::Future,
+    marker::PhantomData, str::FromStr,
+};
 
-use http::{Method, StatusCode};
+use http::{Method, StatusCode, Uri};
 use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service, ServiceExt};
 use paste::paste;
@@ -22,7 +25,7 @@ use crate::{context::ServerContext, request::ServerRequest, response::ServerResp
 
 /// The route service used for [`Router`].
 pub type Route<B = Incoming, E = Infallible> =
-    motore::service::BoxCloneService<ServerContext, ServerRequest<B>, ServerResponse, E>;
+    motore::service::BoxService<ServerContext, ServerRequest<B>, ServerResponse, E>;
 
 // The `matchit::Router` cannot be converted to `Iterator`, so using
 // `matchit::Router<MethodRouter>` is not convenient enough.
@@ -49,7 +52,7 @@ impl RouteId {
 #[must_use]
 pub struct Router<B = Incoming, E = Infallible> {
     matcher: Matcher,
-    routes: HashMap<RouteId, MethodRouter<B, E>>,
+    routes: HashMap<RouteId, Endpoint<B, E>>,
     fallback: Fallback<B, E>,
     is_default_fallback: bool,
 }
@@ -82,7 +85,7 @@ where
         }
     }
 
-    /// Create a route for the given path with the given method router.
+    /// Create a route for the given path with the given [`MethodRouter`].
     ///
     /// The uri matcher is based on [`matchit`](https://docs.rs/matchit/0.8.0/matchit/).  It
     /// supports normal path and parameterized path.
@@ -180,16 +183,116 @@ where
     ///
     /// For more usage methods, please refer to:
     /// [`matchit`](https://docs.rs/matchit/0.8.0/matchit/).
-    pub fn route<R>(mut self, uri: R, route: MethodRouter<B, E>) -> Self
+    pub fn route<S>(mut self, uri: S, method_router: MethodRouter<B, E>) -> Self
     where
-        R: Into<String>,
+        S: AsRef<str>,
     {
         let route_id = self
             .matcher
-            .insert(uri)
+            .insert(uri.as_ref())
             .expect("Insert routing rule failed");
 
-        self.routes.insert(route_id, route);
+        self.routes
+            .insert(route_id, Endpoint::MethodRouter(method_router));
+
+        self
+    }
+
+    /// Create a route for the given path with a given [`Router`] and nest it into the current
+    /// router.
+    ///
+    /// The `uri` param is a prefix of the whole uri and will be stripped before calling the inner
+    /// router, and the inner [`Router`] will handle uri without the given prefix, but all params
+    /// will be kept.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use volo_http::server::{
+    ///     param::PathParams,
+    ///     route::{get, Router},
+    /// };
+    ///
+    /// async fn hello_world() -> &'static str {
+    ///     "Hello, World"
+    /// }
+    /// async fn handle_tid(PathParams(tid): PathParams<String>) -> String {
+    ///     tid
+    /// }
+    /// async fn uid_and_tid(PathParams((uid, tid)): PathParams<(String, String)>) -> String {
+    ///     format!("uid: {uid}, tid: {tid}")
+    /// }
+    ///
+    /// let post_router = Router::new()
+    ///     // http://<SERVER>/post/
+    ///     .route("/", get(hello_world))
+    ///     // http://<SERVER>/post/114
+    ///     .route("/{tid}", get(handle_tid));
+    /// let user_router = Router::new()
+    ///     // http://<SERVER>/user/114/name
+    ///     .route("/name", get(hello_world))
+    ///     // http://<SERVER>/user/114/tid/514
+    ///     .route("/post/{tid}", get(uid_and_tid));
+    ///
+    /// let router: Router = Router::new()
+    ///     .nest("/post", post_router)
+    ///     .nest("/user/{uid}/", user_router);
+    /// ```
+    pub fn nest<U>(self, uri: U, router: Router<B, E>) -> Self
+    where
+        U: AsRef<str>,
+    {
+        self.nest_route(uri.as_ref().to_owned(), Route::new(router))
+    }
+
+    /// Create a route for the given path with a given [`Service`] and nest it into the current
+    /// router.
+    ///
+    /// The service will handle any uri with the param `uri` as its prefix.
+    pub fn nest_service<U, S>(self, uri: U, service: S) -> Self
+    where
+        U: AsRef<str>,
+        S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'static,
+        S::Response: IntoResponse,
+    {
+        self.nest_route(
+            uri.as_ref().to_owned(),
+            Route::new(service.map_response(IntoResponse::into_response)),
+        )
+    }
+
+    fn nest_route(mut self, prefix: String, route: Route<B, E>) -> Self {
+        let uri = if prefix.ends_with('/') {
+            format!("{prefix}{NEST_CATCH_PARAM}")
+        } else {
+            format!("{prefix}/{NEST_CATCH_PARAM}")
+        };
+
+        // Because we use `matchit::Router` for matching uri, for `/{*catch}`, `/xxx` matches it
+        // but `/` does not match. To solve the problem, we should also insert `/` for handling it.
+        let route_id = self
+            .matcher
+            .insert(prefix.clone())
+            .expect("Insert routing rule failed");
+
+        // If user uses `router.nest("/user", another)`, `/user`, `/user/`, `/user/{*catch}` should
+        // be inserted. But if user uses `/user/`, we will insert `/user/` and `/user/{*catch}`
+        // only.
+        if !prefix.ends_with('/') {
+            let prefix_with_slash = prefix + "/";
+            self.matcher
+                .insert_with_id(prefix_with_slash, route_id)
+                .expect("Insert routing rule failed");
+        }
+
+        self.matcher
+            .insert_with_id(uri, route_id)
+            .expect("Insert routing rule failed");
+
+        self.routes.insert(
+            route_id,
+            Endpoint::Service(Route::new(StripPrefixLayer.layer(route))),
+        );
 
         self
     }
@@ -216,7 +319,7 @@ where
     /// Default is returning "404 Not Found".
     pub fn fallback_service<S>(mut self, service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'a,
+        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'a,
         S::Response: IntoResponse,
     {
         self.fallback = Fallback::from_service(service);
@@ -296,12 +399,11 @@ where
 
     /// Add a new inner layer to all routes in router.
     ///
-    /// The layer's `Service` should be `Clone + Send + Sync + 'static`.
+    /// The layer's `Service` should be `Send + Sync + 'static`.
     pub fn layer<L, B2, E2>(self, l: L) -> Router<B2, E2>
     where
         L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
-        L::Service:
-            Service<ServerContext, ServerRequest<B2>, Error = E2> + Clone + Send + Sync + 'static,
+        L::Service: Service<ServerContext, ServerRequest<B2>, Error = E2> + Send + Sync + 'static,
         <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
         B2: 'static,
     {
@@ -402,6 +504,65 @@ impl fmt::Display for MatcherError {
 }
 
 impl Error for MatcherError {}
+
+enum Endpoint<B = Incoming, E = Infallible> {
+    MethodRouter(MethodRouter<B, E>),
+    Service(Route<B, E>),
+}
+
+const NEST_CATCH_PARAM: &str = "{*__priv_nest_catch_param}";
+const NEST_CATCH_PARAM_NAME: &str = "__priv_nest_catch_param";
+
+impl<B, E> Service<ServerContext, ServerRequest<B>> for Endpoint<B, E>
+where
+    B: Send + 'static,
+    E: 'static,
+{
+    type Response = ServerResponse;
+    type Error = E;
+
+    async fn call(
+        &self,
+        cx: &mut ServerContext,
+        req: ServerRequest<B>,
+    ) -> Result<Self::Response, Self::Error> {
+        match self {
+            Self::MethodRouter(mr) => mr.call(cx, req).await,
+            Self::Service(service) => service.call(cx, req).await,
+        }
+    }
+}
+
+impl<B, E> Default for Endpoint<B, E>
+where
+    B: Send + 'static,
+    E: 'static,
+{
+    fn default() -> Self {
+        Self::MethodRouter(Default::default())
+    }
+}
+
+impl<B, E> Endpoint<B, E>
+where
+    B: Send + 'static,
+    E: 'static,
+{
+    fn layer<L, B2, E2>(self, l: L) -> Endpoint<B2, E2>
+    where
+        L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
+        L::Service: Service<ServerContext, ServerRequest<B2>, Error = E2> + Send + Sync,
+        <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
+        B2: 'static,
+    {
+        match self {
+            Self::MethodRouter(mr) => Endpoint::MethodRouter(mr.layer(l)),
+            Self::Service(s) => Endpoint::Service(Route::new(
+                l.layer(s).map_response(IntoResponse::into_response),
+            )),
+        }
+    }
+}
 
 /// A method router that handle the request and dispatch it by its method.
 ///
@@ -521,8 +682,7 @@ where
     pub fn layer<L, B2, E2>(self, l: L) -> MethodRouter<B2, E2>
     where
         L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
-        L::Service:
-            Service<ServerContext, ServerRequest<B2>, Error = E2> + Clone + Send + Sync + 'static,
+        L::Service: Service<ServerContext, ServerRequest<B2>, Error = E2> + Send + Sync + 'static,
         <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
         B2: 'static,
     {
@@ -599,7 +759,6 @@ macro_rules! impl_method_register_for_builder {
         pub fn [<$method _service>]<S>(mut self, service: S) -> MethodRouter<B, E>
         where
             for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E>
-                + Clone
                 + Send
                 + Sync
                 + 'a,
@@ -643,7 +802,7 @@ where
     /// Default is returning "405 Method Not Allowed".
     pub fn fallback_service<S>(mut self, service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'a,
+        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'a,
         S::Response: IntoResponse,
     {
         self.fallback = Fallback::from_service(service);
@@ -673,7 +832,6 @@ macro_rules! impl_method_register {
         pub fn [<$method _service>]<S, B, E>(service: S) -> MethodRouter<B, E>
         where
             for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E>
-                + Clone
                 + Send
                 + Sync
                 + 'a,
@@ -710,7 +868,7 @@ where
 /// Route any method to the given service.
 pub fn any_service<S, B, E>(service: S) -> MethodRouter<B, E>
 where
-    for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'a,
+    for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'a,
     S::Response: IntoResponse,
     B: Send + 'static,
     E: IntoResponse + 'static,
@@ -743,7 +901,7 @@ where
 
     fn from_service<S>(service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'a,
+        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'a,
         S::Response: IntoResponse,
     {
         Self::Route(Route::new(
@@ -803,7 +961,7 @@ where
 
     fn from_service<S>(service: S) -> Self
     where
-        S: Service<ServerContext, ServerRequest<B>, Error = E> + Clone + Send + Sync + 'static,
+        S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'static,
         S::Response: IntoResponse,
     {
         Self::Route(Route::new(
@@ -823,8 +981,7 @@ where
     fn layer<L, B2, E2>(self, l: L) -> Fallback<B2, E2>
     where
         L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
-        L::Service:
-            Service<ServerContext, ServerRequest<B2>, Error = E2> + Clone + Send + Sync + 'static,
+        L::Service: Service<ServerContext, ServerRequest<B2>, Error = E2> + Send + Sync + 'static,
         <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
         B2: 'static,
     {
@@ -835,6 +992,48 @@ where
                     .map_response(IntoResponse::into_response),
             )
         })
+    }
+}
+
+struct StripPrefixLayer;
+
+impl<S> Layer<S> for StripPrefixLayer {
+    type Service = StripPrefix<S>;
+
+    fn layer(self, inner: S) -> Self::Service {
+        StripPrefix { inner }
+    }
+}
+
+struct StripPrefix<S> {
+    inner: S,
+}
+
+impl<S, B, E> Service<ServerContext, ServerRequest<B>> for StripPrefix<S>
+where
+    S: Service<ServerContext, ServerRequest<B>, Response = ServerResponse, Error = E>,
+{
+    type Response = ServerResponse;
+    type Error = E;
+
+    fn call(
+        &self,
+        cx: &mut ServerContext,
+        mut req: ServerRequest<B>,
+    ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
+        let mut uri = String::from("/");
+        if cx
+            .params()
+            .last()
+            .is_some_and(|(k, _)| k == NEST_CATCH_PARAM_NAME)
+        {
+            uri += cx.params_mut().pop().unwrap().1.as_str();
+        };
+
+        // SAFETY: The value is from a valid uri, so it can also be converted into
+        // a valid uri safely.
+        *req.uri_mut() = Uri::from_str(&uri).unwrap();
+        self.inner.call(cx, req)
     }
 }
 
@@ -879,10 +1078,15 @@ where
 
 #[cfg(test)]
 mod route_tests {
-    use http::{method::Method, status::StatusCode};
+    use faststr::FastStr;
+    use http::{method::Method, status::StatusCode, uri::Uri};
 
     use super::{any, get, head, options, MethodRouter};
-    use crate::{body::Body, server::test_helpers::TestServer, Router, Server};
+    use crate::{
+        body::{Body, BodyConversion},
+        server::{param::PathParamsVec, test_helpers::TestServer},
+        Router, Server,
+    };
 
     async fn always_ok() {}
     async fn teapot() -> StatusCode {
@@ -1012,5 +1216,102 @@ mod route_tests {
         assert!(!is_teapot(&server, "/catch/114").await);
         assert!(!is_teapot(&server, "/catch_all/514").await);
         assert!(!is_teapot(&server, "/catch_all/114/514/1919/810").await);
+    }
+
+    #[tokio::test]
+    async fn nest_router() {
+        async fn uri_and_params(uri: Uri, params: PathParamsVec) -> String {
+            let mut v = vec![FastStr::from_string(uri.to_string())];
+            v.extend(params.into_iter().map(|(_, v)| v));
+            v.join("\n")
+        }
+        async fn get_res(
+            server: &TestServer<Router<Option<Body>>, Option<Body>>,
+            uri: &str,
+        ) -> String {
+            server
+                .call_route(Method::GET, uri, None)
+                .await
+                .into_string()
+                .await
+                .unwrap()
+        }
+
+        let router: Router<Option<Body>> = Router::new()
+            .nest(
+                // uri prefix without final slash ('/')
+                "/test-1",
+                Router::new()
+                    .route("/", any(uri_and_params))
+                    .route("/id/{id}", any(uri_and_params))
+                    .route("/catch/{*content}", any(uri_and_params)),
+            )
+            .nest(
+                // uri prefix with final slash ('/')
+                "/test-2/",
+                Router::new()
+                    .route("/", any(uri_and_params))
+                    .route("/id/{id}", any(uri_and_params))
+                    .route("/catch/{*content}", any(uri_and_params)),
+            )
+            .nest(
+                // uri prefix with a param without final slash ('/')
+                "/test-3/{catch}",
+                Router::new()
+                    .route("/", any(uri_and_params))
+                    .route("/id/{id}", any(uri_and_params))
+                    .route("/catch/{*content}", any(uri_and_params)),
+            )
+            .nest(
+                // uri prefix with a param and final slash ('/')
+                "/test-4/{catch}/",
+                Router::new()
+                    .route("/", any(uri_and_params))
+                    .route("/id/{id}", any(uri_and_params))
+                    .route("/catch/{*content}", any(uri_and_params)),
+            );
+        let server = Server::new(router).into_test_server();
+
+        // We register it as `/test-1`, so it does match.
+        assert_eq!(get_res(&server, "/test-1").await, "/");
+        assert_eq!(get_res(&server, "/test-1/").await, "/");
+        assert_eq!(get_res(&server, "/test-1/id/114").await, "/id/114\n114");
+        assert_eq!(
+            get_res(&server, "/test-1/catch/114/514/1919/810").await,
+            "/catch/114/514/1919/810\n114/514/1919/810"
+        );
+
+        // We register it as `/test-2/`, so `/test-2` does not match, but `/test-2/` does match.
+        assert!(get_res(&server, "/test-2").await.is_empty());
+        assert_eq!(get_res(&server, "/test-2/").await, "/");
+        assert_eq!(get_res(&server, "/test-2/id/114").await, "/id/114\n114");
+        assert_eq!(
+            get_res(&server, "/test-2/catch/114/514/1919/810").await,
+            "/catch/114/514/1919/810\n114/514/1919/810"
+        );
+
+        // The first param can be kept.
+        assert_eq!(get_res(&server, "/test-3/114").await, "/\n114");
+        assert_eq!(get_res(&server, "/test-3/114/").await, "/\n114");
+        assert_eq!(
+            get_res(&server, "/test-3/114/id/514").await,
+            "/id/514\n114\n514"
+        );
+        assert_eq!(
+            get_res(&server, "/test-3/114/catch/514/1919/810").await,
+            "/catch/514/1919/810\n114\n514/1919/810"
+        );
+
+        // It is also empty.
+        assert!(get_res(&server, "/test-4/114").await.is_empty());
+        assert_eq!(get_res(&server, "/test-4/114/").await, "/\n114");
+        assert_eq!(
+            get_res(&server, "/test-4/114/id/514").await,
+            "/id/514\n114\n514"
+        );
+        assert_eq!(
+            get_res(&server, "/test-4/114/catch/514/1919/810").await,
+            "/catch/514/1919/810\n114\n514/1919/810"
+        );
     }
 }

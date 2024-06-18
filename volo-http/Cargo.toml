@@ -38,6 +38,7 @@ itoa.workspace = true
 memchr.workspace = true
 metainfo.workspace = true
 mime.workspace = true
+mime_guess.workspace = true
 motore.workspace = true
 parking_lot.workspace = true
 paste.workspace = true
@@ -46,12 +47,14 @@ scopeguard.workspace = true
 simdutf8.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = [
+    "fs",
     "time",
     "macros",
     "rt",
     "signal",
     "parking_lot",
 ] }
+tokio-util = { workspace = true, features = ["io"] }
 tracing.workspace = true
 
 # server optional

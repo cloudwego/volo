@@ -1,4 +1,4 @@
-use std::{convert::Infallible, marker::PhantomData};
+use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 
 use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service};
@@ -38,18 +38,16 @@ pub fn from_fn<F, T, B, B2, E2>(f: F) -> FromFnLayer<F, T, B, B2, E2> {
 impl<S, F, T, B, B2, E2> Layer<S> for FromFnLayer<F, T, B, B2, E2>
 where
     S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
-        + Clone
         + Send
         + Sync
         + 'static,
-    F: Clone,
 {
-    type Service = FromFn<S, F, T, B, B2, E2>;
+    type Service = FromFn<Arc<S>, F, T, B, B2, E2>;
 
     fn layer(self, service: S) -> Self::Service {
         FromFn {
-            service,
-            f: self.f.clone(),
+            service: Arc::new(service),
+            f: self.f,
             _marker: PhantomData,
         }
     }
@@ -139,16 +137,13 @@ pub fn map_response<F, T, R1, R2>(f: F) -> MapResponseLayer<F, T, R1, R2> {
     }
 }
 
-impl<S, F, T, R1, R2> Layer<S> for MapResponseLayer<F, T, R1, R2>
-where
-    F: Clone,
-{
+impl<S, F, T, R1, R2> Layer<S> for MapResponseLayer<F, T, R1, R2> {
     type Service = MapResponse<S, F, T, R1, R2>;
 
     fn layer(self, service: S) -> Self::Service {
         MapResponse {
             service,
-            f: self.f.clone(),
+            f: self.f,
             _marker: self._marker,
         }
     }
@@ -176,8 +171,8 @@ where
 
 impl<S, F, T, Req, R1, R2> Service<ServerContext, Req> for MapResponse<S, F, T, R1, R2>
 where
-    S: Service<ServerContext, Req, Response = R1> + Clone + Send + Sync,
-    F: for<'r> MiddlewareHandlerMapResponse<'r, T, R1, R2> + Clone + Sync,
+    S: Service<ServerContext, Req, Response = R1> + Send + Sync,
+    F: for<'r> MiddlewareHandlerMapResponse<'r, T, R1, R2> + Sync,
     Req: Send,
 {
     type Response = R2;

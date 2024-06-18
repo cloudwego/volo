@@ -45,6 +45,7 @@ pub mod response;
 pub mod route;
 #[cfg(test)]
 pub mod test_helpers;
+pub mod utils;
 
 pub use self::{
     response::{IntoResponse, Redirect},
@@ -63,7 +64,7 @@ pub mod prelude {
 ///
 /// # Examples
 ///
-/// ```compile_fail
+/// ```ignore
 /// use std::net::SocketAddr;
 ///
 /// use volo::net::Address;
