@@ -75,6 +75,7 @@ log = "0.4"
 matchit = "0.8"
 memchr = "2"
 mime = "0.3"
+mime_guess = { version = "2", default-features = false }
 mockall = "0.12"
 mockall_double = "0.3"
 mur3 = "0.1"
