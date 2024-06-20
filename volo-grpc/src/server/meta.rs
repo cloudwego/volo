@@ -98,16 +98,10 @@ where
                                 let v = v.to_str()?;
                                 if k.starts_with(metainfo::HTTP_PREFIX_PERSISTENT) {
                                     vec.push(k.to_owned());
-                                    metainfo.strip_http_prefix_and_set_persistent(
-                                        k.to_owned(),
-                                        v.to_owned(),
-                                    );
+                                    metainfo.strip_http_prefix_and_set_persistent(k, v.to_owned());
                                 } else if k.starts_with(metainfo::HTTP_PREFIX_TRANSIENT) {
                                     vec.push(k.to_owned());
-                                    metainfo.strip_http_prefix_and_set_upstream(
-                                        k.to_owned(),
-                                        v.to_owned(),
-                                    );
+                                    metainfo.strip_http_prefix_and_set_upstream(k, v.to_owned());
                                 }
                             }
                             _ => unreachable!(),

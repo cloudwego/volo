@@ -22,7 +22,7 @@ impl VoloThriftBackend {
         let methods_names = methods.iter().map(|m| &**m.name).collect::<Vec<_>>();
         let variant_names = methods
             .iter()
-            .map(|m| self.cx().rust_name(m.def_id).0.upper_camel_ident())
+            .map(|m| rust_name(self.cx(), m.def_id))
             .collect::<Vec<_>>();
         let args_recv_names = methods
             .iter()
@@ -87,8 +87,8 @@ impl VoloThriftBackend {
             let recv_decode = mk_decode(false, false);
             let recv_decode_async = mk_decode(true, false);
 
-            let mut match_encode = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())}}");
-            let mut match_size = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::volo_thrift::Message::size(value, protocol)}}");
+            let mut match_encode = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::pilota::thrift::Message::encode(value, __protocol).map_err(|err| err.into())}}");
+            let mut match_size = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::volo_thrift::Message::size(value, __protocol)}}");
 
             if variant_names.is_empty() {
                 match_encode = "_ => unreachable!(),".to_string();
@@ -97,25 +97,25 @@ impl VoloThriftBackend {
 
             format! {
                 r#"impl ::volo_thrift::EntryMessage for {req_recv_name} {{
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
                         }}
                     }}
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(__protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
                        {recv_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
-                        protocol: &mut T,
+                        __protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier
                     ) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException>
                         {{
                             {recv_decode_async}
                         }}
 
-                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {{
+                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, __protocol: &mut T) -> usize {{
                         match self {{
                             {match_size}
                         }}
@@ -123,25 +123,25 @@ impl VoloThriftBackend {
                 }}
 
                 impl ::volo_thrift::EntryMessage for {req_send_name} {{
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
                         }}
                     }}
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(__protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
                        {send_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
-                        protocol: &mut T,
+                        __protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier
                     ) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException>
                         {{
                             {send_decode_async}
                         }}
 
-                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {{
+                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, __protocol: &mut T) -> usize {{
                         match self {{
                             {match_size}
                         }}
@@ -184,8 +184,8 @@ impl VoloThriftBackend {
                 )
             };
 
-            let mut match_encode = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::pilota::thrift::Message::encode(value, protocol).map_err(|err| err.into())}}");
-            let mut match_size = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::volo_thrift::Message::size(value, protocol)}}");
+            let mut match_encode = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::pilota::thrift::Message::encode(value, __protocol).map_err(|err| err.into())}}");
+            let mut match_size = crate::join_multi_strs!(",", |variant_names| -> "Self::{variant_names}(value) => {{::volo_thrift::Message::size(value, __protocol)}}");
 
             if variant_names.is_empty() {
                 match_encode = "_ => unreachable!(),".to_string();
@@ -198,25 +198,25 @@ impl VoloThriftBackend {
             let recv_decode_async = mk_decode(true, false);
             format! {
                 r#"impl ::volo_thrift::EntryMessage for {res_recv_name} {{
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
                         }}
                     }}
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(__protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
                        {recv_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
-                        protocol: &mut T,
+                        __protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier,
                     ) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException>
                         {{
                             {recv_decode_async}
                         }}
 
-                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {{
+                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, __protocol: &mut T) -> usize {{
                         match self {{
                             {match_size}
                         }}
@@ -224,25 +224,25 @@ impl VoloThriftBackend {
                 }}
 
                 impl ::volo_thrift::EntryMessage for {res_send_name} {{
-                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
+                    fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
                         }}
                     }}
 
-                    fn decode<T: ::pilota::thrift::TInputProtocol>(protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
+                    fn decode<T: ::pilota::thrift::TInputProtocol>(__protocol: &mut T, msg_ident: &::pilota::thrift::TMessageIdentifier) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {{
                        {send_decode}
                     }}
 
                     async fn decode_async<T: ::pilota::thrift::TAsyncInputProtocol>(
-                        protocol: &mut T,
+                        __protocol: &mut T,
                         msg_ident: &::pilota::thrift::TMessageIdentifier,
                     ) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException>
                         {{
                             {send_decode_async}
                         }}
 
-                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {{
+                    fn size<T: ::pilota::thrift::TLengthProtocol>(&self, __protocol: &mut T) -> usize {{
                         match self {{
                             {match_size}
                         }}
@@ -305,7 +305,7 @@ impl VoloThriftBackend {
                 let ident = &*format!(
                     "{}{}{}",
                     target_service.name,
-                    self.cx().rust_name(method.def_id).0.upper_camel_ident(),
+                    rust_name(self.cx(), def_id),
                     suffix,
                 );
 
@@ -319,7 +319,7 @@ impl VoloThriftBackend {
             rir::MethodSource::Own => format!(
                 "{}{}{}",
                 service_name,
-                self.cx().rust_name(method.def_id).0.upper_camel_ident(),
+                rust_name(self.cx(), method.def_id),
                 suffix
             )
             .into(),
@@ -374,7 +374,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             let name = self.cx().rust_name(m.def_id);
             let resp_type = self.cx().codegen_item_ty(m.ret.kind.clone());
             let req_fields = m.args.iter().map(|a| {
-                let name = self.cx().rust_name(a.def_id);
+                let name = self.cx().rust_name(a.def_id).0.field_ident();
                 let ty = self.cx().codegen_item_ty(a.ty.kind.clone());
                 let mut ty = format!("{ty}");
                 if let Some(RustWrapperArc(true)) = self.cx().tags(a.tags_id).as_ref().and_then(|tags| tags.get::<RustWrapperArc>()) {
@@ -383,7 +383,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 format!(", {name}: {ty}")
             }).join("");
             let method_name_str = &**m.name;
-            let enum_variant = self.cx().rust_name(m.def_id).0.upper_camel_ident();
+            let enum_variant = rust_name(self.cx(), m.def_id);
             let result_path = self.method_result_path(&service_name, m, true);
             let oneway = m.oneway;
             let none = if m.oneway {
@@ -391,7 +391,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             } else {
                 "None => unreachable!()"
             };
-            let req_field_names = m.args.iter().map(|a| self.cx().rust_name(a.def_id)).join(",");
+            let req_field_names = m.args.iter().map(|a| self.cx().rust_name(a.def_id).0.field_ident()).join(",");
             let anonymous_args_send_name = self.method_args_path(&service_name, m, true);
             let exception = if let Some(p) = &m.exceptions {
                 self.cx().cur_related_item_path(p.did)
@@ -465,7 +465,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         let variants = all_methods
             .iter()
-            .map(|m| self.cx().rust_name(m.def_id).0.upper_camel_ident())
+            .map(|m| rust_name(self.cx(), m.def_id))
             .collect_vec();
 
         let user_handler = all_methods
@@ -475,7 +475,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 let args = m
                     .args
                     .iter()
-                    .map(|a| format!("args.{}", self.cx().rust_name(a.def_id)))
+                    .map(|a| format!("args.{}", self.cx().rust_name(a.def_id).0.field_ident()))
                     .join(",");
 
                 let has_exception = m.exceptions.is_some();
@@ -621,7 +621,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             .iter()
             .map(|a| {
                 let ty = self.inner.codegen_item_ty(a.ty.kind.clone());
-                let ident = self.cx().rust_name(a.def_id);
+                let ident = self.cx().rust_name(a.def_id).0.field_ident();
                 format!("{ident}: {ty}")
             })
             .join(",");
@@ -700,6 +700,15 @@ fn need_prepend_volo_gen_path(ty: &TyKind) -> bool {
         TyKind::Arc(t) => need_prepend_volo_gen_path(&t.kind),
         TyKind::Path(_) => true,
         _ => false,
+    }
+}
+
+fn rust_name(cx: &Context, def_id: DefId) -> FastStr {
+    let name = cx.rust_name(def_id);
+    if cx.names.contains(&def_id) {
+        name.0
+    } else {
+        name.0.upper_camel_ident()
     }
 }
 
