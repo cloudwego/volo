@@ -257,9 +257,9 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "cfg_aliases"
-version = "0.1.1"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd16c4719339c4530435d38e511904438d07cce7950afa3718a84ac36c10e89e"
+checksum = "613afe47fcd5fac7ccf1db93babcb082c5994d996f20b8b159f2ad1658eb5724"
 
 [[package]]
 name = "chrono"
@@ -773,9 +773,9 @@ checksum = "40ecd4077b5ae9fd2e9e169b102c6c330d0605168eb0e8bf79952b256dbefffd"
 
 [[package]]
 name = "git2"
-version = "0.18.3"
+version = "0.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "232e6a7bfe35766bf715e55a88b39a700596c0ccfd88cd3680b4cdb40d66ef70"
+checksum = "b903b73e45dc0c6c596f2d37eccece7c1c8bb6e4407b001096387c63d0d93724"
 dependencies = [
  "bitflags 2.5.0",
  "libc",
@@ -1262,9 +1262,9 @@ checksum = "97b3888a4aecf77e811145cadf6eef5901f4782c53886191b2f693f24761847c"
 
 [[package]]
 name = "libgit2-sys"
-version = "0.16.2+1.7.2"
+version = "0.17.0+1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ee4126d8b4ee5c9d9ea891dd875cfdc1e9d0950437179104b183d7d8a74d24e8"
+checksum = "10472326a8a6477c3c20a64547b0059e4b0d086869eee31e6d7da728a8eb7224"
 dependencies = [
  "cc",
  "libc",
@@ -1380,14 +1380,14 @@ dependencies = [
 
 [[package]]
 name = "metainfo"
-version = "0.7.11"
+version = "0.7.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f8d962d5ab3a76783ab5fadae63a66e13e1eeb145f8cdba1b0ff95c561be3447"
+checksum = "dddcf617c777ae882af956d42d9e7f2c1614557589a1fea6a6077886928a6f48"
 dependencies = [
  "ahash",
  "faststr",
  "paste",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "tokio",
 ]
 
@@ -1521,9 +1521,9 @@ dependencies = [
 
 [[package]]
 name = "nix"
-version = "0.28.0"
+version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab2156c4fce2f8df6c499cc1c763e4394b7482525bf2a9701c9d79d215f519e4"
+checksum = "71e2746dc3a24dd78b3cfcb7be93368c6de9963d30f43a6a73998a9cf4b17b46"
 dependencies = [
  "bitflags 2.5.0",
  "cfg-if",
@@ -1862,9 +1862,9 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.11.10"
+version = "0.11.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56660eee4a90ba41fbcdcfb369c14032547c6d3af1ac2d63bea15d72fd7e427c"
+checksum = "f4cd383d4561dd3e69b6f201b47bed9c6ee25b2257c7be4ff6948dc7763df97d"
 dependencies = [
  "ahash",
  "anyhow",
@@ -1883,7 +1883,7 @@ dependencies = [
  "protobuf2",
  "quote",
  "rayon",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "salsa",
  "scoped-tls",
  "serde",
@@ -2269,6 +2269,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
 
 [[package]]
+name = "rustc-hash"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583034fd73374156e66797ed8e5b0d5690409c9226b22d87cb7f19821c05d152"
+dependencies = [
+ "rand",
+]
+
+[[package]]
 name = "rustix"
 version = "0.38.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2371,7 +2380,7 @@ dependencies = [
  "log",
  "oorandom",
  "parking_lot 0.11.2",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "salsa-macros",
  "smallvec",
 ]
@@ -3257,7 +3266,7 @@ dependencies = [
  "percent-encoding",
  "pilota",
  "pin-project",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.25.0",
@@ -3337,7 +3346,7 @@ dependencies = [
  "paste",
  "pilota",
  "pin-project",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "scopeguard",
  "sonic-rs",
  "thiserror",

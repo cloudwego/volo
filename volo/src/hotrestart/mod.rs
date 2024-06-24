@@ -257,7 +257,7 @@ impl HotRestart {
                         }
                         HotRestartMsgType::PassFdResponse => {
                             let mut raw_fd = None;
-                            for c in recv_msg.cmsgs() {
+                            for c in recv_msg.cmsgs()? {
                                 if let ControlMessageOwned::ScmRights(mut fds) = c {
                                     raw_fd = fds.pop();
                                     break;

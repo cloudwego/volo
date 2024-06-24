@@ -37,7 +37,7 @@ pub struct ThriftTransport<E, Resp> {
     #[allow(clippy::type_complexity)]
     tx_map: Arc<
         Mutex<
-            rustc_hash::FxHashMap<
+            rustc_hash::FxHashMapRand<
                 i32,
                 oneshot::Sender<
                     Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>, ClientError>,
@@ -93,7 +93,7 @@ where
         #[allow(clippy::type_complexity)]
         let tx_map: Arc<
             Mutex<
-                rustc_hash::FxHashMap<
+                rustc_hash::FxHashMapRand<
                     i32,
                     oneshot::Sender<
                         Result<Option<(MetaInfo, ClientContext, ThriftMessage<Resp>)>, ClientError>,
