@@ -312,7 +312,7 @@ impl<S, L> Server<S, L> {
         #[cfg(target_family = "windows")]
         tokio::select! {
             _ = tokio::signal::ctrl_c() => {}
-            res = handler => {},
+            _ = handler => {},
         }
 
         if !self.shutdown_hooks.is_empty() {
