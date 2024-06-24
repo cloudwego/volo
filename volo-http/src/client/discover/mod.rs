@@ -249,6 +249,7 @@ impl Target {
         match &self.inner {
             TargetInner::None => None,
             TargetInner::Address(addr) => {
+                #[allow(irrefutable_let_patterns)]
                 if let Address::Ip(socket) = addr {
                     let port = socket.port();
                     // If the port is default port, just ignore it.
