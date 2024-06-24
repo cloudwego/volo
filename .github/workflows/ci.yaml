@@ -57,29 +57,7 @@ jobs:
         run: |
           apt update
           apt install -y libssl-dev
-          cargo clippy -p volo-thrift --no-default-features -- --deny warnings
-          cargo clippy -p volo-thrift --no-default-features --features multiplex -- --deny warnings
-          cargo clippy -p volo-thrift --no-default-features --features unsafe-codec -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features rustls -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features native-tls -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features native-tls-vendored -- --deny warnings
-          cargo clippy -p volo-http --no-default-features -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features default_client -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
-          cargo clippy -p volo -- --deny warnings
-          cargo clippy -p volo-build -- --deny warnings
-          cargo clippy -p volo-cli -- --deny warnings
-          cargo clippy -p volo-macros -- --deny warnings
-          cargo clippy -p examples -- --deny warnings
-          cargo test -p volo-thrift
-          cargo test -p volo-grpc --features rustls
-          cargo test -p volo-http --features full
-          cargo test -p volo --features rustls
-          cargo test -p volo-build
-          cargo test -p volo-cli
+          bash scripts/clippy-and-test.sh
 
   test-linux-aarch64:
     runs-on: [self-hosted, arm]
@@ -97,29 +75,7 @@ jobs:
         run: |
           apt update
           apt install -y libssl-dev
-          cargo clippy -p volo-thrift --no-default-features -- --deny warnings
-          cargo clippy -p volo-thrift --no-default-features --features multiplex -- --deny warnings
-          cargo clippy -p volo-thrift --no-default-features --features unsafe-codec -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features rustls -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features native-tls -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features native-tls-vendored -- --deny warnings
-          cargo clippy -p volo-http --no-default-features -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features default_client -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
-          cargo clippy -p volo -- --deny warnings
-          cargo clippy -p volo-build -- --deny warnings
-          cargo clippy -p volo-cli -- --deny warnings
-          cargo clippy -p volo-macros -- --deny warnings
-          cargo clippy -p examples -- --deny warnings
-          cargo test -p volo-thrift
-          cargo test -p volo-grpc --features rustls
-          cargo test -p volo-http --features full
-          cargo test -p volo --features rustls
-          cargo test -p volo-build
-          cargo test -p volo-cli
+          bash scripts/clippy-and-test.sh
 
   test-macos:
     runs-on: macos-latest
@@ -136,29 +92,7 @@ jobs:
       # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
-          cargo clippy -p volo-thrift --no-default-features -- --deny warnings
-          cargo clippy -p volo-thrift --no-default-features --features multiplex -- --deny warnings
-          cargo clippy -p volo-thrift --no-default-features --features unsafe-codec -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features rustls -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features native-tls -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features native-tls-vendored -- --deny warnings
-          cargo clippy -p volo-http --no-default-features -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features default_client -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
-          cargo clippy -p volo -- --deny warnings
-          cargo clippy -p volo-build -- --deny warnings
-          cargo clippy -p volo-cli -- --deny warnings
-          cargo clippy -p volo-macros -- --deny warnings
-          cargo clippy -p examples -- --deny warnings
-          cargo test -p volo-thrift
-          cargo test -p volo-grpc --features rustls
-          cargo test -p volo-http --features full
-          cargo test -p volo --features rustls
-          cargo test -p volo-build
-          cargo test -p volo-cli
+          bash scripts/clippy-and-test.sh
 
   test-windows:
     runs-on: windows-latest
@@ -175,29 +109,7 @@ jobs:
       # - uses: Swatinem/rust-cache@v1
       - name: Run tests
         run: |
-          cargo clippy -p volo-thrift --no-default-features -- --deny warnings
-          cargo clippy -p volo-thrift --no-default-features --features multiplex -- --deny warnings
-          cargo clippy -p volo-thrift --no-default-features --features unsafe-codec -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features rustls -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features native-tls -- --deny warnings
-          cargo clippy -p volo-grpc --no-default-features --features native-tls-vendored -- --deny warnings
-          cargo clippy -p volo-http --no-default-features -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features default_client -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
-          cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
-          cargo clippy -p volo -- --deny warnings
-          cargo clippy -p volo-build -- --deny warnings
-          cargo clippy -p volo-cli -- --deny warnings
-          cargo clippy -p volo-macros -- --deny warnings
-          cargo clippy -p examples -- --deny warnings
-          cargo test -p volo-thrift
-          cargo test -p volo-grpc --features rustls
-          cargo test -p volo-http --features full
-          cargo test -p volo --features rustls
-          cargo test -p volo-build
-          cargo test -p volo-cli
+          bash scripts/clippy-and-test.sh
 
   test-cli:
     runs-on: [self-hosted, X64]
@@ -213,19 +125,4 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Cli tests
         run: |
-          rm -rf /tmp/volo-cli-test
-          mkdir -p /tmp/volo-cli-test/{thrift/idl,grpc/idl,http}
-          cp examples/thrift_idl/echo.thrift /tmp/volo-cli-test/thrift/idl
-          cp examples/proto/echo.proto /tmp/volo-cli-test/grpc/idl
-          cargo build -p volo-cli
-          cp target/debug/volo /tmp/volo-cli-test/volo
-          cd /tmp/volo-cli-test/thrift
-          ../volo init thrift-test idl/echo.thrift
-          cargo build
-          cd /tmp/volo-cli-test/grpc
-          ../volo init --includes idl grpc-test idl/echo.proto
-          cargo build
-          cd /tmp/volo-cli-test/http
-          ../volo http init http-test
-          cargo build
-          rm -rf /tmp/volo-cli-test
+          bash scripts/volo-cli-test.sh
