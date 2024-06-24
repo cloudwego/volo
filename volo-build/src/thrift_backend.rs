@@ -305,7 +305,7 @@ impl VoloThriftBackend {
                 let ident = &*format!(
                     "{}{}{}",
                     target_service.name,
-                    rust_name(self.cx(), def_id),
+                    rust_name(self.cx(), method.def_id),
                     suffix,
                 );
 
