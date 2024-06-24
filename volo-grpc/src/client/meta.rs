@@ -98,10 +98,7 @@ where
                         let v = v.to_str()?;
                         if k.starts_with(metainfo::HTTP_PREFIX_BACKWARD) {
                             vec.push(k.to_owned());
-                            metainfo.strip_http_prefix_and_set_backward_downstream(
-                                k.to_owned(),
-                                v.to_owned(),
-                            );
+                            metainfo.strip_http_prefix_and_set_backward_downstream(k, v.to_owned());
                         }
                     }
                     _ => unreachable!(),
