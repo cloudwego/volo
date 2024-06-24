@@ -1,7 +1,6 @@
 use std::{
     fs::File,
     io,
-    os::unix::fs::MetadataExt,
     path::Path,
     pin::Pin,
     task::{ready, Context, Poll},
@@ -35,7 +34,7 @@ impl FileResponse {
 
         Ok(Self {
             file,
-            size: metadata.size(),
+            size: metadata.len(),
             content_type,
         })
     }
