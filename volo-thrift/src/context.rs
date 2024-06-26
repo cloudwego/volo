@@ -464,11 +464,7 @@ impl Config {
 }
 
 impl Reusable for Config {
-    fn clear(&mut self) {
-        self.rpc_timeout = None;
-        self.connect_timeout = None;
-        self.read_write_timeout = None;
-    }
+    fn clear(&mut self) {}
 }
 
 impl ::volo::client::Apply<ClientContext> for CallOpt {
