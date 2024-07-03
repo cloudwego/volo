@@ -31,7 +31,7 @@ echo_command cargo clippy -p volo-grpc --no-default-features --features native-t
 echo_command cargo clippy -p volo-http --no-default-features -- --deny warnings
 echo_command cargo clippy -p volo-http --no-default-features --features default_client -- --deny warnings
 echo_command cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
-echo_command cargo clippy -p volo-http --no-default-features --features client,server,serde_json -- --deny warnings
+echo_command cargo clippy -p volo-http --no-default-features --features client,server -- --deny warnings
 echo_command cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
 echo_command cargo clippy -p volo -- --deny warnings
 echo_command cargo clippy -p volo-build -- --deny warnings

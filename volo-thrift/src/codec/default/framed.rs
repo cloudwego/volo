@@ -9,7 +9,7 @@ use super::{MakeZeroCopyCodec, ZeroCopyDecoder, ZeroCopyEncoder};
 use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
 
 /// Default limit according to thrift spec.
-/// https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#framed-vs-unframed-transport
+/// <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#framed-vs-unframed-transport>
 pub const DEFAULT_MAX_FRAME_SIZE: i32 = 16 * 1024 * 1024; // 16MB
 
 /// [`MakeFramedCodec`] implements [`MakeZeroCopyCodec`] to create [`FramedEncoder`] and
@@ -71,7 +71,7 @@ impl<D: ZeroCopyDecoder> FramedDecoder<D> {
 }
 
 /// 4-bytes length + 2-byte protocol id
-/// https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
+/// <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility>
 pub const HEADER_DETECT_LENGTH: usize = 6;
 
 impl<D> ZeroCopyDecoder for FramedDecoder<D>
@@ -142,7 +142,8 @@ where
     }
 }
 
-/// Detect protocol according to https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
+/// Detect protocol according to
+/// <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility>
 #[inline]
 pub fn is_framed(buf: &[u8]) -> bool {
     // binary
@@ -220,7 +221,7 @@ where
 }
 
 /// Checks the framed size according to thrift spec.
-/// https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#framed-vs-unframed-transport
+/// <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#framed-vs-unframed-transport>
 #[inline]
 pub fn check_framed_size(size: i32, max_frame_size: i32) -> Result<(), ProtocolException> {
     if size > max_frame_size {

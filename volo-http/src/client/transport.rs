@@ -18,7 +18,13 @@ use crate::{
     response::ClientResponse,
 };
 
+/// TLS transport tag with no content
+///
+/// When implementing a service discover and TLS should be enable, just inserting it to the callee.
+///
+/// The struct is used for advanced users.
 #[cfg(feature = "__tls")]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 pub struct TlsTransport;
 
 #[derive(Clone)]

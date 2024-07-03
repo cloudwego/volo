@@ -4,7 +4,7 @@ use http::{StatusCode, Uri};
 use paste::paste;
 
 use super::BoxError;
-use crate::body::ResponseConvertError;
+use crate::body::BodyConvertError;
 
 pub type Result<T> = std::result::Result<T, ClientError>;
 
@@ -113,8 +113,8 @@ pub fn status_error(status: StatusCode) -> ClientError {
     ClientError::new(ErrorKind::Status(status), None::<ClientError>)
 }
 
-impl From<ResponseConvertError> for ClientError {
-    fn from(value: ResponseConvertError) -> Self {
+impl From<BodyConvertError> for ClientError {
+    fn from(value: BodyConvertError) -> Self {
         ClientError::new(ErrorKind::Body, Some(BoxError::from(value)))
     }
 }

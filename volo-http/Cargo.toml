@@ -15,6 +15,8 @@ keywords = ["async", "rpc", "http"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+
+
 [badges]
 maintenance = { status = "actively-developed" }
 
@@ -70,13 +72,12 @@ cookie = { workspace = true, optional = true, features = ["percent-encode"] }
 # serde and form, query, json
 serde = { workspace = true, optional = true }
 serde_urlencoded = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
-# sonic is a better replacement for json
 sonic-rs = { workspace = true, optional = true }
 
 [dev-dependencies]
 async-stream.workspace = true
 serde = { workspace = true, features = ["derive"] }
+tokio-test.workspace = true
 
 [features]
 default = []
@@ -100,8 +101,8 @@ cookie = ["dep:cookie"]
 __serde = ["dep:serde"] # a private feature for enabling `serde` by `serde_xxx`
 query = ["__serde", "dep:serde_urlencoded"]
 form = ["__serde", "dep:serde_urlencoded"]
-json = ["sonic_json"] # use `sonic_json` by default
+json = ["__serde", "dep:sonic-rs"]
 
-__json = [] # an empty and private feature for avoiding too many `cfg(any)`
-sonic_json = ["__serde", "dep:sonic-rs", "__json"]
-serde_json = ["__serde", "dep:serde_json", "__json"]
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]

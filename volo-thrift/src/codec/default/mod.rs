@@ -1,4 +1,4 @@
-//! This mod contains the default implementation of codec.
+//! The default codec implementation.
 //!
 //! We use some internal traits such as [`ZeroCopyEncoder`] and [`ZeroCopyDecoder`] to
 //! make the implementation more flexible, which is not desired to be used by others, so
@@ -7,7 +7,8 @@
 //! The main entrypoint is [`DefaultMakeCodec`] which receives [`MakeZeroCopyCodec`], and
 //! then creates [`DefaultEncoder`] and [`DefaultDecoder`].
 //!
-//! [`DefaultMakeCodec`] implements [`MakeCodec`] which is used by [`Server`] and [`Client`].
+//! [`DefaultMakeCodec`] implements [`MakeCodec`] which is used by [`crate::server::Server`] and
+//! [`crate::client::Client`].
 //!
 //! We make this mod public for those who want to implement their own codec and want to
 //! reuse some of the components.
@@ -44,12 +45,13 @@ pub mod thrift;
 pub mod ttheader;
 // mod mesh_header;
 
-/// [`ZeroCopyEncoder`] tries to encode a message without copying large data taking the advantage of
-/// [`LinkedBytes`], which can insert a [`Bytes`] into the middle of a [`BytesMut`] and uses writev.
+/// [`ZeroCopyEncoder`] tries to encode a message without copying large data taking the advantage
+/// of [`LinkedBytes`], which can insert a [`Bytes`] into the middle of a [`bytes::BytesMut`] and
+/// uses writev.
 ///
 /// The recommended length threshold to use `LinkedBytes::insert` is 4KB.
 pub trait ZeroCopyEncoder: Send + Sync + 'static {
-    /// [`encode`] can rely on the `cx` to get some information such as the protocol detected by
+    /// `encode` can rely on the `cx` to get some information such as the protocol detected by
     /// the decoder.
     fn encode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
@@ -58,10 +60,10 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
         msg: ThriftMessage<Msg>,
     ) -> Result<(), ThriftException>;
 
-    /// [`size`] should return the exact size of the encoded message, as we will pre-allocate
+    /// `size` should return the exact size of the encoded message, as we will pre-allocate
     /// a buffer for the encoded message.
     ///
-    /// To avoid the overhead of calculating the size again in the [`encode`] method, the
+    /// To avoid the overhead of calculating the size again in the `encode` method, the
     /// implementation can cache the size in the struct.
     ///
     /// The returned value is (real_size, recommended_malloc_size).
@@ -73,7 +75,7 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
 }
 
 /// [`ZeroCopyDecoder`] tries to decode a message without copying large data, so the [`Bytes`] in
-/// the [`decode`] method is not designed to be reused, and the implementation can use
+/// the `decode` method is not designed to be reused, and the implementation can use
 /// `Bytes::split_to` to get a [`Bytes`] and hand it to the user directly.
 pub trait ZeroCopyDecoder: Send + Sync + 'static {
     /// If the outer decoder is framed, it can reads all the payload into a [`Bytes`] and

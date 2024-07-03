@@ -23,7 +23,7 @@ use crate::{
     Code, Request, Response, Status,
 };
 
-/// A simple wrapper of [`hyper::client::client`] that implements [`Service`]
+/// A simple wrapper of [`hyper_util::client::legacy::Client`] that implements [`Service`]
 /// to make outgoing requests.
 #[allow(clippy::type_complexity)]
 pub struct ClientTransport<U> {

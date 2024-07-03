@@ -11,9 +11,9 @@ use pin_project::pin_project;
 
 use crate::{BoxStream, Code, Status};
 
-/// Similar to [`hyper::Body`], used when sending bodies to client.
+/// Similar to [`hyper::body::Incoming`], used when sending bodies to client.
 ///
-/// [`Body`] will implement [`HttpBody`] to control the behavior of
+/// [`Body`] will implement [`http_body::Body`] to control the behavior of
 /// `poll_data()` and `poll_trailers()`.
 #[pin_project]
 pub struct Body {

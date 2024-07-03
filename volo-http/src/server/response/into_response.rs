@@ -133,7 +133,6 @@ where
 }
 
 #[cfg(feature = "form")]
-#[cfg_attr(docsrs, doc(cfg(feature = "form")))]
 impl<T> IntoResponse for crate::server::extract::Form<T>
 where
     T: serde::Serialize,
@@ -155,8 +154,7 @@ where
     }
 }
 
-#[cfg(feature = "__json")]
-#[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+#[cfg(feature = "json")]
 impl<T> IntoResponse for crate::json::Json<T>
 where
     T: serde::Serialize,

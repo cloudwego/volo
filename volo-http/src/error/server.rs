@@ -9,11 +9,9 @@ use crate::{response::ServerResponse, server::IntoResponse};
 pub enum ExtractBodyError {
     Common(CommonRejectionError),
     String(simdutf8::basic::Utf8Error),
-    #[cfg(feature = "__json")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+    #[cfg(feature = "json")]
     Json(crate::json::Error),
     #[cfg(feature = "form")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "form")))]
     Form(serde_urlencoded::de::Error),
 }
 
@@ -23,7 +21,7 @@ impl fmt::Display for ExtractBodyError {
         match self {
             Self::Common(e) => write!(f, "data: {e}"),
             Self::String(e) => write!(f, "string: {e}"),
-            #[cfg(feature = "__json")]
+            #[cfg(feature = "json")]
             Self::Json(e) => write!(f, "json: {e}"),
             #[cfg(feature = "form")]
             Self::Form(e) => write!(f, "form: {e}"),
@@ -36,7 +34,7 @@ impl IntoResponse for ExtractBodyError {
         let status = match self {
             Self::Common(e) => e.to_status_code(),
             Self::String(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            #[cfg(feature = "__json")]
+            #[cfg(feature = "json")]
             Self::Json(_) => StatusCode::BAD_REQUEST,
             #[cfg(feature = "form")]
             Self::Form(_) => StatusCode::BAD_REQUEST,

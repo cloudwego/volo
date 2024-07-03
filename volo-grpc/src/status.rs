@@ -392,13 +392,13 @@ impl Status {
     }
 
     /// Handles hyper errors specifically, which expose a number of different parameters about the
-    /// http stream's error: https://docs.rs/hyper/0.14.11/hyper/struct.Error.html.
+    /// http stream's error: [hyper::Error](https://docs.rs/hyper/1.0.0/hyper/struct.Error.html).
     ///
     /// Returns Some if there's a way to handle the error, or None if the information from this
     /// hyper error, but perhaps not its source, should be ignored.
     pub fn from_hyper_error(err: &hyper::Error) -> Option<Self> {
         // is_timeout results from hyper's keep-alive logic
-        // (https://docs.rs/hyper/0.14.11/src/hyper/error.rs.html#192-194).  Per the grpc spec
+        // (https://docs.rs/hyper/1.0.0/src/hyper/error.rs.html#192-194).  Per the grpc spec
         // > An expired client initiated PING will cause all calls to be closed with an UNAVAILABLE
         // > status. Note that the frequency of PINGs is highly dependent on the network
         // > environment, implementations are free to adjust PING frequency based on network and

@@ -1,3 +1,4 @@
+//! Service discover utilities
 use std::net::{IpAddr, SocketAddr};
 
 use faststr::FastStr;
@@ -88,12 +89,7 @@ impl Target {
     }
 
     /// Build a `Target` from an address.
-    pub fn from_address<A>(
-        address: A,
-        #[cfg(feature = "__tls")]
-        #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
-        https: bool,
-    ) -> Self
+    pub fn from_address<A>(address: A, #[cfg(feature = "__tls")] https: bool) -> Self
     where
         A: Into<Address>,
     {
@@ -112,13 +108,7 @@ impl Target {
     /// It should NOT be an address or something with port.
     ///
     /// If you have a uri and you are not sure if the host is a host, try `from_uri`.
-    pub fn from_host<S>(
-        host: S,
-        port: Option<u16>,
-        #[cfg(feature = "__tls")]
-        #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
-        https: bool,
-    ) -> Self
+    pub fn from_host<S>(host: S, port: Option<u16>, #[cfg(feature = "__tls")] https: bool) -> Self
     where
         S: AsRef<str>,
     {
@@ -157,13 +147,11 @@ impl Target {
     }
 
     #[cfg(feature = "__tls")]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn set_https(&mut self, https: bool) {
         self.https = https;
     }
 
     #[cfg(feature = "__tls")]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn is_https(&self) -> bool {
         if self.is_none() {
             false

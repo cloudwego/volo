@@ -2,7 +2,7 @@
     html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
-#![cfg_attr(docsrs, feature(doc_cfg))]
+#![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
 pub use motore::{layer, layer::Layer, service, Service};
 pub use tokio::main;
@@ -15,7 +15,6 @@ pub mod net;
 pub mod util;
 pub use hack::Unwrap;
 #[cfg(target_family = "unix")]
-#[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
 pub mod hotrestart;
 
 pub mod client;

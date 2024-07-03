@@ -27,13 +27,10 @@ impl<T> DynStream for T where T: AsyncRead + AsyncWrite + Send + 'static {}
 pub enum ConnStream {
     Tcp(#[pin] TcpStream),
     #[cfg(target_family = "unix")]
-    #[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
     Unix(#[pin] UnixStream),
     #[cfg(feature = "rustls")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
     Rustls(#[pin] tokio_rustls::TlsStream<TcpStream>),
     #[cfg(feature = "native-tls")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
     NativeTls(#[pin] tokio_native_tls::TlsStream<TcpStream>),
 }
 
@@ -47,13 +44,10 @@ type NativeTlsWriteHalf = tokio::io::WriteHalf<tokio_native_tls::TlsStream<TcpSt
 pub enum OwnedWriteHalf {
     Tcp(#[pin] tcp::OwnedWriteHalf),
     #[cfg(target_family = "unix")]
-    #[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
     Unix(#[pin] unix::OwnedWriteHalf),
     #[cfg(feature = "rustls")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
     Rustls(#[pin] RustlsWriteHalf),
     #[cfg(feature = "native-tls")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
     NativeTls(#[pin] NativeTlsWriteHalf),
 }
 
@@ -142,13 +136,10 @@ type NativeTlsReadHalf = tokio::io::ReadHalf<tokio_native_tls::TlsStream<TcpStre
 pub enum OwnedReadHalf {
     Tcp(#[pin] tcp::OwnedReadHalf),
     #[cfg(target_family = "unix")]
-    #[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
     Unix(#[pin] unix::OwnedReadHalf),
     #[cfg(feature = "rustls")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
     Rustls(#[pin] RustlsReadHalf),
     #[cfg(feature = "native-tls")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
     NativeTls(#[pin] NativeTlsReadHalf),
 }
 
@@ -206,7 +197,6 @@ impl From<TcpStream> for ConnStream {
 }
 
 #[cfg(target_family = "unix")]
-#[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
 impl From<UnixStream> for ConnStream {
     #[inline]
     fn from(s: UnixStream) -> Self {
@@ -215,7 +205,6 @@ impl From<UnixStream> for ConnStream {
 }
 
 #[cfg(feature = "rustls")]
-#[cfg_attr(docsrs, doc(cfg(feature = "rustls")))]
 impl From<tokio_rustls::TlsStream<TcpStream>> for ConnStream {
     #[inline]
     fn from(s: tokio_rustls::TlsStream<TcpStream>) -> Self {
@@ -224,7 +213,6 @@ impl From<tokio_rustls::TlsStream<TcpStream>> for ConnStream {
 }
 
 #[cfg(feature = "native-tls")]
-#[cfg_attr(docsrs, doc(cfg(feature = "native-tls")))]
 impl From<tokio_native_tls::TlsStream<TcpStream>> for ConnStream {
     #[inline]
     fn from(s: tokio_native_tls::TlsStream<TcpStream>) -> Self {

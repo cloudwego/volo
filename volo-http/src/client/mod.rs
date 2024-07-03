@@ -1,3 +1,6 @@
+//! Client implementation
+//!
+//! See [`Client`] for more details.
 use std::{cell::RefCell, error::Error, sync::Arc, time::Duration};
 
 use faststr::FastStr;
@@ -23,6 +26,7 @@ use volo::{
 };
 
 #[cfg(feature = "__tls")]
+#[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 pub use self::transport::TlsTransport;
 use self::{
     discover::{dns::parse_target, TargetParser},
@@ -41,7 +45,6 @@ use crate::{
 };
 
 pub mod discover;
-#[doc(hidden)]
 pub mod loadbalance;
 mod meta;
 mod request_builder;
@@ -56,9 +59,12 @@ pub mod prelude {
 
 const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO_PKG_VERSION"));
 
+/// Default inner service of [`Client`]
 pub type ClientMetaService = MetaService<ClientTransport>;
+/// Default [`Client`] without any extra [`Layer`]s
 pub type DefaultClient = Client<DefaultLBService<ClientMetaService>>;
 
+/// A builder for configuring an HTTP [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB> {
     http_config: ClientConfig,
     builder_config: BuilderConfig,
@@ -203,7 +209,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// After we call `.layer_inner(baz)`, we will get: foo -> bar -> baz.
     ///
-    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    /// The overall order for layers is: outer -> LoadBalance -> \[inner\] -> transport.
     pub fn layer_inner<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, IL>, OL, C, LB> {
         ClientBuilder {
             http_config: self.http_config,
@@ -235,7 +241,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// After we call `.layer_inner_front(baz)`, we will get: baz -> foo -> bar.
     ///
-    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    /// The overall order for layers is: outer -> LoadBalance -> \[inner\] -> transport.
     pub fn layer_inner_front<Inner>(
         self,
         layer: Inner,
@@ -270,7 +276,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// After we call `.layer_outer(baz)`, we will get: foo -> bar -> baz.
     ///
-    /// The overall order for layers is: [outer] -> Timeout -> LoadBalance -> inner -> transport.
+    /// The overall order for layers is: \[outer\] -> Timeout -> LoadBalance -> inner -> transport.
     pub fn layer_outer<Outer>(self, layer: Outer) -> ClientBuilder<IL, Stack<Outer, OL>, C, LB> {
         ClientBuilder {
             http_config: self.http_config,
@@ -302,7 +308,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// After we call `.layer_outer_front(baz)`, we will get: baz -> foo -> bar.
     ///
-    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    /// The overall order for layers is: \[outer\] -> LoadBalance -> inner -> transport.
     pub fn layer_outer_front<Outer>(
         self,
         layer: Outer,
@@ -376,13 +382,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Set the target address of the client.
     ///
     /// If there is no target specified when building a request, client will use this address.
-    pub fn address<A>(
-        &mut self,
-        address: A,
-        #[cfg(feature = "__tls")]
-        #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
-        https: bool,
-    ) -> &mut Self
+    pub fn address<A>(&mut self, address: A, #[cfg(feature = "__tls")] https: bool) -> &mut Self
     where
         A: Into<Address>,
     {
@@ -669,6 +669,27 @@ struct ClientInner {
     headers: HeaderMap,
 }
 
+/// An Client for sending HTTP requests and handling HTTP responses.
+///
+/// # Examples
+///
+/// ```
+/// use volo_http::{body::BodyConversion, client::Client};
+///
+/// # tokio_test::block_on(async {
+/// let client = Client::builder().build();
+/// let resp = client
+///     .get("http://httpbin.org/get")
+///     .expect("invalid uri")
+///     .send()
+///     .await
+///     .expect("failed to send request")
+///     .into_string()
+///     .await
+///     .expect("failed to convert response to string");
+/// println!("{resp:?}");
+/// # })
+/// ```
 #[derive(Clone)]
 pub struct Client<S> {
     service: S,
@@ -678,6 +699,7 @@ pub struct Client<S> {
 macro_rules! method_requests {
     ($method:ident) => {
         paste! {
+            #[doc = concat!("Create a request with `", stringify!([<$method:upper>]) ,"` method and the given `uri`.")]
             pub fn [<$method:lower>]<U>(&self, uri: U) -> Result<RequestBuilder<S>, ClientError>
             where
                 U: TryInto<Uri>,
@@ -735,25 +757,29 @@ impl<S> Client<S> {
     ///
     /// # Example
     ///
-    /// ```ignore
+    /// ```no_run
     /// use std::net::SocketAddr;
     ///
     /// use http::{Method, Uri};
     /// use volo::net::Address;
-    /// use volo_http::{body::Body, client::Client, request::ClientRequest};
-    /// use volo_http::client::utils::Target;
+    /// use volo_http::{
+    ///     body::{Body, BodyConversion},
+    ///     client::{discover::Target, Client},
+    ///     request::ClientRequest,
+    /// };
     ///
+    /// # tokio_test::block_on(async {
     /// let client = Client::builder().build();
     /// let addr: SocketAddr = "[::]:8080".parse().unwrap();
-    /// let addr = Address::from(addr);
     /// let resp = client
     ///     .send_request(
-    ///         Target::Address { addr },
+    ///         Target::from_address(addr, false),
     ///         ClientRequest::builder()
     ///             .method(Method::GET)
     ///             .uri("/")
     ///             .body(Body::empty())
     ///             .expect("build request failed"),
+    ///         None,
     ///     )
     ///     .await
     ///     .expect("request failed")
@@ -761,6 +787,7 @@ impl<S> Client<S> {
     ///     .await
     ///     .expect("response failed to convert to string");
     /// println!("{resp:?}");
+    /// # })
     /// ```
     pub async fn send_request<B>(
         &self,
@@ -840,6 +867,7 @@ where
     }
 }
 
+/// A dummy [`MkClient`] that does not have any functionality
 pub struct DefaultMkClient;
 
 impl<S> MkClient<Client<S>> for DefaultMkClient {
@@ -860,7 +888,7 @@ where
 }
 
 // The `httpbin.org` always responses a json data.
-#[cfg(feature = "__json")]
+#[cfg(feature = "json")]
 #[cfg(test)]
 mod client_tests {
     #![allow(unused)]

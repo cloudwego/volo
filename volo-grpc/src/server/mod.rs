@@ -79,7 +79,7 @@ impl<L> Server<L> {
         self
     }
 
-    /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
+    /// Sets the `SETTINGS_INITIAL_WINDOW_SIZE` option for HTTP2
     /// stream-level flow control.
     ///
     /// Default is `1MB`.
@@ -108,7 +108,7 @@ impl<L> Server<L> {
         self
     }
 
-    /// Sets the [`SETTINGS_MAX_CONCURRENT_STREAMS`] option for HTTP2 connections.
+    /// Sets the `SETTINGS_MAX_CONCURRENT_STREAMS` option for HTTP2 connections.
     ///
     /// Default is no limit (`None`).
     pub fn http2_max_concurrent_streams(mut self, max: impl Into<Option<u32>>) -> Self {

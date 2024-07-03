@@ -138,7 +138,7 @@ impl<VE: ValueEncoding> MetadataValue<VE> {
     }
 
     /// Convert a `Bytes` directly into a `MetadataValue` without validating.
-    /// For MetadataValue<Binary> the provided parameter must be base64
+    /// For `MetadataValue<Binary>` the provided parameter must be base64
     /// encoded without padding bytes at the end.
     ///
     /// # Safety
@@ -257,7 +257,7 @@ impl<VE: ValueEncoding> MetadataValue<VE> {
         self.inner.as_bytes()
     }
 
-    /// Converts a HeaderValue to a MetadataValue. This method assumes that the
+    /// Converts a HeaderValue to a `MetadataValue`. This method assumes that the
     /// caller has made sure that the value is of the correct Ascii or Binary
     /// value encoding.
     #[inline]
@@ -268,7 +268,7 @@ impl<VE: ValueEncoding> MetadataValue<VE> {
         }
     }
 
-    /// Converts a HeaderValue reference to a MetadataValue. This method assumes
+    /// Converts a HeaderValue reference to a `MetadataValue`. This method assumes
     /// that the caller has made sure that the value is of the correct Ascii or
     /// Binary value encoding.
     #[inline]
@@ -277,7 +277,7 @@ impl<VE: ValueEncoding> MetadataValue<VE> {
         unsafe { &*(header_value as *const HeaderValue as *const Self) }
     }
 
-    /// Converts a HeaderValue reference to a MetadataValue. This method assumes
+    /// Converts a HeaderValue reference to a `MetadataValue`. This method assumes
     /// that the caller has made sure that the value is of the correct Ascii or
     /// Binary value encoding.
     #[inline]
@@ -326,9 +326,9 @@ impl MetadataValue<Ascii> {
             .map_err(|_| InvalidMetadataValue::new())
     }
 
-    /// Converts a MetadataKey into a MetadataValue<Ascii>.
+    /// Converts a MetadataKey into a `MetadataValue<Ascii>`.
     ///
-    /// Since every valid MetadataKey is a valid MetadataValue this is done
+    /// Since every valid MetadataKey is a valid `MetadataValue` this is done
     /// infallibly.
     ///
     /// # Examples
@@ -345,9 +345,9 @@ impl MetadataValue<Ascii> {
 
     /// Returns the length of `self`, in bytes.
     ///
-    /// This method is not available for MetadataValue<Binary> because that
+    /// This method is not available for `MetadataValue<Binary>` because that
     /// cannot be implemented in constant time, which most people would probably
-    /// expect. To get the length of MetadataValue<Binary>, convert it to a
+    /// expect. To get the length of `MetadataValue<Binary>`, convert it to a
     /// Bytes value and measure its length.
     ///
     /// # Examples

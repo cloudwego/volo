@@ -1,3 +1,4 @@
+//! Response types for client and server.
 use hyper::body::Incoming;
 
 use crate::body::Body;

@@ -25,7 +25,6 @@ use tokio::net::unix::SocketAddr as TokioUnixSocketAddr;
 pub enum Address {
     Ip(SocketAddr),
     #[cfg(target_family = "unix")]
-    #[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
     Unix(StdUnixSocketAddr),
 }
 
@@ -131,7 +130,6 @@ impl From<SocketAddr> for Address {
 }
 
 #[cfg(target_family = "unix")]
-#[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
 impl From<StdUnixSocketAddr> for Address {
     fn from(value: StdUnixSocketAddr) -> Self {
         Address::Unix(value)
@@ -139,7 +137,6 @@ impl From<StdUnixSocketAddr> for Address {
 }
 
 #[cfg(target_family = "unix")]
-#[cfg_attr(docsrs, doc(cfg(target_family = "unix")))]
 impl From<TokioUnixSocketAddr> for Address {
     fn from(value: TokioUnixSocketAddr) -> Self {
         // SAFETY: `std::mem::transmute` can ensure both struct has the same size, so there is no

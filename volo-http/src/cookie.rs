@@ -1,3 +1,6 @@
+//! Cookie utilities of Volo-HTTP
+//!
+//! [`CookieJar`] currently only supports the server side.
 use std::{convert::Infallible, ops::Deref};
 
 pub use cookie::{time::Duration, Cookie};
@@ -7,6 +10,7 @@ use crate::context::ServerContext;
 #[cfg(feature = "server")]
 use crate::server::extract::FromContext;
 
+/// A cooke jar that can be extracted from a handler
 pub struct CookieJar {
     inner: cookie::CookieJar,
 }
@@ -37,7 +41,6 @@ impl Deref for CookieJar {
 }
 
 #[cfg(feature = "server")]
-#[cfg_attr(docsrs, doc(cfg(feature = "server")))]
 impl FromContext for CookieJar {
     type Rejection = Infallible;
 
