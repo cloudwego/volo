@@ -56,7 +56,7 @@ impl CliCommand for Migrate {
                 });
             Ok(())
         })
-        .map_err(|e| {
+        .inspect_err(|_| {
             if let Err(e) = std::fs::rename(backup_path.as_path(), path.as_path()) {
                 eprintln!(
                     "failed to restore backup file: {}, please manually rename it to volo.yml \
@@ -64,7 +64,6 @@ impl CliCommand for Migrate {
                     e
                 );
             }
-            e
         })?;
         std::fs::remove_file(backup_path)?;
         Ok(())
