@@ -657,8 +657,8 @@ struct ClientInner {
     seq_id: AtomicI32,
 }
 
-impl<'m, S> Client<S> {
-    pub fn make_cx(&self, method: &'m str, oneway: bool) -> ClientContext {
+impl<S> Client<S> {
+    pub fn make_cx(&self, method: &str, oneway: bool) -> ClientContext {
         CLIENT_CONTEXT_CACHE.with(|cache| {
             let mut cache = cache.borrow_mut();
             cache
@@ -706,7 +706,7 @@ impl<'m, S> Client<S> {
         })
     }
 
-    fn make_rpc_info(&self, method: &'m str) -> RpcInfo<Config> {
+    fn make_rpc_info(&self, method: &str) -> RpcInfo<Config> {
         let caller = Endpoint::new(self.inner.caller_name.clone());
         let mut callee = Endpoint::new(self.inner.callee_name.clone());
         if let Some(target) = &self.inner.address {
