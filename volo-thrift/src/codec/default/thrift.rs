@@ -177,9 +177,8 @@ impl ZeroCopyDecoder for ThriftCodec {
 
         // detect protocol
         // TODO: support using protocol from TTHeader
-        let protocol = detect(buf).map_err(|e| {
+        let protocol = detect(buf).inspect_err(|_| {
             cx.stats_mut().record_read_end_at();
-            e
         })?;
         // TODO: do we need to check the response protocol at client side?
         let res = match protocol {

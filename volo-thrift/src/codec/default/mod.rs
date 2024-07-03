@@ -140,10 +140,9 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         let mut write_result: Result<(), ThriftException> = self
             .encoder
             .encode(cx, &mut self.linked_bytes, msg)
-            .map_err(|e| {
+            .inspect_err(|_| {
                 // record the error time
                 cx.stats_mut().record_encode_end_at();
-                e
             });
         if write_result.is_ok() {
             cx.stats_mut().record_encode_end_at();

@@ -658,7 +658,7 @@ struct ClientInner {
 }
 
 impl<S> Client<S> {
-    pub fn make_cx(&self, method: &'static str, oneway: bool) -> ClientContext {
+    pub fn make_cx(&self, method: &str, oneway: bool) -> ClientContext {
         CLIENT_CONTEXT_CACHE.with(|cache| {
             let mut cache = cache.borrow_mut();
             cache
@@ -687,8 +687,7 @@ impl<S> Client<S> {
                         cx.rpc_info_mut().callee_mut().set_address(target.clone());
                     }
                     cx.rpc_info_mut().set_config(self.inner.config);
-                    cx.rpc_info_mut()
-                        .set_method(FastStr::from_static_str(method));
+                    cx.rpc_info_mut().set_method(FastStr::new(method));
                     cx
                 })
                 .unwrap_or_else(|| {
@@ -707,7 +706,7 @@ impl<S> Client<S> {
         })
     }
 
-    fn make_rpc_info(&self, method: &'static str) -> RpcInfo<Config> {
+    fn make_rpc_info(&self, method: &str) -> RpcInfo<Config> {
         let caller = Endpoint::new(self.inner.caller_name.clone());
         let mut callee = Endpoint::new(self.inner.callee_name.clone());
         if let Some(target) = &self.inner.address {
@@ -715,7 +714,7 @@ impl<S> Client<S> {
         }
         let config = self.inner.config;
 
-        RpcInfo::new(Role::Client, method.into(), caller, callee, config)
+        RpcInfo::new(Role::Client, FastStr::new(method), caller, callee, config)
     }
 
     pub fn with_opt<Opt>(self, opt: Opt) -> Client<WithOptService<S, Opt>> {
