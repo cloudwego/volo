@@ -1,3 +1,6 @@
+//! Server implementation
+//!
+//! See [`Server`] for more details.
 use std::{
     cell::RefCell,
     convert::Infallible,
@@ -64,7 +67,7 @@ pub mod prelude {
 ///
 /// # Examples
 ///
-/// ```ignore
+/// ```no_run
 /// use std::net::SocketAddr;
 ///
 /// use volo::net::Address;
@@ -81,7 +84,9 @@ pub mod prelude {
 /// let addr = "[::]:8080".parse::<SocketAddr>().unwrap();
 /// let addr = Address::from(addr);
 ///
+/// # tokio_test::block_on(async {
 /// Server::new(app).run(addr).await.unwrap();
+/// # })
 /// ```
 pub struct Server<S, L> {
     service: S,
@@ -109,11 +114,11 @@ impl<S> Server<S, Identity> {
 }
 
 impl<S, L> Server<S, L> {
-    #[cfg(feature = "__tls")]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     /// Enable TLS with the specified configuration.
     ///
     /// If not set, the server will not use TLS.
+    #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn tls_config(mut self, config: impl Into<ServerTlsConfig>) -> Self {
         self.tls_config = Some(config.into());
         self

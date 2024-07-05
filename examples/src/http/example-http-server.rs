@@ -25,6 +25,7 @@ use volo_http::{
         param::PathParams,
         response::sse::{Event, Sse},
         route::{get, get_service, post, Router},
+        utils::ServeDir,
         IntoResponse, Redirect, Server,
     },
     Address,
@@ -337,6 +338,10 @@ fn test_router() -> Router {
         }))
 }
 
+fn docs_router() -> Router {
+    Router::new().nest_service("/docs/", ServeDir::new("target/doc"))
+}
+
 // You can use the following commands for testing cookies
 //
 // ```bash
@@ -409,6 +414,7 @@ async fn main() {
         .merge(user_form_router())
         .merge(body_error_router())
         .merge(test_router())
+        .merge(docs_router())
         .layer(Extension(Arc::new(State {
             foo: "Foo".to_string(),
             bar: 114514,

@@ -3,7 +3,7 @@
 //! Users should not use this module directly.
 //! Instead, they should use the `Builder` type in the generated code.
 //!
-//! For users need to specify some options at call time, they may use ['callopt'][callopt].
+//! For users need to specify some options at call time, they may use [`CallOpt`].
 
 use std::{
     cell::RefCell,
@@ -326,7 +326,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ///
     /// After we call `.layer_inner(baz)`, we will get: foo -> bar -> baz.
     ///
-    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    /// The overall order for layers is: outer -> LoadBalance -> \[inner\] -> transport.
     pub fn layer_inner<Inner>(
         self,
         layer: Inner,
@@ -365,7 +365,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ///
     /// After we call `.layer_inner_front(baz)`, we will get: baz -> foo -> bar.
     ///
-    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    /// The overall order for layers is: outer -> LoadBalance -> \[inner\] -> transport.
     pub fn layer_inner_front<Inner>(
         self,
         layer: Inner,
@@ -404,7 +404,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ///
     /// After we call `.layer_outer(baz)`, we will get: foo -> bar -> baz.
     ///
-    /// The overall order for layers is: [outer] -> Timeout -> LoadBalance -> inner -> transport.
+    /// The overall order for layers is: \[outer\] -> Timeout -> LoadBalance -> inner -> transport.
     pub fn layer_outer<Outer>(
         self,
         layer: Outer,
@@ -443,7 +443,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ///
     /// After we call `.layer_outer_front(baz)`, we will get: baz -> foo -> bar.
     ///
-    /// The overall order for layers is: [outer] -> Timeout -> LoadBalance -> inner -> transport.
+    /// The overall order for layers is: \[outer\] -> Timeout -> LoadBalance -> inner -> transport.
     pub fn layer_outer_front<Outer>(
         self,
         layer: Outer,

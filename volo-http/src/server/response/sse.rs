@@ -174,7 +174,7 @@ impl Event {
     /// # Panics
     ///
     /// - Panics if the data field has already set through [`Self::data`] or [`Self::json`].
-    #[cfg(feature = "__json")]
+    #[cfg(feature = "json")]
     pub fn json<T>(mut self, data: &T) -> Result<Self, crate::json::Error>
     where
         T: serde::Serialize,

@@ -1,3 +1,6 @@
+//! HTTP Body implementation for [`http_body::Body`]
+//!
+//! See [`Body`] for more details.
 use std::{
     error::Error,
     fmt,
@@ -14,12 +17,19 @@ use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
 pub use hyper::body::Incoming;
 use motore::BoxError;
 use pin_project::pin_project;
-#[cfg(feature = "__json")]
+#[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
 
 // The `futures_util::stream::BoxStream` does not have `Sync`
 type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + Send + Sync + 'a>>;
 
+/// An implementation for [`http_body::Body`].
+///
+/// The `Body` supports three different body types.
+///
+/// - `Body:Full`: a complete [`Bytes`], with a certain size and content
+/// - `Body::Stream`: a boxed stream with `Item = Result<Frame<Bytes>, BoxError>`
+/// - `Body::Body`: a boxed [`http_body::Body`]
 #[pin_project(project = BodyProj)]
 pub enum Body {
     Full(#[pin] Full<Bytes>),
@@ -34,10 +44,12 @@ impl Default for Body {
 }
 
 impl Body {
+    /// Create an empty body.
     pub fn empty() -> Self {
         Self::Full(Full::new(Bytes::new()))
     }
 
+    /// Create a body by a [`Stream`] with `Item = Result<Frame<Bytes>, BoxError>`.
     pub fn from_stream<S>(stream: S) -> Self
     where
         S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + Sync + 'static,
@@ -45,6 +57,7 @@ impl Body {
         Self::Stream(StreamBody::new(Box::pin(stream)))
     }
 
+    /// Create a body by another [`http_body::Body`] instance.
     pub fn from_body<B>(body: B) -> Self
     where
         B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
@@ -99,43 +112,64 @@ impl fmt::Debug for Body {
     }
 }
 
-pub trait BodyConversion
+mod sealed {
+    pub trait SealedBody
+    where
+        Self: http_body::Body + Sized + Send,
+        Self::Data: Send,
+    {
+    }
+
+    impl<T> SealedBody for T
+    where
+        T: http_body::Body + Send,
+        T::Data: Send,
+    {
+    }
+}
+
+/// An extend trait for [`http_body::Body`] that can converting a body to other types
+pub trait BodyConversion: sealed::SealedBody
 where
-    Self: http_body::Body + Sized + Send,
-    Self::Data: Send,
+    <Self as http_body::Body>::Data: Send,
 {
-    fn into_bytes(self) -> impl Future<Output = Result<Bytes, ResponseConvertError>> + Send {
+    /// Consume a body and convert it into [`Bytes`].
+    fn into_bytes(self) -> impl Future<Output = Result<Bytes, BodyConvertError>> + Send {
         async {
             Ok(self
                 .collect()
                 .await
-                .map_err(|_| ResponseConvertError::BodyCollectionError)?
+                .map_err(|_| BodyConvertError::BodyCollectionError)?
                 .to_bytes())
         }
     }
 
-    fn into_vec(self) -> impl Future<Output = Result<Vec<u8>, ResponseConvertError>> + Send {
+    /// Consume a body and convert it into [`Vec<u8>`].
+    fn into_vec(self) -> impl Future<Output = Result<Vec<u8>, BodyConvertError>> + Send {
         async { Ok(self.into_bytes().await?.into()) }
     }
 
-    fn into_string(self) -> impl Future<Output = Result<String, ResponseConvertError>> + Send {
+    /// Consume a body and convert it into [`String`].
+    fn into_string(self) -> impl Future<Output = Result<String, BodyConvertError>> + Send {
         async {
             let vec = self.into_vec().await?;
 
             // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
-            let _ = simdutf8::basic::from_utf8(&vec)
-                .map_err(|_| ResponseConvertError::StringUtf8Error)?;
+            let _ =
+                simdutf8::basic::from_utf8(&vec).map_err(|_| BodyConvertError::StringUtf8Error)?;
             Ok(unsafe { String::from_utf8_unchecked(vec) })
         }
     }
 
+    /// Consume a body and convert it into [`String`].
+    ///
     /// # Safety
     ///
     /// It is up to the caller to guarantee that the value really is valid. Using this when the
     /// content is invalid causes immediate undefined behavior.
     unsafe fn into_string_unchecked(
         self,
-    ) -> impl Future<Output = Result<String, ResponseConvertError>> + Send {
+    ) -> impl Future<Output = Result<String, BodyConvertError>> + Send {
         async {
             let vec = self.into_vec().await?;
 
@@ -143,24 +177,27 @@ where
         }
     }
 
-    fn into_faststr(self) -> impl Future<Output = Result<FastStr, ResponseConvertError>> + Send {
+    /// Consume a body and convert it into [`FastStr`].
+    fn into_faststr(self) -> impl Future<Output = Result<FastStr, BodyConvertError>> + Send {
         async {
             let bytes = self.into_bytes().await?;
 
             // SAFETY: The `Vec<u8>` is checked by `simdutf8` and it is a valid `String`
             let _ = simdutf8::basic::from_utf8(&bytes)
-                .map_err(|_| ResponseConvertError::StringUtf8Error)?;
+                .map_err(|_| BodyConvertError::StringUtf8Error)?;
             Ok(unsafe { FastStr::from_bytes_unchecked(bytes) })
         }
     }
 
+    /// Consume a body and convert it into [`FastStr`].
+    ///
     /// # Safety
     ///
     /// It is up to the caller to guarantee that the value really is valid. Using this when the
     /// content is invalid causes immediate undefined behavior.
     unsafe fn into_faststr_unchecked(
         self,
-    ) -> impl Future<Output = Result<FastStr, ResponseConvertError>> + Send {
+    ) -> impl Future<Output = Result<FastStr, BodyConvertError>> + Send {
         async {
             let bytes = self.into_bytes().await?;
 
@@ -168,47 +205,47 @@ where
         }
     }
 
-    #[cfg(feature = "__json")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
-    fn into_json<T>(self) -> impl Future<Output = Result<T, ResponseConvertError>> + Send
+    /// Consume a body and convert it into an instance with [`DeserializeOwned`].
+    #[cfg(feature = "json")]
+    fn into_json<T>(self) -> impl Future<Output = Result<T, BodyConvertError>> + Send
     where
         T: DeserializeOwned,
     {
         async {
             let bytes = self.into_bytes().await?;
-            crate::json::deserialize(&bytes).map_err(ResponseConvertError::JsonDeserializeError)
+            crate::json::deserialize(&bytes).map_err(BodyConvertError::JsonDeserializeError)
         }
     }
 }
 
 impl<T> BodyConversion for T
 where
-    T: http_body::Body + Send,
-    T::Data: Send,
+    T: sealed::SealedBody,
+    <T as http_body::Body>::Data: Send,
 {
 }
 
+/// General error for polling [`http_body::Body`] or converting the [`Bytes`] just polled.
 #[derive(Debug)]
-pub enum ResponseConvertError {
+pub enum BodyConvertError {
     BodyCollectionError,
     StringUtf8Error,
-    #[cfg(feature = "__json")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+    #[cfg(feature = "json")]
     JsonDeserializeError(crate::json::Error),
 }
 
-impl fmt::Display for ResponseConvertError {
+impl fmt::Display for BodyConvertError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::BodyCollectionError => f.write_str("failed to collect body"),
             Self::StringUtf8Error => f.write_str("body is not a valid string"),
-            #[cfg(feature = "__json")]
+            #[cfg(feature = "json")]
             Self::JsonDeserializeError(e) => write!(f, "failed to deserialize body: {e}"),
         }
     }
 }
 
-impl Error for ResponseConvertError {}
+impl Error for BodyConvertError {}
 
 impl From<()> for Body {
     fn from(_: ()) -> Self {

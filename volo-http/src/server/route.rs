@@ -94,7 +94,7 @@ where
     ///
     /// ## Normal path
     ///
-    /// ```no_run
+    /// ```
     /// use volo_http::server::route::{get, Router};
     ///
     /// async fn index() -> &'static str {
@@ -110,7 +110,7 @@ where
     ///
     /// The params can be extract by extractor `PathParamsMap`:
     ///
-    /// ```no_run
+    /// ```
     /// use volo::FastStr;
     /// use volo_http::server::{
     ///     param::PathParamsMap,
@@ -126,7 +126,7 @@ where
     ///
     /// Or you can use `PathParams` directly:
     ///
-    /// ```no_run
+    /// ```
     /// use volo::FastStr;
     /// use volo_http::server::{
     ///     param::PathParams,
@@ -142,7 +142,7 @@ where
     ///
     /// More than one params are also supported:
     ///
-    /// ```no_run
+    /// ```
     /// use volo::FastStr;
     /// use volo_http::server::{
     ///     param::PathParams,
@@ -161,7 +161,7 @@ where
     /// Catch-all parameters start with `*` and match anything until the end of the path. They must
     /// always be at the **end** of the route.
     ///
-    /// ```no_run
+    /// ```
     /// use volo_http::server::{
     ///     param::PathParams,
     ///     route::{get, Router},
@@ -334,7 +334,7 @@ where
     ///
     /// # Examples
     ///
-    /// ```no_run
+    /// ```
     /// use volo_http::server::route::{get, Router};
     ///
     /// async fn index() -> &'static str {
@@ -571,7 +571,7 @@ where
 ///
 /// # Examples
 ///
-/// ```no_run
+/// ```
 /// use std::convert::Infallible;
 ///
 /// use volo::service::service_fn;

@@ -1,3 +1,5 @@
+//! HTTP Loadbalance Layer
+//!
 //! This is a copy of `volo::loadbalance::layer` without the retry logic. Because retry needs the
 //! `Req` has `Clone` trait, but HTTP body may be a stream, which cannot be cloned. So we remove
 //! the retry related codes here.

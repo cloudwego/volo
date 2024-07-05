@@ -5,7 +5,6 @@ use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
 
-/// The default codec implementation.
 pub mod default;
 
 pub use default::DefaultMakeCodec;

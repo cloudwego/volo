@@ -53,8 +53,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
     }
 
     /// Set the request body as json from object with `Serialize`.
-    #[cfg(feature = "__json")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
+    #[cfg(feature = "json")]
     pub fn json<T>(mut self, json: &T) -> Result<Self>
     where
         T: serde::Serialize,
@@ -77,7 +76,6 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
 
     /// Set the request body as form from object with `Serialize`.
     #[cfg(feature = "form")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "form")))]
     pub fn form<T>(mut self, form: &T) -> Result<Self>
     where
         T: serde::Serialize,
@@ -162,7 +160,6 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
 
     /// Set query for the uri in request from object with `Serialize`.
     #[cfg(feature = "query")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "query")))]
     pub fn set_query<T>(mut self, query: &T) -> Result<Self>
     where
         T: serde::Serialize,
@@ -219,13 +216,7 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
     }
 
     /// Set the target address for the request.
-    pub fn address<A>(
-        mut self,
-        address: A,
-        #[cfg(feature = "__tls")]
-        #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
-        https: bool,
-    ) -> Self
+    pub fn address<A>(mut self, address: A, #[cfg(feature = "__tls")] https: bool) -> Self
     where
         A: Into<Address>,
     {
@@ -322,7 +313,7 @@ where
 }
 
 // The `httpbin.org` always responses a json data.
-#[cfg(feature = "__json")]
+#[cfg(feature = "json")]
 #[cfg(test)]
 mod request_tests {
     #![allow(unused)]

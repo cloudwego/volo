@@ -2,6 +2,7 @@
     html_logo_url = "https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true"
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub mod error;
 mod message;

@@ -1,11 +1,6 @@
+//! Json utilities of Volo-HTTP
 use serde::{de::DeserializeOwned, ser::Serialize};
-#[cfg(feature = "serde_json")]
-pub use serde_json::Error;
-#[cfg(feature = "sonic_json")]
 pub use sonic_rs::Error;
-
-#[cfg(all(feature = "serde_json", feature = "sonic_json"))]
-compile_error!("features `serde_json` and `sonic_json` cannot be enabled at the same time.");
 
 #[cfg(feature = "server")]
 mod server;
@@ -14,16 +9,9 @@ pub(crate) fn serialize<T>(data: &T) -> Result<Vec<u8>, Error>
 where
     T: Serialize,
 {
-    #[cfg(feature = "sonic_json")]
-    let res = sonic_rs::to_vec(data);
-
-    #[cfg(feature = "serde_json")]
-    let res = serde_json::to_vec(data);
-
-    res
+    sonic_rs::to_vec(data)
 }
 
-#[cfg(feature = "sonic_json")]
 #[allow(dead_code)]
 pub(crate) fn serialize_to_writer<W, T>(writer: W, data: &T) -> Result<(), Error>
 where
@@ -33,28 +21,68 @@ where
     sonic_rs::to_writer(writer, data)
 }
 
-#[cfg(feature = "serde_json")]
-#[allow(dead_code)]
-pub(crate) fn serialize_to_writer<W, T>(writer: W, data: &T) -> Result<(), Error>
-where
-    W: std::io::Write,
-    T: Serialize,
-{
-    serde_json::to_writer(writer, data)
-}
-
 pub(crate) fn deserialize<T>(data: &[u8]) -> Result<T, Error>
 where
     T: DeserializeOwned,
 {
-    #[cfg(feature = "sonic_json")]
-    let res = sonic_rs::from_slice(data);
-
-    #[cfg(feature = "serde_json")]
-    let res = serde_json::from_slice(data);
-
-    res
+    sonic_rs::from_slice(data)
 }
 
+#[cfg(docsrs)]
+use crate::server::{extract::FromRequest, response::IntoResponse};
+
+/// A wrapper type with [`FromRequest`] and [`IntoResponse`]
+///
+/// The [`Json`] can be parameter or response of a handler.
+///
+/// # Examples
+///
+/// Use [`Json`] as parameter:
+///
+/// ```
+/// use serde::Deserialize;
+/// use volo_http::{
+///     json::Json,
+///     server::route::{post, Router},
+/// };
+///
+/// #[derive(Debug, Deserialize)]
+/// struct User {
+///     username: String,
+///     password: String,
+/// }
+///
+/// async fn login(Json(user): Json<User>) {
+///     println!("user: {user:?}");
+/// }
+///
+/// let router: Router = Router::new().route("/api/v2/login", post(login));
+/// ```
+///
+/// User [`Json`] as response:
+///
+/// ```
+/// use serde::Serialize;
+/// use volo_http::{
+///     json::Json,
+///     server::route::{get, Router},
+/// };
+///
+/// #[derive(Debug, Serialize)]
+/// struct User {
+///     username: String,
+///     password: String,
+/// }
+///
+/// async fn user_info() -> Json<User> {
+///     let user = User {
+///         username: String::from("admin"),
+///         password: String::from("passw0rd"),
+///     };
+///     Json(user)
+/// }
+///
+/// let router: Router = Router::new().route("/api/v2/info", get(user_info));
+/// ```
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Json<T>(pub T);

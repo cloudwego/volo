@@ -31,4 +31,4 @@ SUBCOMMANDS:
     migrate auto migrate from the previous config to the latest one
 ```
 
-For more detailed examples, you can check the [documentation][TODO].
+For more detailed examples, you can check the documentation (TODO).

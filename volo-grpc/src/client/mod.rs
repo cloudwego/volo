@@ -3,7 +3,7 @@
 //! Users should not use this module directly.
 //! Instead, they should use the `Builder` type in the generated code.
 //!
-//! For users need to specify some options at call time, they may use ['callopt'][callopt].
+//! For users need to specify some options at call time, they may use [`CallOpt`].
 
 mod callopt;
 mod meta;
@@ -34,7 +34,7 @@ use crate::{
     Request, Response, Status,
 };
 
-/// [`ClientBuilder`] provides a [builder-like interface][builder] to construct a [`Client`].
+/// [`ClientBuilder`] provides a builder-like interface to construct a [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     http2_config: Http2Config,
     rpc_config: Config,
@@ -127,7 +127,7 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
 }
 
 impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
-    /// Sets the [`SETTINGS_INITIAL_WINDOW_SIZE`] option for HTTP2
+    /// Sets the `SETTINGS_INITIAL_WINDOW_SIZE` option for HTTP2
     /// stream-level flow control.
     ///
     /// Default is `2MB`.
@@ -328,7 +328,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     ///
     /// After we call `.layer_inner(baz)`, we will get: foo -> bar -> baz.
     ///
-    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    /// The overall order for layers is: outer -> LoadBalance -> \[inner\] -> transport.
     pub fn layer_inner<Inner>(
         self,
         layer: Inner,
@@ -362,7 +362,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     ///
     /// After we call `.layer_inner_front(baz)`, we will get: baz -> foo -> bar.
     ///
-    /// The overall order for layers is: outer -> LoadBalance -> [inner] -> transport.
+    /// The overall order for layers is: outer -> LoadBalance -> \[inner\] -> transport.
     pub fn layer_inner_front<Inner>(
         self,
         layer: Inner,
@@ -396,7 +396,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     ///
     /// After we call `.layer_outer(baz)`, we will get: foo -> bar -> baz.
     ///
-    /// The overall order for layers is: [outer] -> LoadBalance -> inner -> transport.
+    /// The overall order for layers is: \[outer\] -> LoadBalance -> inner -> transport.
     pub fn layer_outer<Outer>(
         self,
         layer: Outer,
@@ -430,7 +430,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     ///
     /// After we call `.layer_outer_front(baz)`, we will get: baz -> foo -> bar.
     ///
-    /// The overall order for layers is: [outer] -> LoadBalance -> inner -> transport.
+    /// The overall order for layers is: \[outer\] -> LoadBalance -> inner -> transport.
     pub fn layer_outer_front<Outer>(
         self,
         layer: Outer,

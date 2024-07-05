@@ -142,8 +142,10 @@ pub enum OptionPin<T> {
     None,
 }
 
-/// Basically, this is almost the same with implementation of [`tower::timeout`].
+/// Basically, this is almost the same with implementation of [`tower::timeout`][tower_timeout].
 /// The only difference here is the sleep is optional, so we use a OptionPin instead.
+///
+/// [tower_timeout]: https://docs.rs/tower/0.4.13/tower/timeout/index.html
 impl<F, R> Future for ResponseFuture<F>
 where
     F: Future<Output = Result<R, Status>>,

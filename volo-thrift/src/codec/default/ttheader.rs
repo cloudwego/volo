@@ -1,6 +1,7 @@
 //! TTheader is a transport protocol designed by CloudWeGo.
 //!
-//! For more information, please visit https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/
+//! For more information, please visit
+//! <https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/>
 
 #![allow(clippy::mutable_key_type)]
 
@@ -24,7 +25,7 @@ use crate::{
     BizError, EntryMessage, ThriftMessage,
 };
 
-/// [`MakeTTHeaderCodec`] implements [`MakeZeroCopyCodec`] to create [`TTheaderEncoder`] and
+/// [`MakeTTHeaderCodec`] implements [`MakeZeroCopyCodec`] to create [`TTHeaderEncoder`] and
 /// [`TTHeaderDecoder`].
 #[derive(Clone)]
 pub struct MakeTTHeaderCodec<Inner: MakeZeroCopyCodec> {
@@ -65,7 +66,8 @@ impl<D: ZeroCopyDecoder> TTHeaderDecoder<D> {
 }
 
 /// 4-bytes length + 2-bytes magic
-/// https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/
+///
+/// <https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/>
 pub const HEADER_DETECT_LENGTH: usize = 6;
 
 impl<D> ZeroCopyDecoder for TTHeaderDecoder<D>
@@ -239,7 +241,9 @@ pub enum IntMetaKey {
     MsgType = 22,
 }
 
-/// TTHeader Protocol detailed: https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/
+/// TTHeader Protocol detailed:
+/// <https://www.cloudwego.io/docs/kitex/reference/transport_protocol_ttheader/>
+///
 /// +-------------2Byte--------------|-------------2Byte-------------+
 /// +----------------------------------------------------------------+
 /// | 0|                          LENGTH                             |

@@ -32,7 +32,7 @@ impl MakeThriftCodec {
     /// a colon : and the method name. The multiplexed protocol is not compatible
     /// with other protocols.
     ///
-    /// Spec: https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md
+    /// Spec: <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md>
     ///
     /// This is unimplemented yet.
     // pub fn with_multiplex(mut self, multiplex: bool) -> Self {
@@ -80,7 +80,7 @@ pub struct ProtocolBinary;
 pub struct ProtocolApacheCompact;
 
 /// 1-byte protocol id
-/// https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
+/// <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility>
 pub const HEADER_DETECT_LENGTH: usize = 1;
 
 #[derive(Debug, Clone, Copy)]
@@ -204,7 +204,8 @@ impl ZeroCopyDecoder for ThriftCodec {
     }
 }
 
-/// Detect protocol according to https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility
+/// Detect protocol according to
+/// <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility>
 #[inline]
 pub fn detect(buf: &[u8]) -> Result<Protocol, ProtocolException> {
     if buf[0] == 0x80 || buf[0] == 0x00 {
