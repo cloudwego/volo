@@ -1,4 +1,8 @@
-![Volo](https://github.com/cloudwego/volo/raw/main/.github/assets/logo.png?sanitize=true)
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="https://github.com/cloudwego/volo/raw/main/.github/assets/volo-light.png?sanitize=true" />
+  <source media="(prefers-color-scheme: dark)" srcset="https://github.com/cloudwego/volo/raw/main/.github/assets/volo-dark.png?sanitize=true" />
+  <img alt="Volo" src="https://github.com/cloudwego/volo/raw/main/.github/assets/volo-light.png?sanitize=true" />
+</picture>
 
 volo-build compiles thrift and protobuf idl files into rust code at compile-time.
 
