@@ -2,14 +2,16 @@
 //!
 //! This module contains the low level component to build a gRPC server.
 
+mod incoming;
 mod meta;
 mod router;
 mod service;
 
 use std::{fmt, io, time::Duration};
 
-use hyper::{body::Incoming as BodyIncoming, server::conn::http2};
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
+use incoming::IncomingService;
+pub use meta::MetaService;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::Service,
@@ -24,9 +26,7 @@ use volo::{
 };
 
 pub use self::router::Router;
-use crate::{
-    body::Body, context::ServerContext, server::meta::MetaService, Request, Response, Status,
-};
+use crate::{body::BoxBody, context::ServerContext, Request, Response, Status};
 
 /// A trait to provide a static reference to the service's
 /// name. This is used for routing service's within the router.
@@ -39,8 +39,9 @@ pub trait NamedService {
 
 /// A server for a gRPC service.
 #[derive(Clone)]
-pub struct Server<L> {
-    layer: L,
+pub struct Server<IL, OL> {
+    inner_layer: IL,
+    outer_layer: OL,
     http2_config: Http2Config,
     router: Router,
 
@@ -48,17 +49,18 @@ pub struct Server<L> {
     tls_config: Option<ServerTlsConfig>,
 }
 
-impl Default for Server<Identity> {
+impl Default for Server<Identity, tower::layer::util::Identity> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Server<Identity> {
+impl Server<Identity, tower::layer::util::Identity> {
     /// Creates a new [`Server`].
     pub fn new() -> Self {
         Self {
-            layer: Identity::new(),
+            inner_layer: Identity::new(),
+            outer_layer: tower::layer::util::Identity::new(),
             http2_config: Http2Config::default(),
             router: Router::new(),
 
@@ -68,7 +70,7 @@ impl Server<Identity> {
     }
 }
 
-impl<L> Server<L> {
+impl<IL, OL> Server<IL, OL> {
     #[cfg(feature = "__tls")]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     /// Sets the TLS configuration for the server.
@@ -176,11 +178,8 @@ impl<L> Server<L> {
     /// return confusing (but correct) protocol errors.
     ///
     /// Default is `false`.
-    #[deprecated(
-        since = "0.9.0",
-        note = "accepting http1 connection was not supported by `hyper`"
-    )]
-    pub fn accept_http1(self, _accept_http1: bool) -> Self {
+    pub fn accept_http1(mut self, accept_http1: bool) -> Self {
+        self.http2_config.accept_http1 = accept_http1;
         self
     }
 
@@ -195,9 +194,13 @@ impl<L> Server<L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<O>(self, layer: O) -> Server<Stack<O, L>> {
+    ///
+    /// The overall order for layers is: transport -> IncomingService -> outer -> MetaService ->
+    /// \[inner\].
+    pub fn layer<Inner>(self, layer: Inner) -> Server<Stack<Inner, IL>, OL> {
         Server {
-            layer: Stack::new(layer, self.layer),
+            inner_layer: Stack::new(layer, self.inner_layer),
+            outer_layer: self.outer_layer,
             http2_config: self.http2_config,
             router: self.router,
             #[cfg(feature = "__tls")]
@@ -216,9 +219,41 @@ impl<L> Server<L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> Server<Stack<L, Front>> {
+    ///
+    /// The overall order for layers is: transport -> IncomingService -> outer -> MetaService ->
+    /// \[inner\].
+    pub fn layer_front<Front>(self, layer: Front) -> Server<Stack<IL, Front>, OL> {
         Server {
-            layer: Stack::new(self.layer, layer),
+            inner_layer: Stack::new(self.inner_layer, layer),
+            outer_layer: self.outer_layer,
+            http2_config: self.http2_config,
+            router: self.router,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
+    /// Adds a new outer layer to the server.
+    ///
+    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    ///
+    /// # Order
+    ///
+    /// Assume we already have two layers: foo and bar. We want to add a new layer baz.
+    ///
+    /// The current order is: foo -> bar (the request will come to foo first, and then bar).
+    ///
+    /// After we call `.layer_tower(baz)`, we will get: foo -> bar -> baz.
+    ///
+    /// The overall order for layers is: transport -> IncomingService -> \[outer\] -> MetaService ->
+    /// inner.
+    pub fn layer_tower<Outer>(
+        self,
+        layer: Outer,
+    ) -> Server<IL, tower::layer::util::Stack<Outer, OL>> {
+        Server {
+            inner_layer: self.inner_layer,
+            outer_layer: tower::layer::util::Stack::new(layer, self.outer_layer),
             http2_config: self.http2_config,
             router: self.router,
             #[cfg(feature = "__tls")]
@@ -229,7 +264,7 @@ impl<L> Server<L> {
     /// Adds a new service to the router.
     pub fn add_service<S>(self, s: S) -> Self
     where
-        S: Service<ServerContext, Request<BodyIncoming>, Response = Response<Body>, Error = Status>
+        S: Service<ServerContext, Request<BoxBody>, Response = Response<BoxBody>, Error = Status>
             + NamedService
             + Clone
             + Send
@@ -237,7 +272,8 @@ impl<L> Server<L> {
             + 'static,
     {
         Self {
-            layer: self.layer,
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
             http2_config: self.http2_config,
             router: self.router.add_service(s),
             #[cfg(feature = "__tls")]
@@ -256,20 +292,28 @@ impl<L> Server<L> {
         signal: F,
     ) -> Result<(), BoxError>
     where
-        L: Layer<Router>,
-        L::Service: Service<ServerContext, Request<BodyIncoming>, Response = Response<Body>>
+        IL: Layer<Router>,
+        IL::Service: Service<ServerContext, Request<BoxBody>, Response = Response<BoxBody>>
             + Clone
             + Send
             + Sync
             + 'static,
-        <L::Service as Service<ServerContext, Request<BodyIncoming>>>::Error: Into<Status> + Send,
+        <IL::Service as Service<ServerContext, Request<BoxBody>>>::Error: Into<Status>,
+        OL: tower::Layer<MetaService<IL::Service>>,
+        OL::Service: tower::Service<hyper::Request<BoxBody>, Response = hyper::Response<BoxBody>>
+            + Clone
+            + Send
+            + 'static,
+        <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Future: Send + 'static,
+        <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Error:
+            Into<Status> + Send + Sync + std::error::Error,
     {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
 
-        let service = motore::builder::ServiceBuilder::new()
-            .layer(self.layer)
-            .service(self.router);
+        let service = self
+            .outer_layer
+            .layer(MetaService::new(self.inner_layer.layer(self.router)));
 
         tokio::pin!(signal);
         let (tx, rx) = tokio::sync::watch::channel(());
@@ -320,11 +364,16 @@ impl<L> Server<L> {
                     tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
                     let peer_addr = conn.info.peer_addr.clone();
 
-                    let service = MetaService::new(service.clone(), peer_addr);
+                    let service = IncomingService::new(service.clone(), peer_addr);
 
                     // init server
-                    let mut server = http2::Builder::new(TokioExecutor::new());
-                    server.initial_stream_window_size(self.http2_config.init_stream_window_size)
+                    let mut server = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
+                    if !self.http2_config.accept_http1 {
+                        server = server.http2_only();
+                    }
+                    server
+                        .http2()
+                        .initial_stream_window_size(self.http2_config.init_stream_window_size)
                         .timer(TokioTimer::new())
                         .initial_connection_window_size(self.http2_config.init_connection_window_size)
                         .adaptive_window(self.http2_config.adaptive_window)
@@ -337,32 +386,29 @@ impl<L> Server<L> {
 
                     let mut watch = rx.clone();
                     spawn(async move {
-                        let mut http_conn = server.serve_connection(
+                        let mut http_conn = std::pin::pin!(server.serve_connection(
                             TokioIo::new(conn),
                             hyper::service::service_fn(move |req| {
-                                let mut cx = ServerContext::default();
-                                let service = service.clone();
+                                let mut service = service.clone();
                                 async move {
-                                    service.call(&mut cx, req).await
+                                    tower::Service::call(&mut service, req).await
                                 }
                             })
-                        );
-                        tokio::select! {
-                            _ = watch.changed() => {
-                                tracing::trace!("[VOLO] closing a pending connection");
-                                // Graceful shutdown.
-                                http2::Connection::graceful_shutdown(Pin::new(&mut http_conn));
-                                // Continue to poll this connection until shutdown can finish.
-                                let result = http_conn.await;
-                                if let Err(err) = result {
-                                    tracing::debug!("[VOLO] connection error: {:?}", err);
-                                }
-                            },
-                            result = &mut http_conn => {
-                                if let Err(err) = result {
-                                    tracing::debug!("[VOLO] connection error: {:?}", err);
-                                }
-                            },
+                        ));
+                        loop {
+                            tokio::select! {
+                                _ = watch.changed() => {
+                                    tracing::trace!("[VOLO] closing a pending connection");
+                                    // Graceful shutdown.
+                                    http_conn.as_mut().graceful_shutdown();
+                                },
+                                result = &mut http_conn => {
+                                    if let Err(err) = result {
+                                        tracing::debug!("[VOLO] connection error: {:?}", err);
+                                    }
+                                    break;
+                                },
+                            }
                         }
                     });
                 },
@@ -373,20 +419,28 @@ impl<L> Server<L> {
     /// The main entry point for the server.
     pub async fn run<A: volo::net::MakeIncoming>(self, incoming: A) -> Result<(), BoxError>
     where
-        L: Layer<Router>,
-        L::Service: Service<ServerContext, Request<BodyIncoming>, Response = Response<Body>>
+        IL: Layer<Router>,
+        IL::Service: Service<ServerContext, Request<BoxBody>, Response = Response<BoxBody>>
             + Clone
             + Send
             + Sync
             + 'static,
-        <L::Service as Service<ServerContext, Request<BodyIncoming>>>::Error: Into<Status> + Send,
+        <IL::Service as Service<ServerContext, Request<BoxBody>>>::Error: Into<Status>,
+        OL: tower::Layer<MetaService<IL::Service>>,
+        OL::Service: tower::Service<hyper::Request<BoxBody>, Response = hyper::Response<BoxBody>>
+            + Clone
+            + Send
+            + 'static,
+        <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Future: Send + 'static,
+        <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Error:
+            Into<Status> + Send + Sync + std::error::Error,
     {
         self.run_with_shutdown(incoming, tokio::signal::ctrl_c())
             .await
     }
 }
 
-impl<L> fmt::Debug for Server<L> {
+impl<IL, OL> fmt::Debug for Server<IL, OL> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Server")
             .field("http2_config", &self.http2_config)
@@ -413,6 +467,7 @@ pub struct Http2Config {
     pub(crate) max_frame_size: Option<u32>,
     pub(crate) max_send_buf_size: usize,
     pub(crate) max_header_list_size: u32,
+    pub(crate) accept_http1: bool,
 }
 
 impl Default for Http2Config {
@@ -427,6 +482,7 @@ impl Default for Http2Config {
             max_frame_size: None,
             max_send_buf_size: DEFAULT_MAX_SEND_BUF_SIZE,
             max_header_list_size: DEFAULT_SETTINGS_MAX_HEADER_LIST_SIZE,
+            accept_http1: false,
         }
     }
 }

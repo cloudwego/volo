@@ -10,9 +10,7 @@ use tower::BoxError;
 use tracing::{debug, trace, warn};
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
-use crate::{body::Body, metadata::MetadataMap, BASE64_ENGINE};
-
-pub type BoxBody = http_body_util::combinators::BoxBody<Bytes, Status>;
+use crate::{body::BoxBody, metadata::MetadataMap, BASE64_ENGINE};
 
 const ENCODING_SET: &AsciiSet = &CONTROLS
     .add(b' ')
@@ -618,20 +616,14 @@ impl Status {
 
     /// Build trailer-only response by 'grpc-status' 'grpc-message' 'grpc-status-details-bin'
     #[allow(clippy::wrong_self_convention)]
-    pub fn to_http(self) -> http::Response<Body> {
-        let (mut parts, _body) = http::Response::new(()).into_parts();
-
-        parts.headers.insert(
+    pub fn to_http(self) -> http::Response<BoxBody> {
+        let mut response = http::Response::new(crate::body::empty_body());
+        response.headers_mut().insert(
             http::header::CONTENT_TYPE,
             HeaderValue::from_static("application/grpc"),
         );
-
-        self.add_header(&mut parts.headers).unwrap();
-
-        http::Response::from_parts(
-            parts,
-            Body::new(Box::pin(futures::stream::empty())).end_stream(),
-        )
+        self.add_header(response.headers_mut()).unwrap();
+        response
     }
 }
 

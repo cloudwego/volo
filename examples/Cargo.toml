@@ -11,75 +11,83 @@ publish = false
 # hello
 [[bin]]
 name = "hello-grpc-server"
-path = "src/hello/grpc_server.rs"
+path = "src/grpc/hello/server.rs"
 [[bin]]
 name = "hello-grpc-client"
-path = "src/hello/grpc_client.rs"
+path = "src/grpc/hello/client.rs"
 [[bin]]
 name = "hello-thrift-server"
-path = "src/hello/thrift_server.rs"
+path = "src/thrift/hello/server.rs"
 [[bin]]
 name = "hello-thrift-server-panic"
-path = "src/hello/thrift_server_panic.rs"
+path = "src/thrift/hello/server_panic.rs"
 [[bin]]
 name = "hello-thrift-client"
-path = "src/hello/thrift_client.rs"
+path = "src/thrift/hello/client.rs"
 
 # hello tls
 [[bin]]
 name = "hello-tls-grpc-server"
-path = "src/hello_grpc_tls/grpc_tls_server.rs"
+path = "src/grpc/tls/server.rs"
 required-features = ["__tls"]
 [[bin]]
 name = "hello-tls-grpc-client"
-path = "src/hello_grpc_tls/grpc_tls_client.rs"
+path = "src/grpc/tls/client.rs"
 required-features = ["__tls"]
 
 # compression
 [[bin]]
 name = "compression-grpc-server"
-path = "src/compression/grpc_server.rs"
+path = "src/grpc/compression/server.rs"
 [[bin]]
 name = "compression-grpc-client"
-path = "src/compression/grpc_client.rs"
+path = "src/grpc/compression/client.rs"
 
 # multiplex
 [[bin]]
 name = "multiplex-grpc-server"
-path = "src/multiplex/grpc_server.rs"
+path = "src/grpc/multiplex/server.rs"
 [[bin]]
 name = "multiplex-grpc-client"
-path = "src/multiplex/grpc_client.rs"
+path = "src/grpc/multiplex/client.rs"
 [[bin]]
 name = "multiplex-thrift-server"
-path = "src/multiplex/thrift_server.rs"
+path = "src/thrift/multiplex/server.rs"
 [[bin]]
 name = "multiplex-thrift-client"
-path = "src/multiplex/thrift_client.rs"
+path = "src/thrift/multiplex/client.rs"
 
 # streaming
 [[bin]]
 name = "streaming-grpc-server"
-path = "src/streaming/grpc_server.rs"
+path = "src/grpc/streaming/server.rs"
 [[bin]]
 name = "streaming-grpc-client"
-path = "src/streaming/grpc_client.rs"
+path = "src/grpc/streaming/client.rs"
 
 # loadbalance
 [[bin]]
 name = "loadbalance-grpc-server"
-path = "src/loadbalance/grpc_server.rs"
+path = "src/grpc/loadbalance/server.rs"
 [[bin]]
 name = "loadbalance-grpc-client"
-path = "src/loadbalance/grpc_client.rs"
+path = "src/grpc/loadbalance/client.rs"
 
 # unknown
 [[bin]]
 name = "unknown-thrift-server"
-path = "src/unknown/thrift_server.rs"
+path = "src/thrift/unknown/server.rs"
 [[bin]]
 name = "unknown-thrift-client"
-path = "src/unknown/thrift_client.rs"
+path = "src/thrift/unknown/client.rs"
+
+# grpc-web
+[[bin]]
+name = "grpc-web-server"
+path = "src/grpc/grpc-web/server.rs"
+[[bin]]
+name = "grpc-web-client"
+path = "src/grpc/grpc-web/client.rs"
 
 # http
 [[bin]]
@@ -109,12 +117,15 @@ futures.workspace = true
 http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
 lazy_static.workspace = true
 metainfo.workspace = true
 motore.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
+tonic-web.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

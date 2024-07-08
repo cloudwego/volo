@@ -4,9 +4,9 @@ use lazy_static::lazy_static;
 use pilota::FastStr;
 
 lazy_static! {
-    static ref GREETER_CLIENT: volo_gen::proto_gen::hello::GreeterClient = {
+    static ref GREETER_CLIENT: volo_gen::proto_gen::helloworld::GreeterClient = {
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-        volo_gen::proto_gen::hello::GreeterClientBuilder::new("hello")
+        volo_gen::proto_gen::helloworld::GreeterClientBuilder::new("hello")
             .address(addr)
             .build()
     };
@@ -20,7 +20,7 @@ lazy_static! {
 
 #[volo::main]
 async fn main() {
-    let req = volo_gen::proto_gen::hello::HelloRequest {
+    let req = volo_gen::proto_gen::helloworld::HelloRequest {
         name: FastStr::from_static_str("Volo"),
     };
     let resp = GREETER_CLIENT.say_hello(req).await;

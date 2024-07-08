@@ -1,6 +1,5 @@
 use std::marker::PhantomData;
 
-use hyper::body::Incoming;
 use motore::{
     layer::{Identity, Layer, Stack},
     service::Service,
@@ -8,7 +7,7 @@ use motore::{
 
 use super::NamedService;
 use crate::{
-    body::Body,
+    body::{boxed, Body, BoxBody},
     codec::{
         compression::{CompressionEncoding, ENCODING_HEADER},
         decode::Kind,
@@ -74,11 +73,6 @@ impl<S, L> ServiceBuilder<S, L> {
     pub fn build<T, U>(self) -> CodecService<<L as volo::Layer<S>>::Service, T, U>
     where
         L: Layer<S>,
-        L::Service: Service<ServerContext, Request<T>, Response = Response<U>>,
-        <L::Service as Service<ServerContext, Request<T>>>::Error: Into<Status> + Send,
-        S: Service<ServerContext, Request<T>, Response = Response<U>, Error = Status>,
-        T: RecvEntryMessage,
-        U: SendEntryMessage,
     {
         let service = motore::builder::ServiceBuilder::new()
             .layer(self.layer)
@@ -91,7 +85,7 @@ impl<S, L> ServiceBuilder<S, L> {
 pub struct CodecService<S, T, U> {
     inner: S,
     rpc_config: Config,
-    _marker: PhantomData<(T, U)>,
+    _marker: PhantomData<fn(T, U)>,
 }
 
 impl<S, T, U> Clone for CodecService<S, T, U>
@@ -117,20 +111,20 @@ impl<S, T, U> CodecService<S, T, U> {
     }
 }
 
-impl<S, T, U> Service<ServerContext, Request<Incoming>> for CodecService<S, T, U>
+impl<S, T, U> Service<ServerContext, Request<BoxBody>> for CodecService<S, T, U>
 where
-    S: Service<ServerContext, Request<T>, Response = Response<U>> + Clone + Send + Sync + 'static,
+    S: Service<ServerContext, Request<T>, Response = Response<U>> + Sync,
     S::Error: Into<Status>,
-    T: RecvEntryMessage + Send + Sync,
-    U: SendEntryMessage + Send + Sync,
+    T: RecvEntryMessage,
+    U: SendEntryMessage,
 {
-    type Response = Response<Body>;
+    type Response = Response<BoxBody>;
     type Error = Status;
 
     async fn call<'s, 'cx>(
         &'s self,
         cx: &'cx mut ServerContext,
-        req: Request<Incoming>,
+        req: Request<BoxBody>,
     ) -> Result<Self::Response, Self::Error> {
         let (metadata, extensions, body) = req.into_parts();
         let send_compression = CompressionEncoding::from_accept_encoding_header(
@@ -154,7 +148,8 @@ where
 
         let volo_resp = self.inner.call(cx, volo_req).await.map_err(Into::into)?;
 
-        let mut resp = volo_resp.map(|message| Body::new(message.into_body(send_compression)));
+        let mut resp =
+            volo_resp.map(|message| boxed(Body::new(message.into_body(send_compression))));
 
         if let Some(encoding) = send_compression {
             resp.metadata_mut().insert(

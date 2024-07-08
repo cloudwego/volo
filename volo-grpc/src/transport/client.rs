@@ -14,6 +14,7 @@ use volo::net::Address;
 
 use super::connect::Connector;
 use crate::{
+    body::boxed,
     client::Http2Config,
     codec::{
         compression::{CompressionEncoding, ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
@@ -192,7 +193,7 @@ where
 
         let body = U::from_body(
             Some(path),
-            body,
+            boxed(body),
             Kind::Response(status_code),
             accept_compression,
         )?;
