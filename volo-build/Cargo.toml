@@ -1,6 +1,6 @@
 [package]
 name = "volo-build"
-version = "0.10.9"
+version = "0.10.10"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
