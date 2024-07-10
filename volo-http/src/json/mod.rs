@@ -28,10 +28,8 @@ where
     sonic_rs::from_slice(data)
 }
 
-#[cfg(docsrs)]
-use crate::server::{extract::FromRequest, response::IntoResponse};
-
-/// A wrapper type with [`FromRequest`] and [`IntoResponse`]
+/// A wrapper type with [`FromRequest`](crate::server::extract::FromRequest) and
+/// [`IntoResponse`](crate::server::response::IntoResponse)
 ///
 /// The [`Json`] can be parameter or response of a handler.
 ///

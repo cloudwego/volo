@@ -5,11 +5,7 @@ use volo::context::Context;
 #[cfg(feature = "server")]
 mod server;
 
-#[cfg(docsrs)]
-use crate::server::extract::FromContext;
-
-/// `Extension` is used for inserting anything into contexts as a [`Layer`] or extracting
-/// anything as an extractor (through [`crate::server::extract::FromContext`]).
+/// Inserting anything into contexts as a [`Layer`] or extracting anything as an extractor
 ///
 /// # Examples
 ///
