@@ -1,3 +1,5 @@
+//! Context and its utilities of server
+
 use http::{
     header,
     header::{HeaderMap, HeaderValue},
@@ -18,10 +20,12 @@ use crate::{
     },
 };
 
+/// RPC context of http server
 #[derive(Debug)]
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 impl ServerContext {
+    /// Create a new [`ServerContext`] with the address of client
     pub fn new(peer: Address) -> Self {
         let mut cx = RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Server),
@@ -38,8 +42,17 @@ impl_deref_and_deref_mut!(ServerContext, RpcCx<ServerCxInner, Config>, 0);
 
 newtype_impl_context!(ServerContext, Config, 0);
 
+/// Inner details of [`ServerContext`]
 #[derive(Clone, Debug)]
 pub struct ServerCxInner {
+    /// Path params from [`Uri`]
+    ///
+    /// See [`Router::route`][route] and [`PathParamsVec`], [`PathParamsMap`][PathParamsMap] or
+    /// [`PathParams`][PathParams] for more details.
+    ///
+    /// [route]: crate::server::route::Router::route
+    /// [PathParamsMap]: crate::server::param::PathParamsMap
+    /// [PathParams]: crate::server::param::PathParams
     pub params: PathParamsVec,
 }
 
@@ -47,6 +60,9 @@ impl ServerCxInner {
     impl_getter!(params, PathParamsVec);
 }
 
+/// Configuration of the request
+///
+/// It is empty currently
 #[derive(Clone, Debug, Default)]
 pub struct Config {}
 
@@ -54,6 +70,9 @@ impl Reusable for Config {
     fn clear(&mut self) {}
 }
 
+/// Utilities of [`request::Parts`][request::Parts]
+///
+/// [request::Parts]: http::request::Parts
 pub trait RequestPartsExt {
     /// Parse `Forwarded` in headers.
     fn forwarded(&self) -> Forwarded;
@@ -131,11 +150,16 @@ impl RequestPartsExt for Parts {
     }
 }
 
+/// Parsed `Forwarded` from HTTP headers
 #[derive(Clone, Debug)]
 pub struct Forwarded<'a> {
+    /// `by` field from `Forwarded`
     pub by: Option<&'a str>,
+    /// `for` field from `Forwarded`
     pub r#for: Vec<&'a str>,
+    /// `host` field from `Forwarded`
     pub host: Option<&'a str>,
+    /// `proto` field from `Forwarded`
     pub proto: Option<&'a str>,
 }
 

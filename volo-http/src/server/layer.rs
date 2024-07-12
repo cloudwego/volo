@@ -1,3 +1,7 @@
+//! Collections of some userful [`Layer`]s.
+//!
+//! See [`FilterLayer`] and [`TimeoutLayer`] for more details.
+
 use std::{marker::PhantomData, time::Duration};
 
 use motore::{layer::Layer, service::Service};
@@ -5,6 +9,9 @@ use motore::{layer::Layer, service::Service};
 use super::{handler::HandlerWithoutRequest, IntoResponse};
 use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
+/// [`Layer`] for filtering requests
+///
+/// See [`FilterLayer::new`] for more details.
 #[derive(Clone)]
 pub struct FilterLayer<H, R, T> {
     handler: H,
@@ -12,6 +19,41 @@ pub struct FilterLayer<H, R, T> {
 }
 
 impl<H, R, T> FilterLayer<H, R, T> {
+    /// Create a new [`FilterLayer`]
+    ///
+    /// The `handler` is an async function with some params that implement
+    /// [`FromContext`](crate::server::extract::FromContext), and returns
+    /// `Result<(), impl IntoResponse>`.
+    ///
+    /// If the handler returns `Ok(())`, the request will proceed. However, if the handler returns
+    /// `Err` with an object that implements [`IntoResponse`], the request will be rejected with
+    /// the returned object as the response.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use http::{method::Method, status::StatusCode};
+    /// use volo_http::server::{
+    ///     layer::FilterLayer,
+    ///     route::{get, Router},
+    /// };
+    ///
+    /// async fn reject_post(method: Method) -> Result<(), StatusCode> {
+    ///     if method == Method::POST {
+    ///         Err(StatusCode::METHOD_NOT_ALLOWED)
+    ///     } else {
+    ///         Ok(())
+    ///     }
+    /// }
+    ///
+    /// async fn handler() -> &'static str {
+    ///     "Hello, World"
+    /// }
+    ///
+    /// let router: Router = Router::new()
+    ///     .route("/", get(handler))
+    ///     .layer(FilterLayer::new(reject_post));
+    /// ```
     pub fn new(h: H) -> Self {
         Self {
             handler: h,
@@ -37,6 +79,9 @@ where
     }
 }
 
+/// [`FilterLayer`] generated [`Service`]
+///
+/// See [`FilterLayer`] for more details.
 #[derive(Clone)]
 pub struct Filter<S, H, R, T> {
     service: S,
@@ -82,6 +127,9 @@ where
     }
 }
 
+/// [`Layer`] for setting timeout to the request
+///
+/// See [`TimeoutLayer::new`] for more details.
 #[derive(Clone)]
 pub struct TimeoutLayer<H> {
     duration: Duration,
@@ -89,6 +137,37 @@ pub struct TimeoutLayer<H> {
 }
 
 impl<H> TimeoutLayer<H> {
+    /// Create a new [`TimeoutLayer`] with given [`Duration`] and handler.
+    ///
+    /// The handler should be a sync function with [`&ServerContext`](ServerContext) as parameter,
+    /// and return anything that implement [`IntoResponse`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use std::time::Duration;
+    ///
+    /// use http::status::StatusCode;
+    /// use volo_http::{
+    ///     context::ServerContext,
+    ///     server::{
+    ///         layer::TimeoutLayer,
+    ///         route::{get, Router},
+    ///     },
+    /// };
+    ///
+    /// async fn index() -> &'static str {
+    ///     "Hello, World"
+    /// }
+    ///
+    /// fn timeout_handler(_: &ServerContext) -> StatusCode {
+    ///     StatusCode::REQUEST_TIMEOUT
+    /// }
+    ///
+    /// let router: Router = Router::new()
+    ///     .route("/", get(index))
+    ///     .layer(TimeoutLayer::new(Duration::from_secs(1), timeout_handler));
+    /// ```
     pub fn new(duration: Duration, handler: H) -> Self {
         Self { duration, handler }
     }
@@ -123,6 +202,9 @@ where
     }
 }
 
+/// [`TimeoutLayer`] generated [`Service`]
+///
+/// See [`TimeoutLayer`] for more details.
 #[derive(Clone)]
 pub struct Timeout<S, H> {
     service: S,

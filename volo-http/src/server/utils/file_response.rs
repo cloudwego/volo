@@ -18,6 +18,7 @@ use crate::{body::Body, response::ServerResponse, server::IntoResponse};
 
 const BUF_SIZE: usize = 4096;
 
+/// Response for sending a file.
 pub struct FileResponse {
     file: File,
     size: u64,
@@ -25,6 +26,7 @@ pub struct FileResponse {
 }
 
 impl FileResponse {
+    /// Create a new [`FileResponse`] with given path and `Content-Type`
     pub fn new<P>(path: P, content_type: HeaderValue) -> io::Result<Self>
     where
         P: AsRef<Path>,
@@ -37,6 +39,15 @@ impl FileResponse {
             size: metadata.len(),
             content_type,
         })
+    }
+
+    /// Create a new [`FileResponse`] with guessing `Content-Type` through file name
+    pub fn new_with_guess_type<P>(path: P) -> io::Result<Self>
+    where
+        P: AsRef<Path>,
+    {
+        let path = path.as_ref();
+        Self::new(path, super::serve_dir::guess_mime(path))
     }
 }
 

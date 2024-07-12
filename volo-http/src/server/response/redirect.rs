@@ -6,6 +6,7 @@ use http::{
 use super::IntoResponse;
 use crate::{body::Body, response::ServerResponse};
 
+/// Response with 3XX Status Code and specified `Location`
 pub struct Redirect {
     status: StatusCode,
     location: HeaderValue,

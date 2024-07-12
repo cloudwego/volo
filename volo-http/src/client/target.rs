@@ -18,29 +18,40 @@ use crate::{
 ///
 /// The `TargetParser` usually used for service discover. It can update [`Endpoint` ]from
 /// [`Target`] and [`CallOpt`], and the service discover will resolve the [`Endpoint`] to
-/// [`Address`](volo::net::Address)\(es\) and access them.
+/// [`Address`]\(es\) and access them.
 pub type TargetParser = fn(Target, &CallOpt, &mut Endpoint);
 
+/// HTTP target server descriptor
 #[derive(Clone, Debug, Default)]
 pub enum Target {
     #[default]
+    /// No target specified
     None,
+    /// Remote target, supports service name (domain name by default) or ip address
     Remote(RemoteTarget),
+    /// Local target, usually using a unix domain socket.
     #[cfg(target_family = "unix")]
     Local(std::os::unix::net::SocketAddr),
 }
 
+/// Remote part of [`Target`]
 #[derive(Clone, Debug)]
 pub struct RemoteTarget {
+    /// The target address
     pub addr: RemoteTargetAddress,
+    /// Target port, its default value depends on scheme
     pub port: Option<u16>,
+    /// Use https for transporting
     #[cfg(feature = "__tls")]
     pub https: bool,
 }
 
+/// Remote address of [`RemoteTarget`]
 #[derive(Clone, Debug)]
 pub enum RemoteTargetAddress {
+    /// Ip address
     Ip(IpAddr),
+    /// Service name, usually a domain name
     Name(FastStr),
 }
 

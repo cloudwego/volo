@@ -1,4 +1,6 @@
-//! Service discover utilities
+//! DNS resolver implementation
+//!
+//! This module implements [`DnsResolver`] as a [`Discover`] for client.
 
 use std::{net::SocketAddr, ops::Deref, sync::Arc};
 
@@ -42,8 +44,6 @@ impl Deref for Port {
 }
 
 /// A service discover implementation for DNS.
-///
-/// This type
 #[derive(Clone)]
 pub struct DnsResolver {
     resolver: TokioAsyncResolver,
@@ -59,6 +59,7 @@ impl DnsResolver {
         }
     }
 
+    /// Resolve a host to an IP address and then set the port to it for getting an [`Address`].
     pub async fn resolve(&self, host: &str, port: u16) -> Option<Address> {
         // Note that the Resolver will try to parse the host as an IP address first, so we don't
         // need to parse it manually.
@@ -130,6 +131,14 @@ impl Discover for DnsResolver {
     }
 }
 
+/// [`TargetParser`][TargetParser] for parsing [`Target`] and [`CallOpt`] to [`Endpoint`]
+///
+/// Because [`LoadBalance`][LoadBalance] accepts only [`Endpoint`], but we should create an HTTP
+/// target through [`Target`], the [`parse_target`] can parse them and apply to [`Endpoint`] for
+/// [LoadBalance] using.
+///
+/// [TargetParser]: crate::client::target::TargetParser
+/// [LoadBalance]: volo::loadbalance::LoadBalance
 pub fn parse_target(target: Target, _: &CallOpt, endpoint: &mut Endpoint) {
     match target {
         Target::None => (),

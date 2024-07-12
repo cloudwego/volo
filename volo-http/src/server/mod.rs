@@ -1,6 +1,7 @@
 //! Server implementation
 //!
 //! See [`Server`] for more details.
+
 use std::{
     cell::RefCell,
     convert::Infallible,

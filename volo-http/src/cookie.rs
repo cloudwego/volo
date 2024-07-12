@@ -1,6 +1,7 @@
 //! Cookie utilities of Volo-HTTP
 //!
 //! [`CookieJar`] currently only supports the server side.
+
 use std::{convert::Infallible, ops::Deref};
 
 pub use cookie::{time::Duration, Cookie};
@@ -16,6 +17,7 @@ pub struct CookieJar {
 }
 
 impl CookieJar {
+    /// Create a [`CookieJar`] from given [`HeaderMap`]
     pub fn from_header(headers: &HeaderMap) -> Self {
         let mut jar = cookie::CookieJar::new();
         for cookie in headers

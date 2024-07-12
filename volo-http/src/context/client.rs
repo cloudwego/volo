@@ -1,3 +1,5 @@
+//! Context and its utilities of client
+
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
@@ -8,10 +10,12 @@ use volo::{
 
 use crate::utils::macros::{impl_deref_and_deref_mut, stat_impl};
 
+/// RPC context of http client
 #[derive(Debug)]
 pub struct ClientContext(pub(crate) RpcCx<ClientCxInner, Config>);
 
 impl ClientContext {
+    /// Create a new [`ClientContext`]
     pub fn new() -> Self {
         Self(RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Client),
@@ -32,12 +36,17 @@ newtype_impl_context!(ClientContext, Config, 0);
 
 impl_deref_and_deref_mut!(ClientContext, RpcCx<ClientCxInner, Config>, 0);
 
+/// Inner details of [`ClientContext`]
 #[derive(Debug)]
 pub struct ClientCxInner {
+    /// Statistics of client
+    ///
     /// This is unstable now and may be changed in the future.
     pub stats: ClientStats,
 }
 
+/// Statistics of client
+///
 /// This is unstable now and may be changed in the future.
 #[derive(Debug, Default, Clone)]
 pub struct ClientStats {
@@ -50,8 +59,10 @@ impl ClientStats {
     stat_impl!(transport_end_at);
 }
 
+/// Configuration of the request
 #[derive(Clone, Debug, Default)]
 pub struct Config {
+    /// Timeout of the whole request
     pub timeout: Option<Duration>,
 }
 

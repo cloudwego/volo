@@ -8,8 +8,6 @@
 //! a router for routing method (GET, POST, ...) to [`Route`]s. [`Route`] is a handler or service
 //! for handling the request.
 
-#![deny(missing_docs)]
-
 use std::{
     collections::HashMap, convert::Infallible, error::Error, fmt, future::Future,
     marker::PhantomData, str::FromStr,

@@ -19,8 +19,6 @@
 //! The `"."` means `ServeDir` will serve the CWD (current working directory) and then you can
 //! access any file in the directory.
 
-#![deny(missing_docs)]
-
 use std::{
     fs,
     marker::PhantomData,

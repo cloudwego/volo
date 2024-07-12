@@ -1,18 +1,28 @@
+//! Traits and types for extracting data from [`ServerContext`] and [`ServerRequest`]
+//!
+//! See [`FromContext`] and [`FromRequest`] for more details.
 use std::{convert::Infallible, marker::PhantomData};
 
 use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::Future;
-use http::{header, request::Parts, Method, Request, Uri};
+use http::{
+    header::{self, HeaderMap, HeaderName},
+    method::Method,
+    request::Parts,
+    uri::Uri,
+};
 use http_body::Body;
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
+use mime::Mime;
 use volo::{context::Context, net::Address};
 
 use super::IntoResponse;
 use crate::{
     context::ServerContext,
     error::server::{body_collection_error, ExtractBodyError},
+    request::ServerRequest,
 };
 
 mod private {
@@ -23,18 +33,44 @@ mod private {
     pub enum ViaRequest {}
 }
 
+/// Extract a type from context ([`ServerContext`] and [`Parts`])
+///
+/// This trait is used for handlers, which can extract something from [`ServerContext`] and
+/// [`ServerRequest`].
+///
+/// [`FromContext`] only borrows [`ServerContext`] and [`Parts`]. If your extractor needs to
+/// consume [`Parts`] or the whole [`ServerRequest`], please use [`FromRequest`] instead.
 pub trait FromContext: Sized {
+    /// If the extractor fails, it will return this `Rejection` type.
+    ///
+    /// The `Rejection` should implement [`IntoResponse`]. If extractor fails in handler, the
+    /// rejection will be converted into a [`ServerResponse`](crate::response::ServerResponse) and
+    /// returned.
     type Rejection: IntoResponse;
 
+    /// Extract the type from context.
     fn from_context(
         cx: &mut ServerContext,
         parts: &mut Parts,
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
+/// Extract a type from [`ServerRequest`] with its [`ServerContext`]
+///
+/// This trait is used for handlers, which can extract something from [`ServerContext`] and
+/// [`ServerRequest`].
+///
+/// [`FromRequest`] will consume [`ServerRequest`], so it can only be used once in a handler. If
+/// your extractor does not need to consume [`ServerRequest`], please use [`FromContext`] instead.
 pub trait FromRequest<B = Incoming, M = private::ViaRequest>: Sized {
+    /// If the extractor fails, it will return this `Rejection` type.
+    ///
+    /// The `Rejection` should implement [`IntoResponse`]. If extractor fails in handler, the
+    /// rejection will be converted into a [`ServerResponse`](crate::response::ServerResponse) and
+    /// returned.
     type Rejection: IntoResponse;
 
+    /// Extract the type from request.
     fn from_request(
         cx: &mut ServerContext,
         parts: Parts,
@@ -42,16 +78,31 @@ pub trait FromRequest<B = Incoming, M = private::ViaRequest>: Sized {
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
+/// Extract a type from query in uri.
+///
+/// Note that the type must implement [`Deserialize`](serde::Deserialize).
+#[cfg(feature = "query")]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Query<T>(pub T);
 
+/// Extract a type from a urlencoded body.
+///
+/// Note that the type must implement [`Deserialize`](serde::Deserialize).
+#[cfg(feature = "form")]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Form<T>(pub T);
 
+/// Extract a [`String`] or [`FastStr`] without checking.
+///
+/// This type can extract a [`String`] or [`FastStr`] like [`String::from_utf8_unchecked`] or
+/// [`FastStr::from_vec_u8_unchecked`]. Note that extracting them is unsafe and users should assume
+/// that the value is valid.
 #[derive(Debug, Default, Clone)]
 pub struct MaybeInvalid<T>(Vec<u8>, PhantomData<T>);
 
 impl MaybeInvalid<String> {
+    /// Assume the [`String`] is valid and extract it without checking.
+    ///
     /// # Safety
     ///
     /// It is up to the caller to guarantee that the value really is valid. Using this when the
@@ -62,6 +113,8 @@ impl MaybeInvalid<String> {
 }
 
 impl MaybeInvalid<FastStr> {
+    /// Assume the [`FastStr`] is valid and extract it without checking.
+    ///
     /// # Safety
     ///
     /// It is up to the caller to guarantee that the value really is valid. Using this when the
@@ -208,7 +261,7 @@ where
     }
 }
 
-impl<B> FromRequest<B> for Request<B>
+impl<B> FromRequest<B> for ServerRequest<B>
 where
     B: Send,
 {
@@ -219,7 +272,7 @@ where
         parts: Parts,
         body: B,
     ) -> Result<Self, Self::Rejection> {
-        Ok(Request::from_parts(parts, body))
+        Ok(ServerRequest::from_parts(parts, body))
     }
 }
 
@@ -259,17 +312,16 @@ where
             .map_err(|_| body_collection_error())?
             .to_bytes();
 
-        if let Some(Ok(Ok(cap))) = parts
-            .headers
-            .get(header::CONTENT_LENGTH)
-            .map(|v| v.to_str().map(|c| c.parse::<usize>()))
-        {
-            if bytes.len() != cap {
-                tracing::warn!(
-                    "[Volo-HTTP] The length of body ({}) does not match the Content-Length ({})",
-                    bytes.len(),
-                    cap
-                );
+        if let Some(cap) = get_header_value(&parts.headers, header::CONTENT_LENGTH) {
+            if let Ok(cap) = cap.parse::<usize>() {
+                if bytes.len() != cap {
+                    tracing::warn!(
+                        "[Volo-HTTP] The length of body ({}) does not match the Content-Length \
+                         ({})",
+                        bytes.len(),
+                        cap,
+                    );
+                }
             }
         }
 
@@ -357,12 +409,28 @@ where
         parts: Parts,
         body: B,
     ) -> Result<Self, Self::Rejection> {
+        if !content_type_eq(&parts.headers, mime::APPLICATION_WWW_FORM_URLENCODED) {
+            return Err(crate::error::server::invalid_content_type());
+        }
+
         let bytes = Bytes::from_request(cx, parts, body).await?;
         let form =
             serde_urlencoded::from_bytes::<T>(bytes.as_ref()).map_err(ExtractBodyError::Form)?;
 
         Ok(Form(form))
     }
+}
+
+fn get_header_value(map: &HeaderMap, key: HeaderName) -> Option<&str> {
+    map.get(key)?.to_str().ok()
+}
+
+#[allow(unused)]
+fn content_type_eq(map: &HeaderMap, val: Mime) -> bool {
+    let Some(ty) = get_header_value(map, header::CONTENT_TYPE) else {
+        return false;
+    };
+    ty == val.essence_str()
 }
 
 #[cfg(test)]

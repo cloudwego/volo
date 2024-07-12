@@ -1,4 +1,6 @@
-#![deny(missing_docs)]
+//! Request builder for building a request and sending to server
+//!
+//! See [`RequestBuilder`] for more details.
 
 use std::{error::Error, time::Duration};
 
@@ -54,7 +56,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
         Ok(self)
     }
 
-    /// Set the request body as json from object with `Serialize`.
+    /// Set the request body as json from object with [`Serialize`](serde::Serialize).
     #[cfg(feature = "json")]
     pub fn json<T>(mut self, json: &T) -> Result<Self>
     where
@@ -76,7 +78,7 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
         Ok(self)
     }
 
-    /// Set the request body as form from object with `Serialize`.
+    /// Set the request body as form from object with [`Serialize`](serde::Serialize).
     #[cfg(feature = "form")]
     pub fn form<T>(mut self, form: &T) -> Result<Self>
     where
@@ -108,7 +110,7 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         self
     }
 
-    /// Get the reference of method in the request.
+    /// Get a reference to method in the request.
     pub fn method_ref(&self) -> &Method {
         self.request.method()
     }
@@ -170,7 +172,7 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         self
     }
 
-    /// Set query for the uri in request from object with `Serialize`.
+    /// Set query for the uri in request from object with [`Serialize`](serde::Serialize).
     #[cfg(feature = "query")]
     pub fn set_query<T>(mut self, query: &T) -> Result<Self>
     where
@@ -186,23 +188,23 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         Ok(self)
     }
 
-    /// Get the reference of uri in the request.
+    /// Get a reference to uri in the request.
     pub fn uri_ref(&self) -> &Uri {
         self.request.uri()
     }
 
-    /// Set the version of the HTTP request.
+    /// Set version of the HTTP request.
     pub fn version(mut self, version: Version) -> Self {
         *self.request.version_mut() = version;
         self
     }
 
-    /// Get the reference of version in the request.
+    /// Get a reference to version in the request.
     pub fn version_ref(&self) -> Version {
         self.request.version()
     }
 
-    /// Insert a header into the request.
+    /// Insert a header into the request header map.
     pub fn header<K, V>(mut self, key: K, value: V) -> Result<Self>
     where
         K: TryInto<HeaderName>,
@@ -217,17 +219,17 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         Ok(self)
     }
 
-    /// Get the reference of headers in the request.
+    /// Get a reference to headers in the request.
     pub fn headers(&self) -> &HeaderMap {
         self.request.headers()
     }
 
-    /// Get the mutable reference of headers in the request.
+    /// Get a mutable reference to headers in the request.
     pub fn headers_mut(&mut self) -> &mut HeaderMap {
         self.request.headers_mut()
     }
 
-    /// Set the target address for the request.
+    /// Set target address for the request.
     pub fn address<A>(mut self, address: A) -> Self
     where
         A: Into<Address>,
@@ -236,7 +238,7 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         self
     }
 
-    /// Set the target host for the request.
+    /// Set target host for the request.
     ///
     /// It uses http with port 80 by default.
     ///
@@ -263,27 +265,27 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         self
     }
 
-    /// Get a reference of [`Target`].
+    /// Get a reference to [`Target`].
     pub fn target_ref(&self) -> &Target {
         &self.target
     }
 
-    /// Get a mutable reference of [`Target`].
+    /// Get a mutable reference to [`Target`].
     pub fn target_mut(&mut self) -> &mut Target {
         &mut self.target
     }
 
-    /// Get a reference of [`CallOpt`].
+    /// Get a reference to [`CallOpt`].
     pub fn callopt_ref(&self) -> &CallOpt {
         &self.call_opt
     }
 
-    /// Get a mutable reference of [`CallOpt`].
+    /// Get a mutable reference to [`CallOpt`].
     pub fn callopt_mut(&mut self) -> &mut CallOpt {
         &mut self.call_opt
     }
 
-    /// Set the request body.
+    /// Set a request body.
     pub fn body<B2>(self, body: B2) -> RequestBuilder<'a, S, B2> {
         let (parts, _) = self.request.into_parts();
         let request = Request::from_parts(parts, body);
@@ -297,12 +299,12 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         }
     }
 
-    /// Get the reference of body in the request.
+    /// Get a reference to body in the request.
     pub fn body_ref(&self) -> &B {
         self.request.body()
     }
 
-    /// Set the maximin idle time for the request.
+    /// Set maximin idle time for the request.
     ///
     /// The whole request includes connecting, writting, and reading the whole HTTP protocol
     /// headers (without reading response body).

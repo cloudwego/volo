@@ -1,6 +1,7 @@
 //! Client implementation
 //!
 //! See [`Client`] for more details.
+
 use std::{cell::RefCell, error::Error, sync::Arc, time::Duration};
 
 use faststr::FastStr;

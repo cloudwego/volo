@@ -1,3 +1,4 @@
+//! Server middleware utilities
 use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 
 use hyper::body::Incoming;
@@ -10,6 +11,9 @@ use super::{
 };
 use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
 
+/// A [`Layer`] from an async function
+///
+/// This layer is created with [`from_fn`], see that function for more details.
 pub struct FromFnLayer<F, T, B, B2, E2> {
     f: F,
     #[allow(clippy::type_complexity)]
@@ -28,6 +32,141 @@ where
     }
 }
 
+/// Create a middleware from an async function
+///
+/// The function must have the three params `&mut ServerContext`, `ServerRequest` and [`Next`],
+/// and the three params must be at the end of function.
+///
+/// There can also be some other types that implement
+/// [`FromContext`](crate::server::extract::FromContext) before the above three params.
+///
+/// # Examples
+///
+/// Without any extra params:
+///
+/// ```
+/// use volo_http::{
+///     context::ServerContext,
+///     request::ServerRequest,
+///     response::ServerResponse,
+///     server::{
+///         middleware::{from_fn, Next},
+///         response::IntoResponse,
+///         route::{get, Router},
+///     },
+/// };
+///
+/// /// Caculate cost of inner services and print it
+/// async fn tracer(cx: &mut ServerContext, req: ServerRequest, next: Next) -> ServerResponse {
+///     let start = std::time::Instant::now();
+///     let resp = next.run(cx, req).await.into_response();
+///     let elapsed = start.elapsed();
+///     println!("request cost: {elapsed:?}");
+///     resp
+/// }
+///
+/// async fn handler() -> &'static str {
+///     "Hello, World"
+/// }
+///
+/// let router: Router = Router::new()
+///     .route("/", get(handler))
+///     .layer(from_fn(tracer));
+/// ```
+///
+/// With params that implement `FromContext`:
+///
+/// ```
+/// use http::{status::StatusCode, uri::Uri};
+/// use volo::context::Context;
+/// use volo_http::{
+///     context::ServerContext,
+///     cookie::CookieJar,
+///     request::ServerRequest,
+///     response::ServerResponse,
+///     server::{
+///         middleware::{from_fn, Next},
+///         response::IntoResponse,
+///         route::{get, Router},
+///     },
+/// };
+///
+/// struct Session;
+///
+/// fn check_session(session: &str) -> Option<Session> {
+///     unimplemented!()
+/// }
+///
+/// async fn cookies_check(
+///     uri: Uri,
+///     cookies: CookieJar,
+///     cx: &mut ServerContext,
+///     req: ServerRequest,
+///     next: Next,
+/// ) -> Result<ServerResponse, StatusCode> {
+///     let session = cookies.get("session");
+///     // User is not logged in, and not try to login.
+///     if uri.path() != "/api/v1/login" && session.is_none() {
+///         return Err(StatusCode::FORBIDDEN);
+///     }
+///     let session = session.unwrap().value().to_string();
+///     let Some(session) = check_session(&session) else {
+///         return Err(StatusCode::FORBIDDEN);
+///     };
+///     cx.extensions_mut().insert(session);
+///     Ok(next.run(cx, req).await.into_response())
+/// }
+///
+/// async fn handler() -> &'static str {
+///     "Hello, World"
+/// }
+///
+/// let router: Router = Router::new()
+///     .route("/", get(handler))
+///     .layer(from_fn(cookies_check));
+/// ```
+///
+/// There are some advanced uses of this function, for example, we can convert types of request and
+/// error, for example:
+///
+/// ```
+/// use std::convert::Infallible;
+///
+/// use motore::service::service_fn;
+/// use volo_http::{
+///     body::BodyConversion,
+///     context::ServerContext,
+///     request::ServerRequest,
+///     response::ServerResponse,
+///     server::{
+///         middleware::{from_fn, Next},
+///         response::IntoResponse,
+///         route::{get, get_service, Router},
+///     },
+/// };
+///
+/// async fn converter(
+///     cx: &mut ServerContext,
+///     req: ServerRequest,
+///     next: Next<String>,
+/// ) -> ServerResponse {
+///     let (parts, body) = req.into_parts();
+///     let s = body.into_string().await.unwrap();
+///     let req = ServerRequest::from_parts(parts, s);
+///     next.run(cx, req).await.into_response()
+/// }
+///
+/// async fn service(
+///     cx: &mut ServerContext,
+///     req: ServerRequest<String>,
+/// ) -> Result<ServerResponse, Infallible> {
+///     unimplemented!()
+/// }
+///
+/// let router: Router = Router::new()
+///     .route("/", get_service(service_fn(service)))
+///     .layer(from_fn(converter));
+/// ```
 pub fn from_fn<F, T, B, B2, E2>(f: F) -> FromFnLayer<F, T, B, B2, E2> {
     FromFnLayer {
         f,
@@ -53,6 +192,7 @@ where
     }
 }
 
+/// [`Service`] implementation from [`FromFnLayer`]
 pub struct FromFn<S, F, T, B, B2, E2> {
     service: S,
     f: F,
@@ -99,11 +239,18 @@ where
     }
 }
 
+/// Wrapper for inner [`Service`]
+///
+/// Call [`Next::run`] with context and request for calling the inner [`Service`] and get the
+/// response.
+///
+/// See [`from_fn`] for more details.
 pub struct Next<B = Incoming, E = Infallible> {
     service: Route<B, E>,
 }
 
 impl<B, E> Next<B, E> {
+    /// Call the inner [`Service`]
     pub async fn run(
         self,
         cx: &mut ServerContext,
@@ -113,6 +260,9 @@ impl<B, E> Next<B, E> {
     }
 }
 
+/// A [`Layer`] for mapping a response
+///
+/// This layer is created with [`map_response`], see that function for more details.
 pub struct MapResponseLayer<F, T, R1, R2> {
     f: F,
     _marker: PhantomData<fn(T, R1, R2)>,
@@ -130,6 +280,38 @@ where
     }
 }
 
+/// Create a middleware for mapping a response from an async function
+///
+/// The async function can be:
+///
+/// - `async fn func(resp: ServerResponse) -> impl IntoResponse`
+/// - `async fn func(cx: &mut ServerContext, resp: ServerResponse) -> impl IntoResponse`
+///
+/// # Examples
+///
+/// Append some headers:
+///
+/// ```
+/// use volo_http::{
+///     response::ServerResponse,
+///     server::{
+///         middleware::map_response,
+///         route::{get, Router},
+///     },
+/// };
+///
+/// async fn handler() -> &'static str {
+///     "Hello, World"
+/// }
+///
+/// async fn append_header(resp: ServerResponse) -> ((&'static str, &'static str), ServerResponse) {
+///     (("Server", "nginx"), resp)
+/// }
+///
+/// let router: Router = Router::new()
+///     .route("/", get(handler))
+///     .layer(map_response(append_header));
+/// ```
 pub fn map_response<F, T, R1, R2>(f: F) -> MapResponseLayer<F, T, R1, R2> {
     MapResponseLayer {
         f,
@@ -149,6 +331,7 @@ impl<S, F, T, R1, R2> Layer<S> for MapResponseLayer<F, T, R1, R2> {
     }
 }
 
+/// [`Service`] implementation from [`MapResponseLayer`]
 pub struct MapResponse<S, F, T, R1, R2> {
     service: S,
     f: F,

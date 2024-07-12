@@ -1,3 +1,9 @@
+//! Collections for some panic handlers
+//!
+//! [`volo::catch_panic::Layer`] can handle panics in services and when panic occurs, it can
+//! respond a [`ServerResponse`]. This module has some useful handlers for handling panics and
+//! returning a response.
+
 use std::any::Any;
 
 use http::StatusCode;
