@@ -1,3 +1,5 @@
+//! Service discover utilities
+
 use std::{net::SocketAddr, ops::Deref, sync::Arc};
 
 use async_broadcast::Receiver;
@@ -13,12 +15,13 @@ use volo::{
     net::Address,
 };
 
-use super::{Target, TargetInner};
+use super::{target::RemoteTargetAddress, Target};
 #[cfg(feature = "__tls")]
-use crate::{client::transport::TlsTransport, utils::consts::HTTPS_DEFAULT_PORT};
+use crate::client::transport::TlsTransport;
 use crate::{
+    client::callopt::CallOpt,
     error::client::{bad_host_name, no_address},
-    utils::consts::HTTP_DEFAULT_PORT,
+    utils::consts,
 };
 
 /// The port for `DnsResolver`, and only used for `DnsResolver`.
@@ -97,12 +100,12 @@ impl Discover for DnsResolver {
             None => {
                 #[cfg(feature = "__tls")]
                 if endpoint.contains::<TlsTransport>() {
-                    HTTPS_DEFAULT_PORT
+                    consts::HTTPS_DEFAULT_PORT
                 } else {
-                    HTTP_DEFAULT_PORT
+                    consts::HTTP_DEFAULT_PORT
                 }
                 #[cfg(not(feature = "__tls"))]
-                HTTP_DEFAULT_PORT
+                consts::HTTP_DEFAULT_PORT
             }
         };
 
@@ -127,24 +130,31 @@ impl Discover for DnsResolver {
     }
 }
 
-pub fn parse_target(target: &Target, endpoint: &mut Endpoint) {
-    match target.inner() {
-        TargetInner::None => {
-            // `cargo-clippy` will warn on the `return` when `__tls` is disabled, just ignore it.
-            #[allow(clippy::needless_return)]
-            return;
-        }
-        TargetInner::Address(addr) => {
-            endpoint.set_address(addr.clone());
-        }
-        TargetInner::Host { host, port } => {
-            endpoint.insert(Port(*port));
-            endpoint.set_service_name(host.clone());
-        }
-    }
+pub fn parse_target(target: Target, _: &CallOpt, endpoint: &mut Endpoint) {
+    match target {
+        Target::None => (),
+        Target::Remote(rt) => {
+            let port = rt.port();
 
-    #[cfg(feature = "__tls")]
-    if target.is_https() {
-        endpoint.insert(TlsTransport);
+            #[cfg(feature = "__tls")]
+            if rt.is_https() {
+                endpoint.insert(TlsTransport);
+            }
+
+            match rt.addr {
+                RemoteTargetAddress::Ip(ip) => {
+                    let sa = SocketAddr::new(ip, port);
+                    endpoint.set_address(Address::Ip(sa));
+                }
+                RemoteTargetAddress::Name(host) => {
+                    endpoint.insert(Port(port));
+                    endpoint.set_service_name(host);
+                }
+            }
+        }
+        #[cfg(target_family = "unix")]
+        Target::Local(unix_socket) => {
+            endpoint.set_address(Address::Unix(unix_socket.clone()));
+        }
     }
 }

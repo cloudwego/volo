@@ -29,9 +29,11 @@ use volo::{
 #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 pub use self::transport::TlsTransport;
 use self::{
-    discover::{dns::parse_target, TargetParser},
+    callopt::CallOpt,
+    dns::parse_target,
     loadbalance::{DefaultLB, DefaultLBService, LbConfig},
     meta::{MetaService, MetaServiceConfig},
+    target::TargetParser,
     transport::{ClientConfig, ClientTransport, ClientTransportConfig},
 };
 use crate::{
@@ -44,13 +46,15 @@ use crate::{
     response::ClientResponse,
 };
 
-pub mod discover;
+pub mod callopt;
+pub mod dns;
 pub mod loadbalance;
 mod meta;
 mod request_builder;
+pub mod target;
 mod transport;
 
-pub use self::{discover::Target, request_builder::RequestBuilder};
+pub use self::{request_builder::RequestBuilder, target::Target};
 
 #[doc(hidden)]
 pub mod prelude {
@@ -72,6 +76,7 @@ pub struct ClientBuilder<IL, OL, C, LB> {
     callee_name: FastStr,
     caller_name: FastStr,
     target: Target,
+    call_opt: CallOpt,
     target_parser: TargetParser,
     headers: HeaderMap,
     inner_layer: IL,
@@ -112,6 +117,7 @@ impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
             callee_name: FastStr::empty(),
             caller_name: FastStr::empty(),
             target: Default::default(),
+            call_opt: Default::default(),
             target_parser: parse_target,
             headers: Default::default(),
             inner_layer: Identity::new(),
@@ -143,6 +149,7 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
+            call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
             inner_layer: self.inner_layer,
@@ -163,6 +170,7 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
+            call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
             inner_layer: self.inner_layer,
@@ -186,6 +194,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
+            call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
             inner_layer: self.inner_layer,
@@ -218,6 +227,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
+            call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
             inner_layer: Stack::new(layer, self.inner_layer),
@@ -253,6 +263,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
+            call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
             inner_layer: Stack::new(self.inner_layer, layer),
@@ -285,6 +296,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
+            call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
             inner_layer: self.inner_layer,
@@ -320,6 +332,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
+            call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
             inner_layer: self.inner_layer,
@@ -340,6 +353,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             callee_name: self.callee_name,
             caller_name: self.caller_name,
             target: self.target,
+            call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
             inner_layer: self.inner_layer,
@@ -382,15 +396,11 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Set the target address of the client.
     ///
     /// If there is no target specified when building a request, client will use this address.
-    pub fn address<A>(&mut self, address: A, #[cfg(feature = "__tls")] https: bool) -> &mut Self
+    pub fn address<A>(&mut self, address: A) -> &mut Self
     where
         A: Into<Address>,
     {
-        self.target = Target::from_address(
-            address,
-            #[cfg(feature = "__tls")]
-            https,
-        );
+        self.target = Target::from_address(address);
         self
     }
 
@@ -400,52 +410,39 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// It uses http with port 80 by default.
     ///
-    /// To specify scheme or port, use `scheme_host_and_port` instead.
+    /// For setting scheme and port, use [`Self::with_port`] and [`Self::with_https`] after
+    /// specifying host.
     pub fn host<H>(&mut self, host: H) -> &mut Self
     where
         H: AsRef<str>,
     {
-        self.target = Target::from_host(
-            host,
-            None,
-            #[cfg(feature = "__tls")]
-            false,
-        );
+        self.target = Target::from_host(host);
         self
     }
 
-    /// Set the target scheme, host and port of the client.
+    /// Set the port of the default target.
     ///
-    /// If there is no target specified when building a request, client will use this address.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic when TLS related features are not enable but the `https` is
-    /// `true`.
-    pub fn scheme_host_and_port<H>(&mut self, https: bool, host: H, port: Option<u16>) -> &mut Self
-    where
-        H: AsRef<str>,
-    {
-        if cfg!(not(feature = "__tls")) && https {
-            panic!("tls is not enabled while target uses https");
-        }
-        self.target = Target::from_host(
-            host,
-            port,
-            #[cfg(feature = "__tls")]
-            https,
-        );
+    /// If there is no target specified, the function will do nothing.
+    pub fn with_port(&mut self, port: u16) -> &mut Self {
+        self.target.set_port(port);
         self
     }
 
-    /// Get a reference of the current target.
-    pub fn target_ref(&self) -> &Target {
-        &self.target
+    /// Set if the default target uses https for transporting.
+    #[cfg(feature = "__tls")]
+    pub fn with_https(&mut self, https: bool) -> &mut Self {
+        self.target.set_https(https);
+        self
     }
 
-    /// Get a mutable reference of the current target.
-    pub fn target_mut(&mut self) -> &mut Target {
-        &mut self.target
+    /// Set a [`CallOpt`] to the client as default options.
+    ///
+    /// The [`CallOpt`] is used for service discover, default is an empty one.
+    ///
+    /// See [`CallOpt`] for more details.
+    pub fn with_callopt(&mut self, call_opt: CallOpt) -> &mut Self {
+        self.call_opt = call_opt;
+        self
     }
 
     /// Set a target parser for parsing `Target` and updating `Endpoint`.
@@ -470,6 +467,26 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             value.try_into().map_err(builder_error)?,
         );
         Ok(self)
+    }
+
+    /// Get a reference of [`Target`].
+    pub fn target_ref(&self) -> &Target {
+        &self.target
+    }
+
+    /// Get a mutable reference of [`Target`].
+    pub fn target_mut(&mut self) -> &mut Target {
+        &mut self.target
+    }
+
+    /// Get a reference of [`CallOpt`].
+    pub fn callopt_ref(&self) -> &CallOpt {
+        &self.call_opt
+    }
+
+    /// Get a mutable reference of [`CallOpt`].
+    pub fn callopt_mut(&mut self) -> &mut CallOpt {
+        &mut self.call_opt
     }
 
     /// Set tls config for the client.
@@ -650,6 +667,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             caller_name,
             callee_name: self.callee_name,
             default_target: self.target,
+            default_call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
         };
@@ -665,6 +683,7 @@ struct ClientInner {
     caller_name: FastStr,
     callee_name: FastStr,
     default_target: Target,
+    default_call_opt: CallOpt,
     target_parser: TargetParser,
     headers: HeaderMap,
 }
@@ -764,7 +783,7 @@ impl<S> Client<S> {
     /// use volo::net::Address;
     /// use volo_http::{
     ///     body::{Body, BodyConversion},
-    ///     client::{discover::Target, Client},
+    ///     client::{Client, Target},
     ///     request::ClientRequest,
     /// };
     ///
@@ -773,7 +792,8 @@ impl<S> Client<S> {
     /// let addr: SocketAddr = "[::]:8080".parse().unwrap();
     /// let resp = client
     ///     .send_request(
-    ///         Target::from_address(addr, false),
+    ///         Target::from_address(addr),
+    ///         Default::default(),
     ///         ClientRequest::builder()
     ///             .method(Method::GET)
     ///             .uri("/")
@@ -792,6 +812,7 @@ impl<S> Client<S> {
     pub async fn send_request<B>(
         &self,
         target: Target,
+        call_opt: CallOpt,
         mut request: ClientRequest<B>,
         timeout: Option<Duration>,
     ) -> Result<S::Response, S::Error>
@@ -805,11 +826,14 @@ impl<S> Client<S> {
         let caller_name = self.inner.caller_name.clone();
         let callee_name = self.inner.callee_name.clone();
 
-        let target = match (target.is_none(), self.inner.default_target.is_none()) {
+        let (target, call_opt) = match (target.is_none(), self.inner.default_target.is_none()) {
             // The target specified by request exists and we can use it directly.
-            (false, _) => &target,
+            (false, _) => (target, &call_opt),
             // Target is not specified by request, we can use the default target.
-            (true, false) => &self.inner.default_target,
+            (true, false) => (
+                self.inner.default_target.clone(),
+                &self.inner.default_call_opt,
+            ),
             // Both target are none, return an error.
             (true, true) => {
                 return Err(no_address());
@@ -828,7 +852,7 @@ impl<S> Client<S> {
         let mut cx = ClientContext::new();
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
         cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
-        (self.inner.target_parser)(target, cx.rpc_info_mut().callee_mut());
+        (self.inner.target_parser)(target, call_opt, cx.rpc_info_mut().callee_mut());
 
         let config = Config { timeout };
         cx.rpc_info_mut().set_config(config);
@@ -898,7 +922,7 @@ mod client_tests {
     use http::{header, StatusCode};
     use serde::Deserialize;
 
-    use super::{discover::dns::DnsResolver, get, Client, DefaultClient};
+    use super::{dns::DnsResolver, get, Client, DefaultClient};
     use crate::{
         body::BodyConversion,
         error::client::status_error,
@@ -981,13 +1005,7 @@ mod client_tests {
             .await
             .unwrap();
         let mut builder = Client::builder();
-        builder
-            .address(
-                addr,
-                #[cfg(feature = "__tls")]
-                false,
-            )
-            .callee_name("httpbin.org");
+        builder.address(addr).callee_name("httpbin.org");
         let client = builder.build();
 
         let resp = client
@@ -1007,7 +1025,7 @@ mod client_tests {
     #[tokio::test]
     async fn client_builder_with_https() {
         let mut builder = Client::builder();
-        builder.scheme_host_and_port(true, "httpbin.org", None);
+        builder.host("httpbin.org").with_https(true);
         let client = builder.build();
 
         let resp = client
@@ -1031,7 +1049,10 @@ mod client_tests {
             .await
             .unwrap();
         let mut builder = Client::builder();
-        builder.address(addr, true).callee_name("httpbin.org");
+        builder
+            .address(addr)
+            .with_https(true)
+            .callee_name("httpbin.org");
         let client = builder.build();
 
         let resp = client
@@ -1050,7 +1071,7 @@ mod client_tests {
     #[tokio::test]
     async fn client_builder_with_port() {
         let mut builder = Client::builder();
-        builder.scheme_host_and_port(false, "httpbin.org", Some(443));
+        builder.host("httpbin.org").with_port(443);
         let client = builder.build();
 
         let resp = client.get("/get").unwrap().send().await.unwrap();

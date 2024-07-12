@@ -10,7 +10,7 @@ use http::{
 use motore::service::Service;
 use volo::net::Address;
 
-use super::{discover::Target, Client};
+use super::{callopt::CallOpt, target::Target, Client};
 use crate::{
     body::Body,
     context::ClientContext,
@@ -26,6 +26,7 @@ use crate::{
 pub struct RequestBuilder<'a, S, B = Body> {
     client: &'a Client<S>,
     target: Target,
+    call_opt: CallOpt,
     request: ClientRequest<B>,
     timeout: Option<Duration>,
 }
@@ -35,7 +36,8 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
         Self {
             client,
             target: Default::default(),
-            request: Request::new(Body::empty()),
+            call_opt: Default::default(),
+            request: Default::default(),
             timeout: None,
         }
     }
@@ -158,6 +160,16 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         Ok(self)
     }
 
+    /// Set a [`CallOpt`] to the request.
+    ///
+    /// The [`CallOpt`] is used for service discover, default is an empty one.
+    ///
+    /// See [`CallOpt`] for more details.
+    pub fn with_callopt(mut self, call_opt: CallOpt) -> Self {
+        self.call_opt = call_opt;
+        self
+    }
+
     /// Set query for the uri in request from object with `Serialize`.
     #[cfg(feature = "query")]
     pub fn set_query<T>(mut self, query: &T) -> Result<Self>
@@ -216,15 +228,11 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
     }
 
     /// Set the target address for the request.
-    pub fn address<A>(mut self, address: A, #[cfg(feature = "__tls")] https: bool) -> Self
+    pub fn address<A>(mut self, address: A) -> Self
     where
         A: Into<Address>,
     {
-        self.target = Target::from_address(
-            address,
-            #[cfg(feature = "__tls")]
-            https,
-        );
+        self.target = Target::from_address(address);
         self
     }
 
@@ -232,40 +240,47 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
     ///
     /// It uses http with port 80 by default.
     ///
-    /// For setting the scheme and port, use `scheme_host_and_port` instead.
+    /// For setting scheme and port, use [`Self::with_port`] and [`Self::with_https`] after
+    /// specifying host.
     pub fn host<H>(mut self, host: H) -> Self
     where
         H: AsRef<str>,
     {
-        self.target = Target::from_host(
-            host,
-            None,
-            #[cfg(feature = "__tls")]
-            false,
-        );
+        self.target = Target::from_host(host);
         self
     }
 
-    /// Set the target scheme, host and port for the request.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic when TLS related features are not enable but the `https` is
-    /// `true`.
-    pub fn scheme_host_and_port<H>(mut self, https: bool, host: H, port: Option<u16>) -> Self
-    where
-        H: AsRef<str>,
-    {
-        if cfg!(not(feature = "__tls")) && https {
-            panic!("tls is not enabled while target uses https");
-        }
-        self.target = Target::from_host(
-            host,
-            port,
-            #[cfg(feature = "__tls")]
-            https,
-        );
+    /// Set port for the target address of this request.
+    pub fn with_port(mut self, port: u16) -> Self {
+        self.target.set_port(port);
         self
+    }
+
+    /// Set if the request uses https.
+    #[cfg(feature = "__tls")]
+    pub fn with_https(mut self, https: bool) -> Self {
+        self.target.set_https(https);
+        self
+    }
+
+    /// Get a reference of [`Target`].
+    pub fn target_ref(&self) -> &Target {
+        &self.target
+    }
+
+    /// Get a mutable reference of [`Target`].
+    pub fn target_mut(&mut self) -> &mut Target {
+        &mut self.target
+    }
+
+    /// Get a reference of [`CallOpt`].
+    pub fn callopt_ref(&self) -> &CallOpt {
+        &self.call_opt
+    }
+
+    /// Get a mutable reference of [`CallOpt`].
+    pub fn callopt_mut(&mut self) -> &mut CallOpt {
+        &mut self.call_opt
     }
 
     /// Set the request body.
@@ -276,6 +291,7 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
         RequestBuilder {
             client: self.client,
             target: self.target,
+            call_opt: self.call_opt,
             request,
             timeout: self.timeout,
         }
@@ -307,7 +323,7 @@ where
     /// Send the request and get the response.
     pub async fn send(self) -> Result<ClientResponse> {
         self.client
-            .send_request(self.target, self.request, self.timeout)
+            .send_request(self.target, self.call_opt, self.request, self.timeout)
             .await
     }
 }

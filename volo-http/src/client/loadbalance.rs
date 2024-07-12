@@ -18,7 +18,7 @@ use volo::{
     loadbalance::{random::WeightedRandomBalance, LoadBalance, MkLbLayer},
 };
 
-use super::discover::dns::DnsResolver;
+use super::dns::DnsResolver;
 use crate::{
     context::ClientContext,
     error::{
