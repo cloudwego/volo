@@ -1,3 +1,4 @@
+//! Response related utilities
 mod into_response;
 mod redirect;
 pub mod sse;

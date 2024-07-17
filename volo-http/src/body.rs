@@ -24,16 +24,13 @@ use serde::de::DeserializeOwned;
 type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + Send + Sync + 'a>>;
 
 /// An implementation for [`http_body::Body`].
-///
-/// The `Body` supports three different body types.
-///
-/// - `Body:Full`: a complete [`Bytes`], with a certain size and content
-/// - `Body::Stream`: a boxed stream with `Item = Result<Frame<Bytes>, BoxError>`
-/// - `Body::Body`: a boxed [`http_body::Body`]
 #[pin_project(project = BodyProj)]
 pub enum Body {
+    /// Complete [`Bytes`], with a certain size and content
     Full(#[pin] Full<Bytes>),
+    /// Boxed stream with `Item = Result<Frame<Bytes>, BoxError>`
     Stream(#[pin] StreamBody<BoxStream<'static, Result<Frame<Bytes>, BoxError>>>),
+    /// Boxed [`http_body::Body`]
     Body(#[pin] BoxBody<Bytes, BoxError>),
 }
 
@@ -228,8 +225,11 @@ where
 /// General error for polling [`http_body::Body`] or converting the [`Bytes`] just polled.
 #[derive(Debug)]
 pub enum BodyConvertError {
+    /// Failed to collect the body
     BodyCollectionError,
+    /// The body is not a valid utf-8 string
     StringUtf8Error,
+    /// Failed to deserialize the json
     #[cfg(feature = "json")]
     JsonDeserializeError(crate::json::Error),
 }

@@ -1,3 +1,9 @@
+//! Collections for path params from uri.
+//!
+//! See [`Router::route`][route] and [`PathParamsVec`], [`PathParamsMap`] or [`PathParams`] for
+//! more details.
+//!
+//! [route]: crate::server::route::Router::route
 use std::{convert::Infallible, error::Error, fmt, ops::Deref, str::FromStr};
 
 use ahash::AHashMap;
@@ -12,11 +18,26 @@ use crate::{
     utils::macros::all_the_tuples,
 };
 
-pub type UrlParamsVec = PathParamsVec;
-pub type UrlParamsMap = PathParamsMap;
-pub type UrlParams<T> = PathParams<T>;
-pub type UrlParamsRejection = PathParamsRejection;
-
+/// Collected params from request uri
+///
+/// # Examples
+///
+/// ```
+/// use volo_http::server::{
+///     param::PathParamsVec,
+///     route::{get, Router},
+/// };
+///
+/// async fn params(params: PathParamsVec) -> String {
+///     params
+///         .into_iter()
+///         .map(|(k, v)| format!("{k}: {v}"))
+///         .collect::<Vec<_>>()
+///         .join("\n")
+/// }
+///
+/// let router: Router = Router::new().route("/user/{uid}/posts/{tid}", get(params));
+/// ```
 #[derive(Clone, Debug, Default)]
 pub struct PathParamsVec {
     inner: Vec<(FastStr, FastStr)>,
@@ -72,6 +93,24 @@ impl FromContext for PathParamsVec {
     }
 }
 
+/// Map for params from request uri
+///
+/// # Examples
+///
+/// ```
+/// use volo_http::server::{
+///     param::PathParamsMap,
+///     route::{get, Router},
+/// };
+///
+/// async fn params(params: PathParamsMap) -> String {
+///     let uid = params.get("uid").unwrap();
+///     let tid = params.get("tid").unwrap();
+///     format!("uid: {uid}, tid: {tid}")
+/// }
+///
+/// let router: Router = Router::new().route("/user/{uid}/posts/{tid}", get(params));
+/// ```
 #[derive(Debug, Default, Clone)]
 pub struct PathParamsMap {
     inner: AHashMap<FastStr, FastStr>,
@@ -152,6 +191,22 @@ impl_from_path_param!(char);
 impl_from_path_param!(String);
 impl_from_path_param!(FastStr);
 
+/// Extractor for params from request uri
+///
+/// # Examples
+///
+/// ```
+/// use volo_http::server::{
+///     param::PathParams,
+///     route::{get, Router},
+/// };
+///
+/// async fn params(PathParams((uid, tid)): PathParams<(usize, usize)>) -> String {
+///     format!("uid: {uid}, tid: {tid}")
+/// }
+///
+/// let router: Router = Router::new().route("/user/{uid}/posts/{tid}", get(params));
+/// ```
 #[derive(Debug, Default, Clone)]
 pub struct PathParams<T>(pub T);
 
@@ -205,9 +260,12 @@ macro_rules! impl_path_params_extractor {
 
 all_the_tuples!(impl_path_params_extractor);
 
+/// [`PathParams`] specified rejections
 #[derive(Debug)]
 pub enum PathParamsRejection {
+    /// The number of params does not match the number of idents in [`PathParams`]
     LengthMismatch,
+    /// Error when parsing a string to the specified type
     ParseError(BoxError),
 }
 

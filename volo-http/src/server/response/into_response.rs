@@ -8,13 +8,16 @@ use http::{
 
 use crate::{body::Body, response::ServerResponse};
 
+/// Try converting an object to a [`HeaderMap`]
 pub trait TryIntoResponseHeaders {
     type Error: Error;
 
     fn try_into_response_headers(self) -> Result<HeaderMap, Self::Error>;
 }
 
+/// Convert an object into a [`ServerResponse`]
 pub trait IntoResponse {
+    /// Consume self and convert it into a [`ServerResponse`]
     fn into_response(self) -> ServerResponse;
 }
 

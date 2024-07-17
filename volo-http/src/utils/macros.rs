@@ -64,11 +64,13 @@ macro_rules! impl_deref_and_deref_mut {
 macro_rules! impl_getter {
     ($name: ident, $type: ty, $($path: tt).+) => {
         paste::paste! {
+            #[doc = "Get a reference to [`" $type "`]"]
             #[inline]
             pub fn $name(&self) -> &$type {
                 &self.$($path).+
             }
 
+            #[doc = "Get a mutable reference to [`" $type "`]"]
             #[inline]
             pub fn [<$name _mut>](&mut self) -> &mut $type {
                 &mut self.$($path).+
@@ -84,20 +86,20 @@ macro_rules! impl_getter {
 macro_rules! stat_impl {
     ($t: ident) => {
         paste::paste! {
-            /// This is unstable now and may be changed in the future.
+            #[doc = "Get the recorded [`DateTime`] of \"" $t "\""]
             #[inline]
             pub fn $t(&self) -> Option<DateTime<Local>> {
                 self.$t
             }
 
-            /// This is unstable now and may be changed in the future.
+            #[doc = "Set a [`DateTime`] of \"" $t "\""]
             #[doc(hidden)]
             #[inline]
             pub fn [<set_$t>](&mut self, t: DateTime<Local>) {
                 self.$t = Some(t)
             }
 
-            /// This is unstable now and may be changed in the future.
+            #[doc = "Record the current [`DateTime`] of \"" $t "\""]
             #[inline]
             pub fn [<record_ $t>](&mut self) {
                 self.$t = Some(Local::now())

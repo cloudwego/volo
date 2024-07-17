@@ -41,6 +41,26 @@ jobs:
         run: |
           cargo fmt -- --check
 
+  docs-check:
+    runs-on: [self-hosted, X64]
+
+    strategy:
+      matrix:
+        rust: [nightly]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          components: rustfmt,clippy
+          toolchain: ${{matrix.rust}}
+      - name: Docs check
+        run: |
+          cargo rustdoc -p volo --all-features -- --deny warnings
+          cargo rustdoc -p volo-build --all-features -- --deny warnings
+          cargo rustdoc -p volo-grpc --all-features -- --deny warnings
+          cargo rustdoc -p volo-http --all-features -- --deny warnings
+          cargo rustdoc -p volo-thrift --all-features -- --deny warnings
+
   test-linux:
     runs-on: [self-hosted, X64]
 

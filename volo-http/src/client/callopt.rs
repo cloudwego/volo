@@ -9,11 +9,13 @@ use metainfo::{FastStrMap, TypeMap};
 ///
 /// It can be set to a [`Client`][Client] or a [`RequestBuilder`][RequestBuilder]. The
 /// [`TargetParser`][TargetParser] will handle [`Target`][Target] and the [`CallOpt`] for
-/// applying information to the [`Endpoint`].
+/// applying information to the [`Endpoint`][Endpoint].
 ///
 /// [Client]: crate::client::Client
 /// [RequestBuilder]: crate::client::RequestBuilder
-/// [`TargetParser`]: crate::client::target::TargetParser
+/// [TargetParser]: crate::client::target::TargetParser
+/// [Target]: crate::client::target::Target
+/// [Endpoint]: volo::context::Endpoint
 #[derive(Debug, Default)]
 pub struct CallOpt {
     /// `tags` is used to store additional information of the endpoint.

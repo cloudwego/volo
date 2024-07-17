@@ -1,3 +1,6 @@
+//! SSE (Server-Sent Events) supports
+//!
+//! See [`Sse`] and [`Event`] for more details.
 use std::{
     future::Future,
     pin::Pin,
@@ -118,6 +121,7 @@ impl Event {
     const ID: &'static str = "id";
     const RETRY: &'static str = "retry";
 
+    /// Create an empty [`Event`]
     pub fn new() -> Self {
         Self::default()
     }

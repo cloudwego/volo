@@ -1,3 +1,5 @@
+//! Utilities at server-side
+
 mod file_response;
 mod serve_dir;
 
