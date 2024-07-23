@@ -16,13 +16,13 @@ use volo::{
 };
 
 lazy_static! {
-    static ref CLIENT: volo_gen::proto_gen::hello::GreeterClient = {
+    static ref CLIENT: volo_gen::proto_gen::helloworld::GreeterClient = {
         let discover = StaticDiscover::from(vec![
             "127.0.0.1:8080".parse().unwrap(),
             "127.0.0.2:8081".parse().unwrap(),
         ]);
         let lb = ConsistentHashBalance::new(ConsistentHashOption::default());
-        volo_gen::proto_gen::hello::GreeterClientBuilder::new("hello")
+        volo_gen::proto_gen::helloworld::GreeterClientBuilder::new("hello")
             .load_balance(lb)
             .discover(discover)
             .build()
@@ -55,7 +55,7 @@ async fn main() {
     METAINFO
         .scope(RefCell::new(mi), async move {
             for _ in 0..3 {
-                let req = volo_gen::proto_gen::hello::HelloRequest {
+                let req = volo_gen::proto_gen::helloworld::HelloRequest {
                     name: FastStr::from_static_str("Volo"),
                 };
                 set_request_hash(ip_to_u64(&get_local_ip().unwrap()));
@@ -66,7 +66,7 @@ async fn main() {
                 }
             }
             for _ in 0..3 {
-                let req = volo_gen::proto_gen::hello::HelloRequest {
+                let req = volo_gen::proto_gen::helloworld::HelloRequest {
                     name: FastStr::from_static_str("Volo"),
                 };
                 set_request_hash(1000);

@@ -4,13 +4,12 @@ use std::{
 };
 
 use http_body::Body as HttpBody;
-use hyper::body::Incoming;
 use motore::{BoxCloneService, Service};
 use rustc_hash::FxHashMap;
 use volo::Unwrap;
 
 use super::NamedService;
-use crate::{body::Body, context::ServerContext, Request, Response, Status};
+use crate::{body::BoxBody, context::ServerContext, Request, Response, Status};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct RouteId(u32);
@@ -28,8 +27,9 @@ impl RouteId {
 }
 
 #[derive(Default)]
-pub struct Router<B = Incoming> {
-    routes: FxHashMap<RouteId, BoxCloneService<ServerContext, Request<B>, Response<Body>, Status>>,
+pub struct Router<B = BoxBody> {
+    routes:
+        FxHashMap<RouteId, BoxCloneService<ServerContext, Request<B>, Response<BoxBody>, Status>>,
     node: matchit::Router<RouteId>,
 }
 
@@ -55,7 +55,7 @@ where
 
     pub fn add_service<S>(mut self, service: S) -> Self
     where
-        S: Service<ServerContext, Request<B>, Response = Response<Body>, Error = Status>
+        S: Service<ServerContext, Request<B>, Response = Response<BoxBody>, Error = Status>
             + NamedService
             + Clone
             + Send
@@ -91,7 +91,7 @@ impl<B> Service<ServerContext, Request<B>> for Router<B>
 where
     B: HttpBody + Send,
 {
-    type Response = Response<Body>;
+    type Response = Response<BoxBody>;
     type Error = Status;
 
     async fn call<'s, 'cx>(

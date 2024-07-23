@@ -53,7 +53,7 @@ patch_cargo_toml() {
 }
 
 thrift_test() {
-	local idl_path="$VOLO_DIR/examples/thrift_idl/echo.thrift"
+	local idl_path="$VOLO_DIR/examples/thrift/echo.thrift"
 
 	enter_tmp_dir
 

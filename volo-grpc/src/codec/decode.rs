@@ -10,12 +10,12 @@ use futures::{future, Stream};
 use futures_util::ready;
 use http::StatusCode;
 use http_body::Body;
-use hyper::body::Incoming;
 use pilota::prost::Message;
 use tracing::{debug, trace};
 
 use super::{DefaultDecoder, BUFFER_SIZE, PREFIX_LEN};
 use crate::{
+    body::BoxBody,
     codec::{
         compression::{decompress, CompressionEncoding},
         Decoder,
@@ -29,7 +29,7 @@ use crate::{
 ///
 /// Provides an interface for receiving messages and trailers.
 pub struct RecvStream<T> {
-    body: Incoming,
+    body: BoxBody,
     decoder: DefaultDecoder<T>,
     trailers: Option<MetadataMap>,
     buf: BytesMut,
@@ -56,7 +56,7 @@ pub enum Kind {
 
 impl<T> RecvStream<T> {
     pub fn new(
-        body: Incoming,
+        body: BoxBody,
         kind: Kind,
         compression_encoding: Option<CompressionEncoding>,
     ) -> Self {

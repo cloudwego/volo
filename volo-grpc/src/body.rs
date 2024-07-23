@@ -7,9 +7,29 @@ use std::{
 use bytes::Bytes;
 use futures::{ready, TryStreamExt};
 use http_body::{Body as HttpBody, Frame};
+use http_body_util::BodyExt;
 use pin_project::pin_project;
 
 use crate::{BoxStream, Code, Status};
+
+/// A type erased HTTP body used for tonic services.
+pub type BoxBody = http_body_util::combinators::UnsyncBoxBody<Bytes, Status>;
+
+/// Convert a [`http_body::Body`] into a [`BoxBody`].
+pub fn boxed<B>(body: B) -> BoxBody
+where
+    B: http_body::Body<Data = Bytes> + Send + 'static,
+    B::Error: Into<crate::BoxError>,
+{
+    body.map_err(Status::map_error).boxed_unsync()
+}
+
+/// Create an empty `BoxBody`
+pub fn empty_body() -> BoxBody {
+    http_body_util::Empty::new()
+        .map_err(|err| match err {})
+        .boxed_unsync()
+}
 
 /// Similar to [`hyper::body::Incoming`], used when sending bodies to client.
 ///
