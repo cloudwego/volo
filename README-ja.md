@@ -13,7 +13,7 @@
 [actions-badge]: https://github.com/cloudwego/volo/actions/workflows/ci.yaml/badge.svg
 [actions-url]: https://github.com/cloudwego/volo/actions
 
-English | [中文](README-zh_cn.md) | [日本語](README-ja.md)
+[English](README.md) | [中文](README-zh_cn.md) | 日本語
 
 Voloは、開発者がマイクロサービスを構築するのを支援する**高性能**で**強力な拡張性**を持つRust RPCフレームワークです。
 
