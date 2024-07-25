@@ -9,7 +9,7 @@
 [actions-badge]: https://github.com/cloudwego/volo/actions/workflows/ci.yaml/badge.svg
 [actions-url]: https://github.com/cloudwego/volo/actions
 
-[English](README.md) | 中文
+[English](README.md) | 中文 | [日本語](README-ja.md)
 
 Volo 是字节跳动服务框架团队研发的 **高性能**、**可扩展性强** 的 Rust RPC 框架，使用了 Rust 最新的 AFIT 和 RPITIT 特性。
 
