@@ -349,6 +349,8 @@ impl VoloThriftBackend {
 }
 
 impl pilota_build::CodegenBackend for VoloThriftBackend {
+    const PROTOCOL: &'static str = "thrift";
+
     fn codegen_struct_impl(&self, def_id: DefId, stream: &mut String, s: &rir::Message) {
         self.inner.codegen_struct_impl(def_id, stream, s)
     }
