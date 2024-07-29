@@ -21,6 +21,15 @@ impl Builder<crate::thrift_backend::MkThriftBackend, crate::parser::ThriftParser
     }
 }
 
+impl Builder<crate::grpc_backend::MkGrpcBackend, crate::parser::ProtobufParser> {
+    pub fn protobuf() -> Self {
+        Self {
+            pilota_builder: pilota_build::Builder::protobuf()
+                .with_backend(crate::grpc_backend::MkGrpcBackend),
+        }
+    }
+}
+
 impl WorkspaceConfig {
     pub fn update_repos(&mut self) -> anyhow::Result<()> {
         self.repos
@@ -62,13 +71,7 @@ where
             std::process::exit(1);
         };
 
-        // To resolve absolute path dependencies, go back two levels to the domain level
-        let mut include_dirs = Vec::with_capacity(repo_dir_map.len());
-        repo_dir_map.iter().for_each(|(_, v)| {
-            if let Some(path) = v.parent().and_then(|v| v.parent()) {
-                include_dirs.push(path.to_path_buf());
-            }
-        });
+        let mut includes: Vec<PathBuf> = Vec::new();
 
         let services = config
             .services
@@ -80,11 +83,18 @@ where
                         .get(repo)
                         .expect("git source requires the repo info for idl")
                         .clone();
+                    let path = dir.join(strip_slash_prefix(s.idl.path.as_path()));
+                    includes.extend(s.idl.includes.iter().map(|v| dir.join(v.clone())));
+                    // To resolve absolute path dependencies, go back two levels to the domain level
+                    if let Some(path) = dir.parent().and_then(|d| d.parent()) {
+                        includes.push(path.to_path_buf());
+                    }
                     IdlService {
-                        path: dir.join(strip_slash_prefix(s.idl.path.as_path())),
+                        path,
                         config: s.codegen_option.config,
                     }
                 } else {
+                    includes.extend(s.idl.includes.iter().cloned());
                     IdlService {
                         path: s.idl.path.clone(),
                         config: s.codegen_option.config,
@@ -93,7 +103,7 @@ where
             })
             .collect();
 
-        self.include_dirs(include_dirs)
+        self.include_dirs(includes)
             .ignore_unused(!config.common_option.touch_all)
             .dedup(config.common_option.dedups)
             .special_namings(config.common_option.special_namings)

@@ -110,7 +110,8 @@ impl VoloGrpcBackend {
 
         if streaming {
             format!(
-                "::std::result::Result<::volo_grpc::Response<impl ::futures::Stream<Item = \
+                "::std::result::Result<::volo_grpc::Response<impl \
+                 ::volo_grpc::codegen::futures::Stream<Item = \
                  ::std::result::Result<{ret_ty},::volo_grpc::Status>>>, ::volo_grpc::Status>"
             )
             .into()
@@ -128,7 +129,7 @@ impl VoloGrpcBackend {
                 .into()
         } else {
             "requests.into_request().map(|m| \
-             ::futures::stream::once(::futures::future::ready(::std::result::Result::Ok(m))))"
+             ::volo_grpc::codegen::futures::stream::once(::volo_grpc::codegen::futures::future::ready(::std::result::Result::Ok(m))))"
                 .to_string()
                 .into()
         }
@@ -196,7 +197,7 @@ impl VoloGrpcBackend {
         } else {
             format! {
                 r#"{req_stream}
-                ::futures::pin_mut!(message_stream);
+                ::volo_grpc::codegen::futures::pin_mut!(message_stream);
                 let message = ::volo_grpc::codegen::StreamExt::try_next(&mut message_stream)
                     .await?
                     .ok_or_else(|| ::volo_grpc::Status::new(::volo_grpc::Code::Internal, "Missing request message."))?;
@@ -225,7 +226,7 @@ impl VoloGrpcBackend {
         } else {
             format!(
                 "resp.map(|r| r.map(|m| {resp_enum_name}::{variant_name}(::std::boxed::Box::pin( \
-                 ::futures::stream::once(::futures::future::ok(m))))))"
+                 ::volo_grpc::codegen::futures::stream::once(::volo_grpc::codegen::futures::future::ok(m))))))"
             )
             .into()
         }
@@ -233,6 +234,8 @@ impl VoloGrpcBackend {
 }
 
 impl CodegenBackend for VoloGrpcBackend {
+    const PROTOCOL: &'static str = "protobuf";
+
     fn codegen_service_impl(&self, def_id: DefId, stream: &mut String, s: &rir::Service) {
         let service_name = self.cx().rust_name(def_id);
         let server_name = format!("{}Server", service_name);
