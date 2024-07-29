@@ -375,14 +375,17 @@ pub mod middleware_tests {
         request::ServerRequest,
         response::ServerResponse,
         server::{
-            response::IntoResponse,
             test_helpers::*,
+            response::IntoResponse,
+            handler::Handler,
         },
+        body::{
+            Body,
+            BodyConversion,
+        }
     };
     use http::{HeaderValue, Method, Response, StatusCode, Uri};
     use motore::service::service_fn;
-    use crate::body::{Body, BodyConversion};
-    use crate::server::handler::Handler;
 
     #[tokio::test]
     async fn test_from_fn() {
