@@ -89,11 +89,12 @@ pub struct Filter<S, H, R, T> {
     _marker: PhantomData<(R, T)>,
 }
 
-impl<S, H, R, T> Service<ServerContext, ServerRequest> for Filter<S, H, R, T>
+impl<S, B, H, R, T> Service<ServerContext, ServerRequest<B>> for Filter<S, H, R, T>
 where
-    S: Service<ServerContext, ServerRequest> + Send + Sync + 'static,
+    S: Service<ServerContext, ServerRequest<B>> + Send + Sync + 'static,
     S::Response: IntoResponse,
     S::Error: IntoResponse,
+    B: Send,
     H: HandlerWithoutRequest<T, Result<(), R>> + Clone + Send + Sync + 'static,
     R: IntoResponse + Send + Sync,
     T: Sync,
@@ -101,10 +102,10 @@ where
     type Response = ServerResponse;
     type Error = S::Error;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ServerContext,
-        req: ServerRequest,
+    async fn call(
+        &self,
+        cx: &mut ServerContext,
+        req: ServerRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         let (mut parts, body) = req.into_parts();
         let res = self.handler.clone().handle(cx, &mut parts).await;
@@ -212,11 +213,12 @@ pub struct Timeout<S, H> {
     handler: H,
 }
 
-impl<S, H> Service<ServerContext, ServerRequest> for Timeout<S, H>
+impl<S, B, H> Service<ServerContext, ServerRequest<B>> for Timeout<S, H>
 where
-    S: Service<ServerContext, ServerRequest> + Send + Sync + 'static,
+    S: Service<ServerContext, ServerRequest<B>> + Send + Sync + 'static,
     S::Response: IntoResponse,
     S::Error: IntoResponse,
+    B: Send,
     H: for<'r> TimeoutHandler<'r> + Clone + Sync,
 {
     type Response = ServerResponse;
@@ -225,7 +227,7 @@ where
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest,
+        req: ServerRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
         let fut_service = self.service.call(cx, req);
         let fut_timeout = tokio::time::sleep(self.duration);
