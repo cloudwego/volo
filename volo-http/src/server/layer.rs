@@ -243,14 +243,16 @@ where
 
 #[cfg(test)]
 mod layer_tests {
+    use std::convert::Infallible;
+
+    use http::{method::Method, status::StatusCode};
+
     use super::*;
     use crate::{
         body::BodyConversion,
         context::ServerContext,
         server::{handler::Handler, test_helpers::*},
     };
-    use http::{method::Method, status::StatusCode};
-    use std::convert::Infallible;
 
     #[tokio::test]
     async fn test_filter_layer() {
@@ -291,8 +293,9 @@ mod layer_tests {
 
     #[tokio::test]
     async fn test_timeout_layer() {
-        use crate::server::layer::TimeoutLayer;
         use std::time::Duration;
+
+        use crate::server::layer::TimeoutLayer;
 
         async fn index_handler() -> &'static str {
             "Hello, World"

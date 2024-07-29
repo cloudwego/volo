@@ -1,5 +1,6 @@
 //! Server middleware utilities
 use std::{convert::Infallible, marker::PhantomData, sync::Arc};
+
 use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service};
 
@@ -369,6 +370,9 @@ where
 
 #[cfg(test)]
 pub mod middleware_tests {
+    use http::{HeaderValue, Method, Response, StatusCode, Uri};
+    use motore::service::service_fn;
+
     use super::*;
     use crate::{
         body::{Body, BodyConversion},
@@ -377,8 +381,6 @@ pub mod middleware_tests {
         response::ServerResponse,
         server::{handler::Handler, response::IntoResponse, test_helpers::*},
     };
-    use http::{HeaderValue, Method, Response, StatusCode, Uri};
-    use motore::service::service_fn;
 
     #[tokio::test]
     async fn test_from_fn() {
