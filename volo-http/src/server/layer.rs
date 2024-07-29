@@ -245,21 +245,16 @@ where
 mod layer_tests {
     use super::*;
     use crate::{
-        context::ServerContext,
-        server::{
-            handler::Handler,
-            test_helpers::*,
-        },
         body::BodyConversion,
+        context::ServerContext,
+        server::{handler::Handler, test_helpers::*},
     };
-    use std::convert::Infallible;
     use http::{method::Method, status::StatusCode};
+    use std::convert::Infallible;
 
     #[tokio::test]
     async fn test_filter_layer() {
-        use crate::server::{
-            layer::FilterLayer,
-        };
+        use crate::server::layer::FilterLayer;
 
         async fn reject_post(method: Method) -> Result<(), StatusCode> {
             if method == Method::POST {
@@ -274,14 +269,19 @@ mod layer_tests {
         }
 
         let filter_layer = FilterLayer::new(reject_post);
-        let filter_service = filter_layer.layer(<_ as Handler<((),), &str, Infallible>>::into_service(handler));
+        let filter_service = filter_layer.layer(
+            <_ as Handler<((),), &str, Infallible>>::into_service(handler),
+        );
 
         let mut cx = empty_cx();
 
         // Test case 1: not filter
         let req = simple_req(Method::GET, "/", "");
         let resp = filter_service.call(&mut cx, req).await.unwrap();
-        assert_eq!(resp.into_body().into_string().await.unwrap(), "Hello, World");
+        assert_eq!(
+            resp.into_body().into_string().await.unwrap(),
+            "Hello, World"
+        );
 
         // Test case 2: filter
         let req = simple_req(Method::POST, "/", "");
@@ -291,12 +291,8 @@ mod layer_tests {
 
     #[tokio::test]
     async fn test_timeout_layer() {
+        use crate::server::layer::TimeoutLayer;
         use std::time::Duration;
-        use crate::{
-            server::{
-                layer::TimeoutLayer,
-            },
-        };
 
         async fn index_handler() -> &'static str {
             "Hello, World"
@@ -316,15 +312,27 @@ mod layer_tests {
         let mut cx = empty_cx();
 
         // Test case 1: timeout
-        let timeout_service = timeout_layer.clone().layer(<_ as Handler<((),), &str, Infallible>>::into_service(index_timeout_handler));
+        let timeout_service =
+            timeout_layer
+                .clone()
+                .layer(<_ as Handler<((),), &str, Infallible>>::into_service(
+                    index_timeout_handler,
+                ));
         let req = simple_req(Method::GET, "/", "");
         let resp = timeout_service.call(&mut cx, req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::REQUEST_TIMEOUT);
 
         // Test case 2: not timeout
-        let timeout_service = timeout_layer.clone().layer(<_ as Handler<((),), &str, Infallible>>::into_service(index_handler));
+        let timeout_service = timeout_layer.clone().layer(<_ as Handler<
+            ((),),
+            &str,
+            Infallible,
+        >>::into_service(index_handler));
         let req = simple_req(Method::GET, "/", "");
         let resp = timeout_service.call(&mut cx, req).await.unwrap();
-        assert_eq!(resp.into_body().into_string().await.unwrap(), "Hello, World");
+        assert_eq!(
+            resp.into_body().into_string().await.unwrap(),
+            "Hello, World"
+        );
     }
 }

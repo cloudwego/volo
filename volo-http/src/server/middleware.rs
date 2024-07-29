@@ -1,7 +1,7 @@
 //! Server middleware utilities
-use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service};
+use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 
 use super::{
     handler::{MiddlewareHandlerFromFn, MiddlewareHandlerMapResponse},
@@ -175,10 +175,10 @@ pub fn from_fn<F, T, B, B2, E2>(f: F) -> FromFnLayer<F, T, B, B2, E2> {
 
 impl<S, F, T, B, B2, E2> Layer<S> for FromFnLayer<F, T, B, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest<B2>, Response=ServerResponse, Error=E2>
-    + Send
-    + Sync
-    + 'static,
+    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
+        + Send
+        + Sync
+        + 'static,
 {
     type Service = FromFn<Arc<S>, F, T, B, B2, E2>;
 
@@ -214,11 +214,11 @@ where
 
 impl<S, F, T, B, B2, E2> Service<ServerContext, ServerRequest<B>> for FromFn<S, F, T, B, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest<B2>, Response=ServerResponse, Error=E2>
-    + Clone
-    + Send
-    + Sync
-    + 'static,
+    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     F: for<'r> MiddlewareHandlerFromFn<'r, T, B, B2, E2> + Sync,
     B: Send,
     B2: 'static,
@@ -353,7 +353,7 @@ where
 
 impl<S, F, T, Req, R1, R2> Service<ServerContext, Req> for MapResponse<S, F, T, R1, R2>
 where
-    S: Service<ServerContext, Req, Response=R1> + Send + Sync,
+    S: Service<ServerContext, Req, Response = R1> + Send + Sync,
     F: for<'r> MiddlewareHandlerMapResponse<'r, T, R1, R2> + Sync,
     Req: Send,
 {
@@ -371,29 +371,29 @@ where
 pub mod middleware_tests {
     use super::*;
     use crate::{
+        body::{Body, BodyConversion},
         context::ServerContext,
         request::ServerRequest,
         response::ServerResponse,
-        server::{
-            test_helpers::*,
-            response::IntoResponse,
-            handler::Handler,
-        },
-        body::{
-            Body,
-            BodyConversion,
-        }
+        server::{handler::Handler, response::IntoResponse, test_helpers::*},
     };
     use http::{HeaderValue, Method, Response, StatusCode, Uri};
     use motore::service::service_fn;
 
     #[tokio::test]
     async fn test_from_fn() {
-        async fn print_body_handler(_: &mut ServerContext, req: ServerRequest<String>) -> Result<Response<Body>, Infallible> {
+        async fn print_body_handler(
+            _: &mut ServerContext,
+            req: ServerRequest<String>,
+        ) -> Result<Response<Body>, Infallible> {
             Ok(Response::new(req.into_body().into()))
         }
 
-        async fn append_body_mw(cx: &mut ServerContext, req: ServerRequest<String>, next: Next<String>) -> ServerResponse {
+        async fn append_body_mw(
+            cx: &mut ServerContext,
+            req: ServerRequest<String>,
+            next: Next<String>,
+        ) -> ServerResponse {
             let (parts, mut body) = req.into_parts();
             body += "test";
             let req = ServerRequest::from_parts(parts, body);
@@ -421,9 +421,18 @@ pub mod middleware_tests {
         ) -> ServerResponse {
             let resp = next.run(cx, req).await.into_response();
             let (mut parts, body) = resp.into_parts();
-            parts.headers.insert("Access-Control-Allow-Methods", HeaderValue::from_str(method.as_str()).unwrap());
-            parts.headers.insert("Access-Control-Allow-Origin", HeaderValue::from_str(url.to_string().as_str()).unwrap());
-            parts.headers.insert("Access-Control-Allow-Headers", HeaderValue::from_str("*").unwrap());
+            parts.headers.insert(
+                "Access-Control-Allow-Methods",
+                HeaderValue::from_str(method.as_str()).unwrap(),
+            );
+            parts.headers.insert(
+                "Access-Control-Allow-Origin",
+                HeaderValue::from_str(url.to_string().as_str()).unwrap(),
+            );
+            parts.headers.insert(
+                "Access-Control-Allow-Headers",
+                HeaderValue::from_str("*").unwrap(),
+            );
             let resp = ServerResponse::from_parts(parts, body);
             resp
         }
@@ -432,9 +441,18 @@ pub mod middleware_tests {
         let req = simple_req(Method::GET, "/", String::from(""));
         let resp = service.call(&mut cx, req).await.unwrap();
         let (parts, _) = resp.into_parts();
-        assert_eq!(parts.headers.get("Access-Control-Allow-Methods").unwrap(), "GET");
-        assert_eq!(parts.headers.get("Access-Control-Allow-Origin").unwrap(), "/");
-        assert_eq!(parts.headers.get("Access-Control-Allow-Headers").unwrap(), "*");
+        assert_eq!(
+            parts.headers.get("Access-Control-Allow-Methods").unwrap(),
+            "GET"
+        );
+        assert_eq!(
+            parts.headers.get("Access-Control-Allow-Origin").unwrap(),
+            "/"
+        );
+        assert_eq!(
+            parts.headers.get("Access-Control-Allow-Headers").unwrap(),
+            "*"
+        );
 
         // Test case 3: Return type [`Result<_,_>`]
         async fn error_mw(
@@ -446,7 +464,7 @@ pub mod middleware_tests {
         }
         let service = from_fn(error_mw).layer(handler.clone());
         let req = simple_req(Method::GET, "/", String::from("test"));
-        let resp =  service.call(&mut cx, req).await.unwrap();
+        let resp = service.call(&mut cx, req).await.unwrap();
         let status = resp.status();
         let (_, body) = resp.into_parts();
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
@@ -458,9 +476,18 @@ pub mod middleware_tests {
         let req = simple_req(Method::GET, "/", String::from(""));
         let resp = service.call(&mut cx, req).await.unwrap();
         let (parts, body) = resp.into_parts();
-        assert_eq!(parts.headers.get("Access-Control-Allow-Methods").unwrap(), "GET");
-        assert_eq!(parts.headers.get("Access-Control-Allow-Origin").unwrap(), "/");
-        assert_eq!(parts.headers.get("Access-Control-Allow-Headers").unwrap(), "*");
+        assert_eq!(
+            parts.headers.get("Access-Control-Allow-Methods").unwrap(),
+            "GET"
+        );
+        assert_eq!(
+            parts.headers.get("Access-Control-Allow-Origin").unwrap(),
+            "/"
+        );
+        assert_eq!(
+            parts.headers.get("Access-Control-Allow-Headers").unwrap(),
+            "*"
+        );
         assert_eq!(body.into_string().await.unwrap(), "test");
     }
 
@@ -470,11 +497,16 @@ pub mod middleware_tests {
             "Hello, World"
         }
 
-        async fn append_header(resp: ServerResponse) -> ((&'static str, &'static str), ServerResponse) {
+        async fn append_header(
+            resp: ServerResponse,
+        ) -> ((&'static str, &'static str), ServerResponse) {
             (("Server", "nginx"), resp)
         }
 
-        let service = map_response(append_header).layer(<_ as Handler<((),), String, Infallible>>::into_service(handler));
+        let service =
+            map_response(append_header).layer(
+                <_ as Handler<((),), String, Infallible>>::into_service(handler),
+            );
         let mut cx = empty_cx();
         let req = simple_req(Method::GET, "/", String::from(""));
         let resp = service.call(&mut cx, req).await.unwrap();
