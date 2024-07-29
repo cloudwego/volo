@@ -1,4 +1,4 @@
-//! Collections of some userful [`Layer`]s.
+//! Collections of some useful [`Layer`]s.
 //!
 //! See [`FilterLayer`] and [`TimeoutLayer`] for more details.
 
@@ -238,5 +238,93 @@ where
                 Ok((self.handler.clone()).call(cx))
             },
         }
+    }
+}
+
+#[cfg(test)]
+mod layer_tests {
+    use super::*;
+    use crate::{
+        context::ServerContext,
+        server::{
+            handler::Handler,
+            test_helpers::*,
+        },
+        body::BodyConversion,
+    };
+    use std::convert::Infallible;
+    use http::{method::Method, status::StatusCode};
+
+    #[tokio::test]
+    async fn test_filter_layer() {
+        use crate::server::{
+            layer::FilterLayer,
+        };
+
+        async fn reject_post(method: Method) -> Result<(), StatusCode> {
+            if method == Method::POST {
+                Err(StatusCode::METHOD_NOT_ALLOWED)
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn handler() -> &'static str {
+            "Hello, World"
+        }
+
+        let filter_layer = FilterLayer::new(reject_post);
+        let filter_service = filter_layer.layer(<_ as Handler<((),), &str, Infallible>>::into_service(handler));
+
+        let mut cx = empty_cx();
+
+        // Test case 1: not filter
+        let req = simple_req(Method::GET, "/", "");
+        let resp = filter_service.call(&mut cx, req).await.unwrap();
+        assert_eq!(resp.into_body().into_string().await.unwrap(), "Hello, World");
+
+        // Test case 2: filter
+        let req = simple_req(Method::POST, "/", "");
+        let resp = filter_service.call(&mut cx, req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
+    }
+
+    #[tokio::test]
+    async fn test_timeout_layer() {
+        use std::time::Duration;
+        use crate::{
+            server::{
+                layer::TimeoutLayer,
+            },
+        };
+
+        async fn index_handler() -> &'static str {
+            "Hello, World"
+        }
+
+        async fn index_timeout_handler() -> &'static str {
+            tokio::time::sleep(Duration::from_secs_f64(1.5)).await;
+            "Hello, World"
+        }
+
+        fn timeout_handler(_: &ServerContext) -> StatusCode {
+            StatusCode::REQUEST_TIMEOUT
+        }
+
+        let timeout_layer = TimeoutLayer::new(Duration::from_secs(1), timeout_handler);
+
+        let mut cx = empty_cx();
+
+        // Test case 1: timeout
+        let timeout_service = timeout_layer.clone().layer(<_ as Handler<((),), &str, Infallible>>::into_service(index_timeout_handler));
+        let req = simple_req(Method::GET, "/", "");
+        let resp = timeout_service.call(&mut cx, req).await.unwrap();
+        assert_eq!(resp.status(), StatusCode::REQUEST_TIMEOUT);
+
+        // Test case 2: not timeout
+        let timeout_service = timeout_layer.clone().layer(<_ as Handler<((),), &str, Infallible>>::into_service(index_handler));
+        let req = simple_req(Method::GET, "/", "");
+        let resp = timeout_service.call(&mut cx, req).await.unwrap();
+        assert_eq!(resp.into_body().into_string().await.unwrap(), "Hello, World");
     }
 }
