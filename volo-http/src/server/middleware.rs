@@ -379,82 +379,61 @@ pub mod middleware_tests {
         context::ServerContext,
         request::ServerRequest,
         response::ServerResponse,
-        server::{handler::Handler, response::IntoResponse, test_helpers::*},
+        server::{response::IntoResponse, route::get, test_helpers::*},
+        Router,
     };
 
+    async fn print_body_handler(
+        _: &mut ServerContext,
+        req: ServerRequest<String>,
+    ) -> Result<Response<Body>, Infallible> {
+        Ok(Response::new(req.into_body().into()))
+    }
+
+    async fn append_body_mw(
+        cx: &mut ServerContext,
+        req: ServerRequest<String>,
+        next: Next<String>,
+    ) -> ServerResponse {
+        let (parts, mut body) = req.into_parts();
+        body += "test";
+        let req = ServerRequest::from_parts(parts, body);
+        let resp = next.run(cx, req).await.into_response();
+        resp
+    }
+
+    async fn cors_mw(
+        method: Method,
+        url: Uri,
+        cx: &mut ServerContext,
+        req: ServerRequest<String>,
+        next: Next<String>,
+    ) -> ServerResponse {
+        let mut resp = next.run(cx, req).await.into_response();
+        resp.headers_mut().insert(
+            "Access-Control-Allow-Methods",
+            HeaderValue::from_str(method.as_str()).unwrap(),
+        );
+        resp.headers_mut().insert(
+            "Access-Control-Allow-Origin",
+            HeaderValue::from_str(url.to_string().as_str()).unwrap(),
+        );
+        resp.headers_mut().insert(
+            "Access-Control-Allow-Headers",
+            HeaderValue::from_str("*").unwrap(),
+        );
+        resp
+    }
+
     #[tokio::test]
-    async fn test_from_fn() {
-        async fn print_body_handler(
-            _: &mut ServerContext,
-            req: ServerRequest<String>,
-        ) -> Result<Response<Body>, Infallible> {
-            Ok(Response::new(req.into_body().into()))
-        }
-
-        async fn append_body_mw(
-            cx: &mut ServerContext,
-            req: ServerRequest<String>,
-            next: Next<String>,
-        ) -> ServerResponse {
-            let (parts, mut body) = req.into_parts();
-            body += "test";
-            let req = ServerRequest::from_parts(parts, body);
-            let resp = next.run(cx, req).await.into_response();
-            resp
-        }
-
+    async fn test_from_fn_with_necessary_params() {
         let handler = service_fn(print_body_handler);
-
         let mut cx = empty_cx();
 
-        // Test case 1: with necessary params
-        let service = from_fn(append_body_mw).layer(handler.clone());
+        let service = from_fn(append_body_mw).layer(handler);
         let req = simple_req(Method::GET, "/", String::from(""));
         let resp = service.call(&mut cx, req).await.unwrap();
         assert_eq!(resp.into_body().into_string().await.unwrap(), "test");
-
-        // Test case 2: with extra params
-        async fn cors_mw(
-            method: Method,
-            url: Uri,
-            cx: &mut ServerContext,
-            req: ServerRequest<String>,
-            next: Next<String>,
-        ) -> ServerResponse {
-            let resp = next.run(cx, req).await.into_response();
-            let (mut parts, body) = resp.into_parts();
-            parts.headers.insert(
-                "Access-Control-Allow-Methods",
-                HeaderValue::from_str(method.as_str()).unwrap(),
-            );
-            parts.headers.insert(
-                "Access-Control-Allow-Origin",
-                HeaderValue::from_str(url.to_string().as_str()).unwrap(),
-            );
-            parts.headers.insert(
-                "Access-Control-Allow-Headers",
-                HeaderValue::from_str("*").unwrap(),
-            );
-            let resp = ServerResponse::from_parts(parts, body);
-            resp
-        }
-
-        let service = from_fn(cors_mw).layer(handler.clone());
-        let req = simple_req(Method::GET, "/", String::from(""));
-        let resp = service.call(&mut cx, req).await.unwrap();
-        let (parts, _) = resp.into_parts();
-        assert_eq!(
-            parts.headers.get("Access-Control-Allow-Methods").unwrap(),
-            "GET"
-        );
-        assert_eq!(
-            parts.headers.get("Access-Control-Allow-Origin").unwrap(),
-            "/"
-        );
-        assert_eq!(
-            parts.headers.get("Access-Control-Allow-Headers").unwrap(),
-            "*"
-        );
 
         // Test case 3: Return type [`Result<_,_>`]
         async fn error_mw(
@@ -464,16 +443,43 @@ pub mod middleware_tests {
         ) -> Result<ServerResponse, StatusCode> {
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
-        let service = from_fn(error_mw).layer(handler.clone());
+        let service = from_fn(error_mw).layer(handler);
         let req = simple_req(Method::GET, "/", String::from("test"));
         let resp = service.call(&mut cx, req).await.unwrap();
         let status = resp.status();
         let (_, body) = resp.into_parts();
         assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
         assert_eq!(body.into_string().await.unwrap(), "");
+    }
 
-        // Test case 4: use multiple middlewares
-        let service = from_fn(cors_mw).layer(handler.clone());
+    #[tokio::test]
+    async fn test_from_fn_with_optional_params() {
+        let handler = service_fn(print_body_handler);
+        let mut cx = empty_cx();
+
+        let service = from_fn(cors_mw).layer(handler);
+        let req = simple_req(Method::GET, "/", String::from(""));
+        let resp = service.call(&mut cx, req).await.unwrap();
+        assert_eq!(
+            resp.headers().get("Access-Control-Allow-Methods").unwrap(),
+            "GET"
+        );
+        assert_eq!(
+            resp.headers().get("Access-Control-Allow-Origin").unwrap(),
+            "/"
+        );
+        assert_eq!(
+            resp.headers().get("Access-Control-Allow-Headers").unwrap(),
+            "*"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_from_fn_with_multiple_mws() {
+        let handler = service_fn(print_body_handler);
+        let mut cx = empty_cx();
+
+        let service = from_fn(cors_mw).layer(handler);
         let service = from_fn(append_body_mw).layer(service);
         let req = simple_req(Method::GET, "/", String::from(""));
         let resp = service.call(&mut cx, req).await.unwrap();
@@ -505,13 +511,12 @@ pub mod middleware_tests {
             (("Server", "nginx"), resp)
         }
 
-        let service =
-            map_response(append_header).layer(
-                <_ as Handler<((),), String, Infallible>>::into_service(handler),
-            );
+        let router: Router<String, Infallible> = Router::new()
+            .route("/", get(handler))
+            .layer(map_response(append_header));
         let mut cx = empty_cx();
         let req = simple_req(Method::GET, "/", String::from(""));
-        let resp = service.call(&mut cx, req).await.unwrap();
+        let resp = router.call(&mut cx, req).await.unwrap();
         let (parts, _) = resp.into_response().into_parts();
         assert_eq!(parts.headers.get("Server").unwrap(), "nginx");
     }
