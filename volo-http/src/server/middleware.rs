@@ -1,7 +1,7 @@
 //! Server middleware utilities
+use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service};
-use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 
 use super::{
     handler::{MiddlewareHandlerFromFn, MiddlewareHandlerMapResponse},
