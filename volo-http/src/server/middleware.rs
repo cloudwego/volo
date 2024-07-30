@@ -370,8 +370,7 @@ where
 
 #[cfg(test)]
 pub mod middleware_tests {
-    use std::any::{Any, TypeId};
-
+    use faststr::FastStr;
     use http::{HeaderValue, Method, Response, StatusCode, Uri};
     use motore::service::{service_fn, BoxService};
 
@@ -505,18 +504,18 @@ pub mod middleware_tests {
         async fn converter(
             cx: &mut ServerContext,
             req: ServerRequest<String>,
-            next: Next<String>,
+            next: Next<FastStr>,
         ) -> ServerResponse {
             let (parts, body) = req.into_parts();
-            let s = body.into_string().await.unwrap();
+            let s = body.into_faststr().await.unwrap();
             let req = ServerRequest::from_parts(parts, s);
-            assert_eq!(req.type_id(), TypeId::of::<ServerRequest<String>>());
+            let _: ServerRequest<FastStr> = req;
             next.run(cx, req).await.into_response()
         }
 
         async fn service(
             _: &mut ServerContext,
-            _: ServerRequest<String>,
+            _: ServerRequest<FastStr>,
         ) -> Result<ServerResponse, Infallible> {
             Ok(Response::new(String::from("Hello, World").into()))
         }
@@ -531,11 +530,12 @@ pub mod middleware_tests {
             )
             .await;
         match resp {
-            Ok(resp) => assert_eq!(
-                resp.into_string().await.unwrap().type_id(),
-                TypeId::of::<String>()
-            ),
-            Err(err) => assert_eq!(err.type_id(), TypeId::of::<Infallible>()),
+            Ok(resp) => {
+                let _: String = resp.into_string().await.unwrap();
+            }
+            Err(err) => {
+                let _: Infallible = err;
+            }
         };
     }
 
