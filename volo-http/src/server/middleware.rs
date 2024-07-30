@@ -509,7 +509,7 @@ pub mod middleware_tests {
             let (parts, body) = req.into_parts();
             let s = body.into_string().await.unwrap();
             let req = ServerRequest::from_parts(parts, s);
-            assert_eq!(req.clone().type_id(), TypeId::of::<ServerRequest<String>>());
+            assert_eq!(req.type_id(), TypeId::of::<ServerRequest<String>>());
             next.run(cx, req).await.into_response()
         }
 
