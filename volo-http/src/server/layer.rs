@@ -256,6 +256,7 @@ mod layer_tests {
             test_helpers::*,
         },
     };
+    use crate::server::route::any;
 
     #[tokio::test]
     async fn test_filter_layer() {
@@ -274,7 +275,7 @@ mod layer_tests {
         }
 
         let filter_layer = FilterLayer::new(reject_post);
-        let route = Route::new::<MethodRouter<&str, Infallible>>(get(handler));
+        let route = Route::new::<MethodRouter<&str, Infallible>>(any(handler));
         let service = filter_layer.layer(route);
 
         let mut cx = empty_cx();
