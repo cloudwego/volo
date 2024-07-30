@@ -523,20 +523,12 @@ pub mod middleware_tests {
         let route = Route::new(get_service(service_fn(service)));
         let service = from_fn(converter).layer(route);
 
-        let resp = service
+        let _: Result<ServerResponse, Infallible> = service
             .call(
                 &mut empty_cx(),
-                simple_req::<_, String>(Method::GET, "/", String::from("")),
+                simple_req(Method::GET, "/", String::from("")),
             )
             .await;
-        match resp {
-            Ok(resp) => {
-                let _: String = resp.into_string().await.unwrap();
-            }
-            Err(err) => {
-                let _: Infallible = err;
-            }
-        };
     }
 
     async fn index_handler() -> &'static str {
