@@ -252,11 +252,10 @@ mod layer_tests {
         body::BodyConversion,
         context::ServerContext,
         server::{
-            route::{get, MethodRouter, Route},
+            route::{any, get, MethodRouter, Route},
             test_helpers::*,
         },
     };
-    use crate::server::route::any;
 
     #[tokio::test]
     async fn test_filter_layer() {
@@ -320,7 +319,6 @@ mod layer_tests {
         // Test case 1: timeout
         let route = Route::new::<MethodRouter<&str, Infallible>>(get(index_timeout_handler));
         let service = timeout_layer.clone().layer(route);
-
         let req = simple_req(Method::GET, "/", "");
         let resp = service.call(&mut cx, req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::REQUEST_TIMEOUT);
