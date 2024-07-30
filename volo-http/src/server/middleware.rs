@@ -176,10 +176,10 @@ pub fn from_fn<F, T, B, B2, E2>(f: F) -> FromFnLayer<F, T, B, B2, E2> {
 
 impl<S, F, T, B, B2, E2> Layer<S> for FromFnLayer<F, T, B, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ServerContext, ServerRequest<B2>, Response=ServerResponse, Error=E2>
+    + Send
+    + Sync
+    + 'static,
 {
     type Service = FromFn<Arc<S>, F, T, B, B2, E2>;
 
@@ -215,11 +215,11 @@ where
 
 impl<S, F, T, B, B2, E2> Service<ServerContext, ServerRequest<B>> for FromFn<S, F, T, B, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
-        + Clone
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ServerContext, ServerRequest<B2>, Response=ServerResponse, Error=E2>
+    + Clone
+    + Send
+    + Sync
+    + 'static,
     F: for<'r> MiddlewareHandlerFromFn<'r, T, B, B2, E2> + Sync,
     B: Send,
     B2: 'static,
@@ -354,7 +354,7 @@ where
 
 impl<S, F, T, Req, R1, R2> Service<ServerContext, Req> for MapResponse<S, F, T, R1, R2>
 where
-    S: Service<ServerContext, Req, Response = R1> + Send + Sync,
+    S: Service<ServerContext, Req, Response=R1> + Send + Sync,
     F: for<'r> MiddlewareHandlerMapResponse<'r, T, R1, R2> + Sync,
     Req: Send,
 {
@@ -370,6 +370,7 @@ where
 
 #[cfg(test)]
 pub mod middleware_tests {
+    use std::any::{Any, TypeId};
     use http::{HeaderValue, Method, Response, StatusCode, Uri};
     use motore::service::{service_fn, BoxService};
 
@@ -500,9 +501,6 @@ pub mod middleware_tests {
 
     #[tokio::test]
     async fn test_from_fn_converts() {
-        fn assert_request<B>(_: ServerRequest<B>) {}
-        fn assert_type<T>(_: T) {}
-
         async fn converter(
             cx: &mut ServerContext,
             req: ServerRequest<String>,
@@ -511,7 +509,7 @@ pub mod middleware_tests {
             let (parts, body) = req.into_parts();
             let s = body.into_string().await.unwrap();
             let req = ServerRequest::from_parts(parts, s);
-            assert_request::<String>(req.clone());
+            assert_eq!(req.clone().type_id(), TypeId::of::<ServerRequest<String>>());
             next.run(cx, req).await.into_response()
         }
 
@@ -532,8 +530,8 @@ pub mod middleware_tests {
             )
             .await;
         match resp {
-            Ok(resp) => assert_type::<String>(resp.into_string().await.unwrap()),
-            Err(err) => assert_type::<Infallible>(err),
+            Ok(resp) => assert_eq!(resp.into_string().await.unwrap().type_id(), TypeId::of::<String>()),
+            Err(err) => assert_eq!(err.type_id(), TypeId::of::<Infallible>()),
         };
     }
 
