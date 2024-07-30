@@ -251,8 +251,10 @@ mod layer_tests {
     use crate::{
         body::BodyConversion,
         context::ServerContext,
-        server::{route::get, test_helpers::*},
-        Router,
+        server::{
+            route::{get, MethodRouter, Route},
+            test_helpers::*,
+        },
     };
 
     #[tokio::test]
@@ -272,15 +274,14 @@ mod layer_tests {
         }
 
         let filter_layer = FilterLayer::new(reject_post);
-        let router: Router<&str, Infallible> = Router::new()
-            .route("/", get(handler))
-            .layer(filter_layer.clone());
+        let route = Route::new::<MethodRouter<&str, Infallible>>(get(handler));
+        let service = filter_layer.layer(route);
 
         let mut cx = empty_cx();
 
         // Test case 1: not filter
         let req = simple_req(Method::GET, "/", "");
-        let resp = router.call(&mut cx, req).await.unwrap();
+        let resp = service.call(&mut cx, req).await.unwrap();
         assert_eq!(
             resp.into_body().into_string().await.unwrap(),
             "Hello, World"
@@ -288,7 +289,7 @@ mod layer_tests {
 
         // Test case 2: filter
         let req = simple_req(Method::POST, "/", "");
-        let resp = router.call(&mut cx, req).await.unwrap();
+        let resp = service.call(&mut cx, req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
     }
 
@@ -316,19 +317,18 @@ mod layer_tests {
         let mut cx = empty_cx();
 
         // Test case 1: timeout
-        let router: Router<&str, Infallible> = Router::new()
-            .route("/", get(index_timeout_handler))
-            .layer(timeout_layer.clone());
+        let route = Route::new::<MethodRouter<&str, Infallible>>(get(index_timeout_handler));
+        let service = timeout_layer.clone().layer(route);
+
         let req = simple_req(Method::GET, "/", "");
-        let resp = router.call(&mut cx, req).await.unwrap();
+        let resp = service.call(&mut cx, req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::REQUEST_TIMEOUT);
 
         // Test case 2: not timeout
-        let router: Router<&str, Infallible> = Router::new()
-            .route("/", get(index_handler))
-            .layer(timeout_layer.clone());
+        let route = Route::new::<MethodRouter<&str, Infallible>>(get(index_handler));
+        let service = timeout_layer.clone().layer(route);
         let req = simple_req(Method::GET, "/", "");
-        let resp = router.call(&mut cx, req).await.unwrap();
+        let resp = service.call(&mut cx, req).await.unwrap();
         assert_eq!(
             resp.into_body().into_string().await.unwrap(),
             "Hello, World"
