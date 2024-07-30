@@ -176,10 +176,10 @@ pub fn from_fn<F, T, B, B2, E2>(f: F) -> FromFnLayer<F, T, B, B2, E2> {
 
 impl<S, F, T, B, B2, E2> Layer<S> for FromFnLayer<F, T, B, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest<B2>, Response=ServerResponse, Error=E2>
-    + Send
-    + Sync
-    + 'static,
+    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
+        + Send
+        + Sync
+        + 'static,
 {
     type Service = FromFn<Arc<S>, F, T, B, B2, E2>;
 
@@ -215,11 +215,11 @@ where
 
 impl<S, F, T, B, B2, E2> Service<ServerContext, ServerRequest<B>> for FromFn<S, F, T, B, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest<B2>, Response=ServerResponse, Error=E2>
-    + Clone
-    + Send
-    + Sync
-    + 'static,
+    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
+        + Clone
+        + Send
+        + Sync
+        + 'static,
     F: for<'r> MiddlewareHandlerFromFn<'r, T, B, B2, E2> + Sync,
     B: Send,
     B2: 'static,
@@ -354,7 +354,7 @@ where
 
 impl<S, F, T, Req, R1, R2> Service<ServerContext, Req> for MapResponse<S, F, T, R1, R2>
 where
-    S: Service<ServerContext, Req, Response=R1> + Send + Sync,
+    S: Service<ServerContext, Req, Response = R1> + Send + Sync,
     F: for<'r> MiddlewareHandlerMapResponse<'r, T, R1, R2> + Sync,
     Req: Send,
 {
@@ -371,6 +371,7 @@ where
 #[cfg(test)]
 pub mod middleware_tests {
     use std::any::{Any, TypeId};
+
     use http::{HeaderValue, Method, Response, StatusCode, Uri};
     use motore::service::{service_fn, BoxService};
 
@@ -530,7 +531,10 @@ pub mod middleware_tests {
             )
             .await;
         match resp {
-            Ok(resp) => assert_eq!(resp.into_string().await.unwrap().type_id(), TypeId::of::<String>()),
+            Ok(resp) => assert_eq!(
+                resp.into_string().await.unwrap().type_id(),
+                TypeId::of::<String>()
+            ),
             Err(err) => assert_eq!(err.type_id(), TypeId::of::<Infallible>()),
         };
     }
