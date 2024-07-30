@@ -371,7 +371,7 @@ where
 #[cfg(test)]
 pub mod middleware_tests {
     use http::{HeaderValue, Method, Response, StatusCode, Uri};
-    use motore::service::service_fn;
+    use motore::service::{service_fn, BoxService};
 
     use super::*;
     use crate::{
@@ -379,12 +379,7 @@ pub mod middleware_tests {
         context::ServerContext,
         request::ServerRequest,
         response::ServerResponse,
-        server::{
-            response::IntoResponse,
-            route::{get, get_service},
-            test_helpers::*,
-        },
-        Router,
+        server::{handler::Handler, response::IntoResponse, route::get_service, test_helpers::*},
     };
 
     async fn print_body_handler(
@@ -527,11 +522,10 @@ pub mod middleware_tests {
             Ok(Response::new(String::from("Hello, World").into()))
         }
 
-        let router: Router<String, Infallible> = Router::new()
-            .route("/", get_service(service_fn(service)))
-            .layer(from_fn(converter));
+        let route = Route::new(get_service(service_fn(service)));
+        let service = from_fn(converter).layer(route);
 
-        let resp = router
+        let resp = service
             .call(
                 &mut empty_cx(),
                 simple_req::<_, String>(Method::GET, "/", String::from("")),
@@ -555,12 +549,13 @@ pub mod middleware_tests {
             (("Server", "nginx"), resp)
         }
 
-        let router: Router<String, Infallible> = Router::new()
-            .route("/", get(index_handler))
-            .layer(map_response(append_header));
+        let route: BoxService<ServerContext, http::Request<String>, Response<Body>, Infallible> =
+            Route::new(index_handler.into_service());
+        let service = map_response(append_header).layer(route);
+
         let mut cx = empty_cx();
         let req = simple_req(Method::GET, "/", String::from(""));
-        let resp = router.call(&mut cx, req).await.unwrap();
+        let resp = service.call(&mut cx, req).await.unwrap();
         let (parts, _) = resp.into_response().into_parts();
         assert_eq!(parts.headers.get("Server").unwrap(), "nginx");
     }
