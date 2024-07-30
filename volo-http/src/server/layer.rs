@@ -243,8 +243,6 @@ where
 
 #[cfg(test)]
 mod layer_tests {
-    use std::convert::Infallible;
-
     use http::{method::Method, status::StatusCode};
 
     use super::*;
@@ -252,7 +250,7 @@ mod layer_tests {
         body::BodyConversion,
         context::ServerContext,
         server::{
-            route::{any, get, MethodRouter, Route},
+            route::{any, get, Route},
             test_helpers::*,
         },
     };
@@ -274,7 +272,7 @@ mod layer_tests {
         }
 
         let filter_layer = FilterLayer::new(reject_post);
-        let route = Route::new::<MethodRouter<&str, Infallible>>(any(handler));
+        let route: Route<&str> = Route::new(any(handler));
         let service = filter_layer.layer(route);
 
         let mut cx = empty_cx();
