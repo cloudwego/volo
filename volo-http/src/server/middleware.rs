@@ -367,3 +367,193 @@ where
         Ok(self.f.handle(cx, resp).await)
     }
 }
+
+#[cfg(test)]
+pub mod middleware_tests {
+    use faststr::FastStr;
+    use http::{HeaderValue, Method, Response, StatusCode, Uri};
+    use motore::service::service_fn;
+
+    use super::*;
+    use crate::{
+        body::{Body, BodyConversion},
+        context::ServerContext,
+        request::ServerRequest,
+        response::ServerResponse,
+        server::{
+            response::IntoResponse,
+            route::{any, get_service},
+            test_helpers::*,
+        },
+    };
+
+    async fn print_body_handler(
+        _: &mut ServerContext,
+        req: ServerRequest<String>,
+    ) -> Result<Response<Body>, Infallible> {
+        Ok(Response::new(req.into_body().into()))
+    }
+
+    async fn append_body_mw(
+        cx: &mut ServerContext,
+        req: ServerRequest<String>,
+        next: Next<String>,
+    ) -> ServerResponse {
+        let (parts, mut body) = req.into_parts();
+        body += "test";
+        let req = ServerRequest::from_parts(parts, body);
+        let resp = next.run(cx, req).await.into_response();
+        resp
+    }
+
+    async fn cors_mw(
+        method: Method,
+        url: Uri,
+        cx: &mut ServerContext,
+        req: ServerRequest<String>,
+        next: Next<String>,
+    ) -> ServerResponse {
+        let mut resp = next.run(cx, req).await.into_response();
+        resp.headers_mut().insert(
+            "Access-Control-Allow-Methods",
+            HeaderValue::from_str(method.as_str()).unwrap(),
+        );
+        resp.headers_mut().insert(
+            "Access-Control-Allow-Origin",
+            HeaderValue::from_str(url.to_string().as_str()).unwrap(),
+        );
+        resp.headers_mut().insert(
+            "Access-Control-Allow-Headers",
+            HeaderValue::from_str("*").unwrap(),
+        );
+        resp
+    }
+
+    #[tokio::test]
+    async fn test_from_fn_with_necessary_params() {
+        let handler = service_fn(print_body_handler);
+        let mut cx = empty_cx();
+
+        let service = from_fn(append_body_mw).layer(handler);
+        let req = simple_req(Method::GET, "/", String::from(""));
+        let resp = service.call(&mut cx, req).await.unwrap();
+        assert_eq!(resp.into_body().into_string().await.unwrap(), "test");
+
+        // Test case 3: Return type [`Result<_,_>`]
+        async fn error_mw(
+            _: &mut ServerContext,
+            _: ServerRequest<String>,
+            _: Next<String>,
+        ) -> Result<ServerResponse, StatusCode> {
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+        let service = from_fn(error_mw).layer(handler);
+        let req = simple_req(Method::GET, "/", String::from("test"));
+        let resp = service.call(&mut cx, req).await.unwrap();
+        let status = resp.status();
+        let (_, body) = resp.into_parts();
+        assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+        assert_eq!(body.into_string().await.unwrap(), "");
+    }
+
+    #[tokio::test]
+    async fn test_from_fn_with_optional_params() {
+        let handler = service_fn(print_body_handler);
+        let mut cx = empty_cx();
+
+        let service = from_fn(cors_mw).layer(handler);
+        let req = simple_req(Method::GET, "/", String::from(""));
+        let resp = service.call(&mut cx, req).await.unwrap();
+        assert_eq!(
+            resp.headers().get("Access-Control-Allow-Methods").unwrap(),
+            "GET"
+        );
+        assert_eq!(
+            resp.headers().get("Access-Control-Allow-Origin").unwrap(),
+            "/"
+        );
+        assert_eq!(
+            resp.headers().get("Access-Control-Allow-Headers").unwrap(),
+            "*"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_from_fn_with_multiple_mws() {
+        let handler = service_fn(print_body_handler);
+        let mut cx = empty_cx();
+
+        let service = from_fn(cors_mw).layer(handler);
+        let service = from_fn(append_body_mw).layer(service);
+        let req = simple_req(Method::GET, "/", String::from(""));
+        let resp = service.call(&mut cx, req).await.unwrap();
+        let (parts, body) = resp.into_parts();
+        assert_eq!(
+            parts.headers.get("Access-Control-Allow-Methods").unwrap(),
+            "GET"
+        );
+        assert_eq!(
+            parts.headers.get("Access-Control-Allow-Origin").unwrap(),
+            "/"
+        );
+        assert_eq!(
+            parts.headers.get("Access-Control-Allow-Headers").unwrap(),
+            "*"
+        );
+        assert_eq!(body.into_string().await.unwrap(), "test");
+    }
+
+    #[tokio::test]
+    async fn test_from_fn_converts() {
+        async fn converter(
+            cx: &mut ServerContext,
+            req: ServerRequest<String>,
+            next: Next<FastStr>,
+        ) -> ServerResponse {
+            let (parts, body) = req.into_parts();
+            let s = body.into_faststr().await.unwrap();
+            let req = ServerRequest::from_parts(parts, s);
+            let _: ServerRequest<FastStr> = req;
+            next.run(cx, req).await.into_response()
+        }
+
+        async fn service(
+            _: &mut ServerContext,
+            _: ServerRequest<FastStr>,
+        ) -> Result<ServerResponse, Infallible> {
+            Ok(Response::new(String::from("Hello, World").into()))
+        }
+
+        let route = Route::new(get_service(service_fn(service)));
+        let service = from_fn(converter).layer(route);
+
+        let _: Result<ServerResponse, Infallible> = service
+            .call(
+                &mut empty_cx(),
+                simple_req(Method::GET, "/", String::from("")),
+            )
+            .await;
+    }
+
+    async fn index_handler() -> &'static str {
+        "Hello, World"
+    }
+
+    #[tokio::test]
+    async fn test_map_response() {
+        async fn append_header(
+            resp: ServerResponse,
+        ) -> ((&'static str, &'static str), ServerResponse) {
+            (("Server", "nginx"), resp)
+        }
+
+        let route: Route<String> = Route::new(any(index_handler));
+        let service = map_response(append_header).layer(route);
+
+        let mut cx = empty_cx();
+        let req = simple_req(Method::GET, "/", String::from(""));
+        let resp = service.call(&mut cx, req).await.unwrap();
+        let (parts, _) = resp.into_response().into_parts();
+        assert_eq!(parts.headers.get("Server").unwrap(), "nginx");
+    }
+}
