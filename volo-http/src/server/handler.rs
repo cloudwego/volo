@@ -276,7 +276,7 @@ where
 
 impl<'r, F, Fut, R1, R2> MiddlewareHandlerMapResponse<'r, (ServerContext,), R1, R2> for F
 where
-    F: Fn(&mut ServerContext, R1) -> Fut + Copy + Send + Sync + 'r,
+    F: Fn(&'r mut ServerContext, R1) -> Fut + Copy + Send + Sync + 'r,
     Fut: Future<Output = R2> + Send + 'r,
     R2: 'r,
 {
@@ -317,7 +317,7 @@ mod handler_tests {
     use hyper::body::Incoming;
     use volo::net::Address;
 
-    use super::Handler;
+    use super::{Handler, MiddlewareHandlerMapResponse};
     use crate::{
         context::ServerContext,
         request::ServerRequest,
@@ -416,5 +416,25 @@ mod handler_tests {
         assert_handler(simple_mw_with_parts);
         assert_handler(with_error);
         assert_handler(convert_body);
+    }
+
+    #[test]
+    fn map_response_handler() {
+        fn assert_handler<F, T, R1, R2>(_: F)
+        where
+            F: for<'r> MiddlewareHandlerMapResponse<'r, T, R1, R2>,
+        {
+        }
+
+        async fn without_cx(_: ServerResponse) -> ServerResponse {
+            unimplemented!()
+        }
+
+        async fn with_cx(_: &mut ServerContext, _: ServerResponse) -> ServerResponse {
+            unimplemented!()
+        }
+
+        assert_handler(without_cx);
+        assert_handler(with_cx);
     }
 }

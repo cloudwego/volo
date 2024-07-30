@@ -379,7 +379,11 @@ pub mod middleware_tests {
         context::ServerContext,
         request::ServerRequest,
         response::ServerResponse,
-        server::{response::IntoResponse, route::get, test_helpers::*},
+        server::{
+            response::IntoResponse,
+            route::{get, get_service},
+            test_helpers::*,
+        },
         Router,
     };
 
@@ -500,11 +504,51 @@ pub mod middleware_tests {
     }
 
     #[tokio::test]
-    async fn test_map_response() {
-        async fn handler() -> &'static str {
-            "Hello, World"
+    async fn test_from_fn_converts() {
+        fn assert_request<B>(_: ServerRequest<B>) {}
+        fn assert_type<T>(_: T) {}
+
+        async fn converter(
+            cx: &mut ServerContext,
+            req: ServerRequest<String>,
+            next: Next<String>,
+        ) -> ServerResponse {
+            let (parts, body) = req.into_parts();
+            let s = body.into_string().await.unwrap();
+            let req = ServerRequest::from_parts(parts, s);
+            assert_request::<String>(req.clone());
+            next.run(cx, req).await.into_response()
         }
 
+        async fn service(
+            _: &mut ServerContext,
+            _: ServerRequest<String>,
+        ) -> Result<ServerResponse, Infallible> {
+            Ok(Response::new(String::from("Hello, World").into()))
+        }
+
+        let router: Router<String, Infallible> = Router::new()
+            .route("/", get_service(service_fn(service)))
+            .layer(from_fn(converter));
+
+        let resp = router
+            .call(
+                &mut empty_cx(),
+                simple_req::<_, String>(Method::GET, "/", String::from("")),
+            )
+            .await;
+        match resp {
+            Ok(resp) => assert_type::<String>(resp.into_string().await.unwrap()),
+            Err(err) => assert_type::<Infallible>(err),
+        };
+    }
+
+    async fn index_handler() -> &'static str {
+        "Hello, World"
+    }
+
+    #[tokio::test]
+    async fn test_map_response() {
         async fn append_header(
             resp: ServerResponse,
         ) -> ((&'static str, &'static str), ServerResponse) {
@@ -512,7 +556,7 @@ pub mod middleware_tests {
         }
 
         let router: Router<String, Infallible> = Router::new()
-            .route("/", get(handler))
+            .route("/", get(index_handler))
             .layer(map_response(append_header));
         let mut cx = empty_cx();
         let req = simple_req(Method::GET, "/", String::from(""));
