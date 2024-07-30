@@ -317,14 +317,14 @@ mod layer_tests {
         let mut cx = empty_cx();
 
         // Test case 1: timeout
-        let route = Route::new::<MethodRouter<&str, Infallible>>(get(index_timeout_handler));
+        let route: Route<&str> = Route::new(get(index_timeout_handler));
         let service = timeout_layer.clone().layer(route);
         let req = simple_req(Method::GET, "/", "");
         let resp = service.call(&mut cx, req).await.unwrap();
         assert_eq!(resp.status(), StatusCode::REQUEST_TIMEOUT);
 
         // Test case 2: not timeout
-        let route = Route::new::<MethodRouter<&str, Infallible>>(get(index_handler));
+        let route: Route<&str> = Route::new(get(index_handler));
         let service = timeout_layer.clone().layer(route);
         let req = simple_req(Method::GET, "/", "");
         let resp = service.call(&mut cx, req).await.unwrap();

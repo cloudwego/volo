@@ -372,7 +372,7 @@ where
 pub mod middleware_tests {
     use faststr::FastStr;
     use http::{HeaderValue, Method, Response, StatusCode, Uri};
-    use motore::service::{service_fn, BoxService};
+    use motore::service::service_fn;
 
     use super::*;
     use crate::{
@@ -380,7 +380,11 @@ pub mod middleware_tests {
         context::ServerContext,
         request::ServerRequest,
         response::ServerResponse,
-        server::{handler::Handler, response::IntoResponse, route::get_service, test_helpers::*},
+        server::{
+            response::IntoResponse,
+            route::{any, get_service},
+            test_helpers::*,
+        },
     };
 
     async fn print_body_handler(
@@ -543,8 +547,7 @@ pub mod middleware_tests {
             (("Server", "nginx"), resp)
         }
 
-        let route: BoxService<ServerContext, http::Request<String>, Response<Body>, Infallible> =
-            Route::new(index_handler.into_service());
+        let route: Route<String> = Route::new(any(index_handler));
         let service = map_response(append_header).layer(route);
 
         let mut cx = empty_cx();
