@@ -131,7 +131,7 @@ tracing-subscriber.workspace = true
 
 pilota.workspace = true
 volo = { path = "../volo" }
-volo-grpc = { path = "../volo-grpc" }
+volo-grpc = { path = "../volo-grpc", features = ["grpc-web"] }
 volo-thrift = { path = "../volo-thrift", features = ["multiplex"] }
 volo-http = { path = "../volo-http", features = [
     "default_client",
