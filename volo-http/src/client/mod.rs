@@ -77,7 +77,7 @@ pub struct ClientBuilder<IL, OL, C, LB> {
     callee_name: FastStr,
     caller_name: FastStr,
     target: Target,
-    call_opt: CallOpt,
+    call_opt: Option<CallOpt>,
     target_parser: TargetParser,
     headers: HeaderMap,
     inner_layer: IL,
@@ -436,13 +436,13 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         self
     }
 
-    /// Set a [`CallOpt`] to the client as default options.
+    /// Set a [`CallOpt`] to the client as default options for the default target.
     ///
     /// The [`CallOpt`] is used for service discover, default is an empty one.
     ///
     /// See [`CallOpt`] for more details.
     pub fn with_callopt(&mut self, call_opt: CallOpt) -> &mut Self {
-        self.call_opt = call_opt;
+        self.call_opt = Some(call_opt);
         self
     }
 
@@ -481,12 +481,12 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     }
 
     /// Get a reference of [`CallOpt`].
-    pub fn callopt_ref(&self) -> &CallOpt {
+    pub fn callopt_ref(&self) -> &Option<CallOpt> {
         &self.call_opt
     }
 
     /// Get a mutable reference of [`CallOpt`].
-    pub fn callopt_mut(&mut self) -> &mut CallOpt {
+    pub fn callopt_mut(&mut self) -> &mut Option<CallOpt> {
         &mut self.call_opt
     }
 
@@ -684,7 +684,7 @@ struct ClientInner {
     caller_name: FastStr,
     callee_name: FastStr,
     default_target: Target,
-    default_call_opt: CallOpt,
+    default_call_opt: Option<CallOpt>,
     target_parser: TargetParser,
     headers: HeaderMap,
 }
@@ -813,7 +813,7 @@ impl<S> Client<S> {
     pub async fn send_request<B>(
         &self,
         target: Target,
-        call_opt: CallOpt,
+        call_opt: Option<CallOpt>,
         mut request: ClientRequest<B>,
         timeout: Option<Duration>,
     ) -> Result<S::Response, S::Error>
@@ -829,11 +829,17 @@ impl<S> Client<S> {
 
         let (target, call_opt) = match (target.is_none(), self.inner.default_target.is_none()) {
             // The target specified by request exists and we can use it directly.
-            (false, _) => (target, &call_opt),
+            //
+            // Note that the default callopt only applies to the default target and should not be
+            // used here.
+            (false, _) => (target, call_opt.as_ref()),
             // Target is not specified by request, we can use the default target.
+            //
+            // Although the request does not set a target, its callopt should be valid for the
+            // default target.
             (true, false) => (
                 self.inner.default_target.clone(),
-                &self.inner.default_call_opt,
+                call_opt.as_ref().or(self.inner.default_call_opt.as_ref()),
             ),
             // Both target are none, return an error.
             (true, true) => {
@@ -922,8 +928,13 @@ mod client_tests {
 
     use http::{header, StatusCode};
     use serde::Deserialize;
+    use volo::context::Endpoint;
 
-    use super::{dns::DnsResolver, get, Client, DefaultClient};
+    use super::{
+        callopt::CallOpt,
+        dns::{parse_target, DnsResolver},
+        get, Client, DefaultClient, Target,
+    };
     use crate::{
         body::BodyConversion,
         error::client::status_error,
@@ -1120,5 +1131,94 @@ mod client_tests {
             ),
             format!("{}", bad_scheme()),
         );
+    }
+
+    struct CallOptInserted;
+
+    // Wrapper for [`parse_target`] with checking [`CallOptInserted`]
+    fn callopt_should_inserted(
+        target: Target,
+        call_opt: Option<&CallOpt>,
+        endpoint: &mut Endpoint,
+    ) {
+        assert!(call_opt.is_some());
+        assert!(call_opt.unwrap().contains::<CallOptInserted>());
+        parse_target(target, call_opt, endpoint);
+    }
+
+    fn callopt_should_not_inserted(
+        target: Target,
+        call_opt: Option<&CallOpt>,
+        endpoint: &mut Endpoint,
+    ) {
+        if let Some(call_opt) = call_opt {
+            assert!(!call_opt.contains::<CallOptInserted>());
+        }
+        parse_target(target, call_opt, endpoint);
+    }
+
+    #[tokio::test]
+    async fn no_callopt() {
+        let mut builder = Client::builder();
+        builder.target_parser(callopt_should_not_inserted);
+        let client = builder.build();
+
+        let resp = client.get(HTTPBIN_GET).unwrap().send().await;
+        assert!(resp.is_ok());
+    }
+
+    #[tokio::test]
+    async fn default_callopt() {
+        let mut builder = Client::builder();
+        builder.with_callopt(CallOpt::new().with(CallOptInserted));
+        builder.target_parser(callopt_should_not_inserted);
+        let client = builder.build();
+
+        let resp = client.get(HTTPBIN_GET).unwrap().send().await;
+        assert!(resp.is_ok());
+    }
+
+    #[tokio::test]
+    async fn request_callopt() {
+        let mut builder = Client::builder();
+        builder.target_parser(callopt_should_inserted);
+        let client = builder.build();
+
+        let resp = client
+            .get(HTTPBIN_GET)
+            .unwrap()
+            .with_callopt(CallOpt::new().with(CallOptInserted))
+            .send()
+            .await;
+        assert!(resp.is_ok());
+    }
+
+    #[tokio::test]
+    async fn override_callopt() {
+        let mut builder = Client::builder();
+        builder.with_callopt(CallOpt::new().with(CallOptInserted));
+        builder.target_parser(callopt_should_not_inserted);
+        let client = builder.build();
+
+        let resp = client
+            .get(HTTPBIN_GET)
+            .unwrap()
+            // insert an empty callopt
+            .with_callopt(CallOpt::new())
+            .send()
+            .await;
+        assert!(resp.is_ok());
+    }
+
+    #[tokio::test]
+    async fn default_target_and_callopt_with_new_target() {
+        let mut builder = Client::builder();
+        builder.host("httpbin.org");
+        builder.with_callopt(CallOpt::new().with(CallOptInserted));
+        builder.target_parser(callopt_should_not_inserted);
+        let client = builder.build();
+
+        let resp = client.get(HTTPBIN_GET).unwrap().send().await;
+        assert!(resp.is_ok());
     }
 }

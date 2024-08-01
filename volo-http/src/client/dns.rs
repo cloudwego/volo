@@ -139,7 +139,7 @@ impl Discover for DnsResolver {
 ///
 /// [TargetParser]: crate::client::target::TargetParser
 /// [LoadBalance]: volo::loadbalance::LoadBalance
-pub fn parse_target(target: Target, _: &CallOpt, endpoint: &mut Endpoint) {
+pub fn parse_target(target: Target, _: Option<&CallOpt>, endpoint: &mut Endpoint) {
     match target {
         Target::None => (),
         Target::Remote(rt) => {
