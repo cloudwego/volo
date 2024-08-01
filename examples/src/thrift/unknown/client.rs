@@ -12,8 +12,6 @@ lazy_static! {
     };
 }
 
-pub struct LogService<S>(S);
-
 #[volo::main]
 async fn main() {
     tracing_subscriber::fmt::init();
