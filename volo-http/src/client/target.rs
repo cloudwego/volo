@@ -19,7 +19,7 @@ use crate::{
 /// The `TargetParser` usually used for service discover. It can update [`Endpoint` ]from
 /// [`Target`] and [`CallOpt`], and the service discover will resolve the [`Endpoint`] to
 /// [`Address`]\(es\) and access them.
-pub type TargetParser = fn(Target, &CallOpt, &mut Endpoint);
+pub type TargetParser = fn(Target, Option<&CallOpt>, &mut Endpoint);
 
 /// HTTP target server descriptor
 #[derive(Clone, Debug, Default)]
@@ -159,13 +159,15 @@ impl Target {
     ///
     /// If the [`Target`] cannot use https ([`Target::None`] or [`Target::Local`]), this function
     /// will return `false`.
-    #[cfg(feature = "__tls")]
     pub fn is_https(&self) -> bool {
+        #[cfg(feature = "__tls")]
         if let Some(rt) = self.remote_ref() {
             rt.is_https()
         } else {
             false
         }
+        #[cfg(not(feature = "__tls"))]
+        false
     }
 
     /// Return the remote [`IpAddr`] if the [`Target`] is an IP address.
@@ -341,7 +343,6 @@ mod target_tests {
 
     use super::Target;
 
-    #[cfg(feature = "__tls")]
     #[test]
     fn test_from_uri() {
         // no domain name
@@ -401,14 +402,6 @@ mod target_tests {
         assert_eq!(target.port(), None);
         assert!(!target.is_https());
 
-        // domain with scheme (https)
-        let target = Target::from_uri(&Uri::from_static("https://github.com"));
-        assert!(matches!(target, Some(Ok(_))));
-        let target = target.unwrap().unwrap();
-        assert_eq!(target.remote_host().unwrap(), "github.com");
-        assert_eq!(target.port(), None);
-        assert!(target.is_https());
-
         // domain with port
         let target = Target::from_uri(&Uri::from_static("github.com:8000"));
         assert!(matches!(target, Some(Ok(_))));
@@ -424,6 +417,40 @@ mod target_tests {
         assert_eq!(target.remote_host().unwrap(), "github.com");
         assert_eq!(target.port(), Some(8000));
         assert!(!target.is_https());
+    }
+
+    #[cfg(not(feature = "__tls"))]
+    #[test]
+    fn test_from_uri_without_tls() {
+        // domain with scheme (https)
+
+        use crate::error::client::bad_scheme;
+        let target = Target::from_uri(&Uri::from_static("https://github.com"));
+        assert!(matches!(target, Some(Err(_))));
+        assert_eq!(
+            format!("{}", target.unwrap().unwrap_err()),
+            format!("{}", bad_scheme()),
+        );
+
+        // domain with scheme (https) and port
+        let target = Target::from_uri(&Uri::from_static("https://github.com:8000/"));
+        assert!(matches!(target, Some(Err(_))));
+        assert_eq!(
+            format!("{}", target.unwrap().unwrap_err()),
+            format!("{}", bad_scheme()),
+        );
+    }
+
+    #[cfg(feature = "__tls")]
+    #[test]
+    fn test_from_uri_with_tls() {
+        // domain with scheme (https)
+        let target = Target::from_uri(&Uri::from_static("https://github.com"));
+        assert!(matches!(target, Some(Ok(_))));
+        let target = target.unwrap().unwrap();
+        assert_eq!(target.remote_host().unwrap(), "github.com");
+        assert_eq!(target.port(), None);
+        assert!(target.is_https());
 
         // domain with scheme (https) and port
         let target = Target::from_uri(&Uri::from_static("https://github.com:8000/"));
@@ -434,7 +461,6 @@ mod target_tests {
         assert!(target.is_https());
     }
 
-    #[cfg(feature = "__tls")]
     #[test]
     fn test_from_ip_address() {
         // IPv4
@@ -547,6 +573,7 @@ mod target_tests {
         assert_eq!(target.port(), Some(port));
     }
 
+    #[cfg(feature = "__tls")]
     #[test]
     fn test_uri_with_https() {
         // domain name only
@@ -566,6 +593,7 @@ mod target_tests {
         assert!(target.is_https());
     }
 
+    #[cfg(feature = "__tls")]
     #[test]
     fn test_ip_with_https() {
         // IPv4
@@ -587,7 +615,7 @@ mod target_tests {
         assert!(target.is_https());
     }
 
-    #[cfg(target_family = "unix")]
+    #[cfg(all(feature = "__tls", target_family = "unix"))]
     #[test]
     fn test_uds_with_https() {
         let uds = std::os::unix::net::SocketAddr::from_pathname("/tmp/test.sock").unwrap();
@@ -599,6 +627,7 @@ mod target_tests {
         assert!(!target.is_https());
     }
 
+    #[cfg(feature = "__tls")]
     #[test]
     fn test_host_with_https() {
         let mut target = Target::from_host("github.com");
@@ -607,13 +636,14 @@ mod target_tests {
         assert!(target.is_https());
     }
 
-    fn gen_host_to_string(target: &Target) -> Option<String> {
-        let host = target.gen_host()?;
-        Some(host.to_str().map(ToOwned::to_owned).unwrap_or_default())
-    }
-
+    #[cfg(feature = "__tls")]
     #[test]
     fn test_gen_host() {
+        fn gen_host_to_string(target: &Target) -> Option<String> {
+            let host = target.gen_host()?;
+            Some(host.to_str().map(ToOwned::to_owned).unwrap_or_default())
+        }
+
         // ipv4 with default http port
         let target = Target::from_address(Address::Ip(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),

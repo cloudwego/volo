@@ -43,6 +43,7 @@ echo_command cargo clippy -p examples -- --deny warnings
 # Test
 echo_command cargo test -p volo-thrift
 echo_command cargo test -p volo-grpc --features rustls
+echo_command cargo test -p volo-http --features default_client,default_server
 echo_command cargo test -p volo-http --features full
 echo_command cargo test -p volo --features rustls
 echo_command cargo test -p volo-build

@@ -77,11 +77,9 @@ where
 /// With params that implement `FromContext`:
 ///
 /// ```
-/// use http::{status::StatusCode, uri::Uri};
-/// use volo::context::Context;
+/// use http::{header::HeaderMap, status::StatusCode, uri::Uri};
 /// use volo_http::{
 ///     context::ServerContext,
-///     cookie::CookieJar,
 ///     request::ServerRequest,
 ///     response::ServerResponse,
 ///     server::{
@@ -93,27 +91,22 @@ where
 ///
 /// struct Session;
 ///
-/// fn check_session(session: &str) -> Option<Session> {
+/// fn get_session(headers: &HeaderMap) -> Option<Session> {
 ///     unimplemented!()
 /// }
 ///
 /// async fn cookies_check(
 ///     uri: Uri,
-///     cookies: CookieJar,
 ///     cx: &mut ServerContext,
 ///     req: ServerRequest,
 ///     next: Next,
 /// ) -> Result<ServerResponse, StatusCode> {
-///     let session = cookies.get("session");
 ///     // User is not logged in, and not try to login.
+///     let session = get_session(req.headers());
 ///     if uri.path() != "/api/v1/login" && session.is_none() {
 ///         return Err(StatusCode::FORBIDDEN);
 ///     }
-///     let session = session.unwrap().value().to_string();
-///     let Some(session) = check_session(&session) else {
-///         return Err(StatusCode::FORBIDDEN);
-///     };
-///     cx.extensions_mut().insert(session);
+///     // do something
 ///     Ok(next.run(cx, req).await.into_response())
 /// }
 ///

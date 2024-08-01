@@ -28,7 +28,7 @@ use crate::{
 pub struct RequestBuilder<'a, S, B = Body> {
     client: &'a Client<S>,
     target: Target,
-    call_opt: CallOpt,
+    call_opt: Option<CallOpt>,
     request: ClientRequest<B>,
     timeout: Option<Duration>,
 }
@@ -168,7 +168,7 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
     ///
     /// See [`CallOpt`] for more details.
     pub fn with_callopt(mut self, call_opt: CallOpt) -> Self {
-        self.call_opt = call_opt;
+        self.call_opt = Some(call_opt);
         self
     }
 
@@ -276,12 +276,12 @@ impl<'a, S, B> RequestBuilder<'a, S, B> {
     }
 
     /// Get a reference to [`CallOpt`].
-    pub fn callopt_ref(&self) -> &CallOpt {
+    pub fn callopt_ref(&self) -> &Option<CallOpt> {
         &self.call_opt
     }
 
     /// Get a mutable reference to [`CallOpt`].
-    pub fn callopt_mut(&mut self) -> &mut CallOpt {
+    pub fn callopt_mut(&mut self) -> &mut Option<CallOpt> {
         &mut self.call_opt
     }
 
