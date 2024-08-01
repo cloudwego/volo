@@ -150,7 +150,7 @@ where
             }
         }
         if cx.transport.should_reuse && resp.is_ok() {
-            transport.reuse();
+            transport.reuse().await;
         }
         resp
     }

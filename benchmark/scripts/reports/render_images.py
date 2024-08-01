@@ -57,7 +57,7 @@ def parse_y(lines, idx, times=1):
 
 # TODO
 color_dict = {
-    "[volo]": "royalblue",
+    "[thrift]": "royalblue",
 }
 
 

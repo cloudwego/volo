@@ -23,7 +23,7 @@ class bcolors:
 def diff(from_csv, to_csv):
     from_reader = list(csv.reader(open(from_csv)))
     to_reader = csv.reader(open(to_csv))
-    title = ['Kind', 'Concurrency', 'Data Size', 'QPS', 'P99', 'P999', 'Client CPU', 'Server CPU']
+    title = ['Kind', 'Concurrency', 'Data Size', 'QPS', 'P99', 'P999', 'Server CPU', 'Client CPU']
     results = []
 
     for line_num, line in enumerate(to_reader):

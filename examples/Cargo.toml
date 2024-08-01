@@ -125,7 +125,6 @@ motore.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
-tonic-web.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
 

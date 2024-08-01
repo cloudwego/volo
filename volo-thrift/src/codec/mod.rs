@@ -14,22 +14,30 @@ pub use default::DefaultMakeCodec;
 /// Returning an Ok(None) indicates the EOF has been reached.
 ///
 /// Note: [`Decoder`] should be designed to be ready for reuse.
-pub trait Decoder: Send + 'static {
+pub trait Decoder: Send + Sync + 'static {
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
     ) -> impl Future<Output = Result<Option<ThriftMessage<Msg>>, ThriftException>> + Send;
+
+    fn is_closed(&self) -> impl Future<Output = bool> + Send {
+        async { false }
+    }
 }
 
 /// [`Encoder`] writes a [`ThriftMessage`] to an [`AsyncWrite`] and flushes the data.
 ///
 /// Note: [`Encoder`] should be designed to be ready for reuse.
-pub trait Encoder: Send + 'static {
+pub trait Encoder: Send + Sync + 'static {
     fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
         msg: ThriftMessage<Req>,
     ) -> impl Future<Output = Result<(), ThriftException>> + Send;
+
+    fn is_closed(&self) -> impl Future<Output = bool> + Send {
+        async { false }
+    }
 }
 
 /// [`MakeCodec`] receives an [`AsyncRead`] and an [`AsyncWrite`] and returns a

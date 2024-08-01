@@ -32,9 +32,9 @@ use std::future::Future;
 use bytes::Bytes;
 use linkedbytes::LinkedBytes;
 use pilota::thrift::ThriftException;
-use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, Interest};
 use tracing::{trace, warn};
-use volo::util::buf_reader::BufReader;
+use volo::{net::ready::AsyncReady, util::buf_reader::BufReader};
 
 use self::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec};
 use super::{Decoder, Encoder, MakeCodec};
@@ -115,7 +115,7 @@ pub struct DefaultEncoder<E, W> {
     linked_bytes: LinkedBytes,
 }
 
-impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
+impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncReady + Unpin + Send + Sync + 'static> Encoder
     for DefaultEncoder<E, W>
 {
     #[inline]
@@ -180,6 +180,20 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + Unpin + Send + Sync + 'static> Encoder
         }
         // write_result
     }
+
+    async fn is_closed(&self) -> bool {
+        match self
+            .writer
+            .ready(Interest::READABLE | Interest::WRITABLE)
+            .await
+        {
+            Ok(ready) => ready.is_read_closed() || ready.is_write_closed(),
+            Err(e) => {
+                warn!("[VOLO] thrift codec write half ready error: {}", e);
+                true
+            }
+        }
+    }
 }
 
 pub struct DefaultDecoder<D, R> {
@@ -187,7 +201,7 @@ pub struct DefaultDecoder<D, R> {
     reader: BufReader<R>,
 }
 
-impl<D: ZeroCopyDecoder, R: AsyncRead + Unpin + Send + Sync + 'static> Decoder
+impl<D: ZeroCopyDecoder, R: AsyncRead + AsyncReady + Unpin + Send + Sync + 'static> Decoder
     for DefaultDecoder<D, R>
 {
     #[inline]
@@ -274,8 +288,8 @@ impl Default for DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCo
 impl<MkZC, R, W> MakeCodec<R, W> for DefaultMakeCodec<MkZC>
 where
     MkZC: MakeZeroCopyCodec,
-    R: AsyncRead + Unpin + Send + Sync + 'static,
-    W: AsyncWrite + Unpin + Send + Sync + 'static,
+    R: AsyncRead + AsyncReady + Unpin + Send + Sync + 'static,
+    W: AsyncWrite + AsyncReady + Unpin + Send + Sync + 'static,
 {
     type Encoder = DefaultEncoder<MkZC::Encoder, W>;
     type Decoder = DefaultDecoder<MkZC::Decoder, R>;

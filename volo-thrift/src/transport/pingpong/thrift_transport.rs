@@ -146,7 +146,10 @@ where
     E: Encoder,
     D: Decoder,
 {
-    fn reusable(&self) -> bool {
-        self.read_half.reusable && self.write_half.reusable
+    async fn reusable(&self) -> bool {
+        self.read_half.reusable
+            && self.write_half.reusable
+            && !self.read_half.decoder.is_closed().await
+            && !self.write_half.encoder.is_closed().await
     }
 }
