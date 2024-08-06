@@ -100,19 +100,28 @@ pub fn invalid_content_type() -> ExtractBodyError {
     ExtractBodyError::Generic(GenericRejectionError::InvalidContentType)
 }
 
+/// Rejection used for [`WebSocketUpgrade`](crate::server::extract::WebSocketUpgrade).
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum WebSocketUpgradeRejectionError {
+    /// The request method must be `GET`
     MethodNotGet,
+    /// The HTTP version is not supported
     InvalidHttpVersion,
+    /// The `Connection` header is invalid
     InvalidConnectionHeader,
+    /// The `Upgrade` header is invalid
     InvalidUpgradeHeader,
+    /// The `Sec-WebSocket-Version` header is invalid
     InvalidWebSocketVersionHeader,
+    /// The `Sec-WebSocket-Key` header is missing
     WebSocketKeyHeaderMissing,
+    /// The connection is not upgradable
     ConnectionNotUpgradable,
 }
 
 impl WebSocketUpgradeRejectionError {
+    /// Convert the [`WebSocketUpgradeRejectionError`] to the corresponding [`StatusCode`]
     pub fn to_status_code(self) -> StatusCode {
         match self {
             Self::MethodNotGet => StatusCode::METHOD_NOT_ALLOWED,

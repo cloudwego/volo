@@ -21,7 +21,9 @@ use crate::{
     response::ServerResponse, server::extract::FromContext,
 };
 
+/// WebSocketStream used In handler Request
 pub type WebSocket = WebSocketStream<TokioIo<hyper::upgrade::Upgraded>>;
+/// alias of [`tungstenite::Message`]
 pub type Message = tungstenite::Message;
 
 /// WebSocket headers that will be used for the upgrade request.
@@ -43,6 +45,7 @@ impl std::fmt::Debug for Headers {
     }
 }
 
+/// WebSocket config
 pub struct Config {
     /// WebSocket config for transport (alias of [`tungstenite::protocol::WebSocketConfig`])
     /// e.g. max write buffer size
@@ -53,6 +56,7 @@ pub struct Config {
 }
 
 impl Config {
+    /// Create Default Config
     pub fn new() -> Self {
         Config {
             transport: WebSocketConfig::default(),
@@ -129,7 +133,8 @@ impl std::fmt::Debug for Config {
 
 /// Callback fn that processes [`WebSocket`]
 pub trait Callback: Send + 'static {
-    fn call(self, _: WebSocket) -> impl std::future::Future<Output = ()> + std::marker::Send;
+    /// Called when a connection upgrade succeeds
+    fn call(self, _: WebSocket) -> impl Future<Output = ()> + Send;
 }
 
 impl<Fut, C> Callback for C
@@ -147,6 +152,7 @@ where
 ///
 /// See [`WebSocketUpgrade::on_failed_upgrade`] for more details.
 pub trait OnFailedUpgrade: Send + 'static {
+    /// Called when a connection upgrade fails.
     fn call(self, error: Error);
 }
 
@@ -171,6 +177,9 @@ impl OnFailedUpgrade for DefaultOnFailedUpgrade {
     fn call(self, _error: Error) {}
 }
 
+/// The default `Callback` used by `WebSocketUpgrade`.
+///
+/// It simply ignores the socket.
 #[derive(Copy, Clone)]
 pub struct DefaultCallback;
 impl Callback for DefaultCallback {
