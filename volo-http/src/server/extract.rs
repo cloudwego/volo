@@ -18,6 +18,7 @@ use hyper::body::Incoming;
 use mime::Mime;
 use volo::{context::Context, net::Address};
 
+pub use super::utils::{Message, WebSocket, WebSocketConfig, WebSocketUpgrade};
 use super::IntoResponse;
 use crate::{
     context::ServerContext,

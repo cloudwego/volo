@@ -59,8 +59,12 @@ tokio = { workspace = true, features = [
 tokio-util = { workspace = true, features = ["io"] }
 tracing.workspace = true
 
+# =====optional=====
 # server optional
 matchit = { workspace = true, optional = true }
+
+# protocol optional
+tokio-tungstenite = { workspace = true, optional = true }
 
 # tls optional
 tokio-rustls = { workspace = true, optional = true }
@@ -88,8 +92,11 @@ default_server = ["server", "query", "form", "json"]
 
 full = ["client", "server", "rustls", "cookie", "query", "form", "json", "tls"]
 
-client = ["hyper/client", "hyper/http1"] # client core
-server = ["hyper/server", "hyper/http1", "dep:matchit"] # server core
+client = ["hyper/client", "hyper/http1", "ws"] # client core
+server = ["hyper/server", "hyper/http1", "dep:matchit", "ws"] # server core
+
+protocol = ["ws"]
+ws = ["dep:tokio-tungstenite"]
 
 tls = ["rustls"]
 __tls = []
