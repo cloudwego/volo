@@ -1,0 +1,39 @@
+[package]
+name = "benchmark"
+version = "0.0.0"
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "bench-client"
+path = "src/bin/client.rs"
+[[bin]]
+name = "bench-server"
+path = "src/bin/server.rs"
+
+[dependencies]
+anyhow.workspace = true
+bytes.workspace = true
+chrono.workspace = true
+clap = { workspace = true, features = ["derive"] }
+faststr.workspace = true
+governor.workspace = true
+lazy_static.workspace = true
+metainfo.workspace = true
+motore.workspace = true
+serde.workspace = true
+sysinfo.workspace = true
+tokio = { workspace = true, features = ["full"] }
+tokio-util.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+pilota.workspace = true
+volo = { path = "../volo" }
+volo-thrift = { path = "../volo-thrift", features = ["multiplex"] }
+
+[build-dependencies]
+volo-build = { path = "../volo-build" }

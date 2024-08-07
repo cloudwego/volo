@@ -359,8 +359,8 @@ where
     }
 }
 
-impl<TTEncoder, Resp> Poolable for ThriftTransport<TTEncoder, Resp> {
-    fn reusable(&self) -> bool {
+impl<TTEncoder: Send, Resp: Send> Poolable for ThriftTransport<TTEncoder, Resp> {
+    async fn reusable(&self) -> bool {
         !self.write_error.load(std::sync::atomic::Ordering::Relaxed)
             && !self.read_error.load(std::sync::atomic::Ordering::Relaxed)
             && !self.read_closed.load(std::sync::atomic::Ordering::Relaxed)
