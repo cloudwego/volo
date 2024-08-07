@@ -92,10 +92,9 @@ default_server = ["server", "query", "form", "json"]
 
 full = ["client", "server", "rustls", "cookie", "query", "form", "json", "tls"]
 
-client = ["hyper/client", "hyper/http1", "ws"] # client core
-server = ["hyper/server", "hyper/http1", "dep:matchit", "ws"] # server core
+client = ["hyper/client", "hyper/http1"] # client core
+server = ["hyper/server", "hyper/http1", "dep:matchit"] # server core
 
-protocol = ["ws"]
 ws = ["dep:tokio-tungstenite"]
 
 tls = ["rustls"]
