@@ -345,16 +345,7 @@ where
                         })
                         .unwrap()
                         .clone()
-                    // protocol.clone()
                 })
-                // .into_iter()
-                // .find(|protocol| {
-                //     req_protocols
-                //         .split(',')
-                //         .any(|req_protocol| req_protocol == *protocol)
-                // })
-                // .unwrap();
-                // Some(protocol.clone())
             });
 
         let callback = protocol
