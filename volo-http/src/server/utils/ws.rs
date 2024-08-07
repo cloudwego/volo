@@ -12,9 +12,8 @@
 //! use volo_http::{
 //!     response::ServerResponse,
 //!     server::{
-//!         utils::{Message, WebSocket},
 //!         route::get,
-//!         utils::WebSocketUpgrade,
+//!         utils::{Message, WebSocket, WebSocketUpgrade},
 //!     },
 //!     Router,
 //! };
@@ -83,8 +82,8 @@ impl std::fmt::Debug for Headers {
 /// WebSocket config
 #[derive(Default)]
 pub struct Config {
-    /// WebSocket config for transport (alias of [`WebSocketConfig`](tungstenite::protocol::WebSocketConfig))
-    /// e.g. max write buffer size
+    /// WebSocket config for transport (alias of
+    /// [`WebSocketConfig`](tungstenite::protocol::WebSocketConfig)) e.g. max write buffer size
     transport: WebSocketConfig,
     /// The chosen protocol sent in the `Sec-WebSocket-Protocol` header of the response.
     /// use [`WebSocketUpgrade::protocols`] to set server supported protocols
@@ -103,8 +102,8 @@ impl Config {
     /// Set server supported protocols.
     ///
     /// This will filter protocols in request header `Sec-WebSocket-Protocol`
-    /// and will set the first server supported protocol in [`http::header::Sec-WebSocket-Protocol`] in
-    /// response
+    /// and will set the first server supported protocol in [`http::header::Sec-WebSocket-Protocol`]
+    /// in response
     ///
     /// ```rust
     /// use volo_http::server::utils::WebSocketConfig;
