@@ -168,8 +168,7 @@ pub trait Callback: Send + 'static {
 impl<Fut, C> Callback for C
 where
     Fut: Future<Output = ()> + Send + 'static,
-    C: FnOnce(WebSocket) -> Fut + Send + 'static,
-    C: Copy,
+    C: FnOnce(WebSocket) -> Fut + Send + Copy + 'static,
 {
     async fn call(self, websocket: WebSocket) {
         self(websocket).await;
@@ -208,7 +207,7 @@ impl OnFailedUpgrade for DefaultOnFailedUpgrade {
 /// The default `Callback` used by `WebSocketUpgrade`.
 ///
 /// It simply ignores the socket.
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct DefaultCallback;
 impl Callback for DefaultCallback {
     #[inline]
