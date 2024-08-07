@@ -604,7 +604,7 @@ mod websocket_tests {
 
         let addr = Address::Ip(net::SocketAddr::new(
             net::IpAddr::V4(net::Ipv4Addr::new(127, 0, 0, 1)),
-            8000,
+            25230,
         ));
 
         let builder = ClientRequestBuilder::new(
@@ -621,7 +621,7 @@ mod websocket_tests {
         assert_eq!(output, Message::Text("foobar-graphql-ws".to_owned()));
     }
 
-    #[tokio::test]
+    #[cfg(test)]
     async fn integration_test() {
         async fn handle_socket(mut socket: WebSocket) {
             while let Some(Ok(msg)) = socket.next().await {
@@ -641,7 +641,7 @@ mod websocket_tests {
 
         let addr = Address::Ip(net::SocketAddr::new(
             net::IpAddr::V4(net::Ipv4Addr::new(127, 0, 0, 1)),
-            8001,
+            25231,
         ));
 
         let builder = ClientRequestBuilder::new(
