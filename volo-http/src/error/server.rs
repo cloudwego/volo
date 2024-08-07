@@ -100,7 +100,7 @@ pub fn invalid_content_type() -> ExtractBodyError {
     ExtractBodyError::Generic(GenericRejectionError::InvalidContentType)
 }
 
-/// Rejection used for [`WebSocketUpgrade`](crate::server::extract::WebSocketUpgrade).
+/// Rejection used for [`WebSocketUpgrade`](crate::server::utils::WebSocketUpgrade).
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum WebSocketUpgradeRejectionError {
