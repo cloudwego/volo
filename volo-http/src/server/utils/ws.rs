@@ -190,7 +190,7 @@ impl Callback for DefaultCallback {
 /// Extractor of [`FromContext`] for establishing WebSocket connection
 ///
 /// Constrains:
-/// The extractor only supports for the request that has the method [`Method::GET`]
+/// The extractor only supports for the request that has the method [`GET`](http::Method::GET)
 /// and contains certain header values.
 /// See [`WebSocketUpgrade::from_context`] for more details.
 pub struct WebSocketUpgrade<C = DefaultCallback, F = DefaultOnFailedUpgrade> {
