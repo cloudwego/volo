@@ -12,7 +12,7 @@ use volo::{net::Address, volo_unreachable};
 
 use crate::{
     codec::{Decoder, Encoder},
-    context::{ServerContext, SERVER_CONTEXT_CACHE},
+    context::{ServerContext, ThriftContext, SERVER_CONTEXT_CACHE},
     protocol::TMessageType,
     server_error_to_application_exception, thrift_exception_to_application_exception,
     tracing::SpanProvider,
@@ -81,11 +81,11 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     match msg {
                         Ok(Some(ThriftMessage { data: Ok(req), .. })) => {
                             cx.stats.record_process_start_at();
-                            let resp = service.call(&mut cx, req).await;
+                            let resp = service.call(&mut cx, req).await.map_err(Into::into);
                             cx.stats.record_process_end_at();
 
                             if exit_mark.load(Ordering::Relaxed) {
-                                cx.transport.set_conn_reset(true);
+                                cx.set_conn_reset_by_ttheader(true);
                             }
 
                             let req_msg_type =
@@ -98,9 +98,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                 });
                                 let msg = ThriftMessage::mk_server_resp(
                                     &cx,
-                                    resp.map_err(|e| {
-                                        server_error_to_application_exception(e.into())
-                                    }),
+                                    resp.map_err(server_error_to_application_exception),
                                 );
                                 if let Err(e) = async {
                                     let result = encoder.encode(&mut cx, msg).await;
@@ -118,6 +116,9 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                     stat_tracer.iter().for_each(|f| f(&cx));
                                     return Err(());
                                 }
+                            }
+                            if cx.transport.is_conn_reset() {
+                                return Err(());
                             }
                         }
                         Ok(Some(ThriftMessage { data: Err(_), .. })) => {
@@ -138,6 +139,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                 e, cx, peer_addr
                             );
                             cx.msg_type = Some(TMessageType::Exception);
+                            cx.set_conn_reset_by_ttheader(true);
                             if !matches!(e, ThriftException::Transport(_)) {
                                 let msg = ThriftMessage::mk_server_resp(
                                     &cx,

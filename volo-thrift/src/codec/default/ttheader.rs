@@ -324,7 +324,7 @@ pub(crate) fn encode<Cx: ThriftContext>(
             }
             Role::Server => {
                 metainfo.get_all_backward_transients().is_some()
-                    || cx.encode_conn_reset().unwrap_or(false)
+                    || cx.encode_conn_reset()
                     || cx.stats().biz_error().is_some()
             }
         };
@@ -375,7 +375,7 @@ pub(crate) fn encode<Cx: ThriftContext>(
                             string_kv_len += 1;
                         }
                     }
-                    if cx.encode_conn_reset().unwrap_or(false) {
+                    if cx.encode_conn_reset() {
                         dst.put_u16(5);
                         dst.put_slice("crrst".as_bytes());
                         dst.put_u16(1);
@@ -582,8 +582,7 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                 metainfo.get_all_persistents().is_some() || metainfo.get_all_transients().is_some()
             }
             Role::Server => {
-                metainfo.get_all_backward_transients().is_some()
-                    || thrift_cx.encode_conn_reset().unwrap_or(false)
+                metainfo.get_all_backward_transients().is_some() || thrift_cx.encode_conn_reset()
             }
         };
 
@@ -624,7 +623,7 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                             len += value.as_bytes().len();
                         }
                     }
-                    if thrift_cx.encode_conn_reset().unwrap_or(false) {
+                    if thrift_cx.encode_conn_reset() {
                         len += 2;
                         len += "crrst".as_bytes().len();
                         len += 2;

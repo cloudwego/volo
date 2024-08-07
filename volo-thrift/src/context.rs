@@ -292,7 +292,7 @@ impl std::ops::DerefMut for ServerContext {
 }
 
 pub trait ThriftContext: volo::context::Context<Config = Config> + Send + 'static {
-    fn encode_conn_reset(&self) -> Option<bool>;
+    fn encode_conn_reset(&self) -> bool;
     fn set_conn_reset_by_ttheader(&mut self, reset: bool);
     fn handle_decoded_msg_ident(&mut self, ident: &TMessageIdentifier);
     fn seq_id(&self) -> i32;
@@ -307,8 +307,8 @@ pub trait ThriftContext: volo::context::Context<Config = Config> + Send + 'stati
 
 impl ThriftContext for ClientContext {
     #[inline]
-    fn encode_conn_reset(&self) -> Option<bool> {
-        None
+    fn encode_conn_reset(&self) -> bool {
+        false
     }
 
     #[inline]
@@ -342,12 +342,14 @@ impl ThriftContext for ClientContext {
 
 impl ThriftContext for ServerContext {
     #[inline]
-    fn encode_conn_reset(&self) -> Option<bool> {
-        Some(self.transport.is_conn_reset())
+    fn encode_conn_reset(&self) -> bool {
+        self.transport.is_conn_reset()
     }
 
     #[inline]
-    fn set_conn_reset_by_ttheader(&mut self, _reset: bool) {}
+    fn set_conn_reset_by_ttheader(&mut self, reset: bool) {
+        self.transport.set_conn_reset(reset)
+    }
 
     #[inline]
     fn handle_decoded_msg_ident(&mut self, ident: &TMessageIdentifier) {
