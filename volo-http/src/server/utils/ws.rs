@@ -46,6 +46,7 @@ impl std::fmt::Debug for Headers {
 }
 
 /// WebSocket config
+#[derive(Default)]
 pub struct Config {
     /// WebSocket config for transport (alias of [`tungstenite::protocol::WebSocketConfig`])
     /// e.g. max write buffer size
@@ -110,15 +111,6 @@ impl Config {
     pub fn set_transport(mut self, config: WebSocketConfig) -> Self {
         self.transport = config;
         self
-    }
-}
-
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            transport: Default::default(),
-            protocols: None,
-        }
     }
 }
 
@@ -345,7 +337,7 @@ where
                 let binding = self.config.protocols.clone();
                 binding.as_ref().map(|protocol| {
                     protocol
-                        .into_iter()
+                        .iter()
                         .find(|protocol| {
                             req_protocols
                                 .split(',')
@@ -417,10 +409,10 @@ impl FromContext for WebSocketUpgrade<DefaultCallback> {
         parts: &mut Parts,
     ) -> Result<Self, Self::Rejection> {
         if parts.method != http::Method::GET {
-            return Err(WebSocketUpgradeRejectionError::MethodNotGet.into());
+            return Err(WebSocketUpgradeRejectionError::MethodNotGet);
         }
         if parts.version < http::Version::HTTP_11 {
-            return Err(WebSocketUpgradeRejectionError::InvalidHttpVersion.into());
+            return Err(WebSocketUpgradeRejectionError::InvalidHttpVersion);
         }
 
         fn header_contains(headers: &HeaderMap, key: HeaderName, value: &'static str) -> bool {
@@ -438,7 +430,7 @@ impl FromContext for WebSocketUpgrade<DefaultCallback> {
         }
 
         if !header_contains(&parts.headers, http::header::CONNECTION, "upgrade") {
-            return Err(WebSocketUpgradeRejectionError::InvalidConnectionHeader.into());
+            return Err(WebSocketUpgradeRejectionError::InvalidConnectionHeader);
         }
 
         fn header_eq(headers: &HeaderMap, key: HeaderName, value: &'static str) -> bool {
@@ -450,11 +442,11 @@ impl FromContext for WebSocketUpgrade<DefaultCallback> {
         }
 
         if !header_eq(&parts.headers, http::header::UPGRADE, "websocket") {
-            return Err(WebSocketUpgradeRejectionError::InvalidUpgradeHeader.into());
+            return Err(WebSocketUpgradeRejectionError::InvalidUpgradeHeader);
         }
 
         if !header_eq(&parts.headers, http::header::SEC_WEBSOCKET_VERSION, "13") {
-            return Err(WebSocketUpgradeRejectionError::InvalidWebSocketVersionHeader.into());
+            return Err(WebSocketUpgradeRejectionError::InvalidWebSocketVersionHeader);
         }
 
         let sec_websocket_key = parts
