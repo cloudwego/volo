@@ -157,7 +157,7 @@ impl std::fmt::Debug for Config {
 }
 
 /// Callback fn that processes [`WebSocket`]
-trait Callback: Send + 'static {
+pub trait Callback: Send + 'static {
     /// Called when a connection upgrade succeeds
     fn call(self, _: WebSocket) -> impl Future<Output = ()> + Send;
 }
@@ -295,7 +295,7 @@ where
     ///         WebSocketConfig::new()
     ///             .set_protocols(["graphql-ws","graphql-transport-ws"])
     ///         )
-    ///         .on_protocol(HashMap::from([("graphql-ws",|mut socket: WebSocket| async move{})]))
+    ///         .on_protocol([("graphql-ws",|mut socket: WebSocket| async move{})])
     ///         .on_upgrade(|socket| async{} )
     /// }
     pub fn on_protocol<H, I, C1>(self, on_protocol: I) -> WebSocketUpgrade<C1, F>
@@ -624,7 +624,7 @@ mod websocket_tests {
             ws.set_config(
                 WebSocketConfig::new().set_protocols(["graphql-ws", "graphql-transport-ws"]),
             )
-            .on_protocol(HashMap::from([(
+            .on_protocol([(
                 "graphql-ws",
                 |mut socket: WebSocket| async move {
                     while let Some(Ok(msg)) = socket.next().await {
@@ -639,7 +639,7 @@ mod websocket_tests {
                         }
                     }
                 },
-            )]))
+            )])
             .on_upgrade(|_| async {})
         }
 
