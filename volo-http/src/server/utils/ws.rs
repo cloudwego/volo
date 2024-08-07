@@ -541,8 +541,7 @@ mod websocket_tests {
     where
         R: IntoClientRequest + Unpin,
         Fut: Future<Output = ServerResponse> + Send + 'static,
-        C: FnOnce(WebSocketUpgrade) -> Fut + Send + 'static,
-        C: Send + Sync + Clone,
+        C: FnOnce(WebSocketUpgrade) -> Fut + Send + Sync + Clone + 'static,
     {
         let app = Router::new().route("/echo", get(handler));
 
