@@ -94,7 +94,6 @@ impl ClientTransport {
             volo::net::conn::ConnStream::Tcp(tcp_stream) => tcp_stream,
             _ => unreachable!(),
         };
-        println!("target_name: {target_name}");
         self.tls_connector
             .connect(target_name, tcp_stream)
             .await

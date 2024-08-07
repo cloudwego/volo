@@ -93,7 +93,7 @@ where
         let path = req.uri().path();
         let path = path.strip_prefix('/').unwrap_or(path);
 
-        tracing::trace!("ServeDir: path: {path}");
+        tracing::trace!("[Volo-HTTP] ServeDir: path: {path}");
 
         // Join to the serving directory and canonicalize it
         let path = self.path.join(path);
@@ -103,7 +103,7 @@ where
 
         // Reject file which is out of the serving directory
         if path.strip_prefix(self.path.as_path()).is_err() {
-            tracing::debug!("ServeDir: illegal path: {}", path.display());
+            tracing::debug!("[Volo-HTTP] ServeDir: illegal path: {}", path.display());
             return Ok(StatusCode::FORBIDDEN.into_response());
         }
 
