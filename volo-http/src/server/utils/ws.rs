@@ -624,22 +624,19 @@ mod websocket_tests {
             ws.set_config(
                 WebSocketConfig::new().set_protocols(["graphql-ws", "graphql-transport-ws"]),
             )
-            .on_protocol([(
-                "graphql-ws",
-                |mut socket: WebSocket| async move {
-                    while let Some(Ok(msg)) = socket.next().await {
-                        match msg {
-                            Message::Text(text) => {
-                                socket
-                                    .send(Message::Text(text.add("-graphql-ws")))
-                                    .await
-                                    .unwrap();
-                            }
-                            _ => {}
+            .on_protocol([("graphql-ws", |mut socket: WebSocket| async move {
+                while let Some(Ok(msg)) = socket.next().await {
+                    match msg {
+                        Message::Text(text) => {
+                            socket
+                                .send(Message::Text(text.add("-graphql-ws")))
+                                .await
+                                .unwrap();
                         }
+                        _ => {}
                     }
-                },
-            )])
+                }
+            })])
             .on_upgrade(|_| async {})
         }
 
