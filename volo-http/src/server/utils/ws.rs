@@ -1,11 +1,9 @@
 //! Module for handling WebSocket connection
 //!
-//!
 //! This module provides utilities for setting up and handling WebSocket connections, including
 //! configuring WebSocket options, setting protocols, and upgrading connections.
 //!
 //! It uses [`hyper::upgrade::OnUpgrade`] to upgrade the connection.
-//!
 //!
 //! # Example
 //!
@@ -14,7 +12,7 @@
 //! use volo_http::{
 //!     response::ServerResponse,
 //!     server::{
-//!         extract::{Message, WebSocket},
+//!         utils::{Message, WebSocket},
 //!         route::get,
 //!         utils::WebSocketUpgrade,
 //!     },
@@ -63,13 +61,13 @@ pub type WebSocket = WebSocketStream<TokioIo<hyper::upgrade::Upgraded>>;
 /// alias of [`tungstenite::Message`]
 pub type Message = tungstenite::Message;
 
-/// WebSocket headers that will be used for the upgrade request.
+/// WebSocket Request headers for establishing a WebSocket connection.
 struct Headers {
     /// The `Sec-WebSocket-Key` request header value
     /// used for compute 'Sec-WebSocket-Accept' response header value
     sec_websocket_key: HeaderValue,
     /// The `Sec-WebSocket-Protocol` request header value
-    /// specify [`Callback`] method depend on protocol
+    /// specify [`Callback`] method depend on the protocol
     sec_websocket_protocol: Option<HeaderValue>,
 }
 
@@ -85,7 +83,7 @@ impl std::fmt::Debug for Headers {
 /// WebSocket config
 #[derive(Default)]
 pub struct Config {
-    /// WebSocket config for transport (alias of [`tungstenite::protocol::WebSocketConfig`])
+    /// WebSocket config for transport (alias of [`WebSocketConfig`](tungstenite::protocol::WebSocketConfig))
     /// e.g. max write buffer size
     transport: WebSocketConfig,
     /// The chosen protocol sent in the `Sec-WebSocket-Protocol` header of the response.
@@ -102,11 +100,11 @@ impl Config {
         }
     }
 
-    /// Set server supported protocols
-    /// This will filter protocols in request header `Sec-WebSocket-Protocol`
-    /// will set the first server supported protocol in [`http::header::Sec-WebSocket-Protocol`] in
-    /// response
+    /// Set server supported protocols.
     ///
+    /// This will filter protocols in request header `Sec-WebSocket-Protocol`
+    /// and will set the first server supported protocol in [`http::header::Sec-WebSocket-Protocol`] in
+    /// response
     ///
     /// ```rust
     /// use volo_http::server::utils::WebSocketConfig;
@@ -160,7 +158,7 @@ impl std::fmt::Debug for Config {
 }
 
 /// Callback fn that processes [`WebSocket`]
-pub trait Callback: Send + 'static {
+trait Callback: Send + 'static {
     /// Called when a connection upgrade succeeds
     fn call(self, _: WebSocket) -> impl Future<Output = ()> + Send;
 }
@@ -224,7 +222,7 @@ impl Callback for DefaultCallback {
 /// # Usage
 ///
 /// ```rust
-/// use volo_http::{response::ServerResponse, server::extract::WebSocketUpgrade};
+/// use volo_http::{response::ServerResponse, server::utils::WebSocketUpgrade};
 ///
 /// fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
 ///     ws.on_upgrade(|socket| unimplemented!())
@@ -256,8 +254,10 @@ where
     /// ```rust
     /// use volo_http::{
     ///     response::ServerResponse,
-    ///     server::extract::WebSocketConfig,
-    ///     server::extract::WebSocketUpgrade,
+    ///     server::utils::{
+    ///         WebSocketConfig,
+    ///         WebSocketUpgrade,
+    ///     }
     /// };
     /// use tokio_tungstenite::tungstenite::protocol::{WebSocketConfig as WebSocketTransConfig};
     ///
@@ -284,7 +284,7 @@ where
     /// use std::collections::HashMap;
     /// use volo_http::{
     ///     response::ServerResponse,
-    ///     server::extract::{
+    ///     server::utils::{
     ///         WebSocketConfig,
     ///         WebSocketUpgrade,
     ///         WebSocket,
@@ -333,7 +333,7 @@ where
     /// use std::collections::HashMap;
     /// use volo_http::{
     ///     response::ServerResponse,
-    ///     server::extract::{
+    ///     server::utils::{
     ///         WebSocketConfig,
     ///         WebSocketUpgrade,
     ///         WebSocket,
@@ -618,7 +618,7 @@ mod websocket_tests {
     async fn on_protocol() {
         use crate::{
             response::ServerResponse,
-            server::extract::{WebSocketConfig, WebSocketUpgrade},
+            server::utils::{WebSocketConfig, WebSocketUpgrade},
         };
 
         async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {

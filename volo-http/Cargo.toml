@@ -90,7 +90,7 @@ default = []
 default_client = ["client", "json"]
 default_server = ["server", "query", "form", "json"]
 
-full = ["client", "server", "rustls", "cookie", "query", "form", "json", "tls"]
+full = ["client", "server", "rustls", "cookie", "query", "form", "json", "tls", "ws"]
 
 client = ["hyper/client", "hyper/http1"] # client core
 server = ["hyper/server", "hyper/http1", "dep:matchit"] # server core
