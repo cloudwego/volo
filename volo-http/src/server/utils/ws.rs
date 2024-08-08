@@ -35,7 +35,7 @@
 //!     ws.on_upgrade(handle_socket)
 //! }
 //!
-//! let app: Router<ServerResponse, Infallible> = Router::new().route("/ws", get(ws_handler));
+//! let app: Router = Router::new().route("/ws", get(ws_handler));
 //! ```
 
 use std::{borrow::Cow, fmt::Formatter, future::Future};
@@ -213,7 +213,7 @@ impl Callback for DefaultCallback {
 
 /// Handler request for establishing WebSocket connection
 ///
-/// **Constrains**:
+/// # Constrains:
 ///
 /// The extractor only supports for the request that has the method [`GET`](http::Method::GET)
 /// and contains certain header values.
@@ -356,15 +356,10 @@ where
             callback(socket).await;
         });
 
-        #[allow(clippy::declare_interior_mutable_const)]
-        const UPGRADE: HeaderValue = HeaderValue::from_static("upgrade");
-        #[allow(clippy::declare_interior_mutable_const)]
-        const WEBSOCKET: HeaderValue = HeaderValue::from_static("websocket");
-
         let mut builder = ServerResponse::builder()
             .status(http::StatusCode::SWITCHING_PROTOCOLS)
-            .header(http::header::CONNECTION, UPGRADE)
-            .header(http::header::UPGRADE, WEBSOCKET)
+            .header(http::header::CONNECTION, "upgrade")
+            .header(http::header::UPGRADE, "websocket")
             .header(
                 http::header::SEC_WEBSOCKET_ACCEPT,
                 derive_accept_key(self.headers.sec_websocket_key.as_bytes()),
