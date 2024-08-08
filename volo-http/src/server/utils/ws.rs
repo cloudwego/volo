@@ -250,6 +250,7 @@ where
     F: OnFailedUpgrade,
 {
     /// Set WebSocket config
+    ///
     /// ```rust
     /// use volo_http::{
     ///     response::ServerResponse,
@@ -273,6 +274,7 @@ where
     ///         )
     ///         .on_upgrade(|socket| async{} )
     /// }
+    /// ```
     pub fn set_config(mut self, config: Config) -> Self {
         self.config = config;
         self
@@ -317,7 +319,8 @@ where
     }
 
     /// Finalize upgrading the connection and call the provided callback
-    /// if request protocol is matched, it will use `callback` to handle the connection stream data
+    ///
+    /// If request protocol is matched, it will use `callback` to handle the connection stream data
     pub fn on_upgrade<Fut, C>(self, callback: C) -> ServerResponse
     where
         Fut: Future<Output = ()> + Send + 'static,
