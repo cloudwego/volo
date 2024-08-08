@@ -579,11 +579,12 @@ mod websocket_tests {
         )
         .await;
 
-        assert!(resp
-            .headers()
-            .get(http::header::SEC_WEBSOCKET_PROTOCOL)
-            .unwrap()
-            .eq("graphql-ws"));
+        assert_eq!(
+            resp.headers()
+                .get(http::header::SEC_WEBSOCKET_PROTOCOL)
+                .unwrap(),
+            "graphql-ws"
+        );
     }
 
     #[tokio::test]
