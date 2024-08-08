@@ -107,6 +107,8 @@ impl Config {
     /// and will set the first server supported protocol in [`http::header::Sec-WebSocket-Protocol`]
     /// in response
     ///
+    /// # Example
+    ///
     /// ```rust
     /// use volo_http::server::utils::WebSocketConfig;
     ///
@@ -295,12 +297,13 @@ where
     ///     }
     /// };
     ///
-    /// async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse{
+    /// async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
     ///     ws.on_failed_upgrade(|error| {
     ///             unimplemented!()
     ///         })
     ///         .on_upgrade(|socket| async{} )
     /// }
+    /// ```
     pub fn on_failed_upgrade<F1>(self, callback: F1) -> WebSocketUpgrade<F1>
     where
         F1: OnFailedUpgrade,
