@@ -1,4 +1,4 @@
-//! Module for handling WebSocket connection
+//! Handle WebSocket connection
 //!
 //! This module provides utilities for setting up and handling WebSocket connections, including
 //! configuring WebSocket options, setting protocols, and upgrading connections.
@@ -8,6 +8,8 @@
 //! # Example
 //!
 //! ```rust
+//! use std::convert::Infallible;
+//!
 //! use futures_util::{SinkExt, StreamExt};
 //! use volo_http::{
 //!     response::ServerResponse,
@@ -21,7 +23,7 @@
 //! async fn handle_socket(mut socket: WebSocket) {
 //!     while let Some(Ok(msg)) = socket.next().await {
 //!         match msg {
-//!             Message::Text(text) => {
+//!             Message::Text(_) => {
 //!                 socket.send(msg).await.unwrap();
 //!             }
 //!             _ => {}
@@ -33,7 +35,7 @@
 //!     ws.on_upgrade(handle_socket)
 //! }
 //!
-//! let app = Router::new().route("/ws", get(ws_handler));
+//! let app: Router<ServerResponse, Infallible> = Router::new().route("/ws", get(ws_handler));
 //! ```
 
 use std::{borrow::Cow, fmt::Formatter, future::Future};
@@ -127,8 +129,8 @@ impl Config {
     }
 
     /// Set transport config
-    /// e.g. write buffer size
     ///
+    /// e.g. write buffer size
     ///
     /// ```rust
     /// use tokio_tungstenite::tungstenite::protocol::WebSocketConfig as WebSocketTransConfig;
@@ -213,8 +215,10 @@ impl Callback for DefaultCallback {
 ///
 /// **Constrains**:
 ///
-/// The extractor only supports for the request that has the method [`GET`](http::Method::GET)
+/// The extractor only supports for the request that has the method [`GET`](http::method::GET)
 /// and contains certain header values.
+///
+/// See more details in [`WebSocketUpgrade::from_context`]
 ///
 /// # Usage
 ///
@@ -222,7 +226,7 @@ impl Callback for DefaultCallback {
 /// use volo_http::{response::ServerResponse, server::utils::WebSocketUpgrade};
 ///
 /// fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
-///     ws.on_upgrade(|socket| unimplemented!())
+///     ws.on_upgrade(|socket| async { unimplemented!() })
 /// }
 /// ```
 pub struct WebSocketUpgrade<F = DefaultOnFailedUpgrade> {

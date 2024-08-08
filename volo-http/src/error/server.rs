@@ -122,7 +122,7 @@ pub enum WebSocketUpgradeRejectionError {
 
 impl WebSocketUpgradeRejectionError {
     /// Convert the [`WebSocketUpgradeRejectionError`] to the corresponding [`StatusCode`]
-    pub fn to_status_code(self) -> StatusCode {
+    fn to_status_code(self) -> StatusCode {
         match self {
             Self::MethodNotGet => StatusCode::METHOD_NOT_ALLOWED,
             Self::InvalidHttpVersion => StatusCode::HTTP_VERSION_NOT_SUPPORTED,
