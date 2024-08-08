@@ -115,15 +115,14 @@ impl Config {
         I: IntoIterator,
         I::Item: Into<Cow<'static, str>>,
     {
-        self.protocols =
-            protocols
-                .into_iter()
-                .map(Into::into)
-                .map(|protocol| match protocol {
-                    Cow::Owned(s) => HeaderValue::from_str(&s).unwrap(),
-                    Cow::Borrowed(s) => HeaderValue::from_static(s),
-                })
-                .collect();
+        self.protocols = protocols
+            .into_iter()
+            .map(Into::into)
+            .map(|protocol| match protocol {
+                Cow::Owned(s) => HeaderValue::from_str(&s).unwrap(),
+                Cow::Borrowed(s) => HeaderValue::from_static(s),
+            })
+            .collect();
         self
     }
 
@@ -158,12 +157,12 @@ impl std::fmt::Debug for Config {
 /// Callback fn that processes [`WebSocket`]
 pub trait Callback: Send + 'static {
     /// Called when a connection upgrade succeeds
-    fn call(self, _: WebSocket) -> impl Future<Output=()> + Send;
+    fn call(self, _: WebSocket) -> impl Future<Output = ()> + Send;
 }
 
 impl<Fut, C> Callback for C
 where
-    Fut: Future<Output=()> + Send + 'static,
+    Fut: Future<Output = ()> + Send + 'static,
     C: FnOnce(WebSocket) -> Fut + Send + Copy + 'static,
 {
     async fn call(self, websocket: WebSocket) {
@@ -314,11 +313,10 @@ where
     }
 
     /// Finalize upgrading the connection and call the provided callback
-    /// if request protocol is matched, it will use callback set by
-    /// [`WebSocketUpgrade::on_protocol`], otherwise use `default_callback`.
+    /// if request protocol is matched, it will use `callback` to handle the connection stream data
     pub fn on_upgrade<Fut, C>(self, callback: C) -> ServerResponse
     where
-        Fut: Future<Output=()> + Send + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
         C: FnOnce(WebSocket) -> Fut + Send + Sync + 'static,
     {
         let on_upgrade = self.on_upgrade;
@@ -332,13 +330,11 @@ where
             .as_ref()
             .and_then(|p| p.to_str().ok())
             .and_then(|req_protocols| {
-                self.config.protocols
-                    .iter()
-                    .find(|protocol| {
-                        req_protocols
-                            .split(',')
-                            .any(|req_protocol| req_protocol == *protocol)
-                    })
+                self.config.protocols.iter().find(|protocol| {
+                    req_protocols
+                        .split(',')
+                        .any(|req_protocol| req_protocol == *protocol)
+                })
             });
 
         tokio::spawn(async move {
@@ -456,7 +452,7 @@ impl FromContext for WebSocketUpgrade<DefaultOnFailedUpgrade> {
 
 #[cfg(test)]
 mod websocket_tests {
-    use std::{net};
+    use std::net;
 
     use futures_util::{SinkExt, StreamExt};
     use http::Uri;
@@ -484,7 +480,7 @@ mod websocket_tests {
     ) -> (WebSocketStream<MaybeTlsStream<TcpStream>>, ServerResponse)
     where
         R: IntoClientRequest + Unpin,
-        Fut: Future<Output=ServerResponse> + Send + 'static,
+        Fut: Future<Output = ServerResponse> + Send + 'static,
         C: FnOnce(WebSocketUpgrade) -> Fut + Send + Sync + Clone + 'static,
     {
         let app = Router::new().route("/echo", get(handler));
@@ -592,7 +588,7 @@ mod websocket_tests {
             |ws: WebSocketUpgrade| std::future::ready(ws.on_upgrade(handle_socket)),
             builder,
         )
-            .await;
+        .await;
 
         let input = Message::Text("foobar".to_owned());
         ws_stream.send(input.clone()).await.unwrap();
