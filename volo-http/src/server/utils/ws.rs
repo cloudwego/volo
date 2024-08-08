@@ -215,7 +215,7 @@ impl Callback for DefaultCallback {
 ///
 /// **Constrains**:
 ///
-/// The extractor only supports for the request that has the method [`GET`](http::method::GET)
+/// The extractor only supports for the request that has the method [`GET`](http::Method::GET)
 /// and contains certain header values.
 ///
 /// See more details in [`WebSocketUpgrade::from_context`]
