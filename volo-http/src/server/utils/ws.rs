@@ -290,20 +290,15 @@ where
     ///
     /// ```rust
     /// use std::collections::HashMap;
+    ///
     /// use volo_http::{
     ///     response::ServerResponse,
-    ///     server::utils::{
-    ///         WebSocketConfig,
-    ///         WebSocketUpgrade,
-    ///         WebSocket,
-    ///     }
+    ///     server::utils::{WebSocket, WebSocketConfig, WebSocketUpgrade},
     /// };
     ///
     /// async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
-    ///     ws.on_failed_upgrade(|error| {
-    ///             unimplemented!()
-    ///         })
-    ///         .on_upgrade(|socket| async{} )
+    ///     ws.on_failed_upgrade(|error| unimplemented!())
+    ///         .on_upgrade(|socket| async {})
     /// }
     /// ```
     pub fn on_failed_upgrade<F1>(self, callback: F1) -> WebSocketUpgrade<F1>
