@@ -211,7 +211,7 @@ impl Callback for DefaultCallback {
     async fn call(self, _: WebSocket) {}
 }
 
-/// Extractor of [`FromContext`] for establishing WebSocket connection
+/// Handler request for establishing WebSocket connection
 ///
 /// **Constrains**:
 ///
