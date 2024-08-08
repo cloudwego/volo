@@ -158,7 +158,7 @@ where
         }
         if cx.transport.should_reuse && resp.is_ok() {
             if let Transport::Pooled(pooled) = transport {
-                pooled.reuse();
+                pooled.reuse().await;
             }
         }
         resp

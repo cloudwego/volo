@@ -424,7 +424,7 @@ impl<E: Encoder, D: Decoder> Transport<Address, ThriftTransport<E, D>> {
     pub async fn reuse(self) {
         match self {
             Transport::Pooled(pooled) => {
-                pooled.reuse();
+                pooled.reuse().await;
             }
             Transport::UnPooled(t) => {
                 t.reuse().await;
