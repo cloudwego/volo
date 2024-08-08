@@ -253,6 +253,8 @@ where
 {
     /// Set WebSocket config
     ///
+    /// # Example
+    ///
     /// ```rust
     /// use tokio_tungstenite::tungstenite::protocol::WebSocketConfig as WebSocketTransConfig;
     /// use volo_http::{
