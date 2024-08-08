@@ -89,7 +89,7 @@ pub struct Config {
     transport: WebSocketConfig,
     /// The chosen protocol sent in the `Sec-WebSocket-Protocol` header of the response.
     /// use [`WebSocketUpgrade::protocols`] to set server supported protocols
-    protocols: Vec<HeaderValue>,
+    protocols: Vec<String>,
 }
 
 impl Config {
@@ -121,8 +121,8 @@ impl Config {
             .into_iter()
             .map(Into::into)
             .map(|protocol| match protocol {
-                Cow::Owned(s) => HeaderValue::from_str(&s).unwrap(),
-                Cow::Borrowed(s) => HeaderValue::from_static(s),
+                Cow::Owned(s) => s,
+                Cow::Borrowed(s) => s.to_string(),
             })
             .collect();
         self
@@ -356,7 +356,9 @@ where
             callback(socket).await;
         });
 
+        #[allow(clippy::declare_interior_mutable_const)]
         const UPGRADE: HeaderValue = HeaderValue::from_static("upgrade");
+        #[allow(clippy::declare_interior_mutable_const)]
         const WEBSOCKET: HeaderValue = HeaderValue::from_static("websocket");
 
         let mut builder = ServerResponse::builder()
@@ -493,12 +495,9 @@ mod websocket_tests {
 
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
 
-        let (socket, response) = tokio_tungstenite::connect_async(req).await.unwrap();
+        let (socket, resp) = tokio_tungstenite::connect_async(req).await.unwrap();
 
-        (
-            socket,
-            response.map(|response| response.unwrap_or_default().into()),
-        )
+        (socket, resp.map(|resp| resp.unwrap_or_default().into()))
     }
 
     #[tokio::test]
@@ -557,6 +556,37 @@ mod websocket_tests {
     }
 
     #[tokio::test]
+    async fn set_protocols() {
+        let addr = Address::Ip(net::SocketAddr::new(
+            net::IpAddr::V4(net::Ipv4Addr::new(127, 0, 0, 1)),
+            25230,
+        ));
+
+        let builder = ClientRequestBuilder::new(
+            format!("ws://{}/echo", addr.clone())
+                .parse::<Uri>()
+                .unwrap(),
+        )
+        .with_sub_protocol("graphql-ws");
+
+        let (_, resp) = run_ws_handler(
+            addr.clone(),
+            |ws: WebSocketUpgrade| async {
+                ws.set_config(Config::new().set_protocols(["graphql-ws", "test-protocol"]))
+                    .on_upgrade(|_| async {})
+            },
+            builder,
+        )
+        .await;
+
+        assert!(resp
+            .headers()
+            .get(http::header::SEC_WEBSOCKET_PROTOCOL)
+            .unwrap()
+            .eq("graphql-ws"));
+    }
+
+    #[tokio::test]
     async fn success_on_upgrade() {
         async fn handle_socket(mut socket: WebSocket) {
             while let Some(Ok(msg)) = socket.next().await {
@@ -585,7 +615,7 @@ mod websocket_tests {
                 .unwrap(),
         );
 
-        let (mut ws_stream, _response) = run_ws_handler(
+        let (mut ws_stream, _resp) = run_ws_handler(
             addr.clone(),
             |ws: WebSocketUpgrade| std::future::ready(ws.on_upgrade(handle_socket)),
             builder,
