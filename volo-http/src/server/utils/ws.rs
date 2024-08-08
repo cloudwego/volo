@@ -36,7 +36,7 @@
 //! let app = Router::new().route("/ws", get(ws_handler));
 //! ```
 
-use std::{borrow::Cow, collections::HashMap, fmt::Formatter, future::Future};
+use std::{borrow::Cow, fmt::Formatter, future::Future};
 
 use http::{request::Parts, HeaderMap, HeaderName, HeaderValue};
 use hyper::Error;
@@ -87,7 +87,7 @@ pub struct Config {
     transport: WebSocketConfig,
     /// The chosen protocol sent in the `Sec-WebSocket-Protocol` header of the response.
     /// use [`WebSocketUpgrade::protocols`] to set server supported protocols
-    protocols: Option<Vec<HeaderValue>>,
+    protocols: Vec<HeaderValue>,
 }
 
 impl Config {
@@ -95,7 +95,7 @@ impl Config {
     pub fn new() -> Self {
         Config {
             transport: WebSocketConfig::default(),
-            protocols: None,
+            protocols: Vec::new(),
         }
     }
 
@@ -115,7 +115,7 @@ impl Config {
         I: IntoIterator,
         I::Item: Into<Cow<'static, str>>,
     {
-        self.protocols = Some(
+        self.protocols =
             protocols
                 .into_iter()
                 .map(Into::into)
@@ -123,8 +123,7 @@ impl Config {
                     Cow::Owned(s) => HeaderValue::from_str(&s).unwrap(),
                     Cow::Borrowed(s) => HeaderValue::from_static(s),
                 })
-                .collect(),
-        );
+                .collect();
         self
     }
 
@@ -159,12 +158,12 @@ impl std::fmt::Debug for Config {
 /// Callback fn that processes [`WebSocket`]
 pub trait Callback: Send + 'static {
     /// Called when a connection upgrade succeeds
-    fn call(self, _: WebSocket) -> impl Future<Output = ()> + Send;
+    fn call(self, _: WebSocket) -> impl Future<Output=()> + Send;
 }
 
 impl<Fut, C> Callback for C
 where
-    Fut: Future<Output = ()> + Send + 'static,
+    Fut: Future<Output=()> + Send + 'static,
     C: FnOnce(WebSocket) -> Fut + Send + Copy + 'static,
 {
     async fn call(self, websocket: WebSocket) {
@@ -227,15 +226,14 @@ impl Callback for DefaultCallback {
 ///     ws.on_upgrade(|socket| unimplemented!())
 /// }
 /// ```
-pub struct WebSocketUpgrade<C = DefaultCallback, F = DefaultOnFailedUpgrade> {
+pub struct WebSocketUpgrade<F = DefaultOnFailedUpgrade> {
     config: Config,
-    on_protocol: HashMap<HeaderValue, C>,
     on_failed_upgrade: F,
     on_upgrade: hyper::upgrade::OnUpgrade,
     headers: Headers,
 }
 
-impl<C, F> std::fmt::Debug for WebSocketUpgrade<C, F> {
+impl<F> std::fmt::Debug for WebSocketUpgrade<F> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("WebSocketUpgrade")
             .field("config", &self.config)
@@ -244,9 +242,8 @@ impl<C, F> std::fmt::Debug for WebSocketUpgrade<C, F> {
     }
 }
 
-impl<C, F> WebSocketUpgrade<C, F>
+impl<F> WebSocketUpgrade<F>
 where
-    C: Callback + Clone,
     F: OnFailedUpgrade,
 {
     /// Set WebSocket config
@@ -278,47 +275,6 @@ where
         self
     }
 
-    /// Set callback for specific protocol
-    /// ```rust
-    /// use std::collections::HashMap;
-    /// use volo_http::{
-    ///     response::ServerResponse,
-    ///     server::utils::{
-    ///         WebSocketConfig,
-    ///         WebSocketUpgrade,
-    ///         WebSocket,
-    ///     }
-    /// };
-    ///
-    /// async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse{
-    ///     ws.set_config(
-    ///         WebSocketConfig::new()
-    ///             .set_protocols(["graphql-ws","graphql-transport-ws"])
-    ///         )
-    ///         .on_protocol([("graphql-ws",|mut socket: WebSocket| async move{})])
-    ///         .on_upgrade(|socket| async{} )
-    /// }
-    pub fn on_protocol<H, I, C1>(self, on_protocol: I) -> WebSocketUpgrade<C1, F>
-    where
-        I: IntoIterator,
-        I::Item: Into<(H, C1)>,
-        H: Into<&'static str>,
-        C1: Callback,
-    {
-        let on_protocol =
-            HashMap::from_iter(on_protocol.into_iter().map(Into::into).map(|(k, v)| {
-                let k = HeaderValue::from_str(k.into()).unwrap();
-                (k, v)
-            }));
-        WebSocketUpgrade {
-            config: self.config,
-            on_protocol,
-            on_failed_upgrade: self.on_failed_upgrade,
-            on_upgrade: self.on_upgrade,
-            headers: self.headers,
-        }
-    }
-
     /// Provide a callback to call if upgrading the connection fails.
     ///
     /// The connection upgrade is performed in a background task.
@@ -345,10 +301,12 @@ where
     ///         })
     ///         .on_upgrade(|socket| async{} )
     /// }
-    pub fn on_failed_upgrade<F1>(self, callback: F1) -> WebSocketUpgrade<C, F1> {
+    pub fn on_failed_upgrade<F1>(self, callback: F1) -> WebSocketUpgrade<F1>
+    where
+        F1: OnFailedUpgrade,
+    {
         WebSocketUpgrade {
             config: self.config,
-            on_protocol: self.on_protocol,
             on_failed_upgrade: callback,
             on_upgrade: self.on_upgrade,
             headers: self.headers,
@@ -358,10 +316,10 @@ where
     /// Finalize upgrading the connection and call the provided callback
     /// if request protocol is matched, it will use callback set by
     /// [`WebSocketUpgrade::on_protocol`], otherwise use `default_callback`.
-    pub fn on_upgrade<Fut, C1>(self, default_callback: C1) -> ServerResponse
+    pub fn on_upgrade<Fut, C>(self, callback: C) -> ServerResponse
     where
-        Fut: Future<Output = ()> + Send + 'static,
-        C1: FnOnce(WebSocket) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output=()> + Send + 'static,
+        C: FnOnce(WebSocket) -> Fut + Send + Sync + 'static,
     {
         let on_upgrade = self.on_upgrade;
         let config = self.config.transport;
@@ -374,23 +332,14 @@ where
             .as_ref()
             .and_then(|p| p.to_str().ok())
             .and_then(|req_protocols| {
-                let binding = self.config.protocols.clone();
-                binding.as_ref().map(|protocol| {
-                    protocol
-                        .iter()
-                        .find(|protocol| {
-                            req_protocols
-                                .split(',')
-                                .any(|req_protocol| req_protocol == *protocol)
-                        })
-                        .unwrap()
-                        .clone()
-                })
+                self.config.protocols
+                    .iter()
+                    .find(|protocol| {
+                        req_protocols
+                            .split(',')
+                            .any(|req_protocol| req_protocol == *protocol)
+                    })
             });
-
-        let callback = protocol
-            .clone()
-            .and_then(|protocol| self.on_protocol.get(&protocol).cloned());
 
         tokio::spawn(async move {
             let upgraded = match on_upgrade.await {
@@ -406,10 +355,7 @@ where
                 WebSocketStream::from_raw_socket(upgraded, protocol::Role::Server, Some(config))
                     .await;
 
-            match callback {
-                Some(callback) => callback.call(socket).await,
-                None => default_callback(socket).await,
-            }
+            callback(socket).await;
         });
 
         const UPGRADE: HeaderValue = HeaderValue::from_static("upgrade");
@@ -454,7 +400,7 @@ fn header_eq(headers: &HeaderMap, key: HeaderName, value: &'static str) -> bool 
     }
 }
 
-impl FromContext for WebSocketUpgrade<DefaultCallback> {
+impl FromContext for WebSocketUpgrade<DefaultOnFailedUpgrade> {
     type Rejection = WebSocketUpgradeRejectionError;
 
     async fn from_context(
@@ -504,14 +450,13 @@ impl FromContext for WebSocketUpgrade<DefaultCallback> {
             },
             on_failed_upgrade: DefaultOnFailedUpgrade,
             on_upgrade,
-            on_protocol: HashMap::new(),
         })
     }
 }
 
 #[cfg(test)]
 mod websocket_tests {
-    use std::{net, ops::Add};
+    use std::{net};
 
     use futures_util::{SinkExt, StreamExt};
     use http::Uri;
@@ -539,7 +484,7 @@ mod websocket_tests {
     ) -> (WebSocketStream<MaybeTlsStream<TcpStream>>, ServerResponse)
     where
         R: IntoClientRequest + Unpin,
-        Fut: Future<Output = ServerResponse> + Send + 'static,
+        Fut: Future<Output=ServerResponse> + Send + 'static,
         C: FnOnce(WebSocketUpgrade) -> Fut + Send + Sync + Clone + 'static,
     {
         let app = Router::new().route("/echo", get(handler));
@@ -559,7 +504,7 @@ mod websocket_tests {
     }
 
     #[tokio::test]
-    async fn rejects_unupgradable_requests() {
+    async fn reject_unupgradable_requests() {
         let route: Route<Body> = Route::new(get(
             |ws: Result<WebSocketUpgrade, WebSocketUpgradeRejectionError>| {
                 let rejection = ws.unwrap_err();
@@ -589,7 +534,7 @@ mod websocket_tests {
     }
 
     #[tokio::test]
-    async fn rejects_non_get_requests() {
+    async fn reject_non_get_requests() {
         let route: Route<Body> = Route::new(get(
             |ws: Result<WebSocketUpgrade, WebSocketUpgradeRejectionError>| {
                 let rejection = ws.unwrap_err();
@@ -614,53 +559,7 @@ mod websocket_tests {
     }
 
     #[tokio::test]
-    async fn on_protocol() {
-        use crate::{
-            response::ServerResponse,
-            server::utils::{WebSocketConfig, WebSocketUpgrade},
-        };
-
-        async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
-            ws.set_config(
-                WebSocketConfig::new().set_protocols(["graphql-ws", "graphql-transport-ws"]),
-            )
-            .on_protocol([("graphql-ws", |mut socket: WebSocket| async move {
-                while let Some(Ok(msg)) = socket.next().await {
-                    match msg {
-                        Message::Text(text) => {
-                            socket
-                                .send(Message::Text(text.add("-graphql-ws")))
-                                .await
-                                .unwrap();
-                        }
-                        _ => {}
-                    }
-                }
-            })])
-            .on_upgrade(|_| async {})
-        }
-
-        let addr = Address::Ip(net::SocketAddr::new(
-            net::IpAddr::V4(net::Ipv4Addr::new(127, 0, 0, 1)),
-            25230,
-        ));
-
-        let builder = ClientRequestBuilder::new(
-            format!("ws://{}/echo", addr.clone())
-                .parse::<Uri>()
-                .unwrap(),
-        )
-        .with_sub_protocol("graphql-ws");
-        let (mut ws_stream, _response) = run_ws_handler(addr, ws_handler, builder).await;
-
-        let input = Message::Text("foobar".to_owned());
-        ws_stream.send(input.clone()).await.unwrap();
-        let output = ws_stream.next().await.unwrap().unwrap();
-        assert_eq!(output, Message::Text("foobar-graphql-ws".to_owned()));
-    }
-
-    #[tokio::test]
-    async fn integration_test() {
+    async fn success_on_upgrade() {
         async fn handle_socket(mut socket: WebSocket) {
             while let Some(Ok(msg)) = socket.next().await {
                 match msg {
@@ -693,7 +592,7 @@ mod websocket_tests {
             |ws: WebSocketUpgrade| std::future::ready(ws.on_upgrade(handle_socket)),
             builder,
         )
-        .await;
+            .await;
 
         let input = Message::Text("foobar".to_owned());
         ws_stream.send(input.clone()).await.unwrap();
