@@ -252,27 +252,22 @@ where
     /// Set WebSocket config
     ///
     /// ```rust
+    /// use tokio_tungstenite::tungstenite::protocol::WebSocketConfig as WebSocketTransConfig;
     /// use volo_http::{
     ///     response::ServerResponse,
-    ///     server::utils::{
-    ///         WebSocketConfig,
-    ///         WebSocketUpgrade,
-    ///     }
+    ///     server::utils::{WebSocketConfig, WebSocketUpgrade},
     /// };
-    /// use tokio_tungstenite::tungstenite::protocol::{WebSocketConfig as WebSocketTransConfig};
     ///
-    /// async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse{
+    /// async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
     ///     ws.set_config(
     ///         WebSocketConfig::new()
-    ///             .set_protocols(["graphql-ws","graphql-transport-ws"])
-    ///             .set_transport(
-    ///                 WebSocketTransConfig{
-    ///                     write_buffer_size: 128 * 1024,
-    ///                     ..<_>::default()
-    ///                 }
-    ///             )
-    ///         )
-    ///         .on_upgrade(|socket| async{} )
+    ///             .set_protocols(["graphql-ws", "graphql-transport-ws"])
+    ///             .set_transport(WebSocketTransConfig {
+    ///                 write_buffer_size: 128 * 1024,
+    ///                 ..<_>::default()
+    ///             }),
+    ///     )
+    ///     .on_upgrade(|socket| async {})
     /// }
     /// ```
     pub fn set_config(mut self, config: Config) -> Self {
