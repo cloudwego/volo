@@ -8,7 +8,7 @@ pub mod default;
 
 pub use default::DefaultMakeCodec;
 
-/// [`Decoder`] reads from an [`AsyncRead`] and decodes the data into a [`ThriftMessage`].
+/// [`Decoder`] decodes the data into a [`ThriftMessage`].
 ///
 /// Returning an Ok(None) indicates the EOF has been reached.
 ///
@@ -24,7 +24,7 @@ pub trait Decoder: Send + Sync + 'static {
     }
 }
 
-/// [`Encoder`] writes a [`ThriftMessage`] to an [`AsyncWrite`] and flushes the data.
+/// [`Encoder`] writes a [`ThriftMessage`] and flushes the data.
 ///
 /// Note: [`Encoder`] should be designed to be ready for reuse.
 pub trait Encoder: Send + Sync + 'static {
@@ -39,8 +39,7 @@ pub trait Encoder: Send + Sync + 'static {
     }
 }
 
-/// [`MakeCodec`] receives an [`R`] and an [`W`] and returns a
-/// [`Decoder`] and an [`Encoder`].
+/// [`MakeCodec`] returns a [`Decoder`] and an [`Encoder`].
 ///
 /// The implementation of [`MakeCodec`] must make sure the [`Decoder`] and [`Encoder`]
 /// matches.

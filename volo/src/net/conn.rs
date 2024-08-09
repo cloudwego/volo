@@ -1,6 +1,7 @@
+#[cfg(target_family = "unix")]
+use std::os::fd::{AsRawFd, RawFd};
 use std::{
     io,
-    os::fd::{AsRawFd, RawFd},
     pin::Pin,
     task::{Context, Poll},
 };
@@ -367,12 +368,12 @@ impl ConnStream {
     }
 }
 
+#[cfg(target_family = "unix")]
 impl AsRawFd for ConnStream {
     #[inline]
     fn as_raw_fd(&self) -> RawFd {
         match self {
             Self::Tcp(s) => s.as_raw_fd(),
-            #[cfg(target_family = "unix")]
             Self::Unix(s) => s.as_raw_fd(),
             #[cfg(feature = "rustls")]
             Self::Rustls(s) => s.as_raw_fd(),
