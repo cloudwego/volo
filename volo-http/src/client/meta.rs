@@ -1,4 +1,4 @@
-use std::{error::Error, time::Duration};
+use std::error::Error;
 
 use http_body::Body;
 use motore::service::Service;
@@ -6,7 +6,7 @@ use volo::context::Context;
 
 use crate::{
     context::ClientContext,
-    error::client::{status_error, timeout, ClientError},
+    error::client::{status_error, ClientError},
     request::ClientRequest,
     response::ClientResponse,
 };
@@ -14,18 +14,11 @@ use crate::{
 #[derive(Clone)]
 pub struct MetaService<S> {
     inner: S,
-    config: MetaServiceConfig,
-}
-
-#[derive(Clone)]
-pub(super) struct MetaServiceConfig {
-    pub default_timeout: Option<Duration>,
-    pub fail_on_error_status: bool,
 }
 
 impl<S> MetaService<S> {
-    pub(super) fn new(inner: S, config: MetaServiceConfig) -> Self {
-        Self { inner, config }
+    pub(super) fn new(inner: S) -> Self {
+        Self { inner }
     }
 }
 
@@ -47,27 +40,23 @@ where
         cx: &mut ClientContext,
         req: ClientRequest<B>,
     ) -> Result<Self::Response, Self::Error> {
-        let request_timeout = cx
-            .rpc_info()
-            .config()
-            .timeout
-            .or(self.config.default_timeout);
+        let config = cx.rpc_info().config().to_owned();
         let fut = self.inner.call(cx, req);
-        let res = match request_timeout {
+        let res = match config.timeout {
             Some(duration) => {
                 let sleep = tokio::time::sleep(duration);
                 tokio::select! {
                     res = fut => res,
                     _ = sleep => {
                         tracing::error!("[Volo-HTTP]: request timeout.");
-                        return Err(timeout());
+                        return Err(crate::error::client::timeout());
                     }
                 }
             }
             None => fut.await,
         };
 
-        if !self.config.fail_on_error_status {
+        if !config.fail_on_error_status {
             return res;
         }
 

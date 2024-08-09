@@ -64,6 +64,8 @@ impl ClientStats {
 pub struct Config {
     /// Timeout of the whole request
     pub timeout: Option<Duration>,
+    /// Return `Err` if status code of response is 4XX or 5XX
+    pub fail_on_error_status: bool,
 }
 
 impl Reusable for Config {
