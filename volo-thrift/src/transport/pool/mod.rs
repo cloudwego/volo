@@ -44,7 +44,7 @@ pub enum Ver {
 
 pub trait Poolable: Sized {
     // check if the connection is opened
-    fn reusable(&self) -> bool;
+    fn reusable(&self) -> impl Future<Output = bool> + Send;
 
     /// Reserve this connection.
     ///
@@ -158,53 +158,6 @@ impl Expiration {
     }
 }
 
-/// Pop off this list, looking for a usable connection that hasn't expired.
-struct IdlePopper<'a, K: Key, T> {
-    key: &'a K,
-    list: &'a mut VecDeque<Idle<T>>,
-}
-
-impl<'a, K: Key, T: Poolable + 'a> IdlePopper<'a, K, T> {
-    fn pop(self, expiration: &Expiration) -> Option<Idle<T>> {
-        while let Some(entry) = self.list.pop_front() {
-            // If the connection has been closed, or is older than our idle
-            // timeout, simply drop it and keep looking...
-            if !entry.inner.reusable() {
-                tracing::trace!("[VOLO] removing closed connection for {:?}", self.key);
-                continue;
-            }
-            // TODO: Actually, since the `idle` list is pushed to the end always,
-            // that would imply that if *this* entry is expired, then anything
-            // "earlier" in the list would *have* to be expired also... Right?
-            //
-            // In that case, we could just break out of the loop and drop the
-            // whole list...
-            if expiration.expires(entry.idle_at) {
-                tracing::trace!("[VOLO] removing expired connection for {:?}", self.key);
-                continue;
-            }
-
-            let value = match entry.inner.reserve() {
-                Reservation::Shared(to_reinsert, to_return) => {
-                    self.list.push_back(Idle {
-                        idle_at: Instant::now(),
-                        inner: to_reinsert,
-                    });
-                    to_return
-                }
-                Reservation::Unique(unique) => unique,
-            };
-
-            return Some(Idle {
-                idle_at: entry.idle_at,
-                inner: value,
-            });
-        }
-
-        None
-    }
-}
-
 impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
     #[allow(dead_code)]
     pub fn new(cfg: Option<Config>) -> Self {
@@ -267,19 +220,56 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
         MT::Error: Into<crate::ClientError> + Send,
     {
         let (rx, _waiter_token) = {
-            let mut inner = self.inner.lock().volo_unwrap();
-            // 1. check the idle and opened connections
-            let expiration = Expiration::new(Some(inner.timeout));
-            let entry = inner.idle.get_mut(&key).and_then(|list| {
-                tracing::trace!("[VOLO] take? {:?}: expiration = {:?}", key, expiration.0);
-                {
-                    let popper = IdlePopper { key: &key, list };
-                    popper.pop(&expiration)
+            let entry = 'outer: loop {
+                let entry = 'inner: {
+                    let mut inner = self.inner.lock().volo_unwrap();
+                    // 1. check the idle and opened connections
+                    let expiration = Expiration::new(Some(inner.timeout));
+
+                    if let Some(list) = inner.idle.get_mut(&key) {
+                        tracing::trace!("[VOLO] take? {:?}: expiration = {:?}", key, expiration.0);
+                        while let Some(entry) = list.pop_front() {
+                            // TODO: Actually, since the `idle` list is pushed to the end always,
+                            // that would imply that if *this* entry is expired, then anything
+                            // "earlier" in the list would *have* to be expired also... Right?
+                            //
+                            // In that case, we could just break out of the loop and drop the
+                            // whole list...
+                            if expiration.expires(entry.idle_at) {
+                                tracing::trace!("[VOLO] removing expired connection for {:?}", key);
+                                continue;
+                            }
+                            break 'inner entry;
+                        }
+                        break 'outer None;
+                    } else {
+                        break 'outer None;
+                    }
+                };
+                // If the connection has been closed, or is older than our idle
+                // timeout, simply drop it and keep looking...
+                if !entry.inner.reusable().await {
+                    continue;
                 }
-            });
+                break 'outer Some(entry);
+            };
+
+            let mut inner = self.inner.lock().volo_unwrap();
 
             if let Some(t) = entry {
-                return Ok(self.reuse(&key, t.inner));
+                let value = match t.inner.reserve() {
+                    Reservation::Shared(to_reinsert, to_return) => {
+                        if let Some(list) = inner.idle.get_mut(&key) {
+                            list.push_back(Idle {
+                                idle_at: Instant::now(),
+                                inner: to_reinsert,
+                            })
+                        }
+                        to_return
+                    }
+                    Reservation::Unique(unique) => unique,
+                };
+                return Ok(self.reuse(&key, value));
             }
             // 2. no valid idle then add caller into waiters and make connection
             let waiters = if let Some(waiter) = inner.waiters.get_mut(&key) {
@@ -440,9 +430,9 @@ impl<K: Key, T: Poolable> Pooled<K, T> {
         }
     }
 
-    pub(crate) fn reuse(mut self) {
+    pub(crate) async fn reuse(mut self) {
         let inner = self.t.take().volo_unwrap();
-        if !inner.reusable() {
+        if !inner.reusable().await {
             // If we *already* know the connection is done here,
             // it shouldn't be re-inserted back into the pool.
             return;
@@ -544,11 +534,10 @@ impl<K: Key, T: Poolable> Inner<K, T> {
         let now = Instant::now();
         self.idle.retain(|key, values| {
             values.retain(|entry| {
+                // if !entry.inner.reusable().await {
+                //     continue;
+                // }
                 // TODO: check has_idle && remove the (idle, waiters) key
-                if !entry.inner.reusable() {
-                    tracing::trace!("[VOLO] idle interval evicting closed for {:?}", key);
-                    return false;
-                }
                 if now - entry.idle_at > timeout {
                     tracing::trace!("[VOLO] idle interval evicting expired for {:?}", key);
                     return false;

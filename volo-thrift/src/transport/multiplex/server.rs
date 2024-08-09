@@ -12,7 +12,7 @@ use volo::{context::Context, net::Address, volo_unreachable};
 
 use crate::{
     codec::{Decoder, Encoder},
-    context::ServerContext,
+    context::{ServerContext, ThriftContext as _},
     protocol::TMessageType,
     server_error_to_application_exception, thrift_exception_to_application_exception, DummyMessage,
     EntryMessage, ServerError, ThriftMessage,
@@ -40,7 +40,8 @@ pub async fn serve<Svc, Req, Resp, E, D>(
 
     // mpsc channel used to send responses to the loop
     let (send_tx, mut send_rx) = mpsc::channel(CHANNEL_SIZE);
-    let (error_send_tx, mut error_send_rx) = mpsc::channel(1);
+    let (error_send_tx, mut error_send_rx) =
+        mpsc::channel::<(ServerContext, ThriftMessage<DummyMessage>)>(1);
 
     tokio::spawn({
         let peer_addr = peer_addr.clone();
@@ -70,6 +71,9 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                             return;
                                         }
                                         stat_tracer.iter().for_each(|f| f(&cx));
+                                        if cx.encode_conn_reset() {
+                                            return;
+                                        }
                                     }
                                     None => {
                                         // log it
@@ -85,6 +89,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             error_msg = error_send_rx.recv() => {
                                 match error_msg {
                                     Some((mut cx, msg)) => {
+                                        cx.set_conn_reset_by_ttheader(true);
                                         if let Err(e) = encoder
                                             .encode::<DummyMessage, ServerContext>(&mut cx, msg)
                                             .await
@@ -185,11 +190,11 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             metainfo::METAINFO
                                 .scope(RefCell::new(mi), async move {
                                     cx.stats.record_process_start_at();
-                                    let resp = svc.call(&mut cx, req).await;
+                                    let resp = svc.call(&mut cx, req).await.map_err(Into::into);
                                     cx.stats.record_process_end_at();
 
                                     if exit_mark.load(Ordering::Relaxed) {
-                                        cx.transport.set_conn_reset(true);
+                                        cx.set_conn_reset_by_ttheader(true);
                                     }
                                     let req_msg_type =
                                         cx.req_msg_type.expect("`req_msg_type` should be set.");
@@ -200,9 +205,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                         });
                                         let msg = ThriftMessage::mk_server_resp(
                                             &cx,
-                                            resp.map_err(|e| {
-                                                server_error_to_application_exception(e.into())
-                                            }),
+                                            resp.map_err(server_error_to_application_exception),
                                         );
                                         let mi = metainfo::METAINFO.with(|m| m.take());
                                         let _ = send_tx.send((mi, cx, msg)).await;
