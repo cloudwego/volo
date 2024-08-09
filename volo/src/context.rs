@@ -153,6 +153,7 @@ pub struct Endpoint {
     /// `service_name` is the most important information, which is used by the service discovering.
     pub service_name: FastStr,
     pub address: Option<Address>,
+    pub shmipc_address: Option<Address>,
     /// `faststr_tags` is a optimized typemap to store additional information of the endpoint.
     ///
     /// Use `FastStrMap` instead of `TypeMap` can reduce the Box allocation.
@@ -173,6 +174,7 @@ impl Endpoint {
         Self {
             service_name,
             address: None,
+            shmipc_address: None,
             faststr_tags: FastStrMap::with_capacity(DEFAULT_MAP_CAPACITY),
             tags: Default::default(),
         }
@@ -240,6 +242,18 @@ impl Endpoint {
     #[inline]
     pub fn address(&self) -> Option<Address> {
         self.address.clone()
+    }
+
+    /// Sets the shmipc address.
+    #[inline]
+    pub fn set_shmipc_address(&mut self, shmipc_address: Address) {
+        self.shmipc_address = Some(shmipc_address)
+    }
+
+    /// Gets the shmipc address.
+    #[inline]
+    pub fn shmipc_address(&self) -> Option<Address> {
+        self.shmipc_address.clone()
     }
 
     /// Clear the information
