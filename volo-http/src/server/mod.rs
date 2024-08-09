@@ -442,13 +442,15 @@ async fn serve_conn<S>(
     let notified = exit_notify.notified();
     tokio::pin!(notified);
 
-    let mut http_conn = server.serve_connection(TokioIo::new(conn), service);
+    let mut http_conn = server
+        .serve_connection(TokioIo::new(conn), service)
+        .with_upgrades();
 
     tokio::select! {
         _ = &mut notified => {
             tracing::trace!("[Volo-HTTP] closing a pending connection");
             // Graceful shutdown.
-            hyper::server::conn::http1::Connection::graceful_shutdown(
+            hyper::server::conn::http1::UpgradeableConnection::graceful_shutdown(
                 Pin::new(&mut http_conn)
             );
             // Continue to poll this connection until shutdown can finish.

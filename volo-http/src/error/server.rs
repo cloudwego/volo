@@ -76,7 +76,7 @@ impl Error for GenericRejectionError {}
 
 impl GenericRejectionError {
     /// Convert the [`GenericRejectionError`] to the corresponding [`StatusCode`]
-    pub fn to_status_code(self) -> StatusCode {
+    pub fn to_status_code(&self) -> StatusCode {
         match self {
             Self::BodyCollectionError => StatusCode::INTERNAL_SERVER_ERROR,
             Self::InvalidContentType => StatusCode::UNSUPPORTED_MEDIA_TYPE,
@@ -98,4 +98,70 @@ pub fn body_collection_error() -> ExtractBodyError {
 /// Create a generic [`ExtractBodyError`] with [`GenericRejectionError::InvalidContentType`]
 pub fn invalid_content_type() -> ExtractBodyError {
     ExtractBodyError::Generic(GenericRejectionError::InvalidContentType)
+}
+
+/// Rejection used for [`WebSocketUpgrade`](crate::server::utils::WebSocketUpgrade).
+#[derive(Debug)]
+#[non_exhaustive]
+pub enum WebSocketUpgradeRejectionError {
+    /// The request method must be `GET`
+    MethodNotGet,
+    /// The HTTP version is not supported
+    InvalidHttpVersion,
+    /// The `Connection` header is invalid
+    InvalidConnectionHeader,
+    /// The `Upgrade` header is invalid
+    InvalidUpgradeHeader,
+    /// The `Sec-WebSocket-Version` header is invalid
+    InvalidWebSocketVersionHeader,
+    /// The `Sec-WebSocket-Key` header is missing
+    WebSocketKeyHeaderMissing,
+    /// The connection is not upgradable
+    ConnectionNotUpgradable,
+}
+
+impl WebSocketUpgradeRejectionError {
+    /// Convert the [`WebSocketUpgradeRejectionError`] to the corresponding [`StatusCode`]
+    fn to_status_code(&self) -> StatusCode {
+        match self {
+            Self::MethodNotGet => StatusCode::METHOD_NOT_ALLOWED,
+            Self::InvalidHttpVersion => StatusCode::HTTP_VERSION_NOT_SUPPORTED,
+            Self::InvalidConnectionHeader => StatusCode::BAD_REQUEST,
+            Self::InvalidUpgradeHeader => StatusCode::BAD_REQUEST,
+            Self::InvalidWebSocketVersionHeader => StatusCode::BAD_REQUEST,
+            Self::WebSocketKeyHeaderMissing => StatusCode::BAD_REQUEST,
+            Self::ConnectionNotUpgradable => StatusCode::UPGRADE_REQUIRED,
+        }
+    }
+}
+
+impl Error for WebSocketUpgradeRejectionError {}
+
+impl fmt::Display for WebSocketUpgradeRejectionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MethodNotGet => write!(f, "Request method must be 'GET'"),
+            Self::InvalidHttpVersion => {
+                write!(f, "Http version not support, only support HTTP 1.1 for now")
+            }
+            Self::InvalidConnectionHeader => {
+                write!(f, "Connection header did not include 'upgrade'")
+            }
+            Self::InvalidUpgradeHeader => write!(f, "`Upgrade` header did not include 'websocket'"),
+            Self::InvalidWebSocketVersionHeader => {
+                write!(f, "`Sec-WebSocket-Version` header did not include '13'")
+            }
+            Self::WebSocketKeyHeaderMissing => write!(f, "`Sec-WebSocket-Key` header missing"),
+            Self::ConnectionNotUpgradable => write!(
+                f,
+                "WebSocket request couldn't be upgraded since no upgrade state was present"
+            ),
+        }
+    }
+}
+
+impl IntoResponse for WebSocketUpgradeRejectionError {
+    fn into_response(self) -> ServerResponse {
+        self.to_status_code().into_response()
+    }
 }
