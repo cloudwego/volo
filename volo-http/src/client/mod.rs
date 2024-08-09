@@ -67,7 +67,8 @@ const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO
 /// Default inner service of [`Client`]
 pub type ClientMetaService = MetaService<ClientTransport>;
 /// Default [`Client`] without any extra [`Layer`]s
-pub type DefaultClient = Client<DefaultLBService<ClientMetaService>>;
+pub type DefaultClient<IL = Identity, OL = Identity> =
+    Client<<OL as Layer<DefaultLBService<<IL as Layer<ClientMetaService>>::Service>>>::Service>;
 
 /// A builder for configuring an HTTP [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB> {
@@ -88,7 +89,11 @@ pub struct ClientBuilder<IL, OL, C, LB> {
     tls_config: Option<volo::net::tls::TlsConnector>,
 }
 
-struct BuilderConfig {
+/// Configuration for [`ClientBuilder`]
+///
+/// This is unstable now and may be changed in the future.
+#[doc(hidden)]
+pub struct BuilderConfig {
     timeout: Option<Duration>,
     stat_enable: bool,
     fail_on_error_status: bool,
@@ -511,14 +516,24 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         &mut self.headers
     }
 
-    /// Get a reference to the HTTP configuration of the client.
-    pub fn http_config(&self) -> &ClientConfig {
+    /// Get a reference to HTTP configuration of the client.
+    pub fn http_config_ref(&self) -> &ClientConfig {
         &self.http_config
     }
 
-    /// Get a mutable reference to the HTTP configuration of the client.
+    /// Get a mutable reference to HTTP configuration of the client.
     pub fn http_config_mut(&mut self) -> &mut ClientConfig {
         &mut self.http_config
+    }
+
+    /// Get a reference to builder configuration of the client.
+    pub fn builder_config_ref(&self) -> &BuilderConfig {
+        &self.builder_config
+    }
+
+    /// Get a mutable reference to builder configuration of the client.
+    pub fn builder_config_mut(&mut self) -> &mut BuilderConfig {
+        &mut self.builder_config
     }
 
     /// This is unstable now and may be changed in the future.
@@ -590,20 +605,20 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     }
 
     /// Set the maximum idle time for a connection.
-    pub fn set_connect_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.connector.set_connect_timeout(Some(timeout));
+    pub fn set_connect_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
+        self.connector.set_connect_timeout(timeout);
         self
     }
 
     /// Set the maximum idle time for reading data from the connection.
-    pub fn set_read_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.connector.set_read_timeout(Some(timeout));
+    pub fn set_read_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
+        self.connector.set_read_timeout(timeout);
         self
     }
 
     /// Set the maximum idle time for writing data to the connection.
-    pub fn set_write_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.connector.set_write_timeout(Some(timeout));
+    pub fn set_write_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
+        self.connector.set_write_timeout(timeout);
         self
     }
 
@@ -611,8 +626,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// The whole request includes connecting, writting, and reading the whole HTTP protocol
     /// headers (without reading response body).
-    pub fn set_request_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.builder_config.timeout = Some(timeout);
+    pub fn set_request_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
+        self.builder_config.timeout = timeout;
         self
     }
 
@@ -924,11 +939,12 @@ where
 mod client_tests {
     #![allow(unused)]
 
-    use std::collections::HashMap;
+    use std::{collections::HashMap, future::Future};
 
     use http::{header, StatusCode};
+    use motore::{layer::Layer, service::Service};
     use serde::Deserialize;
-    use volo::context::Endpoint;
+    use volo::{context::Endpoint, layer::Identity};
 
     use super::{
         callopt::CallOpt,
@@ -956,7 +972,46 @@ mod client_tests {
     const USER_AGENT_VAL: &str = "volo-http-unit-test";
 
     fn client_types_check() {
+        struct TestLayer;
+        struct TestService<S> {
+            inner: S,
+        }
+
+        impl<S> Layer<S> for TestLayer {
+            type Service = TestService<S>;
+
+            fn layer(self, inner: S) -> Self::Service {
+                TestService { inner }
+            }
+        }
+
+        impl<S, Cx, Req> Service<Cx, Req> for TestService<S>
+        where
+            S: Service<Cx, Req>,
+        {
+            type Response = S::Response;
+            type Error = S::Error;
+
+            fn call(
+                &self,
+                cx: &mut Cx,
+                req: Req,
+            ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
+                self.inner.call(cx, req)
+            }
+        }
+
         let _: DefaultClient = ClientBuilder::new().build();
+        let _: DefaultClient<TestLayer> = ClientBuilder::new().layer_inner(TestLayer).build();
+        let _: DefaultClient<TestLayer> = ClientBuilder::new().layer_inner_front(TestLayer).build();
+        let _: DefaultClient<Identity, TestLayer> =
+            ClientBuilder::new().layer_outer(TestLayer).build();
+        let _: DefaultClient<Identity, TestLayer> =
+            ClientBuilder::new().layer_outer_front(TestLayer).build();
+        let _: DefaultClient<TestLayer, TestLayer> = ClientBuilder::new()
+            .layer_inner(TestLayer)
+            .layer_outer(TestLayer)
+            .build();
     }
 
     #[tokio::test]

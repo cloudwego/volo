@@ -136,7 +136,7 @@ where
                     match channel.recv().await {
                         Ok(recv) => lb.rebalance(recv),
                         Err(err) => {
-                            tracing::warn!("[VOLO] discovering subscription error: {:?}", err)
+                            tracing::warn!("[Volo-HTTP] discovering subscription error: {:?}", err)
                         }
                     }
                 }

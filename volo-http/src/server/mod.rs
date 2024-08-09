@@ -24,7 +24,6 @@ use motore::{
 use parking_lot::RwLock;
 use scopeguard::defer;
 use tokio::sync::Notify;
-use tracing::{info, trace};
 #[cfg(feature = "__tls")]
 use volo::net::{conn::ConnStream, tls::Acceptor, tls::ServerTlsConfig};
 use volo::{
@@ -274,7 +273,7 @@ impl<S, L> Server<S, L> {
         let server = Arc::new(self.server);
         let service = Arc::new(self.layer.layer(self.service));
         let incoming = mk_incoming.make_incoming().await?;
-        info!("[VOLO] server start at: {:?}", incoming);
+        tracing::info!("[Volo-HTTP] server start at: {:?}", incoming);
 
         // count connections, used for graceful shutdown
         let conn_cnt = Arc::new(AtomicUsize::new(0));
@@ -322,7 +321,7 @@ impl<S, L> Server<S, L> {
         }
 
         if !self.shutdown_hooks.is_empty() {
-            info!("[VOLO] call shutdown hooks");
+            tracing::info!("[Volo-HTTP] call shutdown hooks");
 
             for hook in self.shutdown_hooks {
                 (hook)().await;
@@ -330,7 +329,7 @@ impl<S, L> Server<S, L> {
         }
 
         // received signal, graceful shutdown now
-        info!("[VOLO] received signal, gracefully exiting now");
+        tracing::info!("[Volo-HTTP] received signal, gracefully exiting now");
         *exit_flag.write() = true;
 
         // Now we won't accept new connections.
@@ -345,9 +344,9 @@ impl<S, L> Server<S, L> {
             if conn_cnt.load(Ordering::Relaxed) == 0 {
                 break;
             }
-            trace!(
-                "[VOLO] gracefully exiting, remaining connection count: {}",
-                conn_cnt.load(Ordering::Relaxed)
+            tracing::trace!(
+                "[Volo-HTTP] gracefully exiting, remaining connection count: {}",
+                conn_cnt.load(Ordering::Relaxed),
             );
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
@@ -389,7 +388,7 @@ async fn serve<I, S, E>(
                     let stream = match tls_config.acceptor.accept(stream).await {
                         Ok(conn) => conn,
                         Err(err) => {
-                            trace!("[VOLO] tls handshake error: {err:?}");
+                            tracing::trace!("[Volo-HTTP] tls handshake error: {err:?}");
                             continue;
                         }
                     };
@@ -401,11 +400,11 @@ async fn serve<I, S, E>(
 
         let peer = match conn.info.peer_addr {
             Some(ref peer) => {
-                trace!(" accept connection from: {peer:?}");
+                tracing::trace!("accept connection from: {peer:?}");
                 peer.clone()
             }
             None => {
-                info!("no peer address found from server connection");
+                tracing::info!("no peer address found from server connection");
                 continue;
             }
         };
@@ -449,7 +448,7 @@ async fn serve_conn<S>(
 
     tokio::select! {
         _ = &mut notified => {
-            tracing::trace!("[VOLO] closing a pending connection");
+            tracing::trace!("[Volo-HTTP] closing a pending connection");
             // Graceful shutdown.
             hyper::server::conn::http1::UpgradeableConnection::graceful_shutdown(
                 Pin::new(&mut http_conn)
@@ -457,12 +456,12 @@ async fn serve_conn<S>(
             // Continue to poll this connection until shutdown can finish.
             let result = http_conn.await;
             if let Err(err) = result {
-                tracing::debug!("[VOLO] connection error: {:?}", err);
+                tracing::debug!("[Volo-HTTP] connection error: {:?}", err);
             }
         }
         result = &mut http_conn => {
             if let Err(err) = result {
-                tracing::debug!("[VOLO] connection error: {:?}", err);
+                tracing::debug!("[Volo-HTTP] connection error: {:?}", err);
             }
         },
     }

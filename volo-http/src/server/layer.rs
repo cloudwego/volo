@@ -121,7 +121,7 @@ where
             Ok(Err(res)) => Ok(res.into_response()),
             // something wrong while extracting
             Err(rej) => {
-                tracing::warn!("[VOLO] FilterLayer: something wrong while extracting");
+                tracing::warn!("[Volo-HTTP] FilterLayer: something wrong while extracting");
                 Ok(rej.into_response())
             }
         }
