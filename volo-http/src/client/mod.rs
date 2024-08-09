@@ -94,11 +94,11 @@ pub struct ClientBuilder<IL, OL, C, LB> {
 /// This is unstable now and may be changed in the future.
 #[doc(hidden)]
 pub struct BuilderConfig {
-    timeout: Option<Duration>,
-    stat_enable: bool,
-    fail_on_error_status: bool,
+    pub timeout: Option<Duration>,
+    pub stat_enable: bool,
+    pub fail_on_error_status: bool,
     #[cfg(feature = "__tls")]
-    disable_tls: bool,
+    pub disable_tls: bool,
 }
 
 impl Default for BuilderConfig {
@@ -605,20 +605,20 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     }
 
     /// Set the maximum idle time for a connection.
-    pub fn set_connect_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.connector.set_connect_timeout(timeout);
+    pub fn set_connect_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.connector.set_connect_timeout(Some(timeout));
         self
     }
 
     /// Set the maximum idle time for reading data from the connection.
-    pub fn set_read_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.connector.set_read_timeout(timeout);
+    pub fn set_read_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.connector.set_read_timeout(Some(timeout));
         self
     }
 
     /// Set the maximum idle time for writing data to the connection.
-    pub fn set_write_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.connector.set_write_timeout(timeout);
+    pub fn set_write_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.connector.set_write_timeout(Some(timeout));
         self
     }
 
@@ -626,8 +626,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// The whole request includes connecting, writting, and reading the whole HTTP protocol
     /// headers (without reading response body).
-    pub fn set_request_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.builder_config.timeout = timeout;
+    pub fn set_request_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.builder_config.timeout = Some(timeout);
         self
     }
 
