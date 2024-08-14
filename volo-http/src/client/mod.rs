@@ -33,7 +33,7 @@ use self::{
     callopt::CallOpt,
     dns::parse_target,
     loadbalance::{DefaultLB, DefaultLBService, LbConfig},
-    meta::{MetaService, MetaServiceConfig},
+    meta::MetaService,
     target::TargetParser,
     transport::{ClientConfig, ClientTransport, ClientTransportConfig},
 };
@@ -94,11 +94,11 @@ pub struct ClientBuilder<IL, OL, C, LB> {
 /// This is unstable now and may be changed in the future.
 #[doc(hidden)]
 pub struct BuilderConfig {
-    timeout: Option<Duration>,
-    stat_enable: bool,
-    fail_on_error_status: bool,
+    pub timeout: Option<Duration>,
+    pub stat_enable: bool,
+    pub fail_on_error_status: bool,
     #[cfg(feature = "__tls")]
-    disable_tls: bool,
+    pub disable_tls: bool,
 }
 
 impl Default for BuilderConfig {
@@ -605,20 +605,20 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     }
 
     /// Set the maximum idle time for a connection.
-    pub fn set_connect_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.connector.set_connect_timeout(timeout);
+    pub fn set_connect_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.connector.set_connect_timeout(Some(timeout));
         self
     }
 
     /// Set the maximum idle time for reading data from the connection.
-    pub fn set_read_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.connector.set_read_timeout(timeout);
+    pub fn set_read_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.connector.set_read_timeout(Some(timeout));
         self
     }
 
     /// Set the maximum idle time for writing data to the connection.
-    pub fn set_write_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.connector.set_write_timeout(timeout);
+    pub fn set_write_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.connector.set_write_timeout(Some(timeout));
         self
     }
 
@@ -626,8 +626,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///
     /// The whole request includes connecting, writting, and reading the whole HTTP protocol
     /// headers (without reading response body).
-    pub fn set_request_timeout(&mut self, timeout: Option<Duration>) -> &mut Self {
-        self.builder_config.timeout = timeout;
+    pub fn set_request_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.builder_config.timeout = Some(timeout);
         self
     }
 
@@ -648,10 +648,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             #[cfg(feature = "__tls")]
             disable_tls: self.builder_config.disable_tls,
         };
-        let meta_config = MetaServiceConfig {
-            default_timeout: self.builder_config.timeout,
-            fail_on_error_status: self.builder_config.fail_on_error_status,
-        };
         let transport = ClientTransport::new(
             self.http_config,
             transport_config,
@@ -659,7 +655,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             #[cfg(feature = "__tls")]
             self.tls_config.unwrap_or_default(),
         );
-        let meta_service = MetaService::new(transport, meta_config);
+        let meta_service = MetaService::new(transport);
         let service = self.outer_layer.layer(
             self.mk_lb
                 .make()
@@ -671,18 +667,22 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         } else {
             self.caller_name
         };
-
         if !caller_name.is_empty() && self.headers.get(header::USER_AGENT).is_none() {
             self.headers.insert(
                 header::USER_AGENT,
                 HeaderValue::from_str(caller_name.as_str()).expect("Invalid caller name"),
             );
         }
+        let config = Config {
+            timeout: self.builder_config.timeout,
+            fail_on_error_status: self.builder_config.fail_on_error_status,
+        };
 
         let client_inner = ClientInner {
             caller_name,
             callee_name: self.callee_name,
             default_target: self.target,
+            default_config: config,
             default_call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
@@ -699,6 +699,7 @@ struct ClientInner {
     caller_name: FastStr,
     callee_name: FastStr,
     default_target: Target,
+    default_config: Config,
     default_call_opt: Option<CallOpt>,
     target_parser: TargetParser,
     headers: HeaderMap,
@@ -876,8 +877,9 @@ impl<S> Client<S> {
         cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
         (self.inner.target_parser)(target, call_opt, cx.rpc_info_mut().callee_mut());
 
-        let config = Config { timeout };
-        cx.rpc_info_mut().set_config(config);
+        let config = cx.rpc_info_mut().config_mut();
+        config.clone_from(&self.inner.default_config);
+        config.timeout = timeout.or(config.timeout);
 
         self.call(&mut cx, request).await
     }
