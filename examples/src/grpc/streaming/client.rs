@@ -1,18 +1,15 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::LazyLock};
 
 use async_stream::stream;
-use lazy_static::lazy_static;
 use pilota::FastStr;
 use tokio_stream::StreamExt;
 
-lazy_static! {
-    static ref CLIENT: volo_gen::proto_gen::streaming::StreamingClient = {
-        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-        volo_gen::proto_gen::streaming::StreamingClientBuilder::new("streaming")
-            .address(addr)
-            .build()
-    };
-}
+static CLIENT: LazyLock<volo_gen::proto_gen::streaming::StreamingClient> = LazyLock::new(|| {
+    let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+    volo_gen::proto_gen::streaming::StreamingClientBuilder::new("streaming")
+        .address(addr)
+        .build()
+});
 
 #[volo::main]
 async fn main() {

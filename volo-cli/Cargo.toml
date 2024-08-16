@@ -32,7 +32,6 @@ clap = { workspace = true, features = ["wrap_help", "derive"] }
 colored.workspace = true
 heck.workspace = true
 itertools.workspace = true
-lazy_static.workspace = true
 log.workspace = true
 normpath.workspace = true
 pretty_env_logger.workspace = true

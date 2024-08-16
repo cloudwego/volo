@@ -9,15 +9,13 @@
 //! ```rust,ignore
 //! use volo_thrift::client::CallOpt;
 //!
-//! lazy_static! {
-//!     static ref CLIENT: volo_gen::volo::example::item::ItemServiceClient = {
+//! static CLIENT: LazyLock<volo_gen::volo::example::item::ItemServiceClient> = LazyLock::new(|| {
 //!         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
 //!         volo_gen::volo::example::item::ItemServiceClientBuilder::new("volo-example-item")
 //!             .layer(LogLayer)
 //!             .target(addr)
 //!             .build()
-//!     };
-//! }
+//! })
 //!
 //! #[volo::main]
 //! async fn main() {

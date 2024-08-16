@@ -30,7 +30,6 @@ async-broadcast.workspace = true
 dashmap.workspace = true
 faststr.workspace = true
 futures.workspace = true
-lazy_static.workspace = true
 libc.workspace = true
 metainfo.workspace = true
 mur3.workspace = true

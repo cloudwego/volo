@@ -31,7 +31,6 @@ chrono.workspace = true
 futures.workspace = true
 itoa.workspace = true
 rustc-hash.workspace = true
-lazy_static.workspace = true
 linkedbytes.workspace = true
 linked-hash-map.workspace = true
 num_enum.workspace = true

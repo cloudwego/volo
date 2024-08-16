@@ -2,7 +2,7 @@ use std::{
     cell::RefCell,
     sync::{
         atomic::{AtomicBool, AtomicUsize},
-        Arc,
+        Arc, LazyLock,
     },
 };
 
@@ -25,10 +25,7 @@ use crate::{
     ClientError, EntryMessage, ThriftMessage,
 };
 
-lazy_static::lazy_static! {
-    // This is used for debug.
-    static ref TRANSPORT_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
-}
+static TRANSPORT_ID_COUNTER: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 
 #[pin_project]
 pub struct ThriftTransport<E, Resp> {

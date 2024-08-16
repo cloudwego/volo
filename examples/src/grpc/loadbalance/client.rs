@@ -2,9 +2,9 @@ use std::{
     cell::RefCell,
     hash::{Hash, Hasher},
     net::IpAddr,
+    sync::LazyLock,
 };
 
-use lazy_static::lazy_static;
 use metainfo::{MetaInfo, METAINFO};
 use pilota::FastStr;
 use volo::{
@@ -15,19 +15,17 @@ use volo::{
     },
 };
 
-lazy_static! {
-    static ref CLIENT: volo_gen::proto_gen::helloworld::GreeterClient = {
-        let discover = StaticDiscover::from(vec![
-            "127.0.0.1:8080".parse().unwrap(),
-            "127.0.0.2:8081".parse().unwrap(),
-        ]);
-        let lb = ConsistentHashBalance::new(ConsistentHashOption::default());
-        volo_gen::proto_gen::helloworld::GreeterClientBuilder::new("hello")
-            .load_balance(lb)
-            .discover(discover)
-            .build()
-    };
-}
+static CLIENT: LazyLock<volo_gen::proto_gen::helloworld::GreeterClient> = LazyLock::new(|| {
+    let discover = StaticDiscover::from(vec![
+        "127.0.0.1:8080".parse().unwrap(),
+        "127.0.0.2:8081".parse().unwrap(),
+    ]);
+    let lb = ConsistentHashBalance::new(ConsistentHashOption::default());
+    volo_gen::proto_gen::helloworld::GreeterClientBuilder::new("hello")
+        .load_balance(lb)
+        .discover(discover)
+        .build()
+});
 
 #[inline]
 fn set_request_hash(code: u64) {

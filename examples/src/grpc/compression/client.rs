@@ -1,27 +1,24 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::LazyLock};
 
-use lazy_static::lazy_static;
 use pilota::FastStr;
 use volo_grpc::codec::compression::{
     CompressionEncoding::{Gzip, Identity, Zlib},
     GzipConfig, Level, ZlibConfig,
 };
 
-lazy_static! {
-    static ref CLIENT: volo_gen::proto_gen::helloworld::GreeterClient = {
-        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-        volo_gen::proto_gen::helloworld::GreeterClientBuilder::new("hello")
-            .send_compressions(vec![
-                Gzip(Some(GzipConfig::default())),
-                Zlib(Some(ZlibConfig {
-                    level: Level::fast(),
-                })),
-            ])
-            .accept_compressions(vec![Gzip(None), Identity])
-            .address(addr)
-            .build()
-    };
-}
+static CLIENT: LazyLock<volo_gen::proto_gen::helloworld::GreeterClient> = LazyLock::new(|| {
+    let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+    volo_gen::proto_gen::helloworld::GreeterClientBuilder::new("hello")
+        .send_compressions(vec![
+            Gzip(Some(GzipConfig::default())),
+            Zlib(Some(ZlibConfig {
+                level: Level::fast(),
+            })),
+        ])
+        .accept_compressions(vec![Gzip(None), Identity])
+        .address(addr)
+        .build()
+});
 
 #[volo::main]
 async fn main() {

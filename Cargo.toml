@@ -20,7 +20,7 @@ edition = "2021"
 homepage = "https://www.cloudwego.io/docs/volo/"
 repository = "https://github.com/cloudwego/volo"
 license = "MIT OR Apache-2.0"
-rust-version = "1.77.0"
+rust-version = "1.80.0"
 
 [workspace.dependencies]
 pilota = "0.11"
@@ -69,7 +69,6 @@ hyper-timeout = "0.5"
 hyper-util = "0.1"
 itertools = "0.13"
 itoa = "1"
-lazy_static = "1"
 libc = "0.2"
 linkedbytes = "0.1"
 linked-hash-map = "0.5"
@@ -133,7 +132,7 @@ webpki-roots = "0.26"
 tokio-rustls = "0.25"
 native-tls = "0.2"
 tokio-native-tls = "0.3"
-tokio-tungstenite="0.23.1"
+tokio-tungstenite = "0.23.1"
 
 [profile.release]
 opt-level = 3

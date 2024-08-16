@@ -119,7 +119,6 @@ http-body.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
-lazy_static.workspace = true
 metainfo.workspace = true
 motore.workspace = true
 serde.workspace = true

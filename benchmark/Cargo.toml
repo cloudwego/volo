@@ -22,7 +22,6 @@ chrono.workspace = true
 clap = { workspace = true, features = ["derive"] }
 faststr.workspace = true
 governor.workspace = true
-lazy_static.workspace = true
 metainfo.workspace = true
 motore.workspace = true
 serde.workspace = true
