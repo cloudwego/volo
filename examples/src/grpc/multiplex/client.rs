@@ -1,22 +1,21 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::LazyLock};
 
-use lazy_static::lazy_static;
 use pilota::FastStr;
 
-lazy_static! {
-    static ref GREETER_CLIENT: volo_gen::proto_gen::helloworld::GreeterClient = {
+static GREETER_CLIENT: LazyLock<volo_gen::proto_gen::helloworld::GreeterClient> =
+    LazyLock::new(|| {
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         volo_gen::proto_gen::helloworld::GreeterClientBuilder::new("hello")
             .address(addr)
             .build()
-    };
-    static ref ECHO_CLIENT: volo_gen::proto_gen::echo::EchoClient = {
-        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-        volo_gen::proto_gen::echo::EchoClientBuilder::new("echo")
-            .address(addr)
-            .build()
-    };
-}
+    });
+
+static ECHO_CLIENT: LazyLock<volo_gen::proto_gen::echo::EchoClient> = LazyLock::new(|| {
+    let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+    volo_gen::proto_gen::echo::EchoClientBuilder::new("echo")
+        .address(addr)
+        .build()
+});
 
 #[volo::main]
 async fn main() {

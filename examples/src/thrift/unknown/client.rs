@@ -1,16 +1,13 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::LazyLock};
 
-use lazy_static::lazy_static;
 use volo_thrift::client::CallOpt;
 
-lazy_static! {
-    static ref CLIENT: volo_gen::thrift_gen::echo::EchoServiceClient = {
-        let addr: SocketAddr = "127.0.0.1:8081".parse().unwrap();
-        volo_gen::thrift_gen::echo::EchoServiceClientBuilder::new("hello")
-            .address(addr)
-            .build()
-    };
-}
+static CLIENT: LazyLock<volo_gen::thrift_gen::echo::EchoServiceClient> = LazyLock::new(|| {
+    let addr: SocketAddr = "127.0.0.1:8081".parse().unwrap();
+    volo_gen::thrift_gen::echo::EchoServiceClientBuilder::new("hello")
+        .address(addr)
+        .build()
+});
 
 #[volo::main]
 async fn main() {

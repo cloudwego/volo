@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::LazyLock};
 
 use anyhow::anyhow;
 use benchmark::{
@@ -6,12 +6,9 @@ use benchmark::{
     perf::Recoder,
     runner::processor::process_request,
 };
-use lazy_static::lazy_static;
 use volo_thrift::ServerError;
 
-lazy_static! {
-    static ref RECODER: Recoder = Recoder::new("VOLO@Server");
-}
+static RECODER: LazyLock<Recoder> = LazyLock::new(|| Recoder::new("VOLO@Server"));
 
 pub struct S;
 

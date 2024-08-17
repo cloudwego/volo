@@ -1,4 +1,4 @@
-use std::sync::atomic::AtomicUsize;
+use std::sync::{atomic::AtomicUsize, LazyLock};
 
 use pilota::thrift::{ApplicationException, ApplicationExceptionKind};
 use pin_project::pin_project;
@@ -11,9 +11,7 @@ use crate::{
     ClientError, EntryMessage, ThriftMessage,
 };
 
-lazy_static::lazy_static! {
-    static ref TRANSPORT_ID_COUNTER: AtomicUsize = AtomicUsize::new(0);
-}
+static TRANSPORT_ID_COUNTER: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
 
 #[pin_project]
 pub struct ThriftTransport<E: Encoder, D: Decoder> {

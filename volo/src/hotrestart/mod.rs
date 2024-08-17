@@ -7,12 +7,11 @@ use std::{
     path::{Path, PathBuf},
     sync::{
         atomic::{AtomicI32, Ordering},
-        Arc, Mutex as StdMutex, OnceLock,
+        Arc, LazyLock, Mutex as StdMutex, OnceLock,
     },
     time::Duration,
 };
 
-use lazy_static::lazy_static;
 use nix::{
     cmsg_space,
     sys::{
@@ -32,9 +31,7 @@ use tokio::{
 const HOT_RESTART_PARENT_ADDR: &str = "volo_hot_restart_parent.sock";
 const HOT_RESTART_CHILD_ADDR: &str = "volo_hot_restart_child.sock";
 
-lazy_static! {
-    pub static ref DEFAULT_HOT_RESTART: HotRestart = HotRestart::new();
-}
+pub static DEFAULT_HOT_RESTART: LazyLock<HotRestart> = LazyLock::new(HotRestart::new);
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug)]
 #[repr(u8)]

@@ -4,23 +4,23 @@ use std::{
     io::{Read, Seek, Write},
     path::{Path, PathBuf},
     process::Command,
+    sync::LazyLock,
 };
 
 use anyhow::{bail, Context};
-use lazy_static::lazy_static;
 use mockall_double::double;
 use serde::de::Error;
 use volo::FastStr;
 
 use crate::model::{GitSource, Idl, IdlProtocol, Repo, Service, SingleConfig, Source};
 
-lazy_static! {
-    pub static ref DEFAULT_DIR: PathBuf = std::path::Path::new(
+pub static DEFAULT_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    std::path::Path::new(
         &std::env::var("OUT_DIR")
-            .expect("OUT_DIR is not set, maybe you are calling volo-build outside build.rs?")
+            .expect("OUT_DIR is not set, maybe you are calling volo-build outside build.rs?"),
     )
-    .join("idl");
-}
+    .join("idl")
+});
 
 pub const DEFAULT_CONFIG_FILE: &str = "volo.yml";
 

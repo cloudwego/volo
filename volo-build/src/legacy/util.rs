@@ -1,20 +1,20 @@
 use std::{
     fs::{create_dir_all, File, OpenOptions},
     path::{Path, PathBuf},
+    sync::LazyLock,
 };
 
-use lazy_static::lazy_static;
 use serde::de::Error;
 
 use super::model::Config;
 
-lazy_static! {
-    pub static ref DEFAULT_DIR: PathBuf = std::path::Path::new(
+pub static DEFAULT_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
+    std::path::Path::new(
         &std::env::var("OUT_DIR")
-            .expect("OUT_DIR is not set, maybe you are calling volo-build outside build.rs?")
+            .expect("OUT_DIR is not set, maybe you are calling volo-build outside build.rs?"),
     )
-    .join("idl");
-}
+    .join("idl")
+});
 
 pub const DEFAULT_CONFIG_FILE: &str = "volo.yml";
 

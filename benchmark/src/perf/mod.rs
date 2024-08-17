@@ -13,6 +13,7 @@ pub struct Recoder {
     mem: Arc<UnsafeCell<Vec<u64>>>,
 }
 
+unsafe impl Send for Recoder {}
 unsafe impl Sync for Recoder {}
 
 impl Recoder {

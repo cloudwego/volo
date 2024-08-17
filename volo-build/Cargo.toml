@@ -29,7 +29,6 @@ faststr.workspace = true
 git2.workspace = true
 heck.workspace = true
 itertools.workspace = true
-lazy_static.workspace = true
 mockall.workspace = true
 mockall_double.workspace = true
 nom.workspace = true

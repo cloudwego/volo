@@ -1,4 +1,5 @@
-use lazy_static::lazy_static;
+use std::sync::LazyLock;
+
 use socket2::{Domain, Protocol, Socket, Type};
 
 #[derive(Debug)]
@@ -46,9 +47,8 @@ impl IpStackCapability {
 }
 
 pub fn probe() -> &'static IpStackCapability {
-    lazy_static! {
-        static ref CAPABILITY: IpStackCapability = IpStackCapability::probe();
-    }
+    static CAPABILITY: LazyLock<IpStackCapability> = LazyLock::new(IpStackCapability::probe);
+
     &CAPABILITY
 }
 
