@@ -1027,10 +1027,14 @@ where
         {
             uri += cx.params_mut().pop().unwrap().1.as_str();
         };
+        if let Some(query) = req.uri().query() {
+            uri.push('?');
+            uri.push_str(query);
+        }
 
         // SAFETY: The value is from a valid uri, so it can also be converted into
         // a valid uri safely.
-        *req.uri_mut() = Uri::from_str(&uri).unwrap();
+        *req.uri_mut() = Uri::from_str(&uri).expect("infallible: stripped uri is invalid");
         self.inner.call(cx, req)
     }
 }
@@ -1276,7 +1280,7 @@ mod route_tests {
         assert_eq!(get_res(&server, "/test-1/id/114").await, "/id/114\n114");
         assert_eq!(
             get_res(&server, "/test-1/catch/114/514/1919/810").await,
-            "/catch/114/514/1919/810\n114/514/1919/810"
+            "/catch/114/514/1919/810\n114/514/1919/810",
         );
 
         // We register it as `/test-2/`, so `/test-2` does not match, but `/test-2/` does match.
@@ -1285,7 +1289,7 @@ mod route_tests {
         assert_eq!(get_res(&server, "/test-2/id/114").await, "/id/114\n114");
         assert_eq!(
             get_res(&server, "/test-2/catch/114/514/1919/810").await,
-            "/catch/114/514/1919/810\n114/514/1919/810"
+            "/catch/114/514/1919/810\n114/514/1919/810",
         );
 
         // The first param can be kept.
@@ -1293,11 +1297,11 @@ mod route_tests {
         assert_eq!(get_res(&server, "/test-3/114/").await, "/\n114");
         assert_eq!(
             get_res(&server, "/test-3/114/id/514").await,
-            "/id/514\n114\n514"
+            "/id/514\n114\n514",
         );
         assert_eq!(
             get_res(&server, "/test-3/114/catch/514/1919/810").await,
-            "/catch/514/1919/810\n114\n514/1919/810"
+            "/catch/514/1919/810\n114\n514/1919/810",
         );
 
         // It is also empty.
@@ -1305,11 +1309,164 @@ mod route_tests {
         assert_eq!(get_res(&server, "/test-4/114/").await, "/\n114");
         assert_eq!(
             get_res(&server, "/test-4/114/id/514").await,
-            "/id/514\n114\n514"
+            "/id/514\n114\n514",
         );
         assert_eq!(
             get_res(&server, "/test-4/114/catch/514/1919/810").await,
-            "/catch/514/1919/810\n114\n514/1919/810"
+            "/catch/514/1919/810\n114\n514/1919/810",
         );
+    }
+
+    #[tokio::test]
+    async fn deep_nest_router() {
+        async fn uri_and_params(uri: Uri, params: PathParamsVec) -> String {
+            let mut v = vec![FastStr::from_string(uri.to_string())];
+            v.extend(params.into_iter().map(|(_, v)| v));
+            v.join("\n")
+        }
+        async fn get_res(
+            server: &TestServer<Router<Option<Body>>, Option<Body>>,
+            uri: &str,
+        ) -> String {
+            server
+                .call_route(Method::GET, uri, None)
+                .await
+                .into_string()
+                .await
+                .unwrap()
+        }
+
+        // rule: `/test-1/{catch1}/test-2/{catch2}/test-3/{nest-route}`
+        let router: Router<Option<Body>> = Router::new().nest(
+            "/test-1/{catch1}",
+            Router::new().nest(
+                "/test-2/{catch2}/",
+                Router::new().nest(
+                    "/test-3",
+                    Router::new()
+                        .route("/", any(uri_and_params))
+                        .route("/id/{id}", any(uri_and_params))
+                        .route("/catch/{*content}", any(uri_and_params)),
+                ),
+            ),
+        );
+        let server = Server::new(router).into_test_server();
+
+        // catch1: 114
+        // catch2: 514
+        // inner-uri: /
+        assert_eq!(
+            get_res(&server, "/test-1/114/test-2/514/test-3/").await,
+            "/\n114\n514",
+        );
+        // catch1: 114
+        // catch2: 514
+        // inner-uri: /id/1919
+        // id: 1919
+        assert_eq!(
+            get_res(&server, "/test-1/114/test-2/514/test-3/id/1919").await,
+            "/id/1919\n114\n514\n1919",
+        );
+        // catch1: 114
+        // catch2: 514
+        // inner-uri: /id/1919
+        // id: 1919
+        assert_eq!(
+            get_res(&server, "/test-1/114/test-2/514/test-3/catch/1919/810").await,
+            "/catch/1919/810\n114\n514\n1919/810",
+        );
+    }
+
+    #[tokio::test]
+    async fn nest_router_with_query() {
+        async fn get_query(uri: Uri) -> Result<String, StatusCode> {
+            if let Some(query) = uri.query() {
+                Ok(query.to_owned())
+            } else {
+                Err(StatusCode::BAD_REQUEST)
+            }
+        }
+        async fn get_res(
+            server: &TestServer<Router<Option<Body>>, Option<Body>>,
+            uri: &str,
+        ) -> Result<String, StatusCode> {
+            let resp = server.call_route(Method::GET, uri, None).await;
+            if resp.status().is_success() {
+                Ok(resp
+                    .into_string()
+                    .await
+                    .expect("response is not a valid string"))
+            } else {
+                Err(resp.status())
+            }
+        }
+
+        let router: Router<Option<Body>> =
+            Router::new().nest("/nest", Router::new().route("/query", any(get_query)));
+        let server = Server::new(router).into_test_server();
+
+        assert_eq!(
+            get_res(&server, "/nest/query?foo=bar").await.unwrap(),
+            "foo=bar",
+        );
+        assert_eq!(get_res(&server, "/nest/query?foo").await.unwrap(), "foo");
+        assert_eq!(get_res(&server, "/nest/query?").await.unwrap(), "");
+        assert!(get_res(&server, "/nest/query").await.is_err());
+    }
+
+    #[tokio::test]
+    async fn deep_nest_router_with_query() {
+        async fn get_query(uri: Uri) -> Result<String, StatusCode> {
+            if let Some(query) = uri.query() {
+                Ok(query.to_owned())
+            } else {
+                Err(StatusCode::BAD_REQUEST)
+            }
+        }
+        async fn get_res(
+            server: &TestServer<Router<Option<Body>>, Option<Body>>,
+            uri: &str,
+        ) -> Result<String, StatusCode> {
+            let resp = server.call_route(Method::GET, uri, None).await;
+            if resp.status().is_success() {
+                Ok(resp
+                    .into_string()
+                    .await
+                    .expect("response is not a valid string"))
+            } else {
+                Err(resp.status())
+            }
+        }
+
+        let router: Router<Option<Body>> = Router::new().nest(
+            "/nest-1",
+            Router::new().nest(
+                "/nest-2",
+                Router::new().nest("/nest-3", Router::new().route("/query", any(get_query))),
+            ),
+        );
+        let server = Server::new(router).into_test_server();
+
+        assert_eq!(
+            get_res(&server, "/nest-1/nest-2/nest-3/query?foo=bar")
+                .await
+                .unwrap(),
+            "foo=bar",
+        );
+        assert_eq!(
+            get_res(&server, "/nest-1/nest-2/nest-3/query?foo")
+                .await
+                .unwrap(),
+            "foo",
+        );
+        assert_eq!(
+            get_res(&server, "/nest-1/nest-2/nest-3/query?")
+                .await
+                .unwrap(),
+            "",
+        );
+        assert!(get_res(&server, "/nest-1/nest-2/nest-3/query")
+            .await
+            .is_err());
     }
 }
