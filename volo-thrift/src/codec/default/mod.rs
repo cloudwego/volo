@@ -43,8 +43,9 @@ use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
 pub mod framed;
 pub mod thrift;
 pub mod ttheader;
-// mod mesh_header;
 
+/// Trait for encoding a [`ThriftMessage`] in place.
+///
 /// [`ZeroCopyEncoder`] tries to encode a message without copying large data taking the advantage
 /// of [`LinkedBytes`], which can insert a [`Bytes`] into the middle of a [`bytes::BytesMut`] and
 /// uses writev.
@@ -74,6 +75,8 @@ pub trait ZeroCopyEncoder: Send + Sync + 'static {
     ) -> Result<(usize, usize), ThriftException>;
 }
 
+/// Trait for decoding a [`ThriftMessage`] in place.
+///
 /// [`ZeroCopyDecoder`] tries to decode a message without copying large data, so the [`Bytes`] in
 /// the `decode` method is not designed to be reused, and the implementation can use
 /// `Bytes::split_to` to get a [`Bytes`] and hand it to the user directly.
