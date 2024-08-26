@@ -3570,7 +3570,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.10.12"
+version = "0.10.13"
 dependencies = [
  "ahash",
  "anyhow",
