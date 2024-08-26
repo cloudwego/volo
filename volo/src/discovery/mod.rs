@@ -63,6 +63,8 @@ pub struct Change<K> {
     pub removed: Vec<Arc<Instance>>,
 }
 
+/// Get the difference of two address lists.
+///
 /// [`diff_address`] provides a naive implementation that compares prev and next only by the
 /// address, and returns the [`Change`], which means that the `updated` is always empty when using
 /// this implementation.
