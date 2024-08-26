@@ -4,8 +4,8 @@ use pilota_build::{IdlService, Plugin};
 use volo::FastStr;
 
 use crate::{
-    model::{GitSource, Source, WorkspaceConfig},
-    util::{download_repos_to_target, strip_slash_prefix},
+    model::WorkspaceConfig,
+    util::{download_repos_to_target, get_idl_build_path_and_includes, ServiceBuilder},
 };
 
 pub struct Builder<MkB, P> {
@@ -44,7 +44,7 @@ where
     MkB::Target: Send,
     P: pilota_build::parser::Parser,
 {
-    pub fn gen(self) {
+    pub fn gen(mut self) {
         let work_dir = std::env::current_dir().unwrap();
         let config = match std::fs::read(work_dir.join("volo.workspace.yml")) {
             Ok(config) => config,
@@ -71,45 +71,43 @@ where
             std::process::exit(1);
         };
 
-        let mut includes: Vec<PathBuf> = Vec::new();
-
-        let services = config
+        let (idl_services, service_builders): (Vec<_>, Vec<_>) = config
             .services
             .into_iter()
             .map(|s| {
-                if let Source::Git(GitSource { ref repo }) = s.idl.source {
-                    // git should use relative path instead of absolute path
-                    let dir = repo_dir_map
-                        .get(repo)
-                        .expect("git source requires the repo info for idl")
-                        .clone();
-                    let path = dir.join(strip_slash_prefix(s.idl.path.as_path()));
-                    includes.extend(s.idl.includes.iter().map(|v| dir.join(v.clone())));
-                    // To resolve absolute path dependencies, go back two levels to the domain level
-                    if let Some(path) = dir.parent().and_then(|d| d.parent()) {
-                        includes.push(path.to_path_buf());
-                    }
+                let (path, includes) = get_idl_build_path_and_includes(&s.idl, &repo_dir_map);
+                (
                     IdlService {
+                        path: path.clone(),
+                        config: s.codegen_option.config,
+                    },
+                    ServiceBuilder {
                         path,
-                        config: s.codegen_option.config,
-                    }
-                } else {
-                    includes.extend(s.idl.includes.iter().cloned());
-                    IdlService {
-                        path: s.idl.path.clone(),
-                        config: s.codegen_option.config,
-                    }
-                }
+                        includes,
+                        touch: s.codegen_option.touch,
+                        keep_unknown_fields: s.codegen_option.keep_unknown_fields,
+                    },
+                )
             })
-            .collect();
-
-        self.include_dirs(includes)
-            .ignore_unused(!config.common_option.touch_all)
+            .unzip();
+        for ServiceBuilder {
+            path,
+            includes,
+            touch,
+            keep_unknown_fields,
+        } in service_builders
+        {
+            self = self.include_dirs(includes).touch([(path.clone(), touch)]);
+            if keep_unknown_fields {
+                self = self.keep_unknown_fields([path]);
+            }
+        }
+        self.ignore_unused(!config.common_option.touch_all)
             .dedup(config.common_option.dedups)
             .special_namings(config.common_option.special_namings)
             .common_crate_name(config.common_crate_name)
             .pilota_builder
-            .compile_with_config(services, pilota_build::Output::Workspace(work_dir));
+            .compile_with_config(idl_services, pilota_build::Output::Workspace(work_dir));
     }
 
     pub fn plugin(mut self, plugin: impl Plugin + 'static) -> Self {
@@ -139,6 +137,22 @@ where
 
     pub fn include_dirs(mut self, include_dirs: Vec<PathBuf>) -> Self {
         self.pilota_builder = self.pilota_builder.include_dirs(include_dirs);
+        self
+    }
+
+    pub fn keep_unknown_fields(
+        mut self,
+        keep_unknown_fields: impl IntoIterator<Item = PathBuf>,
+    ) -> Self {
+        self.pilota_builder = self.pilota_builder.keep_unknown_fields(keep_unknown_fields);
+        self
+    }
+
+    pub fn touch(
+        mut self,
+        items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>,
+    ) -> Self {
+        self.pilota_builder = self.pilota_builder.touch(items);
         self
     }
 }
