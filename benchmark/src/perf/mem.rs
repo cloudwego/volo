@@ -53,7 +53,7 @@ pub async fn record_usage(mem_usage_list: &mut Vec<u64>, cancel: CancellationTok
     loop {
         tokio::select! {
             _ = tokio::time::sleep(DEFAULT_INTERVAL) => {
-                system.refresh_process_specifics(pid, ProcessRefreshKind::new().with_memory());
+                system.refresh_processes_specifics(sysinfo::ProcessesToUpdate::Some(&[pid]), ProcessRefreshKind::new().with_memory());
                 let mem_usage = system
                     .process(pid)
                     .unwrap()
