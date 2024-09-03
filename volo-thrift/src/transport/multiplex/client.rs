@@ -157,7 +157,7 @@ where
             }
         }
         if cx.transport.should_reuse && resp.is_ok() {
-            if let Transport::Pooled(pooled) = transport {
+            if let Transport::TcpOrUnix(pooled) = transport {
                 pooled.reuse().await;
             }
         }

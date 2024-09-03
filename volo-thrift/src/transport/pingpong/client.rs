@@ -131,7 +131,7 @@ where
             .call((target, shmipc_target.clone(), Ver::PingPong))
             .await?;
         cx.stats.record_make_transport_end_at();
-        if let Transport::UnPooled(_) = transport {
+        if let Transport::Shm(_) = transport {
             cx.rpc_info
                 .caller_mut()
                 .set_transport(volo::net::shm::Transport(FastStr::new("shmipc")))

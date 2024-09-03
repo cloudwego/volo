@@ -56,7 +56,7 @@ where
         let mt = self.inner.clone();
         if let Some(addr) = kv.1 {
             if let Ok(resp) = mt.call(addr.clone()).await {
-                return Ok(Transport::UnPooled(resp));
+                return Ok(Transport::Shm(resp));
             }
         }
         self.pool

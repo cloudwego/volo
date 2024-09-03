@@ -416,17 +416,17 @@ struct Idle<T> {
 }
 
 pub enum Transport<K: Key, T: Poolable> {
-    Pooled(Pooled<K, T>),
-    UnPooled(T),
+    TcpOrUnix(Pooled<K, T>),
+    Shm(T),
 }
 
 impl<E: Encoder, D: Decoder> Transport<Address, ThriftTransport<E, D>> {
     pub async fn reuse(self) {
         match self {
-            Transport::Pooled(pooled) => {
+            Transport::TcpOrUnix(pooled) => {
                 pooled.reuse().await;
             }
-            Transport::UnPooled(t) => {
+            Transport::Shm(t) => {
                 t.reuse().await;
             }
         }
@@ -435,21 +435,21 @@ impl<E: Encoder, D: Decoder> Transport<Address, ThriftTransport<E, D>> {
 
 impl<K: Key, T: Poolable> From<Pooled<K, T>> for Transport<K, T> {
     fn from(pooled: Pooled<K, T>) -> Self {
-        Transport::Pooled(pooled)
+        Transport::TcpOrUnix(pooled)
     }
 }
 
 impl<K: Key, T: Poolable> From<T> for Transport<K, T> {
     fn from(t: T) -> Self {
-        Transport::UnPooled(t)
+        Transport::Shm(t)
     }
 }
 
 impl<K: Key, T: Poolable> AsRef<T> for Transport<K, T> {
     fn as_ref(&self) -> &T {
         match self {
-            Transport::Pooled(pooled) => pooled.t.as_ref().expect("not dropped"),
-            Transport::UnPooled(t) => t,
+            Transport::TcpOrUnix(pooled) => pooled.t.as_ref().expect("not dropped"),
+            Transport::Shm(t) => t,
         }
     }
 }
@@ -457,8 +457,8 @@ impl<K: Key, T: Poolable> AsRef<T> for Transport<K, T> {
 impl<K: Key, T: Poolable> AsMut<T> for Transport<K, T> {
     fn as_mut(&mut self) -> &mut T {
         match self {
-            Transport::Pooled(pooled) => pooled.t.as_mut().expect("not dropped"),
-            Transport::UnPooled(t) => t,
+            Transport::TcpOrUnix(pooled) => pooled.t.as_mut().expect("not dropped"),
+            Transport::Shm(t) => t,
         }
     }
 }

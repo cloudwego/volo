@@ -60,7 +60,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                         cx.rpc_info.caller_mut().set_address(peer_addr.clone());
                     } else {
                         cx.rpc_info
-                            .caller_mut()
+                            .callee_mut()
                             .set_transport(volo::net::shm::Transport(FastStr::new("shmipc")));
                         cx.rpc_info
                             .caller_mut()
