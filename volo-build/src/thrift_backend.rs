@@ -376,7 +376,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             let name = self.cx().rust_name(m.def_id);
             let resp_type = self.cx().codegen_item_ty(m.ret.kind.clone());
             let req_fields = m.args.iter().map(|a| {
-                let name = self.cx().rust_name(a.def_id).0.field_ident();
+                let name = self.cx().rust_name(a.def_id); // use the rust name as string format which will escape the keyword
                 let ty = self.cx().codegen_item_ty(a.ty.kind.clone());
                 let mut ty = format!("{ty}");
                 if let Some(RustWrapperArc(true)) = self.cx().tags(a.tags_id).as_ref().and_then(|tags| tags.get::<RustWrapperArc>()) {
@@ -393,7 +393,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             } else {
                 "None => unreachable!()"
             };
-            let req_field_names = m.args.iter().map(|a| self.cx().rust_name(a.def_id).0.field_ident()).join(",");
+            let req_field_names = m.args.iter().map(|a| self.cx().rust_name(a.def_id)).join(","); // use the rust name as string format which will escape the keyword
             let anonymous_args_send_name = self.method_args_path(&service_name, m, true);
             let exception = if let Some(p) = &m.exceptions {
                 self.cx().cur_related_item_path(p.did)
@@ -477,7 +477,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 let args = m
                     .args
                     .iter()
-                    .map(|a| format!("args.{}", self.cx().rust_name(a.def_id).0.field_ident()))
+                    .map(|a| format!("args.{}", self.cx().rust_name(a.def_id))) // use the rust name as string format which will escape the keyword
                     .join(",");
 
                 let has_exception = m.exceptions.is_some();
@@ -623,7 +623,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             .iter()
             .map(|a| {
                 let ty = self.inner.codegen_item_ty(a.ty.kind.clone());
-                let ident = self.cx().rust_name(a.def_id).0.field_ident();
+                let ident = self.cx().rust_name(a.def_id); // use the rust name as string format which will escape the keyword
                 format!("{ident}: {ty}")
             })
             .join(",");
@@ -666,7 +666,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             .iter()
             .map(|a| {
                 let ty = self.inner.codegen_item_ty(a.ty.kind.clone()).global_path();
-                let ident = self.cx().rust_name(a.def_id);
+                let ident = self.cx().rust_name(a.def_id).0.field_ident(); // use the _{rust-style fieldname} without keyword escaping
                 format!("_{ident}: volo_gen{ty}")
             })
             .join(",");

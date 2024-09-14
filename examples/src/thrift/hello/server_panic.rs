@@ -11,6 +11,20 @@ impl volo_gen::thrift_gen::hello::HelloService for S {
     ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::ServerError> {
         panic!("panic in hello");
     }
+
+    async fn hello2(
+        &self,
+        _type: volo_gen::thrift_gen::hello::HelloRequest,
+    ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::ServerError> {
+        panic!("panic in hello");
+    }
+
+    async fn hello3(
+        &self,
+        _self: volo_gen::thrift_gen::hello::HelloRequest,
+    ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::ServerError> {
+        panic!("panic in hello");
+    }
 }
 
 #[volo::main]

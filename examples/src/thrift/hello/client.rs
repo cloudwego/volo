@@ -25,4 +25,35 @@ async fn main() {
         Ok(info) => println!("{info:?}"),
         Err(e) => eprintln!("{e:?}"),
     }
+
+    let req = volo_gen::thrift_gen::hello::HelloRequest {
+        name: "volo".into(),
+        common: None,
+        common2: None,
+    };
+
+    let resp = CLIENT
+        .clone()
+        .with_callopt(CallOpt::default())
+        .hello2(req)
+        .await;
+    match resp {
+        Ok(info) => println!("{info:?}"),
+        Err(e) => eprintln!("{e:?}"),
+    }
+
+    let req = volo_gen::thrift_gen::hello::HelloRequest {
+        name: "volo".into(),
+        common: None,
+        common2: None,
+    };
+    let resp = CLIENT
+        .clone()
+        .with_callopt(CallOpt::default())
+        .hello3(req)
+        .await;
+    match resp {
+        Ok(info) => println!("{info:?}"),
+        Err(e) => eprintln!("{e:?}"),
+    }
 }
