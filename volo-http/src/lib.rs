@@ -9,18 +9,13 @@ pub mod body;
 #[cfg(feature = "client")]
 pub mod client;
 pub mod context;
-#[cfg(feature = "cookie")]
-pub mod cookie;
 pub mod error;
-pub mod extension;
-#[cfg(feature = "json")]
-pub mod json;
 pub mod request;
 pub mod response;
 #[cfg(feature = "server")]
 pub mod server;
 
-pub(crate) mod utils;
+pub mod utils;
 
 #[doc(hidden)]
 pub mod prelude {
@@ -31,9 +26,6 @@ pub mod prelude {
 
     #[cfg(feature = "client")]
     pub use crate::client::prelude::*;
-    pub use crate::extension::Extension;
-    #[cfg(feature = "json")]
-    pub use crate::json::Json;
     #[cfg(feature = "server")]
     pub use crate::server::prelude::*;
 }

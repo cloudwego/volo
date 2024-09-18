@@ -1,4 +1,5 @@
-//! Server middleware utilities
+//! Server middleware utilities.
+
 use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 
 use hyper::body::Incoming;

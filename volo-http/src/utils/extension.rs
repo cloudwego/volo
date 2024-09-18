@@ -1,9 +1,7 @@
 //! [`Extension`] support for inserting or extracting anything for contexts
+
 use motore::{layer::Layer, service::Service};
 use volo::context::Context;
-
-#[cfg(feature = "server")]
-mod server;
 
 /// Inserting anything into contexts as a [`Layer`] or extracting anything as an extractor
 ///
@@ -11,8 +9,8 @@ mod server;
 ///
 /// ```
 /// use volo_http::{
-///     extension::Extension,
 ///     server::route::{get, Router},
+///     utils::Extension,
 /// };
 ///
 /// #[derive(Clone)]
@@ -71,5 +69,46 @@ where
     ) -> Result<Self::Response, Self::Error> {
         cx.extensions_mut().insert(self.ext.clone());
         self.inner.call(cx, req).await
+    }
+}
+
+#[cfg(feature = "server")]
+mod server {
+    use http::{request::Parts, StatusCode};
+    use volo::context::Context;
+
+    use super::Extension;
+    use crate::{
+        context::ServerContext,
+        response::ServerResponse,
+        server::{extract::FromContext, IntoResponse},
+    };
+
+    impl<T> FromContext for Extension<T>
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        type Rejection = ExtensionRejection;
+
+        async fn from_context(
+            cx: &mut ServerContext,
+            _parts: &mut Parts,
+        ) -> Result<Self, Self::Rejection> {
+            cx.extensions()
+                .get::<T>()
+                .cloned()
+                .map(Extension)
+                .ok_or(ExtensionRejection::NotExist)
+        }
+    }
+
+    pub enum ExtensionRejection {
+        NotExist,
+    }
+
+    impl IntoResponse for ExtensionRejection {
+        fn into_response(self) -> ServerResponse {
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        }
     }
 }

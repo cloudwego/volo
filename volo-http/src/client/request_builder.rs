@@ -72,7 +72,9 @@ impl<'a, S> RequestBuilder<'a, S, Body> {
         );
         self.request = Request::from_parts(
             parts,
-            crate::json::serialize(json).map_err(builder_error)?.into(),
+            crate::utils::json::serialize(json)
+                .map_err(builder_error)?
+                .into(),
         );
 
         Ok(self)
