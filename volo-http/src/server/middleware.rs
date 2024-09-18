@@ -362,7 +362,7 @@ where
 }
 
 #[cfg(test)]
-pub mod middleware_tests {
+mod middleware_tests {
     use faststr::FastStr;
     use http::{HeaderValue, Method, Response, StatusCode, Uri};
     use motore::service::service_fn;
@@ -395,8 +395,7 @@ pub mod middleware_tests {
         let (parts, mut body) = req.into_parts();
         body += "test";
         let req = ServerRequest::from_parts(parts, body);
-        let resp = next.run(cx, req).await.into_response();
-        resp
+        next.run(cx, req).await.into_response()
     }
 
     async fn cors_mw(

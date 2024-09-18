@@ -1,3 +1,5 @@
+//! Test utilities for server of Volo-HTTP.
+
 use std::{fmt::Debug, marker::PhantomData};
 
 use http::method::Method;
@@ -14,20 +16,33 @@ use crate::{
     server::Server,
 };
 
+/// Wrap a [`Handler`] into a [`HandlerService`].
+///
+/// Since [`Handler`] is not exposed, the [`Handler::into_service`] cannot be called outside of
+/// Volo-HTTP.
+///
+/// For testing purposes, this function wraps [`Handler::into_service`] and is made public.
 pub fn to_service<H, T, B, E>(handler: H) -> HandlerService<H, T, B, E>
 where
     H: Handler<T, B, E>,
 {
-    handler.into_service()
+    Handler::into_service(handler)
 }
 
 /// Test server which supports many calling methods.
+///
+/// Supported methods:
+///
+/// - [`TestServer::call`], which is a naive service call
+/// - [`TestServer::call_without_cx`], which is a naive service call without passing `cx`
+/// - [`TestServer::call_route`], which is a simple call with given method, uri and data
 pub struct TestServer<S, B = Body> {
     inner: S,
     _marker: PhantomData<fn(B)>,
 }
 
-pub fn empty_address() -> Address {
+/// Create a simple address, the address is `127.0.0.1:8080`.
+pub fn mock_address() -> Address {
     use std::net;
     Address::Ip(net::SocketAddr::new(
         net::IpAddr::V4(net::Ipv4Addr::new(127, 0, 0, 1)),
@@ -35,10 +50,16 @@ pub fn empty_address() -> Address {
     ))
 }
 
+/// Create an empty [`ServerContext`].
+///
+/// The context has only caller address.
 pub fn empty_cx() -> ServerContext {
-    ServerContext::new(empty_address())
+    ServerContext::new(mock_address())
 }
 
+/// Create a simple [`ServerRequest`] with only [`Method`], [`Uri`] and [`Body`].
+///
+/// [`Uri`]: http::uri::Uri
 pub fn simple_req<S, B>(method: Method, uri: S, body: B) -> ServerRequest<B>
 where
     S: AsRef<str>,
@@ -55,11 +76,15 @@ where
     B: Send,
     E: IntoResponse,
 {
+    /// Call the [`MethodRouter`] without [`ServerContext`].
+    ///
+    /// This function will generate an empty [`ServerContext`] and use it.
     pub async fn call_without_cx(&self, req: ServerRequest<B>) -> Result<ServerResponse, E> {
-        self.call(&mut ServerContext::new(empty_address()), req)
+        self.call(&mut ServerContext::new(mock_address()), req)
             .await
     }
 
+    /// Call the [`MethodRouter`] with only [`Method`] and [`Body`].
     pub async fn call_route<D>(&self, method: Method, data: D) -> ServerResponse
     where
         B: TryFrom<D>,
@@ -83,6 +108,7 @@ where
     S::Response: IntoResponse,
     S::Error: IntoResponse,
 {
+    /// Call the [`TestServer`] as a [`Service`].
     pub async fn call(
         &self,
         cx: &mut ServerContext,
@@ -91,11 +117,17 @@ where
         self.inner.call(cx, req).await
     }
 
+    /// Call the [`TestServer`] without [`ServerContext`].
+    ///
+    /// This function will generate an empty [`ServerContext`] and use it.
     pub async fn call_without_cx(&self, req: ServerRequest<B>) -> Result<S::Response, S::Error> {
-        self.call(&mut ServerContext::new(empty_address()), req)
+        self.call(&mut ServerContext::new(mock_address()), req)
             .await
     }
 
+    /// Call the [`TestServer`] with only [`Method`], [`Uri`] and [`Body`].
+    ///
+    /// [`Uri`]: http::uri::Uri
     pub async fn call_route<U, D>(&self, method: Method, uri: U, data: D) -> ServerResponse
     where
         U: AsRef<str>,
