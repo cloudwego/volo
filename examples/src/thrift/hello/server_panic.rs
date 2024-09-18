@@ -19,6 +19,7 @@ impl volo_gen::thrift_gen::hello::HelloService for S {
         panic!("panic in hello");
     }
 
+    #[allow(clippy::duplicate_underscore_argument)]
     async fn hello3(
         &self,
         _self: volo_gen::thrift_gen::hello::HelloRequest,
