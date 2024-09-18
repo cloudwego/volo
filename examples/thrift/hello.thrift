@@ -14,4 +14,6 @@ struct HelloResponse {
 
 service HelloService {
     HelloResponse Hello (1: HelloRequest req),
+    HelloResponse Hello2 (1: HelloRequest type),
+    HelloResponse Hello3 (1: HelloRequest self),
 }
