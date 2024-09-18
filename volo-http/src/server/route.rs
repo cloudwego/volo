@@ -479,7 +479,10 @@ impl Matcher {
         Ok(())
     }
 
-    fn at<'a>(&'a self, path: &'a str) -> Result<matchit::Match<&RouteId>, MatcherError> {
+    fn at<'a>(
+        &'a self,
+        path: &'a str,
+    ) -> Result<matchit::Match<'a, 'a, &'a RouteId>, MatcherError> {
         self.router.at(path).map_err(MatcherError::RouterMatchError)
     }
 }
