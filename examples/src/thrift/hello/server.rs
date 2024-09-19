@@ -12,26 +12,6 @@ impl volo_gen::thrift_gen::hello::HelloService for S {
         };
         Ok(resp)
     }
-
-    async fn hello2(
-        &self,
-        r#type: volo_gen::thrift_gen::hello::HelloRequest,
-    ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::ServerError> {
-        let resp = volo_gen::thrift_gen::hello::HelloResponse {
-            message: format!("Hello2, {}!", r#type.name).into(),
-        };
-        Ok(resp)
-    }
-
-    async fn hello3(
-        &self,
-        self_: volo_gen::thrift_gen::hello::HelloRequest,
-    ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::ServerError> {
-        let resp = volo_gen::thrift_gen::hello::HelloResponse {
-            message: format!("Hello3, {}!", self_.name).into(),
-        };
-        Ok(resp)
-    }
 }
 
 #[volo::main]

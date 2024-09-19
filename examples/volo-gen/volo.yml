@@ -3,11 +3,6 @@ entries:
   proto:
     filename: proto_gen.rs
     protocol: protobuf
-    repos:
-      protobuf:
-        url: https://github.com/protocolbuffers/protobuf.git
-        ref: HEAD
-        lock: cb93f9aa6e81329e368f09ded42d17c3f26442f2
     services:
       - idl:
           source: local
@@ -24,20 +19,9 @@ entries:
           path: ../proto/helloworld.proto
           includes:
             - ../proto
-      - idl:
-          source: git
-          repo: protobuf
-          path: examples/addressbook.proto
-          includes:
-            - examples
   thrift:
     filename: thrift_gen.rs
     protocol: thrift
-    repos:
-      thrift:
-        url: https://github.com/apache/thrift.git
-        ref: HEAD
-        lock: 9bd1f1bee7bf59080492bbd3213ca1fed57ab4d6
     services:
       - idl:
           source: local
@@ -50,9 +34,3 @@ entries:
           path: ../thrift/echo_unknown.thrift
         codegen_option:
           keep_unknown_fields: true
-      - idl:
-          source: git
-          repo: thrift
-          path: test/Service.thrift
-    dedups:
-      - CommonReq

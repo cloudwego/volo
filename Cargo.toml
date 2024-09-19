@@ -11,6 +11,7 @@ members = [
   "examples",
   "examples/volo-gen",
   "benchmark",
+  "tests/code-generation",
 ]
 resolver = "2"
 
