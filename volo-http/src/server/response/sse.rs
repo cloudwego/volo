@@ -1,6 +1,7 @@
 //! SSE (Server-Sent Events) supports
 //!
 //! See [`Sse`] and [`Event`] for more details.
+
 use std::{
     future::Future,
     pin::Pin,
@@ -179,7 +180,7 @@ impl Event {
     ///
     /// - Panics if the data field has already set through [`Self::data`] or [`Self::json`].
     #[cfg(feature = "json")]
-    pub fn json<T>(mut self, data: &T) -> Result<Self, crate::json::Error>
+    pub fn json<T>(mut self, data: &T) -> Result<Self, crate::utils::json::Error>
     where
         T: serde::Serialize,
     {
@@ -194,7 +195,7 @@ impl Event {
         self.buffer.put_u8(b' ');
 
         let mut writer = self.buffer.writer();
-        crate::json::serialize_to_writer(&mut writer, data)?;
+        crate::utils::json::serialize_to_writer(&mut writer, data)?;
         self.buffer = writer.into_inner();
 
         Ok(self)

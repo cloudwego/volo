@@ -158,12 +158,12 @@ where
 }
 
 #[cfg(feature = "json")]
-impl<T> IntoResponse for crate::json::Json<T>
+impl<T> IntoResponse for crate::server::extract::Json<T>
 where
     T: serde::Serialize,
 {
     fn into_response(self) -> ServerResponse {
-        let Ok(body) = crate::json::serialize(&self.0) else {
+        let Ok(body) = crate::utils::json::serialize(&self.0) else {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         };
         let body = Body::from(body);
@@ -176,5 +176,12 @@ where
             )
             .body(body)
             .unwrap_or_else(|_| StatusCode::INTERNAL_SERVER_ERROR.into_response())
+    }
+}
+
+#[cfg(feature = "json")]
+impl IntoResponse for crate::utils::json::Error {
+    fn into_response(self) -> ServerResponse {
+        StatusCode::BAD_REQUEST.into_response()
     }
 }

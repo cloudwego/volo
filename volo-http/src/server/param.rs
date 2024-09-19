@@ -4,6 +4,7 @@
 //! more details.
 //!
 //! [route]: crate::server::route::Router::route
+
 use std::{convert::Infallible, error::Error, fmt, ops::Deref, str::FromStr};
 
 use ahash::AHashMap;

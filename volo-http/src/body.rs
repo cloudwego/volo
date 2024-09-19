@@ -1,6 +1,7 @@
 //! HTTP Body implementation for [`http_body::Body`]
 //!
 //! See [`Body`] for more details.
+
 use std::{
     error::Error,
     fmt,
@@ -210,7 +211,7 @@ where
     {
         async {
             let bytes = self.into_bytes().await?;
-            crate::json::deserialize(&bytes).map_err(BodyConvertError::JsonDeserializeError)
+            crate::utils::json::deserialize(&bytes).map_err(BodyConvertError::JsonDeserializeError)
         }
     }
 }
@@ -231,7 +232,7 @@ pub enum BodyConvertError {
     StringUtf8Error,
     /// Failed to deserialize the json
     #[cfg(feature = "json")]
-    JsonDeserializeError(crate::json::Error),
+    JsonDeserializeError(crate::utils::json::Error),
 }
 
 impl fmt::Display for BodyConvertError {

@@ -1,3 +1,4 @@
+#[cfg(feature = "server")]
 #[rustfmt::skip]
 macro_rules! all_the_tuples_with_special_case {
     ($name:ident) => {
@@ -19,7 +20,10 @@ macro_rules! all_the_tuples_with_special_case {
         $name!([T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15], T16);
     };
 }
+#[cfg(feature = "server")]
+pub(crate) use all_the_tuples_with_special_case;
 
+#[cfg(feature = "server")]
 #[rustfmt::skip]
 macro_rules! all_the_tuples {
     ($name:ident) => {
@@ -41,7 +45,10 @@ macro_rules! all_the_tuples {
         $name!(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15, T16);
     };
 }
+#[cfg(feature = "server")]
+pub(crate) use all_the_tuples;
 
+#[cfg(any(feature = "client", feature = "server"))]
 macro_rules! impl_deref_and_deref_mut {
     ($type:ty, $inner:ty, $pos:tt) => {
         impl std::ops::Deref for $type {
@@ -60,7 +67,10 @@ macro_rules! impl_deref_and_deref_mut {
         }
     };
 }
+#[cfg(any(feature = "client", feature = "server"))]
+pub(crate) use impl_deref_and_deref_mut;
 
+#[cfg(feature = "server")]
 macro_rules! impl_getter {
     ($name: ident, $type: ty, $($path: tt).+) => {
         paste::paste! {
@@ -81,8 +91,10 @@ macro_rules! impl_getter {
         impl_getter!($name, $type, $name);
     };
 }
+#[cfg(feature = "server")]
+pub(crate) use impl_getter;
 
-#[allow(unused_macros)]
+#[cfg(feature = "client")]
 macro_rules! stat_impl {
     ($t: ident) => {
         paste::paste! {
@@ -107,9 +119,5 @@ macro_rules! stat_impl {
         }
     };
 }
-
-pub(crate) use all_the_tuples;
-pub(crate) use all_the_tuples_with_special_case;
-pub(crate) use impl_deref_and_deref_mut;
-pub(crate) use impl_getter;
+#[cfg(feature = "client")]
 pub(crate) use stat_impl;

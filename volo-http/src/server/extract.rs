@@ -1,6 +1,7 @@
 //! Traits and types for extracting data from [`ServerContext`] and [`ServerRequest`]
 //!
 //! See [`FromContext`] and [`FromRequest`] for more details.
+
 use std::{convert::Infallible, marker::PhantomData};
 
 use bytes::Bytes;
@@ -15,7 +16,6 @@ use http::{
 use http_body::Body;
 use http_body_util::BodyExt;
 use hyper::body::Incoming;
-use mime::Mime;
 use volo::{context::Context, net::Address};
 
 use super::IntoResponse;
@@ -91,6 +91,61 @@ pub struct Query<T>(pub T);
 #[cfg(feature = "form")]
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Form<T>(pub T);
+
+/// A wrapper that can extract a type from a json body or convert a type to json response.
+///
+/// # Examples
+///
+/// Use [`Json`] as parameter:
+///
+/// ```
+/// use serde::Deserialize;
+/// use volo_http::server::{
+///     extract::Json,
+///     route::{post, Router},
+/// };
+///
+/// #[derive(Debug, Deserialize)]
+/// struct User {
+///     username: String,
+///     password: String,
+/// }
+///
+/// async fn login(Json(user): Json<User>) {
+///     println!("user: {user:?}");
+/// }
+///
+/// let router: Router = Router::new().route("/api/v2/login", post(login));
+/// ```
+///
+/// User [`Json`] as response:
+///
+/// ```
+/// use serde::Serialize;
+/// use volo_http::server::{
+///     extract::Json,
+///     route::{get, Router},
+/// };
+///
+/// #[derive(Debug, Serialize)]
+/// struct User {
+///     username: String,
+///     password: String,
+/// }
+///
+/// async fn user_info() -> Json<User> {
+///     let user = User {
+///         username: String::from("admin"),
+///         password: String::from("passw0rd"),
+///     };
+///     Json(user)
+/// }
+///
+/// let router: Router = Router::new().route("/api/v2/info", get(user_info));
+/// ```
+#[cfg(feature = "json")]
+#[derive(Debug, Default, Clone, Copy)]
+pub struct Json<T>(pub T);
 
 /// Extract a [`String`] or [`FastStr`] without checking.
 ///
@@ -421,16 +476,78 @@ where
     }
 }
 
+#[cfg(feature = "json")]
+impl<B, T> FromRequest<B> for Json<T>
+where
+    B: Body + Send,
+    B::Data: Send,
+    B::Error: Send,
+    T: serde::de::DeserializeOwned,
+{
+    type Rejection = ExtractBodyError;
+
+    async fn from_request(
+        cx: &mut ServerContext,
+        parts: Parts,
+        body: B,
+    ) -> Result<Self, Self::Rejection> {
+        if !json_content_type(&parts.headers) {
+            return Err(crate::error::server::invalid_content_type());
+        }
+
+        let bytes = Bytes::from_request(cx, parts, body).await?;
+        let json = crate::utils::json::deserialize(&bytes).map_err(ExtractBodyError::Json)?;
+
+        Ok(Json(json))
+    }
+}
+
 fn get_header_value(map: &HeaderMap, key: HeaderName) -> Option<&str> {
     map.get(key)?.to_str().ok()
 }
 
-#[allow(unused)]
-fn content_type_eq(map: &HeaderMap, val: Mime) -> bool {
+#[cfg(feature = "form")]
+fn content_type_eq(map: &HeaderMap, val: mime::Mime) -> bool {
     let Some(ty) = get_header_value(map, header::CONTENT_TYPE) else {
         return false;
     };
     ty == val.essence_str()
+}
+
+#[cfg(feature = "json")]
+fn json_content_type(headers: &HeaderMap) -> bool {
+    let content_type = match headers.get(header::CONTENT_TYPE) {
+        Some(content_type) => content_type,
+        None => {
+            return false;
+        }
+    };
+
+    let content_type = match content_type.to_str() {
+        Ok(s) => s,
+        Err(_) => {
+            return false;
+        }
+    };
+
+    let mime_type = match content_type.parse::<mime::Mime>() {
+        Ok(mime_type) => mime_type,
+        Err(_) => {
+            return false;
+        }
+    };
+
+    // `application/json` or `application/json+foo`
+    if mime_type.type_() == mime::APPLICATION && mime_type.subtype() == mime::JSON {
+        return true;
+    }
+
+    // `application/foo+json`
+    if mime_type.suffix() == Some(mime::JSON) {
+        return true;
+    }
+
+    false
 }
 
 #[cfg(test)]

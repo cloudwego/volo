@@ -18,7 +18,7 @@ pub enum ExtractBodyError {
     String(simdutf8::basic::Utf8Error),
     /// The [`Body`](crate::body::Body) cannot be extracted as a json object
     #[cfg(feature = "json")]
-    Json(crate::json::Error),
+    Json(crate::utils::json::Error),
     /// The [`Body`](crate::body::Body) cannot be extracted as a form object
     #[cfg(feature = "form")]
     Form(serde_urlencoded::de::Error),
@@ -100,7 +100,7 @@ pub fn invalid_content_type() -> ExtractBodyError {
     ExtractBodyError::Generic(GenericRejectionError::InvalidContentType)
 }
 
-/// Rejection used for [`WebSocketUpgrade`](crate::server::utils::WebSocketUpgrade).
+/// Rejection used for [`WebSocketUpgrade`](crate::server::utils::ws::WebSocketUpgrade).
 #[derive(Debug)]
 #[non_exhaustive]
 pub enum WebSocketUpgradeRejectionError {

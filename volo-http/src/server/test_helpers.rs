@@ -8,7 +8,7 @@ use volo::net::Address;
 
 use super::{
     handler::{Handler, HandlerService},
-    route::MethodRouter,
+    route::method_router::MethodRouter,
     IntoResponse,
 };
 use crate::{
