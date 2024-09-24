@@ -121,6 +121,7 @@ impl<S, L> Server<S, L> {
     #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     pub fn tls_config(mut self, config: impl Into<ServerTlsConfig>) -> Self {
         self.tls_config = Some(config.into());
+        self.config.set_tls(true);
         self
     }
 

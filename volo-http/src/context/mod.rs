@@ -10,4 +10,4 @@ pub use self::client::ClientContext;
 pub mod server;
 
 #[cfg(feature = "server")]
-pub use self::server::{RequestPartsExt, ServerContext};
+pub use self::server::ServerContext;
