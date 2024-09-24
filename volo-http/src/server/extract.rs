@@ -2,7 +2,7 @@
 //!
 //! See [`FromContext`] and [`FromRequest`] for more details.
 
-use std::{convert::Infallible, marker::PhantomData};
+use std::{convert::Infallible, fmt, marker::PhantomData};
 
 use bytes::Bytes;
 use faststr::FastStr;
@@ -11,7 +11,8 @@ use http::{
     header::{self, HeaderMap, HeaderName},
     method::Method,
     request::Parts,
-    uri::Uri,
+    status::StatusCode,
+    uri::{Scheme, Uri},
 };
 use http_body::Body;
 use http_body_util::BodyExt;
@@ -22,7 +23,8 @@ use super::IntoResponse;
 use crate::{
     context::ServerContext,
     error::server::{body_collection_error, ExtractBodyError},
-    request::ServerRequest,
+    request::{RequestPartsExt, ServerRequest},
+    utils::macros::impl_deref_and_deref_mut,
 };
 
 mod private {
@@ -233,6 +235,51 @@ impl FromContext for Uri {
     }
 }
 
+/// Full uri including scheme, host, path and query.
+#[derive(Debug)]
+pub struct FullUri(Uri);
+
+impl_deref_and_deref_mut!(FullUri, Uri, 0);
+
+impl fmt::Display for FullUri {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FromContext for FullUri {
+    type Rejection = http::Error;
+
+    async fn from_context(
+        cx: &mut ServerContext,
+        parts: &mut Parts,
+    ) -> Result<Self, Self::Rejection> {
+        let scheme = if is_tls(cx) {
+            Scheme::HTTPS
+        } else {
+            Scheme::HTTP
+        };
+        Uri::builder()
+            .scheme(scheme)
+            .authority(parts.host().map(ToOwned::to_owned).unwrap_or_default())
+            .path_and_query(
+                parts
+                    .uri
+                    .path_and_query()
+                    .map(ToString::to_string)
+                    .unwrap_or(String::from("/")),
+            )
+            .build()
+            .map(FullUri)
+    }
+}
+
+impl IntoResponse for http::Error {
+    fn into_response(self) -> crate::response::ServerResponse {
+        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+    }
+}
+
 impl FromContext for Method {
     type Rejection = Infallible;
 
@@ -264,7 +311,7 @@ where
 #[cfg(feature = "query")]
 impl IntoResponse for serde_urlencoded::de::Error {
     fn into_response(self) -> crate::response::ServerResponse {
-        http::StatusCode::BAD_REQUEST.into_response()
+        StatusCode::BAD_REQUEST.into_response()
     }
 }
 
@@ -500,6 +547,16 @@ where
 
         Ok(Json(json))
     }
+}
+
+#[cfg(not(feature = "__tls"))]
+fn is_tls(_: &ServerContext) -> bool {
+    false
+}
+
+#[cfg(feature = "__tls")]
+fn is_tls(cx: &ServerContext) -> bool {
+    cx.rpc_info().config().is_tls()
 }
 
 fn get_header_value(map: &HeaderMap, key: HeaderName) -> Option<&str> {

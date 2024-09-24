@@ -4,18 +4,18 @@ use async_stream::stream;
 use bytes::Bytes;
 use faststr::FastStr;
 use futures::Stream;
-use http::{header, request::Parts, Method, Request, StatusCode, Uri};
+use http::{header, Method, Request, StatusCode, Uri};
 use http_body::Frame;
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use volo::{catch_panic, service::service_fn};
 use volo_http::{
     body::{Body, BodyConversion},
-    context::{RequestPartsExt, ServerContext},
+    context::ServerContext,
     request::ServerRequest,
     response::ServerResponse,
     server::{
-        extract::{Form, FromContext, Json, MaybeInvalid, Query},
+        extract::{Form, FullUri, Json, MaybeInvalid, Query},
         layer::{FilterLayer, TimeoutLayer},
         middleware::{self, Next},
         panic_handler::{always_internal_error, fixed_payload},
@@ -175,21 +175,8 @@ async fn box_body_test() -> Body {
     Body::from_body(body)
 }
 
-struct FullUri(FastStr);
-
-impl FromContext for FullUri {
-    type Rejection = ();
-
-    async fn from_context(
-        _cx: &mut ServerContext,
-        parts: &mut Parts,
-    ) -> Result<Self, Self::Rejection> {
-        Ok(Self(parts.full_uri().ok_or(())?.to_string().into()))
-    }
-}
-
 async fn full_uri(uri: FullUri) -> String {
-    format!("{}\n", uri.0)
+    format!("{}\n", uri)
 }
 
 async fn redirect_to_index() -> Redirect {
@@ -208,12 +195,6 @@ async fn sse() -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
         }
     };
     Sse::new(stream)
-}
-
-async fn forwarded_getter(_: &mut ServerContext, req: ServerRequest) -> Result<String, Infallible> {
-    let (parts, _) = req.into_parts();
-    let forwarded = parts.forwarded();
-    Ok(format!("{forwarded:?}\n"))
 }
 
 struct State {
@@ -304,12 +285,6 @@ fn test_router() -> Router {
         .route("/test/stream", get(stream_test))
         // curl -v http://127.0.0.1:8080/test/body
         .route("/test/body", get(box_body_test))
-        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for="_gazonk"'
-        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: For="[2001:db8:cafe::17]:4711"'
-        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for=192.0.2.60;proto=http;by=203.0.113.43'
-        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for=192.0.2.43, for=198.51.100.17'
-        // curl -v http://127.0.0.1:8080/test/forwarded -H 'Forwarded: for=192.0.2.43, for=198.51.100.17, host=example.com'
-        .route("/test/forwarded", get_service(service_fn(forwarded_getter)))
         // curl -v http://127.0.0.1:8080/test/full_uri
         .route("/test/full_uri", get(full_uri))
         // curl -v http://127.0.0.1:8080/test/redirect

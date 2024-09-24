@@ -14,7 +14,6 @@ pub mod request;
 pub mod response;
 #[cfg(feature = "server")]
 pub mod server;
-
 pub mod utils;
 
 #[doc(hidden)]
