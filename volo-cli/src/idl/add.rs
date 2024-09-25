@@ -3,7 +3,7 @@ use std::{collections::HashMap, path::PathBuf};
 use clap::{value_parser, Parser};
 use volo_build::{
     model::{Entry, GitSource, Idl, Service, Source},
-    util::{check_and_get_repo_name, create_git_service, detect_protocol, strip_slash_prefix},
+    util::{check_and_get_repo_name, create_git_service, detect_protocol},
 };
 
 use crate::{command::CliCommand, context::Context};
@@ -67,7 +67,7 @@ impl CliCommand for Add {
             let local_service = if self.repo.is_none() && self.git.is_none() {
                 let local_idl = Idl {
                     source: Source::Local,
-                    path: strip_slash_prefix(self.idl.as_path()),
+                    path: self.idl.clone(),
                     includes: self.includes.clone(),
                 };
                 // only ensure readable when idl is from local
