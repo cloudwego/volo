@@ -1,15 +1,15 @@
 //! Response types for client and server.
 
-use hyper::body::Incoming;
-
-use crate::body::Body;
-
-/// [`Response`][Response] with [`Body`] as default body
+/// [`Response`] with [`Body`] as default body
 ///
-/// [Response]: http::Response
-pub type ServerResponse<B = Body> = http::Response<B>;
+/// [`Response`]: http::response::Response
+/// [`Body`]: crate::body::Body
+#[cfg(feature = "server")]
+pub type ServerResponse<B = crate::body::Body> = http::response::Response<B>;
 
-/// [`Response`][Response] with [`Incoming`] as default body
+/// [`Response`] with [`Body`] as default body
 ///
-/// [Response]: http::Response
-pub type ClientResponse<B = Incoming> = http::Response<B>;
+/// [`Response`]: http::response::Response
+/// [`Body`]: crate::body::Body
+#[cfg(feature = "client")]
+pub type ClientResponse<B = crate::body::Body> = http::response::Response<B>;

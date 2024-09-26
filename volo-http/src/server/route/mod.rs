@@ -11,11 +11,10 @@
 use std::{convert::Infallible, future::Future, marker::PhantomData};
 
 use http::status::StatusCode;
-use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service, ServiceExt};
 
 use super::{handler::Handler, IntoResponse};
-use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
+use crate::{body::Body, context::ServerContext, request::ServerRequest, response::ServerResponse};
 
 pub mod method_router;
 pub mod router;
@@ -24,7 +23,7 @@ mod utils;
 pub use self::{method_router::*, router::Router};
 
 /// The route service used for [`Router`].
-pub struct Route<B = Incoming, E = Infallible> {
+pub struct Route<B = Body, E = Infallible> {
     inner: motore::service::BoxService<ServerContext, ServerRequest<B>, ServerResponse, E>,
 }
 
@@ -57,7 +56,7 @@ impl<B, E> Service<ServerContext, ServerRequest<B>> for Route<B, E> {
     }
 }
 
-enum Fallback<B = Incoming, E = Infallible> {
+enum Fallback<B = Body, E = Infallible> {
     Route(Route<B, E>),
 }
 

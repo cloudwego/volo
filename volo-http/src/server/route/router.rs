@@ -10,7 +10,6 @@
 use std::{collections::HashMap, convert::Infallible};
 
 use http::status::StatusCode;
-use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service, ServiceExt};
 
 use super::{
@@ -19,6 +18,7 @@ use super::{
     Fallback, Route,
 };
 use crate::{
+    body::Body,
     context::ServerContext,
     request::ServerRequest,
     response::ServerResponse,
@@ -27,7 +27,7 @@ use crate::{
 
 /// The router for routing path to [`Service`]s or handlers.
 #[must_use]
-pub struct Router<B = Incoming, E = Infallible> {
+pub struct Router<B = Body, E = Infallible> {
     matcher: Matcher,
     routes: HashMap<RouteId, Endpoint<B, E>>,
     fallback: Fallback<B, E>,
@@ -428,7 +428,7 @@ where
     }
 }
 
-enum Endpoint<B = Incoming, E = Infallible> {
+enum Endpoint<B = Body, E = Infallible> {
     MethodRouter(MethodRouter<B, E>),
     Service(Route<B, E>),
 }

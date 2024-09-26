@@ -15,7 +15,7 @@ pub type ClientRequest<B = crate::body::Body> = Request<B>;
 ///
 /// [`Incoming`]: hyper::body::Incoming
 #[cfg(feature = "server")]
-pub type ServerRequest<B = hyper::body::Incoming> = Request<B>;
+pub type ServerRequest<B = crate::body::Body> = Request<B>;
 
 /// HTTP header [`X-Forwarded-For`][mdn].
 ///
