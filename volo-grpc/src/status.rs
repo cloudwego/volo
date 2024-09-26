@@ -169,7 +169,6 @@ impl Status {
     }
 
     /// Create a new [`Status`] with the associated code and message.
-
     pub fn new(code: Code, message: impl Into<String>) -> Self {
         Self {
             code,

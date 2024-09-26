@@ -26,15 +26,15 @@ impl MakeThriftCodec {
         }
     }
 
-    /// Whether to use thrift multiplex protocol.
-    ///
-    /// When the multiplexed protocol is used, the name contains the service name,
-    /// a colon : and the method name. The multiplexed protocol is not compatible
-    /// with other protocols.
-    ///
-    /// Spec: <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md>
-    ///
-    /// This is unimplemented yet.
+    // /// Whether to use thrift multiplex protocol.
+    // ///
+    // /// When the multiplexed protocol is used, the name contains the service name,
+    // /// a colon : and the method name. The multiplexed protocol is not compatible
+    // /// with other protocols.
+    // ///
+    // /// Spec: <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md>
+    // ///
+    // /// This is unimplemented yet.
     // pub fn with_multiplex(mut self, multiplex: bool) -> Self {
     //     self.multiplex = multiplex;
     //     self
