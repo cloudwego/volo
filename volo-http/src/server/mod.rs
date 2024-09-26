@@ -475,7 +475,9 @@ struct HyperService<S> {
     config: Config,
 }
 
-impl<S, E> hyper::service::Service<ServerRequest> for HyperService<S>
+type HyperRequest = http::request::Request<hyper::body::Incoming>;
+
+impl<S, E> hyper::service::Service<HyperRequest> for HyperService<S>
 where
     S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'static,
     S::Response: IntoResponse,
@@ -485,13 +487,17 @@ where
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
-    fn call(&self, req: ServerRequest) -> Self::Future {
+    fn call(&self, req: HyperRequest) -> Self::Future {
         let service = self.clone();
         Box::pin(
             METAINFO.scope(RefCell::new(MetaInfo::default()), async move {
                 let mut cx = ServerContext::new(service.peer);
                 cx.rpc_info_mut().set_config(service.config);
-                Ok(service.inner.call(&mut cx, req).await.into_response())
+                Ok(service
+                    .inner
+                    .call(&mut cx, req.map(Body::from_incoming))
+                    .await
+                    .into_response())
             }),
         )
     }

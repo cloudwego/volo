@@ -2,7 +2,6 @@
 
 use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 
-use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service};
 
 use super::{
@@ -10,7 +9,7 @@ use super::{
     route::Route,
     IntoResponse,
 };
-use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
+use crate::{body::Body, context::ServerContext, request::ServerRequest, response::ServerResponse};
 
 /// A [`Layer`] from an async function
 ///
@@ -239,7 +238,7 @@ where
 /// response.
 ///
 /// See [`from_fn`] for more details.
-pub struct Next<B = Incoming, E = Infallible> {
+pub struct Next<B = Body, E = Infallible> {
     service: Route<B, E>,
 }
 

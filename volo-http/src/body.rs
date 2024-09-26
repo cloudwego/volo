@@ -12,23 +12,36 @@ use std::{
 
 use bytes::Bytes;
 use faststr::FastStr;
-use futures_util::{ready, Stream};
+use futures_util::stream::Stream;
 use http_body::{Frame, SizeHint};
 use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
-pub use hyper::body::Incoming;
-use motore::BoxError;
+use hyper::body::Incoming;
 use pin_project::pin_project;
 #[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
+
+use crate::error::BoxError;
 
 // The `futures_util::stream::BoxStream` does not have `Sync`
 type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + Send + Sync + 'a>>;
 
 /// An implementation for [`http_body::Body`].
+#[pin_project]
+pub struct Body {
+    #[pin]
+    repr: BodyRepr,
+}
+
 #[pin_project(project = BodyProj)]
-pub enum Body {
+enum BodyRepr {
     /// Complete [`Bytes`], with a certain size and content
     Full(#[pin] Full<Bytes>),
+    /// Wrapper of [`hyper::body::Incoming`], it usually appers in request of server or response of
+    /// client.
+    ///
+    /// Althrough [`hyper::body::Incoming`] implements [`http_body::Body`], the type is so commonly
+    /// used, we wrap it here as [`Body::Hyper`] to avoid cost of [`Box`] with dynamic dispatch.
+    Hyper(#[pin] Incoming),
     /// Boxed stream with `Item = Result<Frame<Bytes>, BoxError>`
     Stream(#[pin] StreamBody<BoxStream<'static, Result<Frame<Bytes>, BoxError>>>),
     /// Boxed [`http_body::Body`]
@@ -44,7 +57,19 @@ impl Default for Body {
 impl Body {
     /// Create an empty body.
     pub fn empty() -> Self {
-        Self::Full(Full::new(Bytes::new()))
+        Self {
+            repr: BodyRepr::Full(Full::new(Bytes::new())),
+        }
+    }
+
+    /// Create a body by [`hyper::body::Incoming`].
+    ///
+    /// Compared to [`Body::from_body`], this function avoids overhead of allocating by [`Box`]
+    /// and dynamic dispatch by [`dyn http_body::Body`][http_body::Body].
+    pub fn from_incoming(incoming: Incoming) -> Self {
+        Self {
+            repr: BodyRepr::Hyper(incoming),
+        }
     }
 
     /// Create a body by a [`Stream`] with `Item = Result<Frame<Bytes>, BoxError>`.
@@ -52,7 +77,9 @@ impl Body {
     where
         S: Stream<Item = Result<Frame<Bytes>, BoxError>> + Send + Sync + 'static,
     {
-        Self::Stream(StreamBody::new(Box::pin(stream)))
+        Self {
+            repr: BodyRepr::Stream(StreamBody::new(Box::pin(stream))),
+        }
     }
 
     /// Create a body by another [`http_body::Body`] instance.
@@ -61,7 +88,9 @@ impl Body {
         B: http_body::Body<Data = Bytes> + Send + Sync + 'static,
         B::Error: Into<BoxError>,
     {
-        Self::Body(BoxBody::new(body.map_err(Into::into)))
+        Self {
+            repr: BodyRepr::Body(BoxBody::new(body.map_err(Into::into))),
+        }
     }
 }
 
@@ -73,39 +102,42 @@ impl http_body::Body for Body {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        match self.project() {
-            BodyProj::Full(full) => {
-                // Convert `Infallible` to `BoxError`
-                Poll::Ready(ready!(full.poll_frame(cx)).map(|res| Ok(res?)))
+        match self.project().repr.project() {
+            BodyProj::Full(full) => http_body::Body::poll_frame(full, cx).map_err(BoxError::from),
+            BodyProj::Hyper(incoming) => {
+                http_body::Body::poll_frame(incoming, cx).map_err(BoxError::from)
             }
-            BodyProj::Stream(stream) => stream.poll_frame(cx),
-            BodyProj::Body(body) => body.poll_frame(cx),
+            BodyProj::Stream(stream) => http_body::Body::poll_frame(stream, cx),
+            BodyProj::Body(body) => http_body::Body::poll_frame(body, cx),
         }
     }
 
     fn is_end_stream(&self) -> bool {
-        match self {
-            Self::Full(full) => full.is_end_stream(),
-            Self::Stream(stream) => stream.is_end_stream(),
-            Self::Body(body) => body.is_end_stream(),
+        match &self.repr {
+            BodyRepr::Full(full) => http_body::Body::is_end_stream(full),
+            BodyRepr::Hyper(incoming) => http_body::Body::is_end_stream(incoming),
+            BodyRepr::Stream(stream) => http_body::Body::is_end_stream(stream),
+            BodyRepr::Body(body) => http_body::Body::is_end_stream(body),
         }
     }
 
     fn size_hint(&self) -> SizeHint {
-        match self {
-            Self::Full(full) => full.size_hint(),
-            Self::Stream(stream) => http_body::Body::size_hint(stream),
-            Self::Body(body) => body.size_hint(),
+        match &self.repr {
+            BodyRepr::Full(full) => http_body::Body::size_hint(full),
+            BodyRepr::Hyper(incoming) => http_body::Body::size_hint(incoming),
+            BodyRepr::Stream(stream) => http_body::Body::size_hint(stream),
+            BodyRepr::Body(body) => http_body::Body::size_hint(body),
         }
     }
 }
 
 impl fmt::Debug for Body {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Full(_) => f.write_str("Body::Full"),
-            Self::Stream(_) => f.write_str("Body::Stream"),
-            Self::Body(_) => f.write_str("Body::Body"),
+        match &self.repr {
+            BodyRepr::Full(_) => f.write_str("Body::Full"),
+            BodyRepr::Hyper(_) => f.write_str("Body::Hyper"),
+            BodyRepr::Stream(_) => f.write_str("Body::Stream"),
+            BodyRepr::Body(_) => f.write_str("Body::Body"),
         }
     }
 }
@@ -256,30 +288,40 @@ impl From<()> for Body {
 
 impl From<&'static str> for Body {
     fn from(value: &'static str) -> Self {
-        Self::Full(Full::new(Bytes::from_static(value.as_bytes())))
+        Self {
+            repr: BodyRepr::Full(Full::new(Bytes::from_static(value.as_bytes()))),
+        }
     }
 }
 
 impl From<Vec<u8>> for Body {
     fn from(value: Vec<u8>) -> Self {
-        Self::Full(Full::new(Bytes::from(value)))
+        Self {
+            repr: BodyRepr::Full(Full::new(Bytes::from(value))),
+        }
     }
 }
 
 impl From<Bytes> for Body {
     fn from(value: Bytes) -> Self {
-        Self::Full(Full::new(value))
+        Self {
+            repr: BodyRepr::Full(Full::new(value)),
+        }
     }
 }
 
 impl From<FastStr> for Body {
     fn from(value: FastStr) -> Self {
-        Self::Full(Full::new(value.into_bytes()))
+        Self {
+            repr: BodyRepr::Full(Full::new(value.into_bytes())),
+        }
     }
 }
 
 impl From<String> for Body {
     fn from(value: String) -> Self {
-        Self::Full(Full::new(Bytes::from(value)))
+        Self {
+            repr: BodyRepr::Full(Full::new(Bytes::from(value))),
+        }
     }
 }

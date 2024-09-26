@@ -1,6 +1,5 @@
 use std::error::Error;
 
-use http_body::Body;
 use hyper::client::conn::http1;
 use hyper_util::rt::TokioIo;
 use motore::{make::MakeConnection, service::Service};
@@ -116,7 +115,7 @@ impl ClientTransport {
         req: ClientRequest<B>,
     ) -> Result<ClientResponse, ClientError>
     where
-        B: Body + Send + 'static,
+        B: http_body::Body + Send + 'static,
         B::Data: Send,
         B::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
     {
@@ -132,13 +131,13 @@ impl ClientTransport {
             tracing::error!("[Volo-HTTP] failed to send request, error: {err}");
             request_error(err)
         })?;
-        Ok(resp)
+        Ok(resp.map(crate::body::Body::from_incoming))
     }
 }
 
 impl<B> Service<ClientContext, ClientRequest<B>> for ClientTransport
 where
-    B: Body + Send + 'static,
+    B: http_body::Body + Send + 'static,
     B::Data: Send,
     B::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
 {

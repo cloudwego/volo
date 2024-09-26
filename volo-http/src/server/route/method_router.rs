@@ -16,12 +16,12 @@
 use std::convert::Infallible;
 
 use http::{method::Method, status::StatusCode};
-use hyper::body::Incoming;
 use motore::{layer::Layer, service::Service, ServiceExt};
 use paste::paste;
 
 use super::{Fallback, Route};
 use crate::{
+    body::Body,
     context::ServerContext,
     request::ServerRequest,
     response::ServerResponse,
@@ -65,7 +65,7 @@ use crate::{
 /// let app: Router = Router::new().route("/", get(index));
 /// let app: Router = Router::new().route("/", get(index).post(index).head(index));
 /// ```
-pub struct MethodRouter<B = Incoming, E = Infallible> {
+pub struct MethodRouter<B = Body, E = Infallible> {
     options: MethodEndpoint<B, E>,
     get: MethodEndpoint<B, E>,
     post: MethodEndpoint<B, E>,
@@ -344,7 +344,7 @@ where
 }
 
 #[derive(Default)]
-enum MethodEndpoint<B = Incoming, E = Infallible> {
+enum MethodEndpoint<B = Body, E = Infallible> {
     #[default]
     None,
     Route(Route<B, E>),
