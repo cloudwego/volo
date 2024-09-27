@@ -4,7 +4,6 @@ use std::{fmt::Debug, marker::PhantomData};
 
 use http::method::Method;
 use motore::{layer::Layer, service::Service};
-use volo::net::Address;
 
 use super::{
     handler::{Handler, HandlerService},
@@ -13,7 +12,7 @@ use super::{
 };
 use crate::{
     body::Body, context::ServerContext, request::ServerRequest, response::ServerResponse,
-    server::Server,
+    server::Server, utils::test_helpers::mock_address,
 };
 
 /// Wrap a [`Handler`] into a [`HandlerService`].
@@ -41,34 +40,11 @@ pub struct TestServer<S, B = Body> {
     _marker: PhantomData<fn(B)>,
 }
 
-/// Create a simple address, the address is `127.0.0.1:8080`.
-pub fn mock_address() -> Address {
-    use std::net;
-    Address::Ip(net::SocketAddr::new(
-        net::IpAddr::V4(net::Ipv4Addr::new(127, 0, 0, 1)),
-        8000,
-    ))
-}
-
 /// Create an empty [`ServerContext`].
 ///
 /// The context has only caller address.
 pub fn empty_cx() -> ServerContext {
     ServerContext::new(mock_address())
-}
-
-/// Create a simple [`ServerRequest`] with only [`Method`], [`Uri`] and [`Body`].
-///
-/// [`Uri`]: http::uri::Uri
-pub fn simple_req<S, B>(method: Method, uri: S, body: B) -> ServerRequest<B>
-where
-    S: AsRef<str>,
-{
-    ServerRequest::builder()
-        .method(method)
-        .uri(uri.as_ref())
-        .body(body)
-        .expect("Failed to build request")
 }
 
 impl<B, E> MethodRouter<B, E>

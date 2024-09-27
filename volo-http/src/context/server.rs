@@ -20,9 +20,7 @@ impl ServerContext {
     pub fn new(peer: Address) -> Self {
         let mut cx = RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Server),
-            ServerCxInner {
-                params: PathParamsVec::default(),
-            },
+            ServerCxInner::default(),
         );
         cx.rpc_info_mut().caller_mut().set_address(peer);
         Self(cx)
@@ -34,7 +32,7 @@ impl_deref_and_deref_mut!(ServerContext, RpcCx<ServerCxInner, Config>, 0);
 newtype_impl_context!(ServerContext, Config, 0);
 
 /// Inner details of [`ServerContext`]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ServerCxInner {
     /// Path params from [`Uri`]
     ///

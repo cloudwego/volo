@@ -5,12 +5,15 @@ set -o nounset
 set -o pipefail
 
 echo_and_run() {
-	echo "Running \`$@\`..."
-	"$@"
-}
+	echo "Running $@"
 
-quiet() {
-	"$@" > /dev/null 2>&1
+	if [ -n "${DEBUG:-}" ]; then
+		# If env `DEBUG` is non-empty, output all
+		"$@"
+	else
+		# Disable outputs
+		"$@" > /dev/null 2>&1
+	fi
 }
 
 fmt_check() {

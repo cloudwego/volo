@@ -376,8 +376,9 @@ mod middleware_tests {
         server::{
             response::IntoResponse,
             route::{any, get_service},
-            test_helpers::*,
+            test_helpers::empty_cx,
         },
+        utils::test_helpers::simple_req,
     };
 
     async fn print_body_handler(
