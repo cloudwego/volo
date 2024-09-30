@@ -53,6 +53,8 @@ pub mod loadbalance;
 mod meta;
 mod request_builder;
 pub mod target;
+#[cfg(test)]
+pub mod test_helpers;
 mod transport;
 
 pub use self::{request_builder::RequestBuilder, target::Target};
@@ -939,7 +941,6 @@ where
 #[cfg(feature = "json")]
 #[cfg(test)]
 mod client_tests {
-    #![allow(unused)]
 
     use std::{collections::HashMap, future::Future};
 
@@ -954,9 +955,7 @@ mod client_tests {
         get, Client, DefaultClient, Target,
     };
     use crate::{
-        body::BodyConversion,
-        error::client::status_error,
-        utils::consts::{HTTPS_DEFAULT_PORT, HTTP_DEFAULT_PORT},
+        body::BodyConversion, error::client::status_error, utils::consts::HTTP_DEFAULT_PORT,
         ClientBuilder,
     };
 
@@ -964,15 +963,18 @@ mod client_tests {
     struct HttpBinResponse {
         args: HashMap<String, String>,
         headers: HashMap<String, String>,
+        #[allow(unused)]
         origin: String,
         url: String,
     }
 
     const HTTPBIN_GET: &str = "http://httpbin.org/get";
+    #[cfg(feature = "__tls")]
     const HTTPBIN_GET_HTTPS: &str = "https://httpbin.org/get";
     const USER_AGENT_KEY: &str = "User-Agent";
     const USER_AGENT_VAL: &str = "volo-http-unit-test";
 
+    #[allow(unused)]
     fn client_types_check() {
         struct TestLayer;
         struct TestService<S> {
@@ -1114,7 +1116,7 @@ mod client_tests {
     #[tokio::test]
     async fn client_builder_with_address_and_https() {
         let addr = DnsResolver::default()
-            .resolve("httpbin.org", HTTPS_DEFAULT_PORT)
+            .resolve("httpbin.org", crate::utils::consts::HTTPS_DEFAULT_PORT)
             .await
             .unwrap();
         let mut builder = Client::builder();

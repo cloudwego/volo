@@ -5,7 +5,7 @@ set -o nounset
 set -o pipefail
 
 echo_command() {
-	echo "Run \`$@\`"
+	echo "Running $@"
 
 	if [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${DEBUG:-}" ]; then
 		# If we are in GitHub Actions or env `DEBUG` is non-empty,
