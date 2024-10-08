@@ -678,14 +678,14 @@ impl<VE: ValueEncoding> PartialOrd<MetadataValue<VE>> for String {
     }
 }
 
-impl<'a, VE: ValueEncoding> PartialEq<MetadataValue<VE>> for &'a MetadataValue<VE> {
+impl<VE: ValueEncoding> PartialEq<MetadataValue<VE>> for &MetadataValue<VE> {
     #[inline]
     fn eq(&self, other: &MetadataValue<VE>) -> bool {
         **self == *other
     }
 }
 
-impl<'a, VE: ValueEncoding> PartialOrd<MetadataValue<VE>> for &'a MetadataValue<VE> {
+impl<VE: ValueEncoding> PartialOrd<MetadataValue<VE>> for &MetadataValue<VE> {
     #[inline]
     fn partial_cmp(&self, other: &MetadataValue<VE>) -> Option<cmp::Ordering> {
         (**self).partial_cmp(other)
@@ -712,14 +712,14 @@ where
     }
 }
 
-impl<'a, VE: ValueEncoding> PartialEq<MetadataValue<VE>> for &'a str {
+impl<VE: ValueEncoding> PartialEq<MetadataValue<VE>> for &str {
     #[inline]
     fn eq(&self, other: &MetadataValue<VE>) -> bool {
         *other == *self
     }
 }
 
-impl<'a, VE: ValueEncoding> PartialOrd<MetadataValue<VE>> for &'a str {
+impl<VE: ValueEncoding> PartialOrd<MetadataValue<VE>> for &str {
     #[inline]
     fn partial_cmp(&self, other: &MetadataValue<VE>) -> Option<cmp::Ordering> {
         self.as_bytes().partial_cmp(other.inner.as_bytes())
