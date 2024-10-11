@@ -55,7 +55,7 @@ async fn main() -> Result<(), BoxError> {
         client
             .request_builder()
             .host("httpbin.org")
-            .uri("/get")?
+            .uri("/get")
             .send()
             .await?
             .into_string()
@@ -65,7 +65,7 @@ async fn main() -> Result<(), BoxError> {
     println!(
         "{}",
         client
-            .get("http://127.0.0.1:8080/")?
+            .get("http://127.0.0.1:8080/")
             .send()
             .await?
             .into_string()
@@ -77,7 +77,7 @@ async fn main() -> Result<(), BoxError> {
         "{:?}",
         client
             .request_builder()
-            .uri("/user/json_get")?
+            .uri("/user/json_get")
             .send()
             .await?
             .into_json::<Person>()
@@ -86,12 +86,12 @@ async fn main() -> Result<(), BoxError> {
     println!(
         "{:?}",
         client
-            .post("/user/json_post")?
+            .post("/user/json_post")
             .json(&Person {
                 name: "Foo".to_string(),
                 age: 25,
                 phones: vec!["114514".to_string()],
-            })?
+            })
             .send()
             .await?
             .into_string()
@@ -103,7 +103,7 @@ async fn main() -> Result<(), BoxError> {
     println!(
         "{}",
         client
-            .get("http://127.0.0.1:8080/")?
+            .get("http://127.0.0.1:8080/")
             .send()
             .await?
             .into_string()
@@ -114,7 +114,7 @@ async fn main() -> Result<(), BoxError> {
     println!(
         "{:?}",
         client
-            .get("/")?
+            .get("/")
             .send()
             .await
             .expect_err("this request should fail"),

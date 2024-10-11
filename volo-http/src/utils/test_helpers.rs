@@ -142,7 +142,6 @@ mod helper_tests {
         {
             let ret = client
                 .get("/get")
-                .unwrap()
                 .send()
                 .await
                 .unwrap()
@@ -154,7 +153,6 @@ mod helper_tests {
         {
             let ret = client
                 .get("http://127.0.0.1/get")
-                .unwrap()
                 .send()
                 .await
                 .unwrap()
@@ -164,11 +162,11 @@ mod helper_tests {
             assert_eq!(ret, HELLO_WORLD);
         }
         {
-            let resp = client.get("/").unwrap().send().await.unwrap();
+            let resp = client.get("/").send().await.unwrap();
             assert_eq!(resp.status(), StatusCode::NOT_FOUND);
         }
         {
-            let resp = client.post("/get").unwrap().send().await.unwrap();
+            let resp = client.post("/get").send().await.unwrap();
             assert_eq!(resp.status(), StatusCode::METHOD_NOT_ALLOWED);
         }
     }

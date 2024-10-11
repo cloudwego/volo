@@ -40,7 +40,7 @@ use self::{
 use crate::{
     context::{client::Config, ClientContext},
     error::{
-        client::{builder_error, no_address, ClientError},
+        client::{builder_error, no_address, ClientError, Result},
         BoxError,
     },
     request::ClientRequest,
@@ -463,7 +463,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     }
 
     /// Insert a header to the request.
-    pub fn header<K, V>(&mut self, key: K, value: V) -> Result<&mut Self, ClientError>
+    pub fn header<K, V>(&mut self, key: K, value: V) -> Result<&mut Self>
     where
         K: TryInto<HeaderName>,
         K::Error: Error + Send + Sync + 'static,
@@ -681,6 +681,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         };
 
         let client_inner = ClientInner {
+            service,
             caller_name,
             callee_name: self.callee_name,
             default_target: self.target,
@@ -690,14 +691,14 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             headers: self.headers,
         };
         let client = Client {
-            service,
             inner: Arc::new(client_inner),
         };
         self.mk_client.mk_client(client)
     }
 }
 
-struct ClientInner {
+struct ClientInner<S> {
+    service: S,
     caller_name: FastStr,
     callee_name: FastStr,
     default_target: Target,
@@ -718,7 +719,6 @@ struct ClientInner {
 /// let client = Client::builder().build();
 /// let resp = client
 ///     .get("http://httpbin.org/get")
-///     .expect("invalid uri")
 ///     .send()
 ///     .await
 ///     .expect("failed to send request")
@@ -728,17 +728,23 @@ struct ClientInner {
 /// println!("{resp:?}");
 /// # })
 /// ```
-#[derive(Clone)]
 pub struct Client<S> {
-    service: S,
-    inner: Arc<ClientInner>,
+    inner: Arc<ClientInner<S>>,
+}
+
+impl<S> Clone for Client<S> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
 }
 
 macro_rules! method_requests {
     ($method:ident) => {
         paste! {
             #[doc = concat!("Create a request with `", stringify!([<$method:upper>]) ,"` method and the given `uri`.")]
-            pub fn [<$method:lower>]<U>(&self, uri: U) -> Result<RequestBuilder<S>, ClientError>
+            pub fn [<$method:lower>]<U>(&self, uri: U) -> RequestBuilder<S>
             where
                 U: TryInto<Uri>,
                 U::Error: Into<BoxError>,
@@ -759,16 +765,16 @@ impl Client<()> {
 impl<S> Client<S> {
     /// Create a builder for building a request.
     pub fn request_builder(&self) -> RequestBuilder<S> {
-        RequestBuilder::new(self)
+        RequestBuilder::new(self.clone())
     }
 
     /// Create a builder for building a request with the specified method and URI.
-    pub fn request<U>(&self, method: Method, uri: U) -> Result<RequestBuilder<S>, ClientError>
+    pub fn request<U>(&self, method: Method, uri: U) -> RequestBuilder<S>
     where
         U: TryInto<Uri>,
         U::Error: Into<BoxError>,
     {
-        RequestBuilder::new(self).method(method).uri(uri)
+        RequestBuilder::new(self.clone()).method(method).uri(uri)
     }
 
     method_requests!(options);
@@ -907,7 +913,7 @@ where
 
         let has_metainfo = METAINFO.try_with(|_| {}).is_ok();
 
-        let fut = self.service.call(cx, req);
+        let fut = self.inner.service.call(cx, req);
 
         if has_metainfo {
             fut.await
@@ -929,12 +935,12 @@ impl<S> MkClient<Client<S>> for DefaultMkClient {
 }
 
 /// Create a GET request to the specified URI.
-pub async fn get<U>(uri: U) -> Result<ClientResponse, ClientError>
+pub async fn get<U>(uri: U) -> Result<ClientResponse>
 where
     U: TryInto<Uri>,
     U::Error: Into<BoxError>,
 {
-    ClientBuilder::new().build().get(uri)?.send().await
+    ClientBuilder::new().build().get(uri).send().await
 }
 
 // The `httpbin.org` always responses a json data.
@@ -945,7 +951,10 @@ mod client_tests {
     use std::{collections::HashMap, future::Future};
 
     use http::{header, StatusCode};
-    use motore::{layer::Layer, service::Service};
+    use motore::{
+        layer::{Layer, Stack},
+        service::Service,
+    };
     use serde::Deserialize;
     use volo::{context::Endpoint, layer::Identity};
 
@@ -974,7 +983,7 @@ mod client_tests {
     const USER_AGENT_KEY: &str = "User-Agent";
     const USER_AGENT_VAL: &str = "volo-http-unit-test";
 
-    #[allow(unused)]
+    #[test]
     fn client_types_check() {
         struct TestLayer;
         struct TestService<S> {
@@ -1016,6 +1025,10 @@ mod client_tests {
             .layer_inner(TestLayer)
             .layer_outer(TestLayer)
             .build();
+        let _: DefaultClient<Stack<TestLayer, TestLayer>> = ClientBuilder::new()
+            .layer_inner(TestLayer)
+            .layer_inner(TestLayer)
+            .build();
     }
 
     #[tokio::test]
@@ -1038,7 +1051,6 @@ mod client_tests {
 
         let resp = client
             .get(HTTPBIN_GET)
-            .unwrap()
             .send()
             .await
             .unwrap()
@@ -1058,7 +1070,6 @@ mod client_tests {
 
         let resp = client
             .get("/get")
-            .unwrap()
             .send()
             .await
             .unwrap()
@@ -1081,7 +1092,6 @@ mod client_tests {
 
         let resp = client
             .get("/get")
-            .unwrap()
             .send()
             .await
             .unwrap()
@@ -1101,7 +1111,6 @@ mod client_tests {
 
         let resp = client
             .get("/get")
-            .unwrap()
             .send()
             .await
             .unwrap()
@@ -1128,7 +1137,6 @@ mod client_tests {
 
         let resp = client
             .get("/get")
-            .unwrap()
             .send()
             .await
             .unwrap()
@@ -1145,7 +1153,7 @@ mod client_tests {
         builder.host("httpbin.org").with_port(443);
         let client = builder.build();
 
-        let resp = client.get("/get").unwrap().send().await.unwrap();
+        let resp = client.get("/get").send().await.unwrap();
         // Send HTTP request to the HTTPS port (443), `httpbin.org` will response `400 Bad
         // Request`.
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
@@ -1161,7 +1169,6 @@ mod client_tests {
                 "{}",
                 client
                     .get("/post")
-                    .unwrap()
                     .send()
                     .await
                     .expect_err("GET for httpbin.org/post should fail")
@@ -1183,7 +1190,6 @@ mod client_tests {
                 "{}",
                 client
                     .get("https://httpbin.org/get")
-                    .unwrap()
                     .send()
                     .await
                     .expect_err("HTTPS with disable_tls should fail")
@@ -1222,7 +1228,7 @@ mod client_tests {
         builder.target_parser(callopt_should_not_inserted);
         let client = builder.build();
 
-        let resp = client.get(HTTPBIN_GET).unwrap().send().await;
+        let resp = client.get(HTTPBIN_GET).send().await;
         assert!(resp.is_ok());
     }
 
@@ -1233,7 +1239,7 @@ mod client_tests {
         builder.target_parser(callopt_should_not_inserted);
         let client = builder.build();
 
-        let resp = client.get(HTTPBIN_GET).unwrap().send().await;
+        let resp = client.get(HTTPBIN_GET).send().await;
         assert!(resp.is_ok());
     }
 
@@ -1245,7 +1251,6 @@ mod client_tests {
 
         let resp = client
             .get(HTTPBIN_GET)
-            .unwrap()
             .with_callopt(CallOpt::new().with(CallOptInserted))
             .send()
             .await;
@@ -1261,7 +1266,6 @@ mod client_tests {
 
         let resp = client
             .get(HTTPBIN_GET)
-            .unwrap()
             // insert an empty callopt
             .with_callopt(CallOpt::new())
             .send()
@@ -1277,7 +1281,7 @@ mod client_tests {
         builder.target_parser(callopt_should_not_inserted);
         let client = builder.build();
 
-        let resp = client.get(HTTPBIN_GET).unwrap().send().await;
+        let resp = client.get(HTTPBIN_GET).send().await;
         assert!(resp.is_ok());
     }
 }

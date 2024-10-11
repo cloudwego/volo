@@ -1,3 +1,5 @@
+//! Test utilities for client of Volo-HTTP.
+
 use std::sync::Arc;
 
 use faststr::FastStr;
@@ -143,6 +145,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         };
 
         let client_inner = ClientInner {
+            service,
             caller_name,
             callee_name: self.callee_name,
             // set a default target so that we can create a request without authority
@@ -154,7 +157,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             headers: self.headers,
         };
         let client = Client {
-            service,
             inner: Arc::new(client_inner),
         };
         self.mk_client.mk_client(client)
@@ -223,7 +225,7 @@ mod mock_transport_tests {
     #[tokio::test]
     async fn empty_response_test() {
         let client = ClientBuilder::new().mock(MockTransport::default());
-        let resp = client.get("/").unwrap().send().await.unwrap();
+        let resp = client.get("/").send().await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert!(resp.headers().is_empty());
         assert!(resp.into_body().into_vec().await.unwrap().is_empty());
@@ -234,7 +236,7 @@ mod mock_transport_tests {
         {
             let client =
                 ClientBuilder::new().mock(MockTransport::status_code(StatusCode::IM_A_TEAPOT));
-            let resp = client.get("/").unwrap().send().await.unwrap();
+            let resp = client.get("/").send().await.unwrap();
             assert_eq!(resp.status(), StatusCode::IM_A_TEAPOT);
             assert!(resp.headers().is_empty());
             assert!(resp.into_body().into_vec().await.unwrap().is_empty());
@@ -245,7 +247,7 @@ mod mock_transport_tests {
                 builder.fail_on_error_status(true);
                 builder.mock(MockTransport::status_code(StatusCode::IM_A_TEAPOT))
             };
-            assert!(client.get("/").unwrap().send().await.is_err());
+            assert!(client.get("/").send().await.is_err());
         }
     }
 }
