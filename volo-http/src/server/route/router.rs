@@ -419,7 +419,9 @@ where
     ) -> Result<Self::Response, Self::Error> {
         if let Ok(matched) = self.matcher.at(req.uri().clone().path()) {
             if let Some(route) = self.routes.get(matched.value) {
-                cx.params_mut().extend(matched.params);
+                if !matched.params.is_empty() {
+                    cx.params_mut().extend(matched.params);
+                }
                 return route.call(cx, req).await;
             }
         }
