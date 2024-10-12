@@ -8,10 +8,8 @@ use paste::paste;
 use super::BoxError;
 use crate::body::BodyConvertError;
 
-/// [`Result`][Result] with [`ClientError`] as its error type
-///
-/// [Result]: std::result::Result
-pub type Result<T> = std::result::Result<T, ClientError>;
+/// [`Result`](std::result::Result) with [`ClientError`] as its error by default.
+pub type Result<T, E = ClientError> = std::result::Result<T, E>;
 
 /// Generic client error
 #[derive(Debug)]
