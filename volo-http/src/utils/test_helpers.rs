@@ -82,6 +82,7 @@ mod convert_service {
         Endpoint {
             service_name: ep.service_name.clone(),
             address: ep.address.clone(),
+            shmipc_address: ep.shmipc_address.clone(),
             faststr_tags: Default::default(),
             tags: Default::default(),
         }
