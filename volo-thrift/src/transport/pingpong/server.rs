@@ -8,7 +8,13 @@ use motore::service::Service;
 use pilota::thrift::ThriftException;
 use tokio::sync::futures::Notified;
 use tracing::*;
-use volo::{net::Address, volo_unreachable};
+use volo::{
+    net::{
+        shm::{ShmExt, TransportEndpoint},
+        Address,
+    },
+    volo_unreachable, FastStr,
+};
 
 use crate::{
     codec::{Decoder, Encoder},
@@ -29,6 +35,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
     stat_tracer: Arc<[crate::server::TraceFn]>,
     peer_addr: Option<Address>,
     span_provider: SP,
+    stream: Option<Box<dyn ShmExt>>,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
     Svc::Error: Into<ServerError>,
@@ -49,7 +56,16 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     cache.pop().unwrap_or_default()
                 });
                 if let Some(peer_addr) = &peer_addr {
-                    cx.rpc_info.caller_mut().set_address(peer_addr.clone());
+                    if stream.is_none() {
+                        cx.rpc_info.caller_mut().set_address(peer_addr.clone());
+                    } else {
+                        cx.rpc_info
+                            .callee_mut()
+                            .set_transport(volo::net::shm::Transport(FastStr::new("shmipc")));
+                        cx.rpc_info
+                            .caller_mut()
+                            .set_shmipc_address(peer_addr.clone());
+                    }
                 }
 
                 let msg = tokio::select! {
@@ -68,6 +84,10 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     cx,
                     peer_addr
                 );
+
+                if let Some(stream) = &stream {
+                    stream.release_read_and_reuse();
+                }
 
                 // it is promised safe here, because span only reads cx before handling polling
                 let tracing_cx = unsafe {
@@ -178,6 +198,9 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                 .instrument(span_provider.on_serve(tracing_cx))
                 .await;
                 if result.is_err() {
+                    if let Some(mut stream) = stream {
+                        _ = stream.close().await;
+                    }
                     break;
                 }
             }

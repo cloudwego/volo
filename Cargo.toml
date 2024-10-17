@@ -40,6 +40,7 @@ ahash = "0.8"
 anyhow = "1"
 async-broadcast = "0.7"
 async-stream = "0.3"
+async-trait = "0.1"
 base64 = "0.22"
 bytes = "1"
 chrono = { version = "0.4", default-features = false, features = [

@@ -30,9 +30,3 @@ impl Stream for Incoming {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test() {}
-}

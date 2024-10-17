@@ -1,7 +1,7 @@
 use std::{io, marker::PhantomData};
 
 use motore::service::{Service, UnaryService};
-use volo::net::{dial::MakeTransport, Address};
+use volo::net::{conn::ConnExt, dial::MakeTransport, Address};
 
 use crate::{
     codec::MakeCodec,
@@ -9,7 +9,7 @@ use crate::{
     protocol::TMessageType,
     transport::{
         multiplex::thrift_transport::ThriftTransport,
-        pool::{Config, PooledMakeTransport, Ver},
+        pool::{Config, PooledMakeTransport, Transport, Ver},
     },
     ClientError, EntryMessage, ThriftMessage,
 };
@@ -17,15 +17,18 @@ use crate::{
 pub struct MakeClientTransport<MkT, MkC, Resp>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf>,
 {
     make_transport: MkT,
     make_codec: MkC,
     _phantom: PhantomData<fn() -> Resp>,
 }
 
-impl<MkT: MakeTransport, MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>, Resp> Clone
-    for MakeClientTransport<MkT, MkC, Resp>
+impl<
+        MkT: MakeTransport,
+        MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf>,
+        Resp,
+    > Clone for MakeClientTransport<MkT, MkC, Resp>
 {
     fn clone(&self) -> Self {
         Self {
@@ -39,7 +42,7 @@ impl<MkT: MakeTransport, MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>, Resp> Cl
 impl<MkT, MkC, Resp> MakeClientTransport<MkT, MkC, Resp>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf>,
 {
     #[allow(unused)]
     pub fn new(make_transport: MkT, make_codec: MkC) -> Self {
@@ -54,7 +57,7 @@ where
 impl<MkT, MkC, Resp> UnaryService<Address> for MakeClientTransport<MkT, MkC, Resp>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
     Resp: EntryMessage + Send + 'static,
 {
     type Response = ThriftTransport<MkC::Encoder, Resp>;
@@ -62,7 +65,8 @@ where
 
     async fn call(&self, target: Address) -> Result<Self::Response, Self::Error> {
         let make_transport = self.make_transport.clone();
-        let (rh, wh) = make_transport.make_transport(target.clone()).await?;
+        let conn = make_transport.make_transport(target.clone()).await?;
+        let (rh, wh) = conn.into_split();
         Ok(ThriftTransport::new(
             rh,
             wh,
@@ -75,7 +79,7 @@ where
 pub struct Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
     Resp: EntryMessage + Send + 'static,
 {
     #[allow(clippy::type_complexity)]
@@ -86,7 +90,7 @@ where
 impl<Resp, MkT, MkC> Clone for Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
     Resp: EntryMessage + Send + 'static,
 {
     fn clone(&self) -> Self {
@@ -100,7 +104,7 @@ where
 impl<Resp, MkT, MkC> Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
     Resp: EntryMessage + Send + 'static,
 {
     pub fn new(make_transport: MkT, pool_cfg: Option<Config>, make_codec: MkC) -> Self {
@@ -118,7 +122,7 @@ where
     Req: Send + 'static + EntryMessage,
     Resp: EntryMessage + Send + 'static + Sync,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
 {
     type Response = Option<ThriftMessage<Resp>>;
 
@@ -136,7 +140,10 @@ where
         })?;
         let oneway = cx.message_type == TMessageType::OneWay;
         cx.stats.record_make_transport_start_at();
-        let transport = self.make_transport.call((target, Ver::Multiplex)).await?;
+        let transport = self
+            .make_transport
+            .call((target, None, Ver::Multiplex))
+            .await?;
         cx.stats.record_make_transport_end_at();
         let resp = transport.send(cx, req, oneway).await;
         if let Ok(None) = resp {
@@ -150,7 +157,9 @@ where
             }
         }
         if cx.transport.should_reuse && resp.is_ok() {
-            transport.reuse().await;
+            if let Transport::TcpOrUnix(pooled) = transport {
+                pooled.reuse().await;
+            }
         }
         resp
     }

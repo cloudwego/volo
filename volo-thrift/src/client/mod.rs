@@ -23,6 +23,7 @@ use volo::{
     discovery::{Discover, DummyDiscover},
     loadbalance::{random::WeightedRandomBalance, LbConfig, MkLbLayer},
     net::{
+        conn::ConnExt,
         dial::{DefaultMakeTransport, MakeTransport},
         Address,
     },
@@ -52,6 +53,7 @@ pub struct ClientBuilder<IL, OL, MkClient, Req, Resp, MkT, MkC, LB> {
     callee_name: FastStr,
     caller_name: FastStr,
     address: Option<Address>, // maybe address use Arc avoid memory alloc
+    shmipc_address: Option<Address>,
     inner_layer: IL,
     outer_layer: OL,
     make_transport: MkT,
@@ -86,6 +88,7 @@ impl<C, Req, Resp>
             caller_name: "".into(),
             callee_name: FastStr::new(service_name),
             address: None,
+            shmipc_address: None,
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
             mk_client: service_client,
@@ -116,6 +119,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -142,6 +146,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -226,6 +231,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -260,6 +266,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -288,6 +295,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -314,6 +322,12 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
         self
     }
 
+    /// Sets the shmipc address.
+    pub fn shmipc_address<A: Into<Address>>(mut self, target: A) -> Self {
+        self.shmipc_address = Some(target.into());
+        self
+    }
+
     /// Adds a new inner layer to the client.
     ///
     /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
@@ -337,6 +351,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -376,6 +391,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: Stack::new(self.inner_layer, layer),
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -415,6 +431,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
             mk_client: self.mk_client,
@@ -454,6 +471,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
             mk_client: self.mk_client,
@@ -480,6 +498,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             caller_name: self.caller_name,
             callee_name: self.callee_name,
             address: self.address,
+            shmipc_address: self.shmipc_address,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -506,7 +525,7 @@ pub struct MessageService<Resp, MkT, MkC>
 where
     Resp: EntryMessage + Send + 'static,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
 {
     #[cfg(not(feature = "multiplex"))]
     inner: pingpong::Client<Resp, MkT, MkC>,
@@ -523,7 +542,7 @@ where
     Req: EntryMessage + 'static + Send,
     Resp: Send + 'static + EntryMessage + Sync,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
 {
     type Response = Option<Resp>;
 
@@ -576,7 +595,7 @@ where
         Service<ClientContext, Req, Response = Option<Resp>> + Sync + Clone + Send + 'static,
     <IL::Service as Service<ClientContext, Req>>::Error: Send + Into<ClientError>,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
     OL: Layer<BoxCloneService<ClientContext, Req, Option<Resp>, ClientError>>,
     OL::Service:
         Service<ClientContext, Req, Response = Option<Resp>> + 'static + Send + Clone + Sync,
@@ -628,6 +647,7 @@ where
                 callee_name: self.callee_name,
                 config: self.config,
                 address: self.address,
+                shmipc_address: self.shmipc_address,
                 caller_name: self.caller_name,
                 seq_id: AtomicI32::new(0),
             }),
@@ -654,6 +674,7 @@ struct ClientInner {
     caller_name: FastStr,
     config: Config,
     address: Option<Address>,
+    shmipc_address: Option<Address>,
     seq_id: AtomicI32,
 }
 
@@ -686,6 +707,11 @@ impl<S> Client<S> {
                     if let Some(target) = &self.inner.address {
                         cx.rpc_info_mut().callee_mut().set_address(target.clone());
                     }
+                    if let Some(shmipc_address) = &self.inner.shmipc_address {
+                        cx.rpc_info_mut()
+                            .callee_mut()
+                            .set_shmipc_address(shmipc_address.clone());
+                    }
                     cx.rpc_info_mut().set_config(self.inner.config);
                     cx.rpc_info_mut().set_method(FastStr::new(method));
                     cx
@@ -711,6 +737,9 @@ impl<S> Client<S> {
         let mut callee = Endpoint::new(self.inner.callee_name.clone());
         if let Some(target) = &self.inner.address {
             callee.set_address(target.clone());
+        }
+        if let Some(shmipc_address) = &self.inner.shmipc_address {
+            callee.set_shmipc_address(shmipc_address.clone());
         }
         let config = self.inner.config;
 

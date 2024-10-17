@@ -1,7 +1,6 @@
 use std::future::Future;
 
 use pilota::thrift::ThriftException;
-use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
 
@@ -9,7 +8,7 @@ pub mod default;
 
 pub use default::DefaultMakeCodec;
 
-/// [`Decoder`] reads from an [`AsyncRead`] and decodes the data into a [`ThriftMessage`].
+/// [`Decoder`] decodes the data into a [`ThriftMessage`].
 ///
 /// Returning an Ok(None) indicates the EOF has been reached.
 ///
@@ -25,7 +24,7 @@ pub trait Decoder: Send + Sync + 'static {
     }
 }
 
-/// [`Encoder`] writes a [`ThriftMessage`] to an [`AsyncWrite`] and flushes the data.
+/// [`Encoder`] writes a [`ThriftMessage`] and flushes the data.
 ///
 /// Note: [`Encoder`] should be designed to be ready for reuse.
 pub trait Encoder: Send + Sync + 'static {
@@ -40,8 +39,7 @@ pub trait Encoder: Send + Sync + 'static {
     }
 }
 
-/// [`MakeCodec`] receives an [`AsyncRead`] and an [`AsyncWrite`] and returns a
-/// [`Decoder`] and an [`Encoder`].
+/// [`MakeCodec`] returns a [`Decoder`] and an [`Encoder`].
 ///
 /// The implementation of [`MakeCodec`] must make sure the [`Decoder`] and [`Encoder`]
 /// matches.
@@ -52,8 +50,8 @@ pub trait Encoder: Send + Sync + 'static {
 /// The reason why we split the [`Decoder`] and [`Encoder`] is that we want to support multiplex.
 pub trait MakeCodec<R, W>: Clone + Send + 'static
 where
-    R: AsyncRead + Unpin + Send + Sync + 'static,
-    W: AsyncWrite + Unpin + Send + Sync + 'static,
+    R: Unpin + Send + Sync + 'static,
+    W: Unpin + Send + Sync + 'static,
 {
     type Encoder: Encoder;
     type Decoder: Decoder;
