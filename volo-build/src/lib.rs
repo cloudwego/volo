@@ -112,6 +112,14 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
+    pub fn split_generated_files(
+        mut self,
+        split_generated_files: bool
+    ) -> Self {
+        self.pilota_builder = self.pilota_builder.split_generated_files(split_generated_files);
+        self
+    }
+
     pub fn special_namings(mut self, namings: impl IntoIterator<Item = FastStr>) -> Self {
         self.pilota_builder = self.pilota_builder.special_namings(namings);
         self

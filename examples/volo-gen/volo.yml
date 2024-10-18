@@ -22,6 +22,7 @@ entries:
   thrift:
     filename: thrift_gen.rs
     protocol: thrift
+    split_generated_files: true
     services:
       - idl:
           source: local
