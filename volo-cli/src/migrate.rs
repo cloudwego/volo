@@ -49,6 +49,7 @@ impl CliCommand for Migrate {
                             touch_all: old_entry.touch_all,
                             dedups: Vec::new(),
                             special_namings: Vec::new(),
+                            split_generated_files: false,
                         },
                     };
 
