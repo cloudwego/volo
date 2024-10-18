@@ -406,6 +406,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "code-generation-split"
+version = "0.0.0"
+dependencies = [
+ "pilota",
+ "volo",
+ "volo-build",
+ "volo-grpc",
+ "volo-thrift",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
