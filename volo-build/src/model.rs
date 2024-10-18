@@ -22,6 +22,8 @@ pub struct CommonOption {
     pub dedups: Vec<FastStr>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub special_namings: Vec<FastStr>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub split_generated_files: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
