@@ -34,7 +34,7 @@
 //!
 //! See [`Multipart`] for more details.
 
-use std::{error::Error, fmt, fmt::Debug};
+use std::{error::Error, fmt};
 
 use http::{request::Parts, StatusCode};
 use http_body_util::BodyExt;
@@ -42,7 +42,7 @@ use multer::Field;
 
 use crate::{
     context::ServerContext,
-    server::{extract::FromRequest, layer::body_limit::BodyLimitKind, IntoResponse},
+    server::{extract::FromRequest, IntoResponse},
 };
 
 /// Extract a type from `multipart/form-data` HTTP requests.
@@ -121,13 +121,7 @@ impl<'r> Multipart<'r> {
     /// # }
     /// ```
     pub async fn next_field(&mut self) -> Result<Option<Field<'r>>, MultipartRejectionError> {
-        let field = self.inner.next_field().await?;
-
-        if let Some(field) = field {
-            Ok(Some(field))
-        } else {
-            Ok(None)
-        }
+        Ok(self.inner.next_field().await?)
     }
 }
 
@@ -138,14 +132,6 @@ impl<'r> FromRequest<crate::body::Body> for Multipart<'r> {
         parts: Parts,
         body: crate::body::Body,
     ) -> Result<Self, Self::Rejection> {
-        let body = match parts.extensions.get::<BodyLimitKind>().copied() {
-            Some(BodyLimitKind::Disable) => body,
-            Some(BodyLimitKind::Limit(limit)) => {
-                crate::body::Body::from_body(http_body_util::Limited::new(body, limit))
-            }
-            None => body,
-        };
-
         let boundary = multer::parse_boundary(
             parts
                 .headers
@@ -259,9 +245,7 @@ mod multipart_tests {
     };
 
     fn _test_compile() {
-        async fn handler(_: Multipart<'_>) -> Result<(), Infallible> {
-            Ok(())
-        }
+        async fn handler(_: Multipart<'_>) {}
         let app = test_helpers::to_service(handler);
         let addr = Address::Ip(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -272,17 +256,17 @@ mod multipart_tests {
 
     async fn run_handler<S>(service: S, port: u16)
     where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-            + Send
-            + Sync
-            + 'static,
+        S: Service<ServerContext, ServerRequest, Response=ServerResponse, Error=Infallible>
+        + Send
+        + Sync
+        + 'static,
     {
         let addr = Address::Ip(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             port,
         ));
 
-        tokio::spawn(Server::new(service).run(addr.clone()));
+        tokio::spawn(Server::new(service).run(addr));
 
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }

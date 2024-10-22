@@ -1,14 +1,17 @@
+use http::StatusCode;
+use http_body::Body;
 use motore::{layer::Layer, Service};
 
-use crate::{
-    context::ServerContext, request::ServerRequest, response::ServerResponse, server::IntoResponse,
-};
+use crate::{context::ServerContext, request::ServerRequest};
+use crate::response::ServerResponse;
+use crate::server::IntoResponse;
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum BodyLimitKind {
     #[allow(dead_code)]
     Disable,
-    Limit(usize),
+    #[allow(dead_code)]
+    Block(usize),
 }
 
 /// [`Layer`] for limiting body size
@@ -45,7 +48,7 @@ impl BodyLimitLayer {
     /// ```
     pub fn max(body_limit: usize) -> Self {
         Self {
-            kind: BodyLimitKind::Limit(body_limit),
+            kind: BodyLimitKind::Block(body_limit),
         }
     }
 
@@ -61,8 +64,6 @@ impl BodyLimitLayer {
 }
 
 impl<S> Layer<S> for BodyLimitLayer
-where
-    S: Send + Sync + 'static,
 {
     type Service = BodyLimitService<S>;
 
@@ -77,18 +78,16 @@ where
 /// [`BodyLimitLayer`] generated [`Service`]
 ///
 /// See [`BodyLimitLayer`] for more details.
-#[derive(Clone)]
 pub struct BodyLimitService<S> {
     service: S,
     kind: BodyLimitKind,
 }
 
-impl<S, B> Service<ServerContext, ServerRequest<B>> for BodyLimitService<S>
+impl<S> Service<ServerContext, ServerRequest> for BodyLimitService<S>
 where
-    S: Service<ServerContext, ServerRequest<B>> + Send + Sync + 'static,
+    S: Service<ServerContext, ServerRequest> + Send + Sync + 'static,
     S::Response: IntoResponse,
     S::Error: IntoResponse,
-    B: Send,
 {
     type Response = ServerResponse;
     type Error = S::Error;
@@ -96,8 +95,23 @@ where
     async fn call(
         &self,
         cx: &mut ServerContext,
-        mut req: ServerRequest<B>,
+        req: ServerRequest,
     ) -> Result<Self::Response, Self::Error> {
+        let (parts, body) = req.into_parts();
+        if let BodyLimitKind::Block(limit) = self.kind {
+            // get body size from content length
+            if let Some(size) = parts.headers.get(http::header::CONTENT_LENGTH).and_then(|v| v.to_str().ok().and_then(|s| s.parse::<usize>().ok())) {
+                if size > limit {
+                    return Ok(StatusCode::PAYLOAD_TOO_LARGE.into_response());
+                }
+            } else {
+                // get body size from stream
+                if body.size_hint().lower() > limit as u64 {
+                    return Ok(StatusCode::PAYLOAD_TOO_LARGE.into_response());
+                }
+            }
+        }
+        let mut req = ServerRequest::from_parts(parts, body);
         req.extensions_mut().insert(self.kind);
         Ok(self.service.call(cx, req).await?.into_response())
     }

@@ -58,9 +58,10 @@ tokio = { workspace = true, features = [
 ] }
 tokio-util = { workspace = true, features = ["io"] }
 tracing.workspace = true
-multer.workspace = true
 
 # =====optional=====
+
+multer = { workspace = true, optional = true }
 
 # server optional
 matchit = { workspace = true, optional = true }
@@ -86,9 +87,9 @@ async-stream.workspace = true
 libc.workspace = true
 serde = { workspace = true, features = ["derive"] }
 tokio-test.workspace = true
+rand.workspace = true
 reqwest = { workspace = true, features = ["multipart"] }
 url.workspace = true
-rand.workspace = true
 
 [features]
 default = []
@@ -101,6 +102,7 @@ full = ["client", "server", "rustls", "cookie", "query", "form", "json", "multip
 client = ["hyper/client", "hyper/http1"] # client core
 server = ["hyper/server", "hyper/http1", "dep:matchit"] # server core
 
+multipart = ["dep:multer"]
 ws = ["dep:tungstenite", "dep:tokio-tungstenite"]
 
 tls = ["rustls"]
@@ -115,7 +117,6 @@ __serde = ["dep:serde"] # a private feature for enabling `serde` by `serde_xxx`
 query = ["__serde", "dep:serde_urlencoded"]
 form = ["__serde", "dep:serde_urlencoded"]
 json = ["__serde", "dep:sonic-rs"]
-multipart = []
 
 [package.metadata.docs.rs]
 all-features = true
