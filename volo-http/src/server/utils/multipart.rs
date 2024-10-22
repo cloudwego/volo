@@ -77,8 +77,8 @@ use crate::{
 ///
 /// # Body Limitation
 ///
-/// Since the body is unlimited, so it is recommended to use [`BodyLimitLayer`](crate::server::layer::BodyLimitLayer) to limit the size of
-/// the body.
+/// Since the body is unlimited, so it is recommended to use
+/// [`BodyLimitLayer`](crate::server::layer::BodyLimitLayer) to limit the size of the body.
 ///
 /// ```rust,no_run
 /// use http::StatusCode;
@@ -114,10 +114,10 @@ impl<'r> Multipart<'r> {
     /// # let mut multipart: Multipart;
     /// // Extract each field from multipart by using while loop
     /// # async {
-    ///  while let Some(field) = multipart.next_field().await? {
+    /// while let Some(field) = multipart.next_field().await? {
     ///     let name = field.name().unwrap().to_string(); // Get field name
     ///     let data = field.bytes().await?; // Get field data
-    ///  }
+    /// }
     /// # }
     /// ```
     pub async fn next_field(&mut self) -> Result<Option<Field<'r>>, MultipartRejectionError> {
