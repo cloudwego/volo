@@ -2,9 +2,9 @@ use http::StatusCode;
 use http_body::Body;
 use motore::{layer::Layer, Service};
 
-use crate::{context::ServerContext, request::ServerRequest};
-use crate::response::ServerResponse;
-use crate::server::IntoResponse;
+use crate::{
+    context::ServerContext, request::ServerRequest, response::ServerResponse, server::IntoResponse,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum BodyLimitKind {
@@ -67,8 +67,7 @@ impl BodyLimitLayer {
     }
 }
 
-impl<S> Layer<S> for BodyLimitLayer
-{
+impl<S> Layer<S> for BodyLimitLayer {
     type Service = BodyLimitService<S>;
 
     fn layer(self, inner: S) -> Self::Service {
@@ -104,7 +103,11 @@ where
         let (parts, body) = req.into_parts();
         if let BodyLimitKind::Block(limit) = self.kind {
             // get body size from content length
-            if let Some(size) = parts.headers.get(http::header::CONTENT_LENGTH).and_then(|v| v.to_str().ok().and_then(|s| s.parse::<usize>().ok())) {
+            if let Some(size) = parts
+                .headers
+                .get(http::header::CONTENT_LENGTH)
+                .and_then(|v| v.to_str().ok().and_then(|s| s.parse::<usize>().ok()))
+            {
                 if size > limit {
                     return Ok(StatusCode::PAYLOAD_TOO_LARGE.into_response());
                 }
