@@ -336,7 +336,7 @@ mod multipart_tests {
         const FIELD_NAME1: &str = "file1";
         const FIELD_NAME2: &str = "file2";
         const FILE_NAME1: &str = "index1.html";
-        const FILE_NAME2: &str = "index1.html";
+        const FILE_NAME2: &str = "index2.html";
 
         async fn handler(mut multipart: Multipart<'static>) -> Result<(), MultipartRejectionError> {
             while let Some(field) = multipart.next_field().await? {
