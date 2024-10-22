@@ -16,7 +16,11 @@ pub(crate) enum BodyLimitKind {
 
 /// [`Layer`] for limiting body size
 ///
-/// Currently only supports [`Multipart`](crate::server::utils::multipart::Multipart) extractor.
+/// Get the body size by the priority:
+///
+/// 1. [`http::header::CONTENT_LENGTH`]
+///
+/// 2. [`http_body::Body::size_hint()`]
 ///
 /// See [`BodyLimitLayer::max`] for more details.
 #[derive(Clone)]
@@ -111,6 +115,7 @@ where
                 }
             }
         }
+
         let mut req = ServerRequest::from_parts(parts, body);
         req.extensions_mut().insert(self.kind);
         Ok(self.service.call(cx, req).await?.into_response())
