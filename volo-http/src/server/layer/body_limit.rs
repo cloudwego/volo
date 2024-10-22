@@ -116,7 +116,7 @@ where
             }
         }
 
-        let mut req = ServerRequest::from_parts(parts, body);
+        let req = ServerRequest::from_parts(parts, body);
         Ok(self.service.call(cx, req).await?.into_response())
     }
 }
