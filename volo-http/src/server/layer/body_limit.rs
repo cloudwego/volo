@@ -22,7 +22,7 @@ pub struct BodyLimitLayer {
 }
 
 impl BodyLimitLayer {
-    /// Create a new [`BodyLimitLayer`] with given [`body_limit`].
+    /// Create a new [`BodyLimitLayer`] with given `body_limit`.
     ///
     /// If the Body is larger than the `body_limit`, the request will be rejected.
     ///

@@ -77,7 +77,7 @@ use crate::{
 ///
 /// # Body Limitation
 ///
-/// Since the body is unlimited, so it is recommended to use [`BodyLimitLayer`] to limit the size of
+/// Since the body is unlimited, so it is recommended to use [`BodyLimitLayer`](crate::server::layer::BodyLimitLayer) to limit the size of
 /// the body.
 ///
 /// ```rust,no_run
@@ -117,6 +117,7 @@ impl<'r> Multipart<'r> {
     ///  while let Some(field) = multipart.next_field().await? {
     ///     let name = field.name().unwrap().to_string(); // Get field name
     ///     let data = field.bytes().await?; // Get field data
+    ///  }
     /// # }
     /// ```
     pub async fn next_field(&mut self) -> Result<Option<Field<'r>>, MultipartRejectionError> {

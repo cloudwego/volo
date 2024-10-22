@@ -1,4 +1,4 @@
-//! Collections of some useful [`Layer`]s.
+//! Collections of some useful `Layer`s.
 //!
 //! See [`FilterLayer`] and [`TimeoutLayer`] for more details.
 
