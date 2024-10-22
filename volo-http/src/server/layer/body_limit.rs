@@ -117,7 +117,6 @@ where
         }
 
         let mut req = ServerRequest::from_parts(parts, body);
-        req.extensions_mut().insert(self.kind);
         Ok(self.service.call(cx, req).await?.into_response())
     }
 }
