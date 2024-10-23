@@ -5,7 +5,7 @@
 //!
 //! # Example
 //!
-//! ```rust,no_run
+//! ```rust
 //! use http::StatusCode;
 //! use volo_http::{
 //!     response::ServerResponse,
@@ -57,7 +57,7 @@ use crate::{
 ///
 /// # Example
 ///
-/// ```rust,no_run
+/// ```rust
 /// use http::StatusCode;
 /// use volo_http::{
 ///     response::ServerResponse,
@@ -80,7 +80,7 @@ use crate::{
 /// Since the body is unlimited, so it is recommended to use
 /// [`BodyLimitLayer`](crate::server::layer::BodyLimitLayer) to limit the size of the body.
 ///
-/// ```rust,no_run
+/// ```rust
 /// use http::StatusCode;
 /// use volo_http::{
 ///     Router,
@@ -91,25 +91,25 @@ use crate::{
 ///     }
 /// };
 ///
-/// # async fn upload_handler(mut multipart: Multipart<'static>) -> Result<StatusCode, MultipartRejectionError> {
+/// # async fn upload_handler(mut multipart: Multipart) -> Result<StatusCode, MultipartRejectionError> {
 /// # Ok(StatusCode::OK)
 /// # }
 ///
 /// let app: Router<_>= Router::new()
 ///     .route("/",post(upload_handler))
-///     .layer( BodyLimitLayer::max(1024));
+///     .layer( BodyLimitLayer::new(1024));
 /// ```
 #[must_use]
-pub struct Multipart<'r> {
-    inner: multer::Multipart<'r>,
+pub struct Multipart {
+    inner: multer::Multipart<'static>,
 }
 
-impl<'r> Multipart<'r> {
+impl Multipart {
     /// Iterate over all [`Field`] in [`Multipart`]
     ///
     /// # Example
     ///
-    /// ```rust,no_run
+    /// ```rust
     /// # use volo_http::server::utils::multipart::Multipart;
     /// # let mut multipart: Multipart;
     /// // Extract each field from multipart by using while loop
@@ -120,12 +120,12 @@ impl<'r> Multipart<'r> {
     /// }
     /// # }
     /// ```
-    pub async fn next_field(&mut self) -> Result<Option<Field<'r>>, MultipartRejectionError> {
+    pub async fn next_field(&mut self) -> Result<Option<Field<'static>>, MultipartRejectionError> {
         Ok(self.inner.next_field().await?)
     }
 }
 
-impl<'r> FromRequest<crate::body::Body> for Multipart<'r> {
+impl FromRequest<crate::body::Body> for Multipart {
     type Rejection = MultipartRejectionError;
     async fn from_request(
         _: &mut ServerContext,
@@ -136,8 +136,9 @@ impl<'r> FromRequest<crate::body::Body> for Multipart<'r> {
             parts
                 .headers
                 .get(http::header::CONTENT_TYPE)
-                .map(|h| h.to_str().unwrap_or_default())
-                .unwrap_or_default(),
+                .ok_or(multer::Error::NoMultipart)?
+                .to_str()
+                .map_err(|_| multer::Error::NoBoundary)?,
         )?;
 
         let multipart = multer::Multipart::new(body.into_data_stream(), boundary);
@@ -175,20 +176,7 @@ fn status_code_from_multer_error(err: &multer::Error) -> StatusCode {
         multer::Error::FieldSizeExceeded { .. } | multer::Error::StreamSizeExceeded { .. } => {
             StatusCode::PAYLOAD_TOO_LARGE
         }
-        multer::Error::StreamReadFailed(err) => {
-            if let Some(err) = err.downcast_ref::<multer::Error>() {
-                return status_code_from_multer_error(err);
-            }
-
-            if err
-                .downcast_ref::<http_body_util::LengthLimitError>()
-                .is_some()
-            {
-                return StatusCode::PAYLOAD_TOO_LARGE;
-            }
-
-            StatusCode::INTERNAL_SERVER_ERROR
-        }
+        multer::Error::StreamReadFailed(_) => StatusCode::INTERNAL_SERVER_ERROR,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
@@ -214,7 +202,7 @@ impl fmt::Display for MultipartRejectionError {
 
 impl IntoResponse for MultipartRejectionError {
     fn into_response(self) -> http::Response<crate::body::Body> {
-        (self.to_status_code(), self.to_string()).into_response()
+        self.to_status_code().into_response()
     }
 }
 
@@ -245,7 +233,7 @@ mod multipart_tests {
     };
 
     fn _test_compile() {
-        async fn handler(_: Multipart<'_>) {}
+        async fn handler(_: Multipart) {}
         let app = test_helpers::to_service(handler);
         let addr = Address::Ip(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -270,13 +258,14 @@ mod multipart_tests {
 
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     }
+
     #[tokio::test]
     async fn test_single_field_upload() {
         const BYTES: &[u8] = "<!doctype html><title>🦀</title>".as_bytes();
         const FILE_NAME: &str = "index.html";
         const CONTENT_TYPE: &str = "text/html; charset=utf-8";
 
-        async fn handler(mut multipart: Multipart<'static>) -> impl IntoResponse {
+        async fn handler(mut multipart: Multipart) -> impl IntoResponse {
             let field = multipart.next_field().await.unwrap().unwrap();
 
             assert_eq!(field.file_name().unwrap(), FILE_NAME);
@@ -322,7 +311,7 @@ mod multipart_tests {
         const FILE_NAME1: &str = "index1.html";
         const FILE_NAME2: &str = "index2.html";
 
-        async fn handler(mut multipart: Multipart<'static>) -> Result<(), MultipartRejectionError> {
+        async fn handler(mut multipart: Multipart) -> Result<(), MultipartRejectionError> {
             while let Some(field) = multipart.next_field().await? {
                 match field.name() {
                     Some(FIELD_NAME1) => {
@@ -382,7 +371,7 @@ mod multipart_tests {
 
     #[tokio::test]
     async fn test_large_field_upload() {
-        async fn handler(mut multipart: Multipart<'static>) -> Result<(), MultipartRejectionError> {
+        async fn handler(mut multipart: Multipart) -> Result<(), MultipartRejectionError> {
             while let Some(field) = multipart.next_field().await? {
                 field.bytes().await?;
             }
@@ -410,7 +399,7 @@ mod multipart_tests {
 
         let app: Router<_> = Router::new()
             .route("/", post(handler))
-            .layer(BodyLimitLayer::max(1024));
+            .layer(BodyLimitLayer::new(1024));
 
         run_handler(app, 8003).await;
 
