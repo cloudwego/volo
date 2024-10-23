@@ -97,7 +97,7 @@ use crate::{
 ///
 /// let app: Router<_>= Router::new()
 ///     .route("/",post(upload_handler))
-///     .layer( BodyLimitLayer::new(1024));
+///     .layer(BodyLimitLayer::new(1024));
 /// ```
 #[must_use]
 pub struct Multipart {
