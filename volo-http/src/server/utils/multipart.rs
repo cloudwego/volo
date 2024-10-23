@@ -65,7 +65,7 @@ use crate::{
 /// };
 ///
 /// async fn upload(
-///     mut multipart: Multipart<'static>,
+///     mut multipart: Multipart,
 /// ) -> Result<StatusCode, MultipartRejectionError> {
 ///     while let Some(field) = multipart.next_field().await? {
 ///         todo!()
