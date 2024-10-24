@@ -60,7 +60,7 @@ pub struct BodyLimitService<S> {
     limit: usize,
 }
 
-impl<S,B> Service<ServerContext, ServerRequest<B>> for BodyLimitService<S>
+impl<S, B> Service<ServerContext, ServerRequest<B>> for BodyLimitService<S>
 where
     S: Service<ServerContext, ServerRequest<B>> + Send + Sync + 'static,
     S::Response: IntoResponse,
@@ -100,13 +100,17 @@ where
 #[cfg(test)]
 mod tests {
     use http::{Method, StatusCode};
-    use motore::layer::Layer;
-    use motore::Service;
+    use motore::{layer::Layer, Service};
     use rand::Rng;
-    use crate::server::layer::BodyLimitLayer;
-    use crate::server::route::{any, Route};
-    use crate::server::test_helpers::empty_cx;
-    use crate::utils::test_helpers::simple_req;
+
+    use crate::{
+        server::{
+            layer::BodyLimitLayer,
+            route::{any, Route},
+            test_helpers::empty_cx,
+        },
+        utils::test_helpers::simple_req,
+    };
 
     #[tokio::test]
     async fn test_body_limit() {
@@ -125,7 +129,9 @@ mod tests {
         let min_part_size = 4096;
         let mut body: Vec<u8> = vec![0; min_part_size];
         rng.fill(&mut body[..]);
-        let req = simple_req(Method::GET, "/", unsafe { String::from_utf8_unchecked(body) });
+        let req = simple_req(Method::GET, "/", unsafe {
+            String::from_utf8_unchecked(body)
+        });
         let res = service.call(&mut cx, req).await.unwrap();
         assert_eq!(res.status(), StatusCode::PAYLOAD_TOO_LARGE);
 

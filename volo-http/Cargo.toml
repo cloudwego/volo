@@ -60,7 +60,6 @@ tokio-util = { workspace = true, features = ["io"] }
 tracing.workspace = true
 
 # =====optional=====
-
 multer = { workspace = true, optional = true }
 
 # server optional
@@ -86,9 +85,9 @@ sonic-rs = { workspace = true, optional = true }
 async-stream.workspace = true
 libc.workspace = true
 serde = { workspace = true, features = ["derive"] }
-tokio-test.workspace = true
 rand.workspace = true
 reqwest = { workspace = true, features = ["multipart"] }
+tokio-test.workspace = true
 url.workspace = true
 
 [features]

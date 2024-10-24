@@ -16,9 +16,7 @@
 //!     Router,
 //! };
 //!
-//! async fn upload(
-//!     mut multipart: Multipart,
-//! ) -> Result<StatusCode, MultipartRejectionError> {
+//! async fn upload(mut multipart: Multipart) -> Result<StatusCode, MultipartRejectionError> {
 //!     while let Some(field) = multipart.next_field().await? {
 //!         let name = field.name().unwrap();
 //!         let value = field.bytes().await?;
@@ -64,9 +62,7 @@ use crate::{
 ///     server::utils::multipart::{Multipart, MultipartRejectionError},
 /// };
 ///
-/// async fn upload(
-///     mut multipart: Multipart,
-/// ) -> Result<StatusCode, MultipartRejectionError> {
+/// async fn upload(mut multipart: Multipart) -> Result<StatusCode, MultipartRejectionError> {
 ///     while let Some(field) = multipart.next_field().await? {
 ///         todo!()
 ///     }
