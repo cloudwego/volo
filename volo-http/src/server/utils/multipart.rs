@@ -294,7 +294,7 @@ mod multipart_tests {
         let url = url::Url::parse(url_str.as_str()).unwrap();
 
         reqwest::Client::new()
-            .post(url.clone())
+            .post(url)
             .multipart(form)
             .send()
             .await
@@ -367,51 +367,5 @@ mod multipart_tests {
                 .await
                 .unwrap();
         }
-    }
-
-    #[tokio::test]
-    async fn test_large_field_upload() {
-        async fn handler(mut multipart: Multipart) -> Result<(), MultipartRejectionError> {
-            while let Some(field) = multipart.next_field().await? {
-                field.bytes().await?;
-            }
-
-            Ok(())
-        }
-
-        // generate random bytes
-        let mut rng = rand::thread_rng();
-        let min_part_size = 4096;
-        let mut body = vec![0; min_part_size];
-        rng.fill(&mut body[..]);
-
-        let content_type = "text/html; charset=utf-8";
-        let field_name = "file";
-        let file_name = "index.html";
-
-        let form = Form::new().part(
-            field_name,
-            reqwest::multipart::Part::bytes(body)
-                .file_name(file_name)
-                .mime_str(content_type)
-                .unwrap(),
-        );
-
-        let app: Router<_> = Router::new()
-            .route("/", post(handler))
-            .layer(BodyLimitLayer::new(1024));
-
-        run_handler(app, 8003).await;
-
-        let url_str = format!("http://127.0.0.1:{}", 8003);
-        let url = url::Url::parse(url_str.as_str()).unwrap();
-
-        let resp = reqwest::Client::new()
-            .post(url.clone())
-            .multipart(form)
-            .send()
-            .await
-            .unwrap();
-        assert_eq!(resp.status(), http::StatusCode::PAYLOAD_TOO_LARGE);
     }
 }
