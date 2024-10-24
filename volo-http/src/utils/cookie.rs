@@ -79,14 +79,14 @@ impl CookieJar {
     /// ```rust
     /// use volo_http::utils::cookie::CookieJar;
     /// let mut cookie_jar = CookieJar::new();
-    /// cookie_jar.add(("foo", "bar"));
-    /// cookie_jar.add(("foo1", "bar1"))
+    /// cookie_jar.add_original(("foo", "bar"));
+    /// cookie_jar.add_original(("foo1", "bar1"))
     /// ```
-    pub fn add<C>(&mut self, cookie: C)
+    pub fn add_original<C>(&mut self, cookie: C)
     where
         C: Into<Cookie<'static>>,
     {
-        self.inner.add(cookie);
+        self.inner.add_original(cookie);
     }
 
     /// Get [`HeaderValue`] from the cookie jar

@@ -508,7 +508,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
 
         let cookie_jar = self.cookie_jar.as_mut().unwrap();
 
-        cookie_jar.add(cookie.into());
+        cookie_jar.add_original(cookie.into());
 
         self
     }
@@ -533,7 +533,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// use volo_http::{utils::cookie::CookieJar, ClientBuilder};
     ///
     /// let mut cookie_jar = CookieJar::new();
-    /// cookie_jar.add(("foo", "bar"));
+    /// cookie_jar.add_original(("foo", "bar"));
     /// let client = ClientBuilder::new().cookie_jar(cookie_jar);
     /// ```
     pub fn cookie_jar(&mut self, cookie_jar: CookieJar) -> &mut Self {
@@ -1413,8 +1413,8 @@ mod client_tests {
     #[tokio::test]
     async fn with_cookie_jar() {
         let mut cookie_jar = CookieJar::new();
-        cookie_jar.add(("foo", "bar"));
-        cookie_jar.add(("foo1", "bar1"));
+        cookie_jar.add_original(("foo", "bar"));
+        cookie_jar.add_original(("foo1", "bar1"));
         let mut builder = Client::builder();
         builder.cookie_jar(cookie_jar);
         let client = builder.build();
