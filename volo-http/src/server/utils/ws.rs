@@ -71,7 +71,7 @@ use crate::{
 const HEADERVALUE_UPGRADE: HeaderValue = HeaderValue::from_static("upgrade");
 const HEADERVALUE_WEBSOCKET: HeaderValue = HeaderValue::from_static("websocket");
 
-/// Handler request for establishing WebSocket connection.
+/// Handle request for establishing WebSocket connection.
 ///
 /// [`WebSocketUpgrade`] can be passed as an argument to a handler, which will be called if the
 /// http connection making the request can be upgraded to a websocket connection.
