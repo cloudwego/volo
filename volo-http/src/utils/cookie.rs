@@ -82,7 +82,7 @@ impl CookieJar {
     /// cookie_jar.add_original(("foo", "bar"));
     /// cookie_jar.add_original(("foo1", "bar1"))
     /// ```
-    pub fn add_original<C>(&mut self, cookie: C)
+    pub(crate) fn add_original<C>(&mut self, cookie: C)
     where
         C: Into<Cookie<'static>>,
     {
