@@ -64,7 +64,7 @@ impl CookieJar {
     }
 
     #[cfg(feature = "client")]
-    /// Create a empty [`CookieJar`]
+    /// Create an empty [`CookieJar`]
     pub fn new() -> Self {
         Self {
             inner: cookie::CookieJar::new(),
