@@ -2,10 +2,15 @@
 //!
 //! [`CookieJar`] currently only supports the server side.
 
-use std::{convert::Infallible, ops::Deref};
+use std::{
+    borrow::Cow,
+    convert::Infallible,
+    ops::{Deref, DerefMut},
+};
 
+use bytes::Bytes;
 pub use cookie::{time::Duration, Cookie};
-use http::{header, request::Parts, HeaderMap};
+use http::{header, request::Parts, HeaderMap, HeaderValue};
 
 use crate::context::ServerContext;
 #[cfg(feature = "server")]
@@ -32,6 +37,74 @@ impl CookieJar {
 
         Self { inner: jar }
     }
+
+    /// Create a [`CookieJar`] from given string
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use volo_http::utils::cookie::CookieJar;
+    /// let cookie_jar = CookieJar::from_cookie_str("foo=bar; ;foo1=bar1");
+    /// ```
+    #[cfg(feature = "client")]
+    pub fn from_cookie_str<S>(s: S) -> Self
+    where
+        S: Into<Cow<'static, str>>,
+    {
+        let cookies: Vec<Cookie> = Cookie::split_parse(s)
+            .filter_map(|parse| parse.ok())
+            .collect();
+
+        let mut jar = cookie::CookieJar::new();
+        for cookie in cookies {
+            jar.add_original(cookie);
+        }
+
+        Self { inner: jar }
+    }
+
+    #[cfg(feature = "client")]
+    /// Create a empty [`CookieJar`]
+    pub fn new() -> Self {
+        Self {
+            inner: cookie::CookieJar::new(),
+        }
+    }
+
+    #[cfg(feature = "client")]
+    /// Add a cookie to the cookie jar
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use volo_http::utils::cookie::CookieJar;
+    /// let mut cookie_jar = CookieJar::new();
+    /// cookie_jar.add(("foo", "bar"));
+    /// cookie_jar.add(("foo1", "bar1"))
+    /// ```
+    pub fn add<C>(&mut self, cookie: C)
+    where
+        C: Into<Cookie<'static>>,
+    {
+        self.inner.add(cookie);
+    }
+
+    /// Get [`HeaderValue`] from the cookie jar
+    #[cfg(feature = "client")]
+    pub(crate) fn cookies(&self) -> Option<HeaderValue> {
+        let s = self
+            .inner
+            .iter()
+            .map(|c| c.to_string())
+            .collect::<Vec<_>>()
+            .join("; ");
+
+        if s.is_empty() {
+            return None;
+        }
+
+        HeaderValue::from_maybe_shared(Bytes::from(s)).ok()
+    }
 }
 
 impl Deref for CookieJar {
@@ -39,6 +112,12 @@ impl Deref for CookieJar {
 
     fn deref(&self) -> &Self::Target {
         &self.inner
+    }
+}
+
+impl DerefMut for CookieJar {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
 
