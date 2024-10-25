@@ -79,20 +79,22 @@ use crate::{
 /// ```rust
 /// use http::StatusCode;
 /// use volo_http::{
-///     Router,
 ///     server::{
 ///         layer::BodyLimitLayer,
 ///         route::post,
 ///         utils::multipart::{Multipart, MultipartRejectionError},
-///     }
+///     },
+///     Router,
 /// };
 ///
-/// async fn upload_handler(mut multipart: Multipart) -> Result<StatusCode, MultipartRejectionError> {
+/// async fn upload_handler(
+///     mut multipart: Multipart,
+/// ) -> Result<StatusCode, MultipartRejectionError> {
 ///     Ok(StatusCode::OK)
 /// }
 ///
-/// let app: Router<_>= Router::new()
-///     .route("/",post(upload_handler))
+/// let app: Router<_> = Router::new()
+///     .route("/", post(upload_handler))
 ///     .layer(BodyLimitLayer::new(1024));
 /// ```
 #[must_use]

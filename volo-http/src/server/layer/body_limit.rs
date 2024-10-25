@@ -18,7 +18,6 @@ impl BodyLimitLayer {
     /// Create a new [`BodyLimitLayer`] with given `body_limit`.
     ///
     /// If the Body is larger than the `body_limit`, the request will be rejected.
-    /// ```
     pub fn new(body_limit: usize) -> Self {
         Self { limit: body_limit }
     }
