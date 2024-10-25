@@ -87,9 +87,9 @@ use crate::{
 ///     }
 /// };
 ///
-/// # async fn upload_handler(mut multipart: Multipart) -> Result<StatusCode, MultipartRejectionError> {
-/// # Ok(StatusCode::OK)
-/// # }
+/// async fn upload_handler(mut multipart: Multipart) -> Result<StatusCode, MultipartRejectionError> {
+///     Ok(StatusCode::OK)
+/// }
 ///
 /// let app: Router<_>= Router::new()
 ///     .route("/",post(upload_handler))
