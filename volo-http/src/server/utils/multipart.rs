@@ -237,10 +237,10 @@ mod multipart_tests {
 
     async fn run_handler<S>(service: S, port: u16)
     where
-        S: Service<ServerContext, ServerRequest, Response=ServerResponse, Error=Infallible>
-        + Send
-        + Sync
-        + 'static,
+        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
+            + Send
+            + Sync
+            + 'static,
     {
         let addr = Address::Ip(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -324,27 +324,29 @@ mod multipart_tests {
             Ok(())
         }
 
-        let form = Form::new().part(
-            FIELD_NAME1,
-            reqwest::multipart::Part::bytes(BYTES)
-                .file_name(FILE_NAME1)
-                .mime_str(CONTENT_TYPE)
-                .unwrap()
-                .headers(reqwest::header::HeaderMap::from_iter([(
-                    reqwest::header::HeaderName::from_static("foo1"),
-                    reqwest::header::HeaderValue::from_static("bar1"),
-                )])),
-        ).part(
-            FIELD_NAME2,
-            reqwest::multipart::Part::bytes(BYTES)
-                .file_name(FILE_NAME2)
-                .mime_str(CONTENT_TYPE)
-                .unwrap()
-                .headers(reqwest::header::HeaderMap::from_iter([(
-                    reqwest::header::HeaderName::from_static("foo2"),
-                    reqwest::header::HeaderValue::from_static("bar2"),
-                )])),
-        );
+        let form = Form::new()
+            .part(
+                FIELD_NAME1,
+                reqwest::multipart::Part::bytes(BYTES)
+                    .file_name(FILE_NAME1)
+                    .mime_str(CONTENT_TYPE)
+                    .unwrap()
+                    .headers(reqwest::header::HeaderMap::from_iter([(
+                        reqwest::header::HeaderName::from_static("foo1"),
+                        reqwest::header::HeaderValue::from_static("bar1"),
+                    )])),
+            )
+            .part(
+                FIELD_NAME2,
+                reqwest::multipart::Part::bytes(BYTES)
+                    .file_name(FILE_NAME2)
+                    .mime_str(CONTENT_TYPE)
+                    .unwrap()
+                    .headers(reqwest::header::HeaderMap::from_iter([(
+                        reqwest::header::HeaderName::from_static("foo2"),
+                        reqwest::header::HeaderValue::from_static("bar2"),
+                    )])),
+            );
 
         run_handler(test_helpers::to_service(handler), 25242).await;
 
