@@ -60,6 +60,7 @@ tokio-util = { workspace = true, features = ["io"] }
 tracing.workspace = true
 
 # =====optional=====
+multer = { workspace = true, optional = true }
 
 # server optional
 matchit = { workspace = true, optional = true }
@@ -84,19 +85,22 @@ sonic-rs = { workspace = true, optional = true }
 async-stream.workspace = true
 libc.workspace = true
 serde = { workspace = true, features = ["derive"] }
+reqwest = { workspace = true, features = ["multipart"] }
 tokio-test.workspace = true
+url.workspace = true
 
 [features]
 default = []
 
 default_client = ["client", "json"]
-default_server = ["server", "query", "form", "json"]
+default_server = ["server", "query", "form", "json", "multipart"]
 
-full = ["client", "server", "rustls", "cookie", "query", "form", "json", "tls", "ws"]
+full = ["client", "server", "rustls", "cookie", "query", "form", "json", "multipart", "tls", "ws"]
 
 client = ["hyper/client", "hyper/http1"] # client core
 server = ["hyper/server", "hyper/http1", "dep:matchit"] # server core
 
+multipart = ["dep:multer"]
 ws = ["dep:tungstenite", "dep:tokio-tungstenite"]
 
 tls = ["rustls"]
