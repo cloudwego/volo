@@ -233,7 +233,7 @@ mod multipart_tests {
         let app = test_helpers::to_service(handler);
         let addr = Address::Ip(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            8001,
+            25241,
         ));
         let _server = Server::new(app).run(addr);
     }
@@ -284,9 +284,9 @@ mod multipart_tests {
                 )])),
         );
 
-        run_handler(test_helpers::to_service(handler), 8001).await;
+        run_handler(test_helpers::to_service(handler), 25241).await;
 
-        let url_str = format!("http://127.0.0.1:{}", 8001);
+        let url_str = format!("http://127.0.0.1:{}", 25241);
         let url = url::Url::parse(url_str.as_str()).unwrap();
 
         reqwest::Client::new()
@@ -350,9 +350,9 @@ mod multipart_tests {
                 )])),
         );
 
-        run_handler(test_helpers::to_service(handler), 8002).await;
+        run_handler(test_helpers::to_service(handler), 25242).await;
 
-        let url_str = format!("http://127.0.0.1:{}", 8002);
+        let url_str = format!("http://127.0.0.1:{}", 25242);
         let url = url::Url::parse(url_str.as_str()).unwrap();
 
         for form in vec![form1, form2] {
