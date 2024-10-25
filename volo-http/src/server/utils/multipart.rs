@@ -18,7 +18,7 @@
 //!
 //! async fn upload(mut multipart: Multipart) -> Result<StatusCode, MultipartRejectionError> {
 //!     while let Some(field) = multipart.next_field().await? {
-//!         let name = field.name().unwrap();
+//!         let name = field.name().unwrap().to_string();
 //!         let value = field.bytes().await?;
 //!
 //!         println!("The field {} has {} bytes", name, value.len());
@@ -109,10 +109,10 @@ impl Multipart {
     /// # use volo_http::server::utils::multipart::Multipart;
     /// # let mut multipart: Multipart;
     /// // Extract each field from multipart by using while loop
-    /// # async {
-    /// while let Some(field) = multipart.next_field().await? {
+    /// # async fn upload(mut multipart: Multipart) {
+    /// while let Some(field) = multipart.next_field().await.unwrap() {
     ///     let name = field.name().unwrap().to_string(); // Get field name
-    ///     let data = field.bytes().await?; // Get field data
+    ///     let data = field.bytes().await.unwrap(); // Get field data
     /// }
     /// # }
     /// ```
@@ -210,7 +210,6 @@ mod multipart_tests {
     };
 
     use motore::Service;
-    use rand::Rng;
     use reqwest::multipart::Form;
     use volo::net::Address;
 
@@ -219,13 +218,11 @@ mod multipart_tests {
         request::ServerRequest,
         response::ServerResponse,
         server::{
-            layer::BodyLimitLayer,
-            route::post,
             test_helpers,
             utils::multipart::{Multipart, MultipartRejectionError},
             IntoResponse,
         },
-        Router, Server,
+        Server,
     };
 
     fn _test_compile() {
