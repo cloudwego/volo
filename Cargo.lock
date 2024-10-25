@@ -3854,7 +3854,6 @@ dependencies = [
  "parking_lot 0.12.3",
  "paste",
  "pin-project",
- "rand",
  "reqwest 0.12.8",
  "scopeguard",
  "serde",

@@ -85,7 +85,6 @@ sonic-rs = { workspace = true, optional = true }
 async-stream.workspace = true
 libc.workspace = true
 serde = { workspace = true, features = ["derive"] }
-rand.workspace = true
 reqwest = { workspace = true, features = ["multipart"] }
 tokio-test.workspace = true
 url.workspace = true

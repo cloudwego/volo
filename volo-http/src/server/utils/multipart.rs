@@ -237,10 +237,10 @@ mod multipart_tests {
 
     async fn run_handler<S>(service: S, port: u16)
     where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-            + Send
-            + Sync
-            + 'static,
+        S: Service<ServerContext, ServerRequest, Response=ServerResponse, Error=Infallible>
+        + Send
+        + Sync
+        + 'static,
     {
         let addr = Address::Ip(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
@@ -324,7 +324,7 @@ mod multipart_tests {
             Ok(())
         }
 
-        let form1 = Form::new().part(
+        let form = Form::new().part(
             FIELD_NAME1,
             reqwest::multipart::Part::bytes(BYTES)
                 .file_name(FILE_NAME1)
@@ -334,8 +334,7 @@ mod multipart_tests {
                     reqwest::header::HeaderName::from_static("foo1"),
                     reqwest::header::HeaderValue::from_static("bar1"),
                 )])),
-        );
-        let form2 = Form::new().part(
+        ).part(
             FIELD_NAME2,
             reqwest::multipart::Part::bytes(BYTES)
                 .file_name(FILE_NAME2)
@@ -352,13 +351,11 @@ mod multipart_tests {
         let url_str = format!("http://127.0.0.1:{}", 25242);
         let url = url::Url::parse(url_str.as_str()).unwrap();
 
-        for form in vec![form1, form2] {
-            reqwest::Client::new()
-                .post(url.clone())
-                .multipart(form)
-                .send()
-                .await
-                .unwrap();
-        }
+        reqwest::Client::new()
+            .post(url.clone())
+            .multipart(form)
+            .send()
+            .await
+            .unwrap();
     }
 }
