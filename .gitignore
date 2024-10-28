@@ -2,5 +2,4 @@
 .idea
 target
 /benchmark/output
-/tests/output
 /tests/code-generation-workspace-split/Cargo.lock
