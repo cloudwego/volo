@@ -1,28 +1,44 @@
-[package]
-name = "code-generation-workspace-split"
-edition = "2021"
-version = "0.0.0"
-publish = false
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [[bin]]
 bench = false
 name = "gen"
 test = false
 
+[dependencies.pilota-build]
+branch = "main"
+git = "https://github.com/cloudwego/pilota"
+
+[dependencies.volo-build]
+workspace = true
+
+[package]
+edition = "2021"
+name = "code-generation-workspace-split"
+publish = false
+version = "0.0.0"
+
 [workspace]
-members = []
+members = [
+    "common",
+    "rpc_article",
+    "rpc_author",
+    "rpc_image",
+]
 
 [workspace.dependencies]
 anyhow = "1"
 async-trait = "0.1"
 lazy_static = "1"
+serde = "1"
 
-pilota = "*"
-volo = "*"
-volo-build = "*"
-volo-thrift = "*"
+[workspace.dependencies.pilota]
+branch = "main"
+git = "https://github.com/cloudwego/pilota"
 
-[dependencies.volo-build]
-workspace = true
+[workspace.dependencies.volo]
+path = "../../volo"
+
+[workspace.dependencies.volo-build]
+path = "../../volo-build"
+
+[workspace.dependencies.volo-thrift]
+path = "../../volo-thrift"
