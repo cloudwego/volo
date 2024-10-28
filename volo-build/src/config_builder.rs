@@ -130,7 +130,9 @@ impl InnerBuilder {
             InnerBuilder::Protobuf(inner) => {
                 InnerBuilder::Protobuf(inner.split_generated_files(split_generated_files))
             }
-            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.split_generated_files(split_generated_files)),
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(inner.split_generated_files(split_generated_files))
+            }
         }
     }
 

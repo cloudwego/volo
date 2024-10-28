@@ -1,5 +1,6 @@
 .vscode
 .idea
 target
-/test
 /benchmark/output
+/tests/output
+/tests/code-generation-workspace-split/Cargo.lock
