@@ -30,9 +30,8 @@ impl CookieStore {
         }
     }
 
-    /// Get [`HeaderValue`] from the cookie jar
-    #[cfg(feature = "client")]
-    pub(crate) fn cookies(&self, request_url: &url::Url) -> Option<HeaderValue> {
+    /// Get [`HeaderValue`] from the cookie store
+    pub fn cookies(&self, request_url: &url::Url) -> Option<HeaderValue> {
         let s = self
             .inner
             .get_request_values(request_url)
