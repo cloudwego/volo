@@ -686,9 +686,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
                 .make()
                 .layer(self.inner_layer.layer(meta_service)),
         );
-        // TODO: add cookie layer
-
-        // TODO: how to implement redirect layer
 
         let caller_name = if self.caller_name.is_empty() {
             FastStr::from_static_str(PKG_NAME_WITH_VER)
