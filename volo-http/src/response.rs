@@ -1,5 +1,6 @@
 //! Response types for client and server.
 
+#[cfg(feature = "cookie")]
 use cookie::Cookie;
 use http::Response;
 
@@ -20,6 +21,7 @@ pub type ClientResponse<B = crate::body::Body> = http::response::Response<B>;
 /// Utilities of [`http::response::Response`].
 pub trait ResponseExt: sealed::SealedResponseExt {
     /// Get all cookies from `Set-Cookie` header.
+    #[cfg(feature = "cookie")]
     fn cookies(&self) -> impl Iterator<Item = Cookie>;
 }
 
@@ -39,6 +41,7 @@ impl<T> ResponseExt for T
 where
     T: sealed::SealedResponseExt,
 {
+    #[cfg(feature = "cookie")]
     fn cookies(&self) -> impl Iterator<Item = Cookie> {
         self.headers()
             .get_all(http::header::SET_COOKIE)

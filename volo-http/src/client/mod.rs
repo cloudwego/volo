@@ -132,7 +132,7 @@ impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
             target_parser: parse_target,
             headers: Default::default(),
             #[cfg(feature = "cookie")]
-            cookie_store: Default::default(),
+            cookie_store: Some(Default::default()),
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
             mk_client: DefaultMkClient,
@@ -979,9 +979,10 @@ mod client_tests {
         convert::Infallible,
         future::Future,
         net::{IpAddr, Ipv4Addr, SocketAddr},
+        time::SystemTime,
     };
 
-    use cookie::Cookie;
+    use cookie::Expiration;
     use http::{header, StatusCode};
     use motore::{
         layer::{Layer, Stack},
@@ -1000,7 +1001,7 @@ mod client_tests {
         context::ServerContext,
         error::client::status_error,
         request::ServerRequest,
-        response::ServerResponse,
+        response::{ResponseExt, ServerResponse},
         server::{test_helpers, IntoResponse},
         utils::consts::HTTP_DEFAULT_PORT,
         ClientBuilder, Server,
@@ -1338,65 +1339,229 @@ mod client_tests {
         tokio::spawn(Server::new(service).run(addr));
 
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-
-        #[tokio::test]
-        async fn extract_cookie_from_server() {
-            async fn handler() -> impl IntoResponse {
-                http::Response::builder()
-                    .header("Set-Cookie", "key=val")
-                    .header(
-                        "Set-Cookie",
-                        "expires=1; Expires=Wed, 21 Oct 2015 07:28:00 GMT",
-                    )
-                    .header("Set-Cookie", "path=1; Path=/the-path")
-                    .header("Set-Cookie", "maxage=1; Max-Age=100")
-                    .header("Set-Cookie", "domain=1; Domain=mydomain")
-                    .header("Set-Cookie", "secure=1; Secure")
-                    .header("Set-Cookie", "httponly=1; HttpOnly")
-                    .header("Set-Cookie", "samesitelax=1; SameSite=Lax")
-                    .header("Set-Cookie", "samesitestrict=1; SameSite=Strict")
-                    .body(Default::default())
-                    .unwrap()
-            }
-
-            let port = 11000;
-
-            run_handler(test_helpers::to_service(handler), port).await;
-
-            let url_str = format!("http://127.0.0.1:{}/", port);
-            let url = url::Url::parse(&url_str).unwrap();
-
-            let mut builder = Client::builder();
-            let client = builder.build();
-
-            let resp = client.get(url).send().await.unwrap();
-        }
     }
 
     #[tokio::test]
-    async fn with_cookie() {
-        let mut builder = Client::builder();
-        builder
-            .header(header::COOKIE.as_str(), "foo=bar; foo1=bar1")
-            .unwrap();
+    async fn extract_cookie_from_server() {
+        async fn handler() -> impl IntoResponse {
+            http::Response::builder()
+                .header("Set-Cookie", "key=val")
+                .header(
+                    "Set-Cookie",
+                    "expires=1; Expires=Tue, 29 Oct 2024 09:49:37 GMT",
+                )
+                .header("Set-Cookie", "path=1; Path=/the-path")
+                .header("Set-Cookie", "maxage=1; Max-Age=100")
+                .header("Set-Cookie", "domain=1; Domain=mydomain")
+                .header("Set-Cookie", "secure=1; Secure")
+                .header("Set-Cookie", "httponly=1; HttpOnly")
+                .header("Set-Cookie", "samesitelax=1; SameSite=Lax")
+                .header("Set-Cookie", "samesitestrict=1; SameSite=Strict")
+                .body("")
+                .unwrap()
+        }
+
+        let port = 11000;
+
+        run_handler(test_helpers::to_service(handler), port).await;
+
+        let url = format!("http://127.0.0.1:{}/", port);
+
+        let builder = Client::builder();
         let client = builder.build();
 
-        let resp = client
-            .get(HTTPBIN_GET)
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
+        let resp = client.get(url).send().await.unwrap();
 
-        let mut actual: Vec<_> = Cookie::split_parse(resp.headers.get("Cookie").unwrap())
-            .filter_map(|parse| parse.ok())
-            .map(|c| (c.name_raw().unwrap(), c.value_raw().unwrap()))
-            .collect();
-        // Hence the order is not guaranteed, so we need to sort before compare
-        actual.sort();
+        let cookies = resp.cookies().collect::<Vec<_>>();
 
-        assert_eq!(actual, vec![("foo", "bar"), ("foo1", "bar1")]);
+        // key=val
+        assert_eq!(cookies[0].name(), "key");
+        assert_eq!(cookies[0].value(), "val");
+
+        // expires
+        assert_eq!(cookies[1].name(), "expires");
+        match cookies[1].expires() {
+            Some(Expiration::DateTime(offset)) => {
+                assert_eq!(
+                    SystemTime::from(offset),
+                    SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_730_195_377)
+                );
+            }
+            _ => {}
+        }
+
+        // path
+        assert_eq!(cookies[2].name(), "path");
+        assert_eq!(cookies[2].path().unwrap(), "/the-path");
+
+        // max-age
+        assert_eq!(cookies[3].name(), "maxage");
+        assert_eq!(
+            cookies[3].max_age().unwrap(),
+            std::time::Duration::from_secs(100)
+        );
+
+        // domain
+        assert_eq!(cookies[4].name(), "domain");
+        assert_eq!(cookies[4].domain().unwrap(), "mydomain");
+
+        // secure
+        assert_eq!(cookies[5].name(), "secure");
+        assert_eq!(cookies[5].secure().unwrap_or(false), true);
+
+        // httponly
+        assert_eq!(cookies[6].name(), "httponly");
+        assert_eq!(cookies[6].http_only().unwrap_or(false), true);
+
+        // samesitelax
+        assert_eq!(cookies[7].name(), "samesitelax");
+        assert_eq!(cookies[7].same_site(), Some(cookie::SameSite::Lax));
+
+        // samesitestrict
+        assert_eq!(cookies[8].name(), "samesitestrict");
+        assert_eq!(cookies[8].same_site(), Some(cookie::SameSite::Strict));
+    }
+
+    #[tokio::test]
+    async fn cookie_store_simple() {
+        async fn handler(req: ServerRequest) -> impl IntoResponse {
+            if req.uri() == "/2" {
+                assert_eq!(req.headers()["cookie"], "key=val");
+            }
+
+            http::Response::builder()
+                .header("Set-Cookie", "key=val; HttpOnly")
+                .body("")
+                .unwrap()
+        }
+
+        let port = 11001;
+
+        run_handler(test_helpers::to_service(handler), port).await;
+
+        let builder = Client::builder();
+        let client = builder.build();
+
+        let url = format!("http://127.0.0.1:{}/", port);
+        client.get(&url).send().await.unwrap();
+
+        let url = format!("http://127.0.0.1:{}/2", port);
+        client.get(&url).send().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cookie_store_overwrite_existing() {
+        async fn handler(req: ServerRequest) -> impl IntoResponse {
+            if req.uri() == "/" {
+                http::Response::builder()
+                    .header("Set-Cookie", "key=val")
+                    .body("")
+                    .unwrap()
+            } else if req.uri() == "/2" {
+                assert_eq!(req.headers()["cookie"], "key=val");
+                http::Response::builder()
+                    .header("Set-Cookie", "key=val2")
+                    .body("")
+                    .unwrap()
+            } else {
+                assert_eq!(req.uri(), "/3");
+                assert_eq!(req.headers()["cookie"], "key=val2");
+                http::Response::default()
+            }
+        }
+
+        let port = 11002;
+
+        run_handler(test_helpers::to_service(handler), port).await;
+
+        let builder = Client::builder();
+        let client = builder.build();
+
+        let url = format!("http://127.0.0.1:{}/", port);
+        client.get(&url).send().await.unwrap();
+
+        let url = format!("http://127.0.0.1:{}/2", port);
+        client.get(&url).send().await.unwrap();
+
+        let url = format!("http://127.0.0.1:{}/3", port);
+        client.get(&url).send().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cookie_store_max_age() {
+        async fn handler(req: ServerRequest) -> impl IntoResponse {
+            assert_eq!(req.headers().get("cookie"), None);
+            http::Response::builder()
+                .header("Set-Cookie", "key=val; Max-Age=0")
+                .body("")
+                .unwrap()
+        }
+
+        let port = 11003;
+
+        run_handler(test_helpers::to_service(handler), port).await;
+
+        let builder = Client::builder();
+        let client = builder.build();
+
+        let url = format!("http://127.0.0.1:{}/", port);
+        client.get(&url).send().await.unwrap();
+        client.get(&url).send().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cookie_store_expires() {
+        async fn handler(req: ServerRequest) -> impl IntoResponse {
+            assert_eq!(req.headers().get("cookie"), None);
+            http::Response::builder()
+                .header(
+                    "Set-Cookie",
+                    "key=val; Expires=Wed, 21 Oct 2015 07:28:00 GMT",
+                )
+                .body("")
+                .unwrap()
+        }
+
+        let port = 11004;
+
+        run_handler(test_helpers::to_service(handler), port).await;
+
+        let builder = Client::builder();
+        let client = builder.build();
+
+        let url = format!("http://127.0.0.1:{}/", port);
+        client.get(&url).send().await.unwrap();
+        client.get(&url).send().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn cookie_store_path() {
+        async fn handler(req: ServerRequest) -> impl IntoResponse {
+            if req.uri() == "/" {
+                assert_eq!(req.headers().get("cookie"), None);
+                http::Response::builder()
+                    .header("Set-Cookie", "key=val; Path=/subpath")
+                    .body("")
+                    .unwrap()
+            } else {
+                assert_eq!(req.uri(), "/subpath");
+                assert_eq!(req.headers()["cookie"], "key=val");
+                http::Response::default()
+            }
+        }
+
+        let port = 11005;
+
+        run_handler(test_helpers::to_service(handler), port).await;
+
+        let builder = Client::builder();
+        let client = builder.build();
+
+        let url = format!("http://127.0.0.1:{}/", port);
+        client.get(&url).send().await.unwrap();
+        client.get(&url).send().await.unwrap();
+
+        let url = format!("http://127.0.0.1:{}/subpath", port);
+        client.get(&url).send().await.unwrap();
     }
 }
