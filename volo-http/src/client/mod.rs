@@ -974,7 +974,12 @@ where
 #[cfg(feature = "json")]
 #[cfg(test)]
 mod client_tests {
-    use std::{collections::HashMap, future::Future};
+    use std::{
+        collections::HashMap,
+        convert::Infallible,
+        future::Future,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+    };
 
     use cookie::Cookie;
     use http::{header, StatusCode};
@@ -983,7 +988,7 @@ mod client_tests {
         service::Service,
     };
     use serde::Deserialize;
-    use volo::{context::Endpoint, layer::Identity};
+    use volo::{context::Endpoint, layer::Identity, net::Address};
 
     use super::{
         callopt::CallOpt,
@@ -991,8 +996,14 @@ mod client_tests {
         get, Client, DefaultClient, Target,
     };
     use crate::{
-        body::BodyConversion, error::client::status_error, utils::consts::HTTP_DEFAULT_PORT,
-        ClientBuilder,
+        body::BodyConversion,
+        context::ServerContext,
+        error::client::status_error,
+        request::ServerRequest,
+        response::ServerResponse,
+        server::{test_helpers, IntoResponse},
+        utils::consts::HTTP_DEFAULT_PORT,
+        ClientBuilder, Server,
     };
 
     #[derive(Deserialize)]
@@ -1310,6 +1321,56 @@ mod client_tests {
 
         let resp = client.get(HTTPBIN_GET).send().await;
         assert!(resp.is_ok());
+    }
+
+    async fn run_handler<S>(service: S, port: u16)
+    where
+        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
+            + Send
+            + Sync
+            + 'static,
+    {
+        let addr = Address::Ip(SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            port,
+        ));
+
+        tokio::spawn(Server::new(service).run(addr));
+
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+
+        #[tokio::test]
+        async fn extract_cookie_from_server() {
+            async fn handler() -> impl IntoResponse {
+                http::Response::builder()
+                    .header("Set-Cookie", "key=val")
+                    .header(
+                        "Set-Cookie",
+                        "expires=1; Expires=Wed, 21 Oct 2015 07:28:00 GMT",
+                    )
+                    .header("Set-Cookie", "path=1; Path=/the-path")
+                    .header("Set-Cookie", "maxage=1; Max-Age=100")
+                    .header("Set-Cookie", "domain=1; Domain=mydomain")
+                    .header("Set-Cookie", "secure=1; Secure")
+                    .header("Set-Cookie", "httponly=1; HttpOnly")
+                    .header("Set-Cookie", "samesitelax=1; SameSite=Lax")
+                    .header("Set-Cookie", "samesitestrict=1; SameSite=Strict")
+                    .body(Default::default())
+                    .unwrap()
+            }
+
+            let port = 11000;
+
+            run_handler(test_helpers::to_service(handler), port).await;
+
+            let url_str = format!("http://127.0.0.1:{}/", port);
+            let url = url::Url::parse(&url_str).unwrap();
+
+            let mut builder = Client::builder();
+            let client = builder.build();
+
+            let resp = client.get(url).send().await.unwrap();
+        }
     }
 
     #[tokio::test]
