@@ -76,7 +76,6 @@ tokio-native-tls = { workspace = true, optional = true }
 # cookie support
 cookie = { workspace = true, optional = true, features = ["percent-encode"] }
 cookie_store = { workspace = true, optional = true }
-idna = { workspace = true, optional = true }
 url = { workspace = true, optional = true }
 
 # serde and form, query, json
@@ -112,7 +111,7 @@ rustls = ["__tls", "dep:tokio-rustls", "volo/rustls"]
 native-tls = ["__tls", "dep:tokio-native-tls", "volo/native-tls"]
 native-tls-vendored = ["native-tls", "volo/native-tls-vendored"]
 
-cookie = ["dep:cookie", "dep:cookie_store", "dep:idna", "dep:url"]
+cookie = ["dep:cookie", "dep:cookie_store", "dep:url"]
 
 __serde = ["dep:serde"] # a private feature for enabling `serde` by `serde_xxx`
 query = ["__serde", "dep:serde_urlencoded"]
