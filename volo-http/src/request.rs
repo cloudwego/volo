@@ -3,7 +3,6 @@
 use http::{
     header::{self, HeaderMap, HeaderName},
     request::{Parts, Request},
-    uri::Scheme,
     Uri,
 };
 
@@ -31,6 +30,7 @@ pub const X_REAL_IP: HeaderName = HeaderName::from_static("x-real-ip");
 pub trait RequestPartsExt: sealed::SealedRequestPartsExt {
     /// Get host name of the request URI from header `Host`.
     fn host(&self) -> Option<&str>;
+    /// Get URL of the request URI.
     fn url(&self) -> Option<url::Url>;
 }
 
@@ -67,11 +67,8 @@ where
     }
 
     fn url(&self) -> Option<url::Url> {
-        let host = self.host();
+        let host = self.host()?;
         let uri = self.uri();
-        if host.is_none() {
-            return None;
-        }
 
         let mut url_str = String::new();
 
@@ -82,7 +79,7 @@ where
             url_str.push_str("http://");
         }
 
-        url_str.push_str(host.unwrap());
+        url_str.push_str(host);
         url_str.push_str(uri.path());
 
         url::Url::parse(url_str.as_str()).ok()

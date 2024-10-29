@@ -1,9 +1,8 @@
-use std::{error::Error, str::FromStr, sync::RwLock};
+use std::{error::Error, sync::RwLock};
 
 use hyper::client::conn::http1;
 use hyper_util::rt::TokioIo;
 use motore::{make::MakeConnection, service::Service};
-use url::Url;
 #[cfg(feature = "__tls")]
 use volo::net::tls::Connector;
 use volo::{
@@ -126,17 +125,20 @@ impl ClientTransport {
         B::Data: Send,
         B::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
     {
-        let url = req.url().unwrap();
+        #[cfg(feature = "cookie")]
+        let url = req.url();
 
         #[cfg(feature = "cookie")]
         {
             let (mut parts, body) = req.into_parts();
             if let Some(cookie_store) = self.cookie_store.as_ref() {
-                if parts.headers.get(http::header::COOKIE).is_none() {
-                    cookie_store
-                        .read()
-                        .unwrap()
-                        .add_cookie_header(&mut parts.headers, &url);
+                if let Some(url) = &url {
+                    if parts.headers.get(http::header::COOKIE).is_none() {
+                        cookie_store
+                            .read()
+                            .unwrap()
+                            .add_cookie_header(&mut parts.headers, url);
+                    }
                 }
             }
 
@@ -159,10 +161,12 @@ impl ClientTransport {
         #[cfg(feature = "cookie")]
         {
             if let Some(ref cookie_store) = self.cookie_store {
-                cookie_store
-                    .write()
-                    .unwrap()
-                    .with_response_headers(resp.headers(), &url);
+                if let Some(url) = &url {
+                    cookie_store
+                        .write()
+                        .unwrap()
+                        .with_response_headers(resp.headers(), url);
+                }
             }
         }
 
