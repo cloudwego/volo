@@ -2,9 +2,8 @@
 //!
 //! See [`Client`] for more details.
 
-use std::{borrow::Cow, cell::RefCell, error::Error, sync::Arc, time::Duration};
+use std::{cell::RefCell, error::Error, sync::Arc, time::Duration};
 
-use cookie::Cookie;
 use faststr::FastStr;
 use http::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
@@ -46,7 +45,7 @@ use crate::{
     },
     request::ClientRequest,
     response::ClientResponse,
-    utils::cookie::CookieJar,
+    utils::cookie::CookieStore,
 };
 
 pub mod callopt;
@@ -85,7 +84,8 @@ pub struct ClientBuilder<IL, OL, C, LB> {
     call_opt: Option<CallOpt>,
     target_parser: TargetParser,
     headers: HeaderMap,
-    cookie_jar: Option<CookieJar>,
+    #[cfg(feature = "cookie")]
+    cookie_store: Option<CookieStore>,
     inner_layer: IL,
     outer_layer: OL,
     mk_client: C,
@@ -131,7 +131,8 @@ impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
             call_opt: Default::default(),
             target_parser: parse_target,
             headers: Default::default(),
-            cookie_jar: Default::default(),
+            #[cfg(feature = "cookie")]
+            cookie_store: Default::default(),
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
             mk_client: DefaultMkClient,
@@ -164,7 +165,8 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            cookie_jar: self.cookie_jar,
+            #[cfg(feature = "cookie")]
+            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -186,7 +188,8 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            cookie_jar: self.cookie_jar,
+            #[cfg(feature = "cookie")]
+            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -211,7 +214,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            cookie_jar: self.cookie_jar,
+            #[cfg(feature = "cookie")]
+            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: new_mk_client,
@@ -245,7 +249,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            cookie_jar: self.cookie_jar,
+            #[cfg(feature = "cookie")]
+            cookie_store: self.cookie_store,
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -282,7 +287,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            cookie_jar: self.cookie_jar,
+            #[cfg(feature = "cookie")]
+            cookie_store: self.cookie_store,
             inner_layer: Stack::new(self.inner_layer, layer),
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -316,7 +322,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            cookie_jar: self.cookie_jar,
+            #[cfg(feature = "cookie")]
+            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
             mk_client: self.mk_client,
@@ -353,7 +360,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            cookie_jar: self.cookie_jar,
+            #[cfg(feature = "cookie")]
+            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
             mk_client: self.mk_client,
@@ -375,7 +383,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            cookie_jar: self.cookie_jar,
+            #[cfg(feature = "cookie")]
+            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -487,58 +496,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             value.try_into().map_err(builder_error)?,
         );
         Ok(self)
-    }
-
-    /// Add single cookie
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use volo_http::ClientBuilder;
-    /// let mut client = ClientBuilder::new();
-    /// client.cookie(("foo", "bar"));
-    /// ```
-    pub fn cookie<CK>(&mut self, cookie: CK) -> &mut Self
-    where
-        CK: Into<Cookie<'static>>,
-    {
-        if self.cookie_jar.is_none() {
-            self.cookie_jar = Some(CookieJar::new());
-        }
-
-        let cookie_jar = self.cookie_jar.as_mut().unwrap();
-
-        cookie_jar.add_original(cookie.into());
-
-        self
-    }
-
-    /// Add cookie with a whole cookie str
-    ///
-    /// ```rust
-    /// use volo_http::ClientBuilder;
-    /// let client = ClientBuilder::new().cookies("foo=bar; ;foo1=bar1");
-    /// ```
-    pub fn cookies<S>(&mut self, s: S) -> &mut Self
-    where
-        S: Into<Cow<'static, str>>,
-    {
-        self.cookie_jar = Some(CookieJar::from_cookie_str(s));
-        self
-    }
-
-    /// Set cookie jar
-    ///
-    /// ```rust
-    /// use volo_http::{utils::cookie::CookieJar, ClientBuilder};
-    ///
-    /// let mut cookie_jar = CookieJar::new();
-    /// cookie_jar.add_original(("foo", "bar"));
-    /// let client = ClientBuilder::new().cookie_jar(cookie_jar);
-    /// ```
-    pub fn cookie_jar(&mut self, cookie_jar: CookieJar) -> &mut Self {
-        self.cookie_jar = Some(cookie_jar);
-        self
     }
 
     /// Get a reference of [`Target`].
@@ -718,6 +675,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             self.http_config,
             transport_config,
             self.connector,
+            #[cfg(feature = "cookie")]
+            self.cookie_store,
             #[cfg(feature = "__tls")]
             self.tls_config.unwrap_or_default(),
         );
@@ -727,6 +686,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
                 .make()
                 .layer(self.inner_layer.layer(meta_service)),
         );
+        // TODO: add cookie layer
+
+        // TODO: how to implement redirect layer
 
         let caller_name = if self.caller_name.is_empty() {
             FastStr::from_static_str(PKG_NAME_WITH_VER)
@@ -738,13 +700,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
                 header::USER_AGENT,
                 HeaderValue::from_str(caller_name.as_str()).expect("Invalid caller name"),
             );
-        }
-
-        // Add cookies
-        if let Some(cookie_jar) = self.cookie_jar.as_ref() {
-            if let Some(cookie) = cookie_jar.cookies() {
-                self.headers.insert(header::COOKIE, cookie);
-            }
         }
 
         let config = Config {
@@ -1036,9 +991,7 @@ mod client_tests {
         get, Client, DefaultClient, Target,
     };
     use crate::{
-        body::BodyConversion,
-        error::client::status_error,
-        utils::{consts::HTTP_DEFAULT_PORT, cookie::CookieJar},
+        body::BodyConversion, error::client::status_error, utils::consts::HTTP_DEFAULT_PORT,
         ClientBuilder,
     };
 
@@ -1362,61 +1315,9 @@ mod client_tests {
     #[tokio::test]
     async fn with_cookie() {
         let mut builder = Client::builder();
-        builder.cookie(("foo", "bar"));
-        builder.cookie(("foo1", "bar1"));
-        let client = builder.build();
-
-        let resp = client
-            .get(HTTPBIN_GET)
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
+        builder
+            .header(header::COOKIE.as_str(), "foo=bar; foo1=bar1")
             .unwrap();
-
-        let mut actual: Vec<_> = Cookie::split_parse(resp.headers.get("Cookie").unwrap())
-            .filter_map(|parse| parse.ok())
-            .map(|c| (c.name_raw().unwrap(), c.value_raw().unwrap()))
-            .collect();
-        // Hence the order is not guaranteed, so we need to sort before compare
-        actual.sort();
-
-        assert_eq!(actual, vec![("foo", "bar"), ("foo1", "bar1")]);
-    }
-
-    #[tokio::test]
-    async fn with_cookies() {
-        let mut builder = Client::builder();
-        builder.cookies("foo=bar; foo1=bar1");
-        let client = builder.build();
-
-        let resp = client
-            .get(HTTPBIN_GET)
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-
-        let mut actual: Vec<_> = Cookie::split_parse(resp.headers.get("Cookie").unwrap())
-            .filter_map(|parse| parse.ok())
-            .map(|c| (c.name_raw().unwrap(), c.value_raw().unwrap()))
-            .collect();
-        // Hence the order is not guaranteed, so we need to sort before compare
-        actual.sort();
-
-        assert_eq!(actual, vec![("foo", "bar"), ("foo1", "bar1")]);
-    }
-
-    #[tokio::test]
-    async fn with_cookie_jar() {
-        let mut cookie_jar = CookieJar::new();
-        cookie_jar.add_original(("foo", "bar"));
-        cookie_jar.add_original(("foo1", "bar1"));
-        let mut builder = Client::builder();
-        builder.cookie_jar(cookie_jar);
         let client = builder.build();
 
         let resp = client
