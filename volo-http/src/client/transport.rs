@@ -26,6 +26,7 @@ use crate::{
 #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 pub struct TlsTransport;
 
+#[derive(Clone)]
 pub struct ClientTransport {
     client: http1::Builder,
     mk_conn: DefaultMakeTransport,
