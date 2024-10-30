@@ -10,7 +10,6 @@ use crate::{
     utils::cookie::CookieStore,
 };
 
-#[cfg(feature = "cookie")]
 pub struct CookieService<S> {
     inner: S,
     cookie_store: RwLock<CookieStore>,
@@ -68,7 +67,6 @@ where
     }
 }
 
-#[cfg(feature = "cookie")]
 pub struct CookieLayer {
     cookie_store: RwLock<CookieStore>,
 }
