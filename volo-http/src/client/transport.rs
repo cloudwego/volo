@@ -1,4 +1,4 @@
-use std::{error::Error, sync::RwLock};
+use std::error::Error;
 
 use hyper::client::conn::http1;
 use hyper_util::rt::TokioIo;
@@ -10,12 +10,10 @@ use volo::{
     net::{conn::Conn, dial::DefaultMakeTransport, Address},
 };
 
-#[cfg(feature = "cookie")]
-use crate::utils::cookie::CookieStore;
 use crate::{
     context::ClientContext,
     error::client::{no_address, request_error, ClientError},
-    request::{ClientRequest, RequestPartsExt},
+    request::ClientRequest,
     response::ClientResponse,
 };
 
@@ -32,8 +30,6 @@ pub struct ClientTransport {
     client: http1::Builder,
     mk_conn: DefaultMakeTransport,
     config: ClientTransportConfig,
-    #[cfg(feature = "cookie")]
-    cookie_store: Option<RwLock<CookieStore>>,
     #[cfg(feature = "__tls")]
     tls_connector: volo::net::tls::TlsConnector,
 }
@@ -43,7 +39,6 @@ impl ClientTransport {
         http_config: ClientConfig,
         transport_config: ClientTransportConfig,
         mk_conn: DefaultMakeTransport,
-        #[cfg(feature = "cookie")] cookie_store: Option<CookieStore>,
         #[cfg(feature = "__tls")] tls_connector: volo::net::tls::TlsConnector,
     ) -> Self {
         let mut builder = http1::Builder::new();
@@ -58,8 +53,6 @@ impl ClientTransport {
             client: builder,
             mk_conn,
             config: transport_config,
-            #[cfg(feature = "cookie")]
-            cookie_store: cookie_store.map(RwLock::new),
             #[cfg(feature = "__tls")]
             tls_connector,
         }
@@ -118,33 +111,13 @@ impl ClientTransport {
     async fn request<B>(
         &self,
         cx: &ClientContext,
-        mut req: ClientRequest<B>,
+        req: ClientRequest<B>,
     ) -> Result<ClientResponse, ClientError>
     where
         B: http_body::Body + Send + 'static,
         B::Data: Send,
         B::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
     {
-        #[cfg(feature = "cookie")]
-        let url = req.url();
-
-        #[cfg(feature = "cookie")]
-        {
-            let (mut parts, body) = req.into_parts();
-            if let Some(cookie_store) = self.cookie_store.as_ref() {
-                if let Some(url) = &url {
-                    if parts.headers.get(http::header::COOKIE).is_none() {
-                        cookie_store
-                            .read()
-                            .unwrap()
-                            .add_cookie_header(&mut parts.headers, url);
-                    }
-                }
-            }
-
-            req = ClientRequest::from_parts(parts, body);
-        }
-
         tracing::trace!("[Volo-HTTP] requesting {}", req.uri());
         let conn = self.make_connection(cx).await?;
         let io = TokioIo::new(conn);
@@ -157,19 +130,6 @@ impl ClientTransport {
             tracing::error!("[Volo-HTTP] failed to send request, error: {err}");
             request_error(err)
         })?;
-
-        #[cfg(feature = "cookie")]
-        {
-            if let Some(ref cookie_store) = self.cookie_store {
-                if let Some(url) = &url {
-                    cookie_store
-                        .write()
-                        .unwrap()
-                        .with_response_headers(resp.headers(), url);
-                }
-            }
-        }
-
         Ok(resp.map(crate::body::Body::from_incoming))
     }
 }

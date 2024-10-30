@@ -6,7 +6,7 @@ use http::{header, HeaderMap, HeaderValue};
 
 /// A cooke jar that can be extracted from a handler.
 #[derive(Default)]
-pub(crate) struct CookieStore {
+pub struct CookieStore {
     inner: cookie_store::CookieStore,
 }
 

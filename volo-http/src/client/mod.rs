@@ -38,6 +38,7 @@ use self::{
     transport::{ClientConfig, ClientTransport, ClientTransportConfig},
 };
 use crate::{
+    client::cookie::CookieLayer,
     context::{client::Config, ClientContext},
     error::{
         client::{builder_error, no_address, ClientError, Result},
@@ -45,10 +46,11 @@ use crate::{
     },
     request::ClientRequest,
     response::ClientResponse,
-    utils::cookie::CookieStore,
 };
 
 pub mod callopt;
+#[cfg(feature = "cookie")]
+mod cookie;
 pub mod dns;
 pub mod loadbalance;
 mod meta;
@@ -84,8 +86,6 @@ pub struct ClientBuilder<IL, OL, C, LB> {
     call_opt: Option<CallOpt>,
     target_parser: TargetParser,
     headers: HeaderMap,
-    #[cfg(feature = "cookie")]
-    cookie_store: Option<CookieStore>,
     inner_layer: IL,
     outer_layer: OL,
     mk_client: C,
@@ -131,8 +131,6 @@ impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
             call_opt: Default::default(),
             target_parser: parse_target,
             headers: Default::default(),
-            #[cfg(feature = "cookie")]
-            cookie_store: Some(Default::default()),
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
             mk_client: DefaultMkClient,
@@ -165,8 +163,6 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            #[cfg(feature = "cookie")]
-            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -188,8 +184,6 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            #[cfg(feature = "cookie")]
-            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -214,8 +208,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            #[cfg(feature = "cookie")]
-            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: new_mk_client,
@@ -249,8 +241,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            #[cfg(feature = "cookie")]
-            cookie_store: self.cookie_store,
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -287,8 +277,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            #[cfg(feature = "cookie")]
-            cookie_store: self.cookie_store,
             inner_layer: Stack::new(self.inner_layer, layer),
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -322,8 +310,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            #[cfg(feature = "cookie")]
-            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
             mk_client: self.mk_client,
@@ -360,8 +346,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            #[cfg(feature = "cookie")]
-            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
             mk_client: self.mk_client,
@@ -383,8 +367,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
-            #[cfg(feature = "cookie")]
-            cookie_store: self.cookie_store,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             mk_client: self.mk_client,
@@ -654,6 +636,28 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         self
     }
 
+    /// Enable cookie for the client.
+    #[cfg(feature = "cookie")]
+    pub fn set_cookie_layer(self) -> ClientBuilder<Stack<CookieLayer, IL>, OL, C, LB> {
+        ClientBuilder {
+            http_config: self.http_config,
+            builder_config: self.builder_config,
+            connector: self.connector,
+            callee_name: self.callee_name,
+            caller_name: self.caller_name,
+            target: self.target,
+            call_opt: self.call_opt,
+            target_parser: self.target_parser,
+            headers: self.headers,
+            inner_layer: Stack::new(CookieLayer::new(Default::default()), self.inner_layer),
+            outer_layer: self.outer_layer,
+            mk_client: self.mk_client,
+            mk_lb: self.mk_lb,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
     /// Build the HTTP client.
     pub fn build(mut self) -> C::Target
     where
@@ -675,8 +679,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             self.http_config,
             transport_config,
             self.connector,
-            #[cfg(feature = "cookie")]
-            self.cookie_store,
             #[cfg(feature = "__tls")]
             self.tls_config.unwrap_or_default(),
         );
@@ -698,7 +700,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
                 HeaderValue::from_str(caller_name.as_str()).expect("Invalid caller name"),
             );
         }
-
         let config = Config {
             timeout: self.builder_config.timeout,
             fail_on_error_status: self.builder_config.fail_on_error_status,
@@ -1365,7 +1366,7 @@ mod client_tests {
         let url = format!("http://127.0.0.1:{}/", port);
 
         let builder = Client::builder();
-        let client = builder.build();
+        let client = builder.set_cookie_layer().build();
 
         let resp = client.get(url).send().await.unwrap();
 
@@ -1437,7 +1438,7 @@ mod client_tests {
         run_handler(test_helpers::to_service(handler), port).await;
 
         let builder = Client::builder();
-        let client = builder.build();
+        let client = builder.set_cookie_layer().build();
 
         let url = format!("http://127.0.0.1:{}/", port);
         client.get(&url).send().await.unwrap();
@@ -1472,7 +1473,7 @@ mod client_tests {
         run_handler(test_helpers::to_service(handler), port).await;
 
         let builder = Client::builder();
-        let client = builder.build();
+        let client = builder.set_cookie_layer().build();
 
         let url = format!("http://127.0.0.1:{}/", port);
         client.get(&url).send().await.unwrap();
@@ -1499,7 +1500,7 @@ mod client_tests {
         run_handler(test_helpers::to_service(handler), port).await;
 
         let builder = Client::builder();
-        let client = builder.build();
+        let client = builder.set_cookie_layer().build();
 
         let url = format!("http://127.0.0.1:{}/", port);
         client.get(&url).send().await.unwrap();
@@ -1524,7 +1525,7 @@ mod client_tests {
         run_handler(test_helpers::to_service(handler), port).await;
 
         let builder = Client::builder();
-        let client = builder.build();
+        let client = builder.set_cookie_layer().build();
 
         let url = format!("http://127.0.0.1:{}/", port);
         client.get(&url).send().await.unwrap();
@@ -1552,7 +1553,7 @@ mod client_tests {
         run_handler(test_helpers::to_service(handler), port).await;
 
         let builder = Client::builder();
-        let client = builder.build();
+        let client = builder.set_cookie_layer().build();
 
         let url = format!("http://127.0.0.1:{}/", port);
         client.get(&url).send().await.unwrap();
