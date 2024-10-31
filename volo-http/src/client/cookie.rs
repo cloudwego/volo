@@ -80,10 +80,10 @@ pub struct CookieLayer {
 }
 
 impl CookieLayer {
-    /// Create a new [`CookieLayer`] with the given [`CookieStore`].
+    /// Create a new [`CookieLayer`] with the given [` CookieStore`](cookie_store::CookieStore).
     ///
-    /// It will set cookies from the [`CookieStore`] into the request header before sending the
-    /// request,
+    /// It will set cookies from the [`CookieStore`](cookie_store::CookieStore) into the request
+    /// header before sending the request,
     ///
     /// and store cookies after receiving the response.
     ///
@@ -101,9 +101,9 @@ impl CookieLayer {
     ///     .layer_inner(CookieLayer::new(Default::default()))
     ///     .build();
     /// ```
-    pub fn new(cookie_store: CookieStore) -> Self {
+    pub fn new(cookie_store: cookie_store::CookieStore) -> Self {
         Self {
-            cookie_store: RwLock::new(cookie_store),
+            cookie_store: RwLock::new(CookieStore::new(cookie_store)),
         }
     }
 }
