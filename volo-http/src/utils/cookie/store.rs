@@ -4,7 +4,6 @@ use bytes::Bytes;
 use cookie::Cookie;
 use http::{header, HeaderMap, HeaderValue};
 
-/// A cooke jar that can be extracted from a handler.
 #[derive(Default)]
 pub struct CookieStore {
     inner: cookie_store::CookieStore,
@@ -17,7 +16,7 @@ impl CookieStore {
         }
     }
 
-    pub fn with_response_headers(&mut self, headers: &HeaderMap, request_url: &url::Url) {
+    pub fn store_response_headers(&mut self, headers: &HeaderMap, request_url: &url::Url) {
         let mut set_cookie_headers = headers.get_all(header::SET_COOKIE).iter().peekable();
 
         if set_cookie_headers.peek().is_some() {
@@ -35,7 +34,13 @@ impl CookieStore {
         let s = self
             .inner
             .get_request_values(request_url)
-            .map(|(name, value)| format!("{name}={value}"))
+            .map(|(name, value)| {
+                let mut s = String::with_capacity(name.len() + value.len() + 1);
+                s.push_str(name);
+                s.push('=');
+                s.push_str(value);
+                s
+            })
             .collect::<Vec<_>>()
             .join("; ");
 
