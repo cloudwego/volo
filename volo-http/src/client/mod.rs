@@ -964,12 +964,12 @@ mod client_tests {
         dns::{parse_target, DnsResolver},
         get, Client, DefaultClient, Target,
     };
-    #[cfg(feature = "cookie")]
-    use crate::client::cookie::CookieLayer;
     use crate::{
-        body::BodyConversion, error::client::status_error, response::ResponseExt,
-        utils::consts::HTTP_DEFAULT_PORT, ClientBuilder,
+        body::BodyConversion, error::client::status_error, utils::consts::HTTP_DEFAULT_PORT,
+        ClientBuilder,
     };
+    #[cfg(feature = "cookie")]
+    use crate::{client::cookie::CookieLayer, response::ResponseExt};
 
     #[derive(Deserialize)]
     struct HttpBinResponse {
