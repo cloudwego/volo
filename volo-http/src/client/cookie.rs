@@ -89,7 +89,8 @@ impl CookieLayer {
     ///
     /// It is recommended to use [`CookieLayer`] as the innermost layer in the client stack,
     ///
-    /// since it will extract cookies from the request header and store them in the [`CookieStore`].
+    /// since it will extract cookies from the request header and store them before and after call
+    /// the transport layer.
     ///
     /// # Example
     ///
