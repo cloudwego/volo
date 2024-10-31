@@ -964,9 +964,11 @@ mod client_tests {
         dns::{parse_target, DnsResolver},
         get, Client, DefaultClient, Target,
     };
+    #[cfg(feature = "cookie")]
+    use crate::client::cookie::CookieLayer;
     use crate::{
-        body::BodyConversion, client::cookie::CookieLayer, error::client::status_error,
-        response::ResponseExt, utils::consts::HTTP_DEFAULT_PORT, ClientBuilder,
+        body::BodyConversion, error::client::status_error, response::ResponseExt,
+        utils::consts::HTTP_DEFAULT_PORT, ClientBuilder,
     };
 
     #[derive(Deserialize)]
@@ -1286,6 +1288,7 @@ mod client_tests {
         assert!(resp.is_ok());
     }
 
+    #[cfg(feature = "cookie")]
     #[tokio::test]
     async fn cookie_store() {
         let mut builder = Client::builder().layer_inner(CookieLayer::new(Default::default()));
