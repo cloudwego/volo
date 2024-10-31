@@ -45,6 +45,10 @@ impl CookieStore {
             size += key.len() + value.len() + 3;
         }
 
+        if size == 0 {
+            return None;
+        }
+
         let mut s = String::with_capacity(size);
 
         for (name, value) in cookie_iter {
@@ -52,10 +56,6 @@ impl CookieStore {
             s.push('=');
             s.push_str(value);
             s.push_str("; ");
-        }
-
-        if s.is_empty() {
-            return None;
         }
 
         HeaderValue::from_maybe_shared(Bytes::from(s)).ok()
