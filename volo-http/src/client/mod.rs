@@ -72,7 +72,7 @@ const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO
 pub type ClientMetaService = MetaService<ClientTransport>;
 /// Default [`Client`] without any extra [`Layer`]s
 pub type DefaultClient<IL = Identity, OL = Identity> =
-    Client<<OL as Layer<DefaultLBService<<IL as Layer<ClientMetaService>>::Service>>>::Service>;
+Client<<OL as Layer<DefaultLBService<<IL as Layer<ClientMetaService>>::Service>>>::Service>;
 
 /// A builder for configuring an HTTP [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB> {
@@ -844,10 +844,10 @@ impl<S> Client<S> {
         timeout: Option<Duration>,
     ) -> Result<S::Response, S::Error>
     where
-        S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
-            + Send
-            + Sync
-            + 'static,
+        S: Service<ClientContext, ClientRequest<B>, Response=ClientResponse, Error=ClientError>
+        + Send
+        + Sync
+        + 'static,
         B: Send + 'static,
     {
         let caller_name = self.inner.caller_name.clone();
@@ -897,10 +897,10 @@ impl<S> Client<S> {
 
 impl<S, B> Service<ClientContext, ClientRequest<B>> for Client<S>
 where
-    S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ClientContext, ClientRequest<B>, Response=ClientResponse, Error=ClientError>
+    + Send
+    + Sync
+    + 'static,
     B: Send + 'static,
 {
     type Response = S::Response;
@@ -951,9 +951,7 @@ where
 mod client_tests {
     use std::{
         collections::HashMap,
-        convert::Infallible,
         future::Future,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
     };
 
     use http::{header, StatusCode};
@@ -962,7 +960,7 @@ mod client_tests {
         service::Service,
     };
     use serde::Deserialize;
-    use volo::{context::Endpoint, layer::Identity, net::Address};
+    use volo::{context::Endpoint, layer::Identity};
 
     use super::{
         callopt::CallOpt,
@@ -972,14 +970,11 @@ mod client_tests {
     use crate::{
         body::BodyConversion,
         client::cookie::CookieLayer,
-        context::ServerContext,
         error::client::status_error,
-        request::ServerRequest,
-        response::ServerResponse,
-        server::{test_helpers, IntoResponse},
         utils::consts::HTTP_DEFAULT_PORT,
-        ClientBuilder, Server,
+        ClientBuilder,
     };
+    use crate::response::ResponseExt;
 
     #[derive(Deserialize)]
     struct HttpBinResponse {
@@ -1022,7 +1017,7 @@ mod client_tests {
                 &self,
                 cx: &mut Cx,
                 req: Req,
-            ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
+            ) -> impl Future<Output=Result<Self::Response, Self::Error>> + Send {
                 self.inner.call(cx, req)
             }
         }
@@ -1298,51 +1293,25 @@ mod client_tests {
         assert!(resp.is_ok());
     }
 
-    async fn run_handler<S>(service: S, port: u16)
-    where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
-            + Send
-            + Sync
-            + 'static,
-    {
-        let addr = Address::Ip(SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            port,
-        ));
-
-        tokio::spawn(Server::new(service).run(addr));
-
-        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    }
-
     #[tokio::test]
     async fn cookie_store() {
-        async fn handler(req: ServerRequest) -> impl IntoResponse {
-            // test cookie header after server set cookie
-            if req.uri() == "/2" {
-                assert_eq!(req.headers()["cookie"], "key=val");
-            }
+        let mut builder = Client::builder()
+            .layer_inner(CookieLayer::new(Default::default()));
 
-            // test server set cookie
-            http::Response::builder()
-                .header("Set-Cookie", "key=val")
-                .body("")
-                .unwrap()
-        }
+        builder.host("httpbin.org");
 
-        let port = 11001;
+        let client = builder.build();
 
-        run_handler(test_helpers::to_service(handler), port).await;
+        // test server add cookie
+        let resp = client.get("http://httpbin.org/cookies/set?key=value").send().await.unwrap();
+        let cookies = resp.cookies().collect::<Vec<_>>();
+        assert_eq!(cookies[0].name(), "key");
+        assert_eq!(cookies[0].value(), "value");
 
-        let builder = Client::builder();
-        let client = builder
-            .layer_inner(CookieLayer::new(Default::default()))
-            .build();
-
-        let url = format!("http://127.0.0.1:{}/", port);
-        client.get(&url).send().await.unwrap();
-
-        let url = format!("http://127.0.0.1:{}/2", port);
-        client.get(&url).send().await.unwrap();
+        // test server delete cookie
+        _ = client.get("http://httpbin.org/cookies/delete?key").send().await.unwrap();
+        let resp = client.get(HTTPBIN_GET).send().await.unwrap();
+        let cookies = resp.cookies().collect::<Vec<_>>();
+        assert_eq!(cookies.len(), 0)
     }
 }
