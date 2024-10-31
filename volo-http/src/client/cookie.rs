@@ -1,6 +1,8 @@
 //! Cookie implementation
 //!
 //! This module provides [`CookieLayer`] for extracting and setting cookies.
+//!
+//! See [`CookieLayer`] for more details.
 
 use motore::{layer::Layer, Service};
 use parking_lot::RwLock;
