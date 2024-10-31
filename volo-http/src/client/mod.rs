@@ -72,7 +72,7 @@ const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO
 pub type ClientMetaService = MetaService<ClientTransport>;
 /// Default [`Client`] without any extra [`Layer`]s
 pub type DefaultClient<IL = Identity, OL = Identity> =
-Client<<OL as Layer<DefaultLBService<<IL as Layer<ClientMetaService>>::Service>>>::Service>;
+    Client<<OL as Layer<DefaultLBService<<IL as Layer<ClientMetaService>>::Service>>>::Service>;
 
 /// A builder for configuring an HTTP [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB> {
@@ -844,10 +844,10 @@ impl<S> Client<S> {
         timeout: Option<Duration>,
     ) -> Result<S::Response, S::Error>
     where
-        S: Service<ClientContext, ClientRequest<B>, Response=ClientResponse, Error=ClientError>
-        + Send
-        + Sync
-        + 'static,
+        S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
+            + Send
+            + Sync
+            + 'static,
         B: Send + 'static,
     {
         let caller_name = self.inner.caller_name.clone();
@@ -897,10 +897,10 @@ impl<S> Client<S> {
 
 impl<S, B> Service<ClientContext, ClientRequest<B>> for Client<S>
 where
-    S: Service<ClientContext, ClientRequest<B>, Response=ClientResponse, Error=ClientError>
-    + Send
-    + Sync
-    + 'static,
+    S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
+        + Send
+        + Sync
+        + 'static,
     B: Send + 'static,
 {
     type Response = S::Response;
@@ -949,10 +949,7 @@ where
 #[cfg(feature = "json")]
 #[cfg(test)]
 mod client_tests {
-    use std::{
-        collections::HashMap,
-        future::Future,
-    };
+    use std::{collections::HashMap, future::Future};
 
     use http::{header, StatusCode};
     use motore::{
@@ -968,13 +965,9 @@ mod client_tests {
         get, Client, DefaultClient, Target,
     };
     use crate::{
-        body::BodyConversion,
-        client::cookie::CookieLayer,
-        error::client::status_error,
-        utils::consts::HTTP_DEFAULT_PORT,
-        ClientBuilder,
+        body::BodyConversion, client::cookie::CookieLayer, error::client::status_error,
+        response::ResponseExt, utils::consts::HTTP_DEFAULT_PORT, ClientBuilder,
     };
-    use crate::response::ResponseExt;
 
     #[derive(Deserialize)]
     struct HttpBinResponse {
@@ -1017,7 +1010,7 @@ mod client_tests {
                 &self,
                 cx: &mut Cx,
                 req: Req,
-            ) -> impl Future<Output=Result<Self::Response, Self::Error>> + Send {
+            ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
                 self.inner.call(cx, req)
             }
         }
@@ -1295,21 +1288,28 @@ mod client_tests {
 
     #[tokio::test]
     async fn cookie_store() {
-        let mut builder = Client::builder()
-            .layer_inner(CookieLayer::new(Default::default()));
+        let mut builder = Client::builder().layer_inner(CookieLayer::new(Default::default()));
 
         builder.host("httpbin.org");
 
         let client = builder.build();
 
         // test server add cookie
-        let resp = client.get("http://httpbin.org/cookies/set?key=value").send().await.unwrap();
+        let resp = client
+            .get("http://httpbin.org/cookies/set?key=value")
+            .send()
+            .await
+            .unwrap();
         let cookies = resp.cookies().collect::<Vec<_>>();
         assert_eq!(cookies[0].name(), "key");
         assert_eq!(cookies[0].value(), "value");
 
         // test server delete cookie
-        _ = client.get("http://httpbin.org/cookies/delete?key").send().await.unwrap();
+        _ = client
+            .get("http://httpbin.org/cookies/delete?key")
+            .send()
+            .await
+            .unwrap();
         let resp = client.get(HTTPBIN_GET).send().await.unwrap();
         let cookies = resp.cookies().collect::<Vec<_>>();
         assert_eq!(cookies.len(), 0)
