@@ -94,9 +94,9 @@ where
     type Response = Response<BoxBody>;
     type Error = Status;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ServerContext,
+    async fn call(
+        &self,
+        cx: &mut ServerContext,
         req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let path = cx.rpc_info.method();

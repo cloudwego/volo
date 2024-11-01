@@ -529,11 +529,7 @@ where
 
     type Error = ClientError;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ClientContext,
-        req: Req,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn call(&self, cx: &mut ClientContext, req: Req) -> Result<Self::Response, Self::Error> {
         let msg = ThriftMessage::mk_client_msg(cx, req);
         let resp = self.inner.call(cx, msg).await;
         if self.read_biz_error {
@@ -742,9 +738,9 @@ macro_rules! impl_client {
             type Response = S::Response;
             type Error = S::Error;
 
-            async fn call<'s, 'cx>(
-                &'s $self,
-                $cx: &'cx mut crate::context::ClientContext,
+            async fn call(
+                &$self,
+                $cx: &mut crate::context::ClientContext,
                 $req: Req,
             ) -> Result<Self::Response, Self::Error> {
                 $e
@@ -766,9 +762,9 @@ macro_rules! impl_client {
             type Response = S::Response;
             type Error = S::Error;
 
-            async fn call<'cx>(
+            async fn call(
                 $self,
-                $cx: &'cx mut crate::context::ClientContext,
+                $cx: &mut crate::context::ClientContext,
                 $req: Req,
             ) -> Result<Self::Response, Self::Error> {
                 $e

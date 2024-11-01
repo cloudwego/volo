@@ -35,9 +35,9 @@ where
 
     type Error = S::Error;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ClientContext,
+    async fn call(
+        &self,
+        cx: &mut ClientContext,
         mut volo_req: Request<T>,
     ) -> Result<Self::Response, Self::Error> {
         let metadata = volo_req.metadata_mut();

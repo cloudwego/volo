@@ -95,9 +95,9 @@ where
     type Response = S::Response;
     type Error = Status;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut Cx,
+    async fn call(
+        &self,
+        cx: &mut Cx,
         req: hyper::Request<ReqBody>,
     ) -> Result<Self::Response, Self::Error> {
         // parse the client_timeout

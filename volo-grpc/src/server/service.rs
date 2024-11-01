@@ -121,9 +121,9 @@ where
     type Response = Response<BoxBody>;
     type Error = Status;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ServerContext,
+    async fn call(
+        &self,
+        cx: &mut ServerContext,
         req: Request<BoxBody>,
     ) -> Result<Self::Response, Self::Error> {
         let (metadata, extensions, body) = req.into_parts();

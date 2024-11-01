@@ -57,11 +57,7 @@ where
 
     type Error = S::Error;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut Cx,
-        req: Req,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn call(&self, cx: &mut Cx, req: Req) -> Result<Self::Response, Self::Error> {
         let callee = cx.rpc_info().callee();
 
         let picker = match &callee.address {
