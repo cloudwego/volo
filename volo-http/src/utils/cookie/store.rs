@@ -67,6 +67,7 @@ impl CookieStore {
         s.push_str(first.1);
 
         for (key, value) in cookie_iter {
+            s.push_str("; ");
             s.push_str(key);
             s.push('=');
             s.push_str(value);
