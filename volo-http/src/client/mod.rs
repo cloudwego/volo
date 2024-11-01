@@ -1335,11 +1335,6 @@ mod client_tests {
             .send()
             .await
             .unwrap();
-        _ = client
-            .get("http://httpbin.org/delete?key")
-            .send()
-            .await
-            .unwrap();
         let resp = client
             .get("http://httpbin.org/cookies")
             .send()
