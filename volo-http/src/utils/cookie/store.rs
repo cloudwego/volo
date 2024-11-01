@@ -37,11 +37,13 @@ impl CookieStore {
 
     /// Get [`HeaderValue`] from the cookie store
     pub fn cookies(&self, request_url: &url::Url) -> Option<HeaderValue> {
-        let mut cookie_iter = self.inner.get_request_values(request_url);
+        let cookie_iter = self.inner.get_request_values(request_url);
 
         let mut size = 0;
 
-        for (key, value) in cookie_iter.by_ref() {
+        let cookies: Vec<(&str, &str)> = cookie_iter.collect::<Vec<_>>();
+
+        for (key, value) in &cookies {
             size += key.len() + value.len() + 3;
         }
 
@@ -51,7 +53,7 @@ impl CookieStore {
 
         let mut s = String::with_capacity(size);
 
-        for (name, value) in cookie_iter {
+        for (name, value) in cookies {
             s.push_str(name);
             s.push('=');
             s.push_str(value);

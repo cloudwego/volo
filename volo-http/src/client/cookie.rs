@@ -5,7 +5,7 @@
 //! See [`CookieLayer`] for more details.
 
 use motore::{layer::Layer, Service};
-use parking_lot::RwLock;
+use tokio::sync::Mutex;
 
 use crate::{
     context::ClientContext,
@@ -20,11 +20,11 @@ use crate::{
 /// See [`CookieLayer`] for more details.
 pub struct CookieService<S> {
     inner: S,
-    cookie_store: RwLock<CookieStore>,
+    cookie_store: Mutex<CookieStore>,
 }
 
 impl<S> CookieService<S> {
-    fn new(inner: S, cookie_store: RwLock<CookieStore>) -> Self {
+    fn new(inner: S, cookie_store: Mutex<CookieStore>) -> Self {
         Self {
             inner,
             cookie_store,
@@ -54,7 +54,8 @@ where
             let (mut parts, body) = req.into_parts();
             if parts.headers.get(http::header::COOKIE).is_none() {
                 self.cookie_store
-                    .read()
+                    .lock()
+                    .await
                     .add_cookie_header(&mut parts.headers, url);
             }
             req = ClientRequest::from_parts(parts, body);
@@ -64,7 +65,8 @@ where
 
         if let Some(url) = &url {
             self.cookie_store
-                .write()
+                .lock()
+                .await
                 .store_response_headers(resp.headers(), url);
         }
 
@@ -76,7 +78,7 @@ where
 ///
 /// See [`CookieLayer::new`] for more details.
 pub struct CookieLayer {
-    cookie_store: RwLock<CookieStore>,
+    cookie_store: Mutex<CookieStore>,
 }
 
 impl CookieLayer {
@@ -103,7 +105,7 @@ impl CookieLayer {
     /// ```
     pub fn new(cookie_store: cookie_store::CookieStore) -> Self {
         Self {
-            cookie_store: RwLock::new(CookieStore::new(cookie_store)),
+            cookie_store: Mutex::new(CookieStore::new(cookie_store)),
         }
     }
 }

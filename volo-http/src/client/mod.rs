@@ -7,7 +7,7 @@ use std::{cell::RefCell, error::Error, sync::Arc, time::Duration};
 use faststr::FastStr;
 use http::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
-    uri::Uri,
+    uri::{Scheme, Uri},
     Method,
 };
 use metainfo::{MetaInfo, METAINFO};
@@ -882,6 +882,15 @@ impl<S> Client<S> {
             request.headers_mut().insert(header::HOST, host);
         }
 
+        #[cfg(feature = "cookie")]
+        {
+            let scheme = match target.is_https() {
+                true => Scheme::HTTPS,
+                false => Scheme::HTTP,
+            };
+            request.extensions_mut().insert(scheme);
+        }
+
         let mut cx = ClientContext::new();
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
         cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
@@ -1307,14 +1316,36 @@ mod client_tests {
         assert_eq!(cookies[0].name(), "key");
         assert_eq!(cookies[0].value(), "value");
 
+        #[derive(serde::Deserialize)]
+        struct CookieResponse {
+            #[serde(default)]
+            cookies: HashMap<String, String>,
+        }
+        let resp = client
+            .get("http://httpbin.org/cookies")
+            .send()
+            .await
+            .unwrap();
+        let json = resp.into_json::<CookieResponse>().await.unwrap();
+        assert_eq!(json.cookies["key"], "value");
+
         // test server delete cookie
         _ = client
             .get("http://httpbin.org/cookies/delete?key")
             .send()
             .await
             .unwrap();
-        let resp = client.get(HTTPBIN_GET).send().await.unwrap();
-        let cookies = resp.cookies().collect::<Vec<_>>();
-        assert_eq!(cookies.len(), 0)
+        _ = client
+            .get("http://httpbin.org/delete?key")
+            .send()
+            .await
+            .unwrap();
+        let resp = client
+            .get("http://httpbin.org/cookies")
+            .send()
+            .await
+            .unwrap();
+        let json = resp.into_json::<CookieResponse>().await.unwrap();
+        assert_eq!(json.cookies.len(), 0);
     }
 }

@@ -3,6 +3,7 @@
 use http::{
     header::{self, HeaderMap, HeaderName},
     request::{Parts, Request},
+    uri::Scheme,
     Uri,
 };
 
@@ -38,6 +39,7 @@ mod sealed {
     pub trait SealedRequestPartsExt {
         fn headers(&self) -> &http::header::HeaderMap;
         fn uri(&self) -> &http::Uri;
+        fn extensions(&self) -> &http::Extensions;
     }
 }
 
@@ -48,6 +50,9 @@ impl sealed::SealedRequestPartsExt for Parts {
     fn uri(&self) -> &Uri {
         &self.uri
     }
+    fn extensions(&self) -> &http::Extensions {
+        &self.extensions
+    }
 }
 impl<B> sealed::SealedRequestPartsExt for Request<B> {
     fn headers(&self) -> &HeaderMap {
@@ -55,6 +60,9 @@ impl<B> sealed::SealedRequestPartsExt for Request<B> {
     }
     fn uri(&self) -> &Uri {
         self.uri()
+    }
+    fn extensions(&self) -> &http::Extensions {
+        self.extensions()
     }
 }
 
@@ -72,7 +80,7 @@ where
 
         let mut url_str = String::new();
 
-        if let Some(scheme) = uri.scheme() {
+        if let Some(scheme) = self.extensions().get::<Scheme>() {
             url_str.push_str(scheme.as_str());
             url_str.push_str("://");
         } else {
