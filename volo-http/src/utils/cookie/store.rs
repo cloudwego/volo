@@ -43,21 +43,33 @@ impl CookieStore {
 
         let cookies: Vec<(&str, &str)> = cookie_iter.collect::<Vec<_>>();
 
+        if cookies.is_empty() {
+            return None;
+        }
+
         for (key, value) in &cookies {
-            size += key.len() + value.len() + 3;
+            size += key.len() + value.len();
         }
 
         if size == 0 {
             return None;
         }
 
+        size += 3 * cookies.len() - 2;
+
         let mut s = String::with_capacity(size);
 
-        for (name, value) in cookies {
-            s.push_str(name);
+        let mut cookie_iter = cookies.iter();
+        let first = cookie_iter.next().unwrap();
+
+        s.push_str(first.0);
+        s.push('=');
+        s.push_str(first.1);
+
+        for (key, value) in cookie_iter {
+            s.push_str(key);
             s.push('=');
             s.push_str(value);
-            s.push_str("; ");
         }
 
         HeaderValue::from_maybe_shared(Bytes::from(s)).ok()
