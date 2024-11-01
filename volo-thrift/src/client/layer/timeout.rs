@@ -20,11 +20,7 @@ where
 
     type Error = S::Error;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ClientContext,
-        req: Req,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn call(&self, cx: &mut ClientContext, req: Req) -> Result<Self::Response, Self::Error> {
         match cx.rpc_info.config().rpc_timeout() {
             Some(duration) => {
                 let start = std::time::Instant::now();

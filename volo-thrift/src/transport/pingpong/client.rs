@@ -106,9 +106,9 @@ where
     type Error = crate::ClientError;
 
     #[inline]
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ClientContext,
+    async fn call(
+        &self,
+        cx: &mut ClientContext,
         req: ThriftMessage<Req>,
     ) -> Result<Self::Response, Self::Error> {
         let rpc_info = &cx.rpc_info;
