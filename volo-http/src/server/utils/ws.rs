@@ -39,6 +39,7 @@
 
 use std::{
     borrow::Cow,
+    error::Error,
     fmt,
     future::Future,
     ops::{Deref, DerefMut},
@@ -467,7 +468,13 @@ impl fmt::Display for WebSocketError {
     }
 }
 
-impl std::error::Error for WebSocketError {}
+impl Error for WebSocketError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Upgrade(e) => Some(e),
+        }
+    }
+}
 
 /// What to do when a connection upgrade fails.
 ///
@@ -498,7 +505,6 @@ impl OnFailedUpgrade for DefaultOnFailedUpgrade {
 
 /// [`Error`]s while extracting [`WebSocketUpgrade`].
 ///
-/// [`Error`]: std::error::Error
 /// [`WebSocketUpgrade`]: crate::server::utils::ws::WebSocketUpgrade
 #[derive(Debug)]
 pub enum WebSocketUpgradeRejectionError {
@@ -530,7 +536,7 @@ impl WebSocketUpgradeRejectionError {
     }
 }
 
-impl std::error::Error for WebSocketUpgradeRejectionError {}
+impl Error for WebSocketUpgradeRejectionError {}
 
 impl fmt::Display for WebSocketUpgradeRejectionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

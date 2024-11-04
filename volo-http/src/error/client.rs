@@ -79,7 +79,11 @@ impl fmt::Display for ClientError {
     }
 }
 
-impl Error for ClientError {}
+impl Error for ClientError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        Some(self.source.as_ref()?.as_ref())
+    }
+}
 
 /// Error kind of [`ClientError`]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -174,7 +178,7 @@ macro_rules! simple_error {
         paste! {
             #[doc = $kind " error \"" $msg "\""]
             $(#[$attr])*
-            #[derive(Debug)]
+            #[derive(Debug, PartialEq, Eq)]
             pub struct $name;
 
             $(#[$attr])*
@@ -200,3 +204,25 @@ simple_error!(Builder => BadScheme => "bad scheme");
 simple_error!(Builder => BadHostName => "bad host name");
 simple_error!(Request => Timeout => "request timeout");
 simple_error!(LoadBalance => NoAvailableEndpoint => "no available endpoint");
+
+#[cfg(test)]
+mod client_error_tests {
+    use std::error::Error;
+
+    use crate::error::client::{
+        bad_host_name, bad_scheme, no_address, no_available_endpoint, timeout, BadHostName,
+        BadScheme, NoAddress, NoAvailableEndpoint, Timeout,
+    };
+
+    #[test]
+    fn types_downcast() {
+        assert!(no_address().source().unwrap().is::<NoAddress>());
+        assert!(bad_scheme().source().unwrap().is::<BadScheme>());
+        assert!(bad_host_name().source().unwrap().is::<BadHostName>());
+        assert!(timeout().source().unwrap().is::<Timeout>());
+        assert!(no_available_endpoint()
+            .source()
+            .unwrap()
+            .is::<NoAvailableEndpoint>());
+    }
+}

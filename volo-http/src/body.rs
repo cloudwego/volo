@@ -278,7 +278,15 @@ impl fmt::Display for BodyConvertError {
     }
 }
 
-impl Error for BodyConvertError {}
+impl Error for BodyConvertError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            #[cfg(feature = "json")]
+            Self::JsonDeserializeError(e) => Some(e),
+            _ => None,
+        }
+    }
+}
 
 impl From<()> for Body {
     fn from(_: ()) -> Self {
