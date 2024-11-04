@@ -128,6 +128,9 @@ impl HotRestart {
         if *state != HotRestartState::Uninitalized {
             return Ok(());
         }
+        if !sock_dir_path.exists() {
+            std::fs::create_dir_all(sock_dir_path)?;
+        }
         self.listener_num
             .store(server_listener_num, Ordering::Relaxed);
         self.parent_sock_path
