@@ -2,7 +2,10 @@ use std::{io, marker::PhantomData};
 
 use motore::service::{Service, UnaryService};
 use pilota::thrift::TransportException;
-use volo::net::{dial::MakeTransport, Address};
+use volo::{
+    net::{conn::ConnExt, dial::MakeTransport, shm::TransportEndpoint, Address},
+    FastStr,
+};
 
 use crate::{
     codec::MakeCodec,
@@ -10,7 +13,7 @@ use crate::{
     protocol::TMessageType,
     transport::{
         pingpong::thrift_transport::ThriftTransport,
-        pool::{Config, PooledMakeTransport, Ver},
+        pool::{Config, PooledMakeTransport, Transport, Ver},
     },
     EntryMessage, ThriftMessage,
 };
@@ -19,7 +22,7 @@ use crate::{
 pub struct MakeClientTransport<MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf>,
 {
     make_transport: MkT,
     make_codec: MkC,
@@ -28,7 +31,7 @@ where
 impl<MkT, MkC> MakeClientTransport<MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf>,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf>,
 {
     #[allow(unused)]
     #[inline]
@@ -43,7 +46,7 @@ where
 impl<MkT, MkC> UnaryService<Address> for MakeClientTransport<MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
 {
     type Response = ThriftTransport<MkC::Encoder, MkC::Decoder>;
     type Error = io::Error;
@@ -51,15 +54,17 @@ where
     #[inline]
     async fn call(&self, target: Address) -> Result<Self::Response, Self::Error> {
         let make_transport = self.make_transport.clone();
-        let (rh, wh) = make_transport.make_transport(target).await?;
-        Ok(ThriftTransport::new(rh, wh, self.make_codec.clone()))
+        let conn = make_transport.make_transport(target).await?;
+        let inner = conn.inner();
+        let (rh, wh) = conn.into_split();
+        Ok(ThriftTransport::new(rh, wh, self.make_codec.clone(), inner))
     }
 }
 
 pub struct Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
 {
     #[allow(clippy::type_complexity)]
     make_transport: PooledMakeTransport<MakeClientTransport<MkT, MkC>, Address>,
@@ -69,7 +74,7 @@ where
 impl<Resp, MkT, MkC> Clone for Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
 {
     fn clone(&self) -> Self {
         Self {
@@ -82,7 +87,7 @@ where
 impl<Resp, MkT, MkC> Client<Resp, MkT, MkC>
 where
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
 {
     pub fn new(make_transport: MkT, pool_cfg: Option<Config>, make_codec: MkC) -> Self {
         let make_transport = MakeClientTransport::new(make_transport, make_codec);
@@ -99,7 +104,7 @@ where
     Req: Send + 'static + EntryMessage,
     Resp: EntryMessage + Sync,
     MkT: MakeTransport,
-    MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
+    MkC: MakeCodec<<MkT::Conn as ConnExt>::ReadHalf, <MkT::Conn as ConnExt>::WriteHalf> + Sync,
 {
     type Response = Option<ThriftMessage<Resp>>;
 
@@ -118,10 +123,19 @@ where
                 format!("address is required, rpc_info: {:?}", rpc_info),
             ))
         })?;
+        let shmipc_target = rpc_info.callee().shmipc_address();
         let oneway = cx.message_type == TMessageType::OneWay;
         cx.stats.record_make_transport_start_at();
-        let mut transport = self.make_transport.call((target, Ver::PingPong)).await?;
+        let mut transport = self
+            .make_transport
+            .call((target, shmipc_target.clone(), Ver::PingPong))
+            .await?;
         cx.stats.record_make_transport_end_at();
+        if let Transport::Shm(_) = transport {
+            cx.rpc_info
+                .caller_mut()
+                .set_transport(volo::net::shm::Transport(FastStr::new("shmipc")))
+        }
         let resp = transport.send(cx, req, oneway).await;
         if let Ok(None) = resp {
             if !oneway {
@@ -138,6 +152,8 @@ where
         }
         if cx.transport.should_reuse && resp.is_ok() {
             transport.reuse().await;
+        } else {
+            transport.close().await;
         }
         resp
     }

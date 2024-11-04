@@ -2,6 +2,7 @@ pub mod conn;
 pub mod dial;
 pub mod incoming;
 pub mod ready;
+pub mod shm;
 #[cfg(feature = "__tls")]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 pub mod tls;

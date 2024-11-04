@@ -14,7 +14,10 @@ use tokio::net::UnixListener;
 use tokio_stream::wrappers::UnixListenerStream;
 use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 
-use super::{conn::Conn, Address};
+use super::{
+    conn::{Conn, ConnExt},
+    Address,
+};
 
 #[pin_project(project = IncomingProj)]
 #[derive(Debug)]
@@ -46,10 +49,14 @@ impl From<TcpListener> for DefaultIncoming {
 }
 
 pub trait Incoming: fmt::Debug + Send + 'static {
-    fn accept(&mut self) -> impl Future<Output = io::Result<Option<Conn>>> + Send;
+    type Conn: ConnExt;
+
+    fn accept(&mut self) -> impl Future<Output = io::Result<Option<Self::Conn>>> + Send;
 }
 
 impl Incoming for DefaultIncoming {
+    type Conn = Conn;
+
     async fn accept(&mut self) -> io::Result<Option<Conn>> {
         if let Some(conn) = self.try_next().await? {
             tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);

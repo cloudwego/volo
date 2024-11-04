@@ -2,7 +2,7 @@
 
 use motore::service::UnaryService;
 
-use super::{Key, Pool, Poolable, Pooled, Ver};
+use super::{Key, Pool, Poolable, Transport, Ver};
 
 // pooled make transport wrap the inner MakeTransport and return the pooled transport
 // when call make_transport
@@ -42,18 +42,27 @@ where
     }
 }
 
-impl<MT, K: Key> UnaryService<(K, Ver)> for PooledMakeTransport<MT, K>
+impl<MT, K: Key> UnaryService<(K, Option<K>, Ver)> for PooledMakeTransport<MT, K>
 where
     MT: UnaryService<K> + Send + Clone + 'static + Sync,
     MT::Response: Poolable + Send,
     MT::Error: Into<crate::ClientError> + Send,
 {
-    type Response = Pooled<K, MT::Response>;
+    type Response = Transport<K, MT::Response>;
 
     type Error = crate::ClientError;
 
-    async fn call(&self, kv: (K, Ver)) -> Result<Self::Response, Self::Error> {
+    async fn call(&self, kv: (K, Option<K>, Ver)) -> Result<Self::Response, Self::Error> {
         let mt = self.inner.clone();
-        self.pool.get(kv.0, kv.1, mt).await.map_err(Into::into)
+        if let Some(addr) = kv.1 {
+            if let Ok(resp) = mt.call(addr.clone()).await {
+                return Ok(Transport::Shm(resp));
+            }
+        }
+        self.pool
+            .get(kv.0, kv.2, mt)
+            .await
+            .map_err(Into::into)
+            .map(Into::into)
     }
 }

@@ -2,7 +2,7 @@ use std::sync::{atomic::AtomicUsize, LazyLock};
 
 use pilota::thrift::{ApplicationException, ApplicationExceptionKind};
 use pin_project::pin_project;
-use tokio::io::{AsyncRead, AsyncWrite};
+use volo::net::shm::ShmExt;
 
 use crate::{
     codec::{Decoder, Encoder, MakeCodec},
@@ -17,6 +17,7 @@ static TRANSPORT_ID_COUNTER: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsiz
 pub struct ThriftTransport<E: Encoder, D: Decoder> {
     write_half: WriteHalf<E>,
     read_half: ReadHalf<D>,
+    stream: Option<Box<dyn ShmExt>>,
 }
 
 impl<E, D> ThriftTransport<E, D>
@@ -25,13 +26,14 @@ where
     D: Decoder,
 {
     pub fn new<
-        R: AsyncRead + Send + Sync + Unpin + 'static,
-        W: AsyncWrite + Send + Sync + Unpin + 'static,
+        R: Send + Sync + Unpin + 'static,
+        W: Send + Sync + Unpin + 'static,
         MkC: MakeCodec<R, W, Decoder = D, Encoder = E>,
     >(
         read_half: R,
         write_half: W,
         make_codec: MkC,
+        stream: Option<Box<dyn ShmExt>>,
     ) -> Self {
         let id = TRANSPORT_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let (encoder, decoder) = make_codec.make_codec(read_half, write_half);
@@ -46,6 +48,21 @@ where
                 id,
                 reusable: true,
             },
+            stream,
+        }
+    }
+
+    pub async fn reuse(self) {
+        if let Some(stream) = self.stream {
+            stream.reuse().await;
+        }
+    }
+
+    pub async fn close(&mut self) {
+        if let Some(stream) = &mut self.stream {
+            if let Err(err) = stream.close().await {
+                tracing::error!("[VOLO SHMIPC] transport close stream error: {}", err);
+            }
         }
     }
 
