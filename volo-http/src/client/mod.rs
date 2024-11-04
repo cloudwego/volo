@@ -957,6 +957,8 @@ where
 mod client_tests {
     use std::{collections::HashMap, future::Future};
 
+    #[cfg(feature = "cookie")]
+    use cookie::Cookie;
     use http::{header, StatusCode};
     use motore::{
         layer::{Layer, Stack},
