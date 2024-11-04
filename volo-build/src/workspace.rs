@@ -150,7 +150,9 @@ where
     }
 
     pub fn split_generated_files(mut self, split_generated_files: bool) -> Self {
-        self.pilota_builder = self.pilota_builder.split_generated_files(split_generated_files);
+        self.pilota_builder = self
+            .pilota_builder
+            .split_generated_files(split_generated_files);
         self
     }
 
