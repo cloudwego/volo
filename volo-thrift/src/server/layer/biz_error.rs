@@ -42,11 +42,7 @@ where
     type Error = crate::ServerError;
 
     #[inline]
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ServerContext,
-        req: Req,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn call(&self, cx: &mut ServerContext, req: Req) -> Result<Self::Response, Self::Error> {
         let ret = self.inner.call(cx, req).await.map_err(Into::into);
         if let Err(ServerError::Biz(err)) = ret.as_ref() {
             cx.common_stats.set_biz_error(err.clone());

@@ -24,9 +24,9 @@ where
     type Response = T::Response;
     type Error = T::Error;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut Cx,
+    async fn call(
+        &self,
+        cx: &mut Cx,
         req: Request<ReqBody>,
     ) -> Result<Self::Response, Self::Error> {
         // split the header and body

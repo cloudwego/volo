@@ -115,9 +115,9 @@ where
 
     type Error = Status;
 
-    async fn call<'s, 'cx>(
-        &'s self,
-        cx: &'cx mut ClientContext,
+    async fn call(
+        &self,
+        cx: &mut ClientContext,
         volo_req: Request<T>,
     ) -> Result<Self::Response, Self::Error> {
         let mut http_client = self.http_client.clone();

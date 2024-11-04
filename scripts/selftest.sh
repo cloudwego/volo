@@ -5,7 +5,7 @@ set -o nounset
 set -o pipefail
 
 echo_and_run() {
-	echo "Running $@"
+	echo "$@"
 
 	if [ -n "${DEBUG:-}" ]; then
 		# If env `DEBUG` is non-empty, output all
