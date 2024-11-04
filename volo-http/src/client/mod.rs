@@ -7,7 +7,7 @@ use std::{cell::RefCell, error::Error, sync::Arc, time::Duration};
 use faststr::FastStr;
 use http::{
     header::{self, HeaderMap, HeaderName, HeaderValue},
-    uri::Uri,
+    uri::{Scheme, Uri},
     Method,
 };
 use metainfo::{MetaInfo, METAINFO};
@@ -48,6 +48,8 @@ use crate::{
 };
 
 pub mod callopt;
+#[cfg(feature = "cookie")]
+pub mod cookie;
 pub mod dns;
 pub mod loadbalance;
 mod meta;
@@ -880,6 +882,12 @@ impl<S> Client<S> {
             request.headers_mut().insert(header::HOST, host);
         }
 
+        let scheme = match target.is_https() {
+            true => Scheme::HTTPS,
+            false => Scheme::HTTP,
+        };
+        request.extensions_mut().insert(scheme);
+
         let mut cx = ClientContext::new();
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
         cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
@@ -947,9 +955,10 @@ where
 #[cfg(feature = "json")]
 #[cfg(test)]
 mod client_tests {
-
     use std::{collections::HashMap, future::Future};
 
+    #[cfg(feature = "cookie")]
+    use cookie::Cookie;
     use http::{header, StatusCode};
     use motore::{
         layer::{Layer, Stack},
@@ -963,6 +972,8 @@ mod client_tests {
         dns::{parse_target, DnsResolver},
         get, Client, DefaultClient, Target,
     };
+    #[cfg(feature = "cookie")]
+    use crate::client::cookie::CookieLayer;
     use crate::{
         body::BodyConversion, error::client::status_error, utils::consts::HTTP_DEFAULT_PORT,
         ClientBuilder,
@@ -1283,5 +1294,61 @@ mod client_tests {
 
         let resp = client.get(HTTPBIN_GET).send().await;
         assert!(resp.is_ok());
+    }
+
+    #[cfg(feature = "cookie")]
+    #[tokio::test]
+    async fn cookie_store() {
+        let mut builder = Client::builder().layer_inner(CookieLayer::new(Default::default()));
+
+        builder.host("httpbin.org");
+
+        let client = builder.build();
+
+        // test server add cookie
+        let resp = client
+            .get("http://httpbin.org/cookies/set?key=value")
+            .send()
+            .await
+            .unwrap();
+        let cookies = resp
+            .headers()
+            .get_all(http::header::SET_COOKIE)
+            .iter()
+            .filter_map(|value| {
+                std::str::from_utf8(value.as_bytes())
+                    .ok()
+                    .and_then(|val| Cookie::parse(val).map(|c| c.into_owned()).ok())
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(cookies[0].name(), "key");
+        assert_eq!(cookies[0].value(), "value");
+
+        #[derive(serde::Deserialize)]
+        struct CookieResponse {
+            #[serde(default)]
+            cookies: HashMap<String, String>,
+        }
+        let resp = client
+            .get("http://httpbin.org/cookies")
+            .send()
+            .await
+            .unwrap();
+        let json = resp.into_json::<CookieResponse>().await.unwrap();
+        assert_eq!(json.cookies["key"], "value");
+
+        // test server delete cookie
+        _ = client
+            .get("http://httpbin.org/cookies/delete?key")
+            .send()
+            .await
+            .unwrap();
+        let resp = client
+            .get("http://httpbin.org/cookies")
+            .send()
+            .await
+            .unwrap();
+        let json = resp.into_json::<CookieResponse>().await.unwrap();
+        assert_eq!(json.cookies.len(), 0);
     }
 }

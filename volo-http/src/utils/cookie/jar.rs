@@ -4,7 +4,7 @@
 
 use std::{convert::Infallible, ops::Deref};
 
-pub use cookie::{time::Duration, Cookie};
+use cookie::Cookie;
 use http::{header, request::Parts, HeaderMap};
 
 use crate::context::ServerContext;
