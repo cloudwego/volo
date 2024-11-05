@@ -667,7 +667,11 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             .map(|a| {
                 let ty = self.inner.codegen_item_ty(a.ty.kind.clone()).global_path();
                 let ident = self.cx().rust_name(a.def_id).0.field_ident(); // use the _{rust-style fieldname} without keyword escaping
-                format!("_{ident}: volo_gen{ty}")
+                if need_prepend_volo_gen_path(&a.ty.kind) {
+                    format!("_{ident}: volo_gen{ty}")
+                } else {
+                    format!("_{ident}: {ty}")
+                }
             })
             .join(",");
 
