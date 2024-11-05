@@ -75,8 +75,6 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          apt update
-          apt install -y libssl-dev
           bash scripts/clippy-and-test.sh
 
   test-linux-aarch64:
@@ -93,8 +91,6 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          apt update
-          apt install -y libssl-dev
           bash scripts/clippy-and-test.sh
 
   test-macos:
