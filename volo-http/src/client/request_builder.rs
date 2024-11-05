@@ -2,7 +2,7 @@
 //!
 //! See [`RequestBuilder`] for more details.
 
-use std::{error::Error, time::Duration};
+use std::error::Error;
 
 use http::{
     header::{HeaderMap, HeaderName, HeaderValue},
@@ -30,7 +30,6 @@ pub struct RequestBuilder<S, B = Body> {
     target: Target,
     call_opt: Option<CallOpt>,
     request: Result<ClientRequest<B>>,
-    timeout: Option<Duration>,
 }
 
 impl<S> RequestBuilder<S, Body> {
@@ -40,7 +39,6 @@ impl<S> RequestBuilder<S, Body> {
             target: Default::default(),
             call_opt: Default::default(),
             request: Ok(ClientRequest::default()),
-            timeout: None,
         }
     }
 
@@ -412,22 +410,12 @@ impl<S, B> RequestBuilder<S, B> {
             target: self.target,
             call_opt: self.call_opt,
             request,
-            timeout: self.timeout,
         }
     }
 
     /// Get a reference to body in the request.
     pub fn body_ref(&self) -> Option<&B> {
         self.request.as_ref().ok().map(Request::body)
-    }
-
-    /// Set maximin idle time for the request.
-    ///
-    /// The whole request includes connecting, writting, and reading the whole HTTP protocol
-    /// headers (without reading response body).
-    pub fn set_request_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = Some(timeout);
-        self
     }
 }
 
@@ -442,7 +430,7 @@ where
     /// Send the request and get the response.
     pub async fn send(self) -> Result<ClientResponse> {
         self.client
-            .send_request(self.target, self.call_opt, self.request?, self.timeout)
+            .send_request(self.target, self.call_opt, self.request?)
             .await
     }
 }

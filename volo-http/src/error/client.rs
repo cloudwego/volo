@@ -2,7 +2,7 @@
 
 use std::{error::Error, fmt};
 
-use http::{StatusCode, Uri};
+use http::uri::Uri;
 use paste::paste;
 
 use super::BoxError;
@@ -99,13 +99,6 @@ pub enum ErrorKind {
     /// [LoadBalance]: volo::loadbalance::LoadBalance
     /// [Discover]: volo::discovery::Discover
     LoadBalance,
-    /// Client received a response with a 4XX or 5XX status code
-    ///
-    /// This error will only be returned when
-    /// [`ClientBuilder::fail_on_error_status`][fail_on_error_status] enabled.
-    ///
-    /// [fail_on_error_status]: crate::client::ClientBuilder::fail_on_error_status
-    Status(StatusCode),
     /// Something wrong when processing on [`Body`](crate::body::Body)
     Body,
 }
@@ -142,11 +135,6 @@ where
     ClientError::new(ErrorKind::LoadBalance, Some(error))
 }
 
-/// Create a [`ClientError`] with [`ErrorKind::Status`]
-pub fn status_error(status: StatusCode) -> ClientError {
-    ClientError::new(ErrorKind::Status(status), None::<ClientError>)
-}
-
 impl From<BodyConvertError> for ClientError {
     fn from(value: BodyConvertError) -> Self {
         ClientError::new(ErrorKind::Body, Some(BoxError::from(value)))
@@ -160,14 +148,6 @@ impl std::fmt::Display for ErrorKind {
             Self::Context => f.write_str("processing context error"),
             Self::Request => f.write_str("sending request error"),
             Self::LoadBalance => f.write_str("load balance error"),
-            Self::Status(ref status) => {
-                let prefix = if status.is_client_error() {
-                    "HTTP status client error"
-                } else {
-                    "HTTP status server error"
-                };
-                write!(f, "{prefix} ({status})")
-            }
             Self::Body => f.write_str("processing body error"),
         }
     }

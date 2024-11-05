@@ -33,12 +33,11 @@ use self::{
     callopt::CallOpt,
     dns::parse_target,
     loadbalance::{DefaultLB, DefaultLBService, LbConfig},
-    meta::MetaService,
     target::TargetParser,
     transport::{ClientConfig, ClientTransport, ClientTransportConfig},
 };
 use crate::{
-    context::{client::Config, ClientContext},
+    context::ClientContext,
     error::{
         client::{builder_error, no_address, ClientError, Result},
         BoxError,
@@ -51,8 +50,8 @@ pub mod callopt;
 #[cfg(feature = "cookie")]
 pub mod cookie;
 pub mod dns;
+pub mod layer;
 pub mod loadbalance;
-mod meta;
 mod request_builder;
 pub mod target;
 #[cfg(test)]
@@ -69,7 +68,7 @@ pub mod prelude {
 const PKG_NAME_WITH_VER: &str = concat!(env!("CARGO_PKG_NAME"), '/', env!("CARGO_PKG_VERSION"));
 
 /// Default inner service of [`Client`]
-pub type ClientMetaService = MetaService<ClientTransport>;
+pub type ClientMetaService = ClientTransport;
 /// Default [`Client`] without any extra [`Layer`]s
 pub type DefaultClient<IL = Identity, OL = Identity> =
     Client<<OL as Layer<DefaultLBService<<IL as Layer<ClientMetaService>>::Service>>>::Service>;
@@ -98,9 +97,7 @@ pub struct ClientBuilder<IL, OL, C, LB> {
 /// This is unstable now and may be changed in the future.
 #[doc(hidden)]
 pub struct BuilderConfig {
-    pub timeout: Option<Duration>,
     pub stat_enable: bool,
-    pub fail_on_error_status: bool,
     #[cfg(feature = "__tls")]
     pub disable_tls: bool,
 }
@@ -108,9 +105,7 @@ pub struct BuilderConfig {
 impl Default for BuilderConfig {
     fn default() -> Self {
         Self {
-            timeout: None,
             stat_enable: true,
-            fail_on_error_status: false,
             #[cfg(feature = "__tls")]
             disable_tls: false,
         }
@@ -547,14 +542,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         self
     }
 
-    /// Return `Err` rather than full `ClientResponse` when the response status code is 4xx or 5xx.
-    ///
-    /// Default is false.
-    pub fn fail_on_error_status(&mut self, fail_on_error_status: bool) -> &mut Self {
-        self.builder_config.fail_on_error_status = fail_on_error_status;
-        self
-    }
-
     /// Disable TLS for the client.
     ///
     /// Default is false, when TLS related feature is enabled, TLS is enabled by default.
@@ -626,19 +613,10 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         self
     }
 
-    /// Set the maximin idle time for the request.
-    ///
-    /// The whole request includes connecting, writting, and reading the whole HTTP protocol
-    /// headers (without reading response body).
-    pub fn set_request_timeout(&mut self, timeout: Duration) -> &mut Self {
-        self.builder_config.timeout = Some(timeout);
-        self
-    }
-
     /// Build the HTTP client.
     pub fn build(mut self) -> C::Target
     where
-        IL: Layer<MetaService<ClientTransport>>,
+        IL: Layer<ClientMetaService>,
         IL::Service: Send + Sync + 'static,
         LB: MkLbLayer,
         LB::Layer: Layer<IL::Service>,
@@ -659,7 +637,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             #[cfg(feature = "__tls")]
             self.tls_config.unwrap_or_default(),
         );
-        let meta_service = MetaService::new(transport);
+        let meta_service = transport;
         let service = self.outer_layer.layer(
             self.mk_lb
                 .make()
@@ -677,17 +655,12 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
                 HeaderValue::from_str(caller_name.as_str()).expect("Invalid caller name"),
             );
         }
-        let config = Config {
-            timeout: self.builder_config.timeout,
-            fail_on_error_status: self.builder_config.fail_on_error_status,
-        };
 
         let client_inner = ClientInner {
             service,
             caller_name,
             callee_name: self.callee_name,
             default_target: self.target,
-            default_config: config,
             default_call_opt: self.call_opt,
             target_parser: self.target_parser,
             headers: self.headers,
@@ -704,7 +677,6 @@ struct ClientInner<S> {
     caller_name: FastStr,
     callee_name: FastStr,
     default_target: Target,
-    default_config: Config,
     default_call_opt: Option<CallOpt>,
     target_parser: TargetParser,
     headers: HeaderMap,
@@ -826,7 +798,6 @@ impl<S> Client<S> {
     ///             .uri("/")
     ///             .body(Body::empty())
     ///             .expect("build request failed"),
-    ///         None,
     ///     )
     ///     .await
     ///     .expect("request failed")
@@ -841,7 +812,6 @@ impl<S> Client<S> {
         target: Target,
         call_opt: Option<CallOpt>,
         mut request: ClientRequest<B>,
-        timeout: Option<Duration>,
     ) -> Result<S::Response, S::Error>
     where
         S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
@@ -892,10 +862,6 @@ impl<S> Client<S> {
         cx.rpc_info_mut().caller_mut().set_service_name(caller_name);
         cx.rpc_info_mut().callee_mut().set_service_name(callee_name);
         (self.inner.target_parser)(target, call_opt, cx.rpc_info_mut().callee_mut());
-
-        let config = cx.rpc_info_mut().config_mut();
-        config.clone_from(&self.inner.default_config);
-        config.timeout = timeout.or(config.timeout);
 
         self.call(&mut cx, request).await
     }
@@ -974,10 +940,7 @@ mod client_tests {
     };
     #[cfg(feature = "cookie")]
     use crate::client::cookie::CookieLayer;
-    use crate::{
-        body::BodyConversion, error::client::status_error, utils::consts::HTTP_DEFAULT_PORT,
-        ClientBuilder,
-    };
+    use crate::{body::BodyConversion, utils::consts::HTTP_DEFAULT_PORT, ClientBuilder};
 
     #[derive(Deserialize)]
     struct HttpBinResponse {
@@ -1168,24 +1131,6 @@ mod client_tests {
         // Send HTTP request to the HTTPS port (443), `httpbin.org` will response `400 Bad
         // Request`.
         assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[tokio::test]
-    async fn fail_on_status() {
-        let mut builder = Client::builder();
-        builder.host("httpbin.org").fail_on_error_status(true);
-        let client = builder.build();
-        assert_eq!(
-            format!(
-                "{}",
-                client
-                    .get("/post")
-                    .send()
-                    .await
-                    .expect_err("GET for httpbin.org/post should fail")
-            ),
-            format!("{}", status_error(StatusCode::METHOD_NOT_ALLOWED)),
-        );
     }
 
     #[cfg(feature = "__tls")]
