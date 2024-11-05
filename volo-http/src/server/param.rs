@@ -282,7 +282,14 @@ impl fmt::Display for PathParamsRejection {
     }
 }
 
-impl Error for PathParamsRejection {}
+impl Error for PathParamsRejection {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::LengthMismatch => None,
+            Self::ParseError(e) => Some(e.as_ref()),
+        }
+    }
+}
 
 impl IntoResponse for PathParamsRejection {
     fn into_response(self) -> ServerResponse {

@@ -91,7 +91,15 @@ impl fmt::Display for MatcherError {
     }
 }
 
-impl Error for MatcherError {}
+impl Error for MatcherError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::UriConflict(_) => None,
+            Self::RouterInsertError(e) => Some(e),
+            Self::RouterMatchError(e) => Some(e),
+        }
+    }
+}
 
 pub(super) struct StripPrefixLayer;
 

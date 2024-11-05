@@ -38,6 +38,19 @@ impl fmt::Display for ExtractBodyError {
     }
 }
 
+impl Error for ExtractBodyError {
+    fn source(&self) -> Option<&(dyn Error + 'static)> {
+        match self {
+            Self::Generic(e) => Some(e),
+            Self::String(e) => Some(e),
+            #[cfg(feature = "json")]
+            Self::Json(e) => Some(e),
+            #[cfg(feature = "form")]
+            Self::Form(e) => Some(e),
+        }
+    }
+}
+
 impl IntoResponse for ExtractBodyError {
     fn into_response(self) -> ServerResponse {
         let status = match self {
