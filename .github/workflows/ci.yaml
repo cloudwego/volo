@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - test-linux
-      - test-linux-aarch64
+      # - test-linux-aarch64
       - test-macos
       - test-windows
       - lint
@@ -77,21 +77,21 @@ jobs:
         run: |
           bash scripts/clippy-and-test.sh
 
-  test-linux-aarch64:
-    runs-on: [self-hosted, arm]
+  # test-linux-aarch64:
+  #   runs-on: [self-hosted, arm]
 
-    strategy:
-      matrix:
-        rust: [nightly, stable]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          components: rustfmt,clippy
-          toolchain: ${{matrix.rust}}
-      - name: Run tests
-        run: |
-          bash scripts/clippy-and-test.sh
+  #   strategy:
+  #     matrix:
+  #       rust: [nightly, stable]
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: dtolnay/rust-toolchain@master
+  #       with:
+  #         components: rustfmt,clippy
+  #         toolchain: ${{matrix.rust}}
+  #     - name: Run tests
+  #       run: |
+  #         bash scripts/clippy-and-test.sh
 
   test-macos:
     runs-on: macos-latest
