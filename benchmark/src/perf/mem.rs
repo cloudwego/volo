@@ -59,7 +59,7 @@ pub async fn record_usage(mem_usage_list: &mut Vec<u64>, cancel: CancellationTok
                     .unwrap()
                     .memory();
                 if mem_usage > DEFAULT_RSS_THRESHOLD {
-                    mem_usage_list.push(mem_usage as u64);
+                    mem_usage_list.push(mem_usage);
                 }
             }
             _ = cancel.cancelled() => break,
