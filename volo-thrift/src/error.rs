@@ -229,3 +229,9 @@ pub enum MaybeException<T, E> {
     Ok(T),
     Exception(E),
 }
+
+impl<T: Default, E> Default for MaybeException<T, E> {
+    fn default() -> Self {
+        MaybeException::Ok(Default::default())
+    }
+}

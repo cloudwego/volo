@@ -13,13 +13,13 @@ struct TestResponse {
 }
 
 service TestService {
-    TestResponse Test (1: TestRequest req),
+    TestResponse Test (1: TestRequest req, 2: list<TestRequest> reqs),
     TestResponse test (1: TestRequest Req),
     TestResponse Test2 (1: TestRequest type),
     TestResponse Test3 (1: TestRequest self),
 }
 
 service testService {
-    TestResponse Test (1: TestRequest req),
+    TestResponse Test (1: TestRequest req, 2: list<TestRequest> reqs),
     TestResponse test (1: TestRequest Req),
 }
