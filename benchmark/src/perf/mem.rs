@@ -53,13 +53,13 @@ pub async fn record_usage(mem_usage_list: &mut Vec<u64>, cancel: CancellationTok
     loop {
         tokio::select! {
             _ = tokio::time::sleep(DEFAULT_INTERVAL) => {
-                system.refresh_processes_specifics(sysinfo::ProcessesToUpdate::Some(&[pid]), ProcessRefreshKind::new().with_memory());
+                system.refresh_processes_specifics(sysinfo::ProcessesToUpdate::Some(&[pid]), true, ProcessRefreshKind::new().with_memory());
                 let mem_usage = system
                     .process(pid)
                     .unwrap()
                     .memory();
                 if mem_usage > DEFAULT_RSS_THRESHOLD {
-                    mem_usage_list.push(mem_usage as u64);
+                    mem_usage_list.push(mem_usage);
                 }
             }
             _ = cancel.cancelled() => break,
