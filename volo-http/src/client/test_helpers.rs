@@ -10,20 +10,14 @@ use motore::{
 };
 use volo::{client::MkClient, context::Endpoint};
 
-use super::{
-    callopt::CallOpt, meta::MetaService, Client, ClientBuilder, ClientInner, Target,
-    PKG_NAME_WITH_VER,
-};
+use super::{callopt::CallOpt, Client, ClientBuilder, ClientInner, Target, PKG_NAME_WITH_VER};
 use crate::{
-    context::client::{ClientContext, Config},
-    error::ClientError,
-    request::ClientRequest,
-    response::ClientResponse,
-    utils::test_helpers::mock_address,
+    context::client::ClientContext, error::ClientError, request::ClientRequest,
+    response::ClientResponse, utils::test_helpers::mock_address,
 };
 
 /// Default mock service of [`Client`]
-pub type ClientMockService = MetaService<MockTransport>;
+pub type ClientMockService = MockTransport;
 /// Default [`Client`] without any extra [`Layer`]s
 pub type DefaultMockClient<IL = Identity, OL = Identity> =
     Client<<OL as Layer<<IL as Layer<ClientMockService>>::Service>>::Service>;
@@ -118,14 +112,14 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Build a mock HTTP client with a [`MockTransport`] service.
     pub fn mock(mut self, transport: MockTransport) -> C::Target
     where
-        IL: Layer<MetaService<MockTransport>>,
+        IL: Layer<ClientMockService>,
         IL::Service: Send + Sync + 'static,
         // remove loadbalance here
         OL: Layer<IL::Service>,
         OL::Service: Send + Sync + 'static,
         C: MkClient<Client<OL::Service>>,
     {
-        let meta_service = MetaService::new(transport);
+        let meta_service = transport;
         let service = self.outer_layer.layer(self.inner_layer.layer(meta_service));
 
         let caller_name = if self.caller_name.is_empty() {
@@ -139,10 +133,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
                 HeaderValue::from_str(caller_name.as_str()).expect("Invalid caller name"),
             );
         }
-        let config = Config {
-            timeout: self.builder_config.timeout,
-            fail_on_error_status: self.builder_config.fail_on_error_status,
-        };
 
         let client_inner = ClientInner {
             service,
@@ -150,7 +140,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             callee_name: self.callee_name,
             // set a default target so that we can create a request without authority
             default_target: Target::from_address(mock_address()),
-            default_config: config,
             default_call_opt: self.call_opt,
             // do nothing
             target_parser: parse_target,
@@ -229,25 +218,5 @@ mod mock_transport_tests {
         assert_eq!(resp.status(), StatusCode::OK);
         assert!(resp.headers().is_empty());
         assert!(resp.into_body().into_vec().await.unwrap().is_empty());
-    }
-
-    #[tokio::test]
-    async fn status_response_test() {
-        {
-            let client =
-                ClientBuilder::new().mock(MockTransport::status_code(StatusCode::IM_A_TEAPOT));
-            let resp = client.get("/").send().await.unwrap();
-            assert_eq!(resp.status(), StatusCode::IM_A_TEAPOT);
-            assert!(resp.headers().is_empty());
-            assert!(resp.into_body().into_vec().await.unwrap().is_empty());
-        }
-        {
-            let client = {
-                let mut builder = ClientBuilder::new();
-                builder.fail_on_error_status(true);
-                builder.mock(MockTransport::status_code(StatusCode::IM_A_TEAPOT))
-            };
-            assert!(client.get("/").send().await.is_err());
-        }
     }
 }

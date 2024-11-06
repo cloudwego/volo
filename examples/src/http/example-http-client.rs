@@ -44,8 +44,7 @@ async fn main() -> Result<(), BoxError> {
             .callee_name("example.http.server")
             // set default target address
             .address("127.0.0.1:8080".parse::<SocketAddr>().unwrap())
-            .header("Test", "Test")?
-            .fail_on_error_status(true);
+            .header("Test", "Test")?;
         builder.build()
     };
 
