@@ -4,7 +4,6 @@ use pilota_build::{
     db::RirDatabase,
     rir::{self, Method},
     tags::RustWrapperArc,
-    ty::TyKind,
     CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
 };
 use quote::format_ident;
@@ -648,11 +647,8 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         let mut ret_ty = self
             .inner
             .codegen_item_ty(method.ret.kind.clone())
-            .global_path()
+            .global_path("volo_gen")
             .to_string();
-        if need_prepend_volo_gen_path(&method.ret.kind) {
-            ret_ty = format!("volo_gen{ret_ty}");
-        }
         if let Some(RustWrapperArc(true)) = self
             .cx()
             .tags(method.ret.tags_id)
@@ -665,13 +661,12 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             .args
             .iter()
             .map(|a| {
-                let ty = self.inner.codegen_item_ty(a.ty.kind.clone()).global_path();
+                let ty = self
+                    .inner
+                    .codegen_item_ty(a.ty.kind.clone())
+                    .global_path("volo_gen");
                 let ident = self.cx().rust_name(a.def_id).0.field_ident(); // use the _{rust-style fieldname} without keyword escaping
-                if need_prepend_volo_gen_path(&a.ty.kind) {
-                    format!("_{ident}: volo_gen{ty}")
-                } else {
-                    format!("_{ident}: {ty}")
-                }
+                format!("_{ident}: {ty}")
             })
             .join(",");
 
@@ -698,14 +693,6 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
     fn cx(&self) -> &Context {
         self.inner.cx()
-    }
-}
-
-fn need_prepend_volo_gen_path(ty: &TyKind) -> bool {
-    match ty {
-        TyKind::Arc(t) => need_prepend_volo_gen_path(&t.kind),
-        TyKind::Path(_) => true,
-        _ => false,
     }
 }
 

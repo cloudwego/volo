@@ -34,7 +34,7 @@ impl VoloGrpcBackend {
     ) -> FastStr {
         let ty = self.cx().codegen_item_ty(ty.kind);
         let ty_str = if global_path {
-            format!("volo_gen{}", ty.global_path())
+            format!("{}", ty.global_path("volo_gen"))
         } else {
             format!("{}", ty)
         };
@@ -54,7 +54,7 @@ impl VoloGrpcBackend {
     ) -> FastStr {
         let ret_ty = self.cx().codegen_item_ty(ty.kind);
         let ret_ty_str = if global_path {
-            format!("volo_gen{}", ret_ty.global_path())
+            format!("{}", ret_ty.global_path("volo_gen"))
         } else {
             format!("{}", ret_ty)
         };
@@ -402,7 +402,7 @@ impl CodegenBackend for VoloGrpcBackend {
             "",
             |enum_variant_names| -> "Self::{enum_variant_names}(s) => {{
                 ::volo_grpc::codec::encode::encode(s, compression_encoding)
-            }}," 
+            }},"
         );
 
         let req_recv_from_body = crate::join_multi_strs!(
