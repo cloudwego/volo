@@ -965,14 +965,15 @@ dependencies = [
 
 [[package]]
 name = "governor"
-version = "0.6.3"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68a7f542ee6b35af73b06abc0dad1c1bae89964e4e253bc4b587b91c9637867b"
+checksum = "0746aa765db78b521451ef74221663b57ba595bf83f75d0ce23cc09447c8139f"
 dependencies = [
  "cfg-if",
- "dashmap 5.5.3",
- "futures",
+ "dashmap 6.1.0",
+ "futures-sink",
  "futures-timer",
+ "futures-util",
  "no-std-compat",
  "nonzero_ext",
  "parking_lot 0.12.3",
@@ -1089,7 +1090,7 @@ dependencies = [
  "ipnet",
  "once_cell",
  "rand",
- "thiserror",
+ "thiserror 1.0.68",
  "tinyvec",
  "tokio",
  "tracing",
@@ -1112,7 +1113,7 @@ dependencies = [
  "rand",
  "resolv-conf",
  "smallvec",
- "thiserror",
+ "thiserror 1.0.68",
  "tokio",
  "tracing",
 ]
@@ -2274,7 +2275,7 @@ dependencies = [
  "paste",
  "serde",
  "smallvec",
- "thiserror",
+ "thiserror 1.0.68",
  "tokio",
 ]
 
@@ -2454,7 +2455,7 @@ dependencies = [
  "protobuf-support2",
  "protobuf2",
  "tempfile",
- "thiserror",
+ "thiserror 1.0.68",
  "which",
 ]
 
@@ -2464,7 +2465,7 @@ version = "4.0.0-alpha.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1c6e937299e45024fae149d242cee9719048e4890dbc28c0d1838ed0aba8c3ec"
 dependencies = [
- "thiserror",
+ "thiserror 1.0.68",
 ]
 
 [[package]]
@@ -2475,7 +2476,7 @@ checksum = "fc090e26a62f7d66cfc6cd8715ab0973f57287293488a8d05e68fd4d5bb4ad05"
 dependencies = [
  "once_cell",
  "protobuf-support2",
- "thiserror",
+ "thiserror 1.0.68",
 ]
 
 [[package]]
@@ -2611,7 +2612,7 @@ checksum = "ba009ff324d1fc1b900bd1fdb31564febe58a8ccc8a6fdbb93b543d33b13ca43"
 dependencies = [
  "getrandom",
  "libredox",
- "thiserror",
+ "thiserror 1.0.68",
 ]
 
 [[package]]
@@ -2770,9 +2771,9 @@ dependencies = [
 
 [[package]]
 name = "run_script"
-version = "0.10.1"
+version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "829f98fdc58d78989dd9af83be28bc15c94a7d77f9ecdb54abbbc0b1829ba9c7"
+checksum = "f20d7c40e6d6fc2ff69ad8e8bac4d39a5fc1874402647ac92b620954d56d5c3e"
 dependencies = [
  "fsio",
 ]
@@ -3161,7 +3162,7 @@ dependencies = [
  "serde",
  "simdutf8",
  "smallvec",
- "thiserror",
+ "thiserror 1.0.68",
 ]
 
 [[package]]
@@ -3247,9 +3248,9 @@ dependencies = [
 
 [[package]]
 name = "sysinfo"
-version = "0.31.4"
+version = "0.32.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "355dbe4f8799b304b05e1b0f05fc59b2a18d36645cf169607da45bde2f69a1be"
+checksum = "e3b5ae3f4f7d64646c46c4cae4e3f01d1c5d255c7406fdd7c7f999a94e488791"
 dependencies = [
  "core-foundation-sys",
  "libc",
@@ -3345,7 +3346,16 @@ version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02dd99dc800bbb97186339685293e1cc5d9df1f8fae2d0aecd9ff1c77efea892"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.68",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15291287e9bff1bc6f9ff3409ed9af665bec7a5fc8ac079ea96be07bca0e2668"
+dependencies = [
+ "thiserror-impl 2.0.0",
 ]
 
 [[package]]
@@ -3353,6 +3363,17 @@ name = "thiserror-impl"
 version = "1.0.68"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7c61ec9a6f64d2793d8a45faba21efbe3ced62a886d44c36a009b2b519b4c7e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "22efd00f33f93fa62848a7cab956c3d38c8d43095efda1decfc2b3a5dc0b8972"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3779,7 +3800,7 @@ dependencies = [
  "log",
  "rand",
  "sha1",
- "thiserror",
+ "thiserror 1.0.68",
  "utf-8",
 ]
 
@@ -3946,7 +3967,7 @@ dependencies = [
  "rustls-pemfile 2.2.0",
  "rustls-pki-types",
  "socket2",
- "thiserror",
+ "thiserror 2.0.0",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.25.0",
@@ -4099,7 +4120,7 @@ dependencies = [
  "serde_urlencoded",
  "simdutf8",
  "sonic-rs",
- "thiserror",
+ "thiserror 2.0.0",
  "tokio",
  "tokio-native-tls",
  "tokio-rustls 0.25.0",
@@ -4138,7 +4159,7 @@ dependencies = [
  "rustc-hash 2.0.0",
  "scopeguard",
  "sonic-rs",
- "thiserror",
+ "thiserror 2.0.0",
  "tokio",
  "tracing",
  "volo",
