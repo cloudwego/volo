@@ -67,6 +67,9 @@ tower = { workspace = true, features = [
 ] }
 tracing.workspace = true
 
+opentelemetry = { workspace = true, optional = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+
 tokio-rustls = { workspace = true, optional = true }
 tokio-native-tls = { workspace = true, optional = true }
 
@@ -82,3 +85,5 @@ native-tls = ["__tls", "dep:tokio-native-tls", "volo/native-tls"]
 native-tls-vendored = ["native-tls", "volo/native-tls-vendored"]
 
 grpc-web = ["dep:tonic", "dep:tonic-web"]
+
+opentelemetry = ["dep:opentelemetry", "dep:tracing-opentelemetry"]
