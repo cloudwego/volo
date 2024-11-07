@@ -3,17 +3,20 @@
 use std::sync::Arc;
 
 use faststr::FastStr;
-use http::{header, header::HeaderValue, status::StatusCode};
+use http::status::StatusCode;
 use motore::{
     layer::{Identity, Layer},
     service::{BoxService, Service},
 };
-use volo::{client::MkClient, context::Endpoint};
+use volo::client::MkClient;
 
-use super::{callopt::CallOpt, Client, ClientBuilder, ClientInner, Target, PKG_NAME_WITH_VER};
+use super::{Client, ClientBuilder, ClientInner, Target};
 use crate::{
-    context::client::ClientContext, error::ClientError, request::ClientRequest,
-    response::ClientResponse, utils::test_helpers::mock_address,
+    context::client::ClientContext,
+    error::client::{ClientError, Result},
+    request::ClientRequest,
+    response::ClientResponse,
+    utils::test_helpers::mock_address,
 };
 
 /// Default mock service of [`Client`]
@@ -110,7 +113,7 @@ impl Service<ClientContext, ClientRequest> for MockTransport {
 
 impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Build a mock HTTP client with a [`MockTransport`] service.
-    pub fn mock(mut self, transport: MockTransport) -> C::Target
+    pub fn mock(self, transport: MockTransport) -> Result<C::Target>
     where
         IL: Layer<ClientMockService>,
         IL::Service: Send + Sync + 'static,
@@ -119,41 +122,25 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         OL::Service: Send + Sync + 'static,
         C: MkClient<Client<OL::Service>>,
     {
+        self.status?;
+
         let meta_service = transport;
         let service = self.outer_layer.layer(self.inner_layer.layer(meta_service));
 
-        let caller_name = if self.caller_name.is_empty() {
-            FastStr::from_static_str(PKG_NAME_WITH_VER)
-        } else {
-            self.caller_name
-        };
-        if !caller_name.is_empty() && self.headers.get(header::USER_AGENT).is_none() {
-            self.headers.insert(
-                header::USER_AGENT,
-                HeaderValue::from_str(caller_name.as_str()).expect("Invalid caller name"),
-            );
-        }
-
         let client_inner = ClientInner {
             service,
-            caller_name,
-            callee_name: self.callee_name,
             // set a default target so that we can create a request without authority
-            default_target: Target::from_address(mock_address()),
-            default_call_opt: self.call_opt,
-            // do nothing
-            target_parser: parse_target,
+            target: Target::from(mock_address()),
+            timeout: self.timeout,
+            default_callee_name: FastStr::empty(),
             headers: self.headers,
         };
         let client = Client {
             inner: Arc::new(client_inner),
         };
-        self.mk_client.mk_client(client)
+        Ok(self.mk_client.mk_client(client))
     }
 }
-
-// do nothing
-fn parse_target(_: Target, _: Option<&CallOpt>, _: &mut Endpoint) {}
 
 #[allow(unused)]
 fn client_types_check() {
@@ -186,23 +173,28 @@ fn client_types_check() {
         }
     }
 
-    let _: DefaultMockClient = ClientBuilder::new().mock(Default::default());
+    let _: DefaultMockClient = ClientBuilder::new().mock(Default::default()).unwrap();
     let _: DefaultMockClient<TestLayer> = ClientBuilder::new()
         .layer_inner(TestLayer)
-        .mock(Default::default());
+        .mock(Default::default())
+        .unwrap();
     let _: DefaultMockClient<TestLayer> = ClientBuilder::new()
         .layer_inner_front(TestLayer)
-        .mock(Default::default());
+        .mock(Default::default())
+        .unwrap();
     let _: DefaultMockClient<Identity, TestLayer> = ClientBuilder::new()
         .layer_outer(TestLayer)
-        .mock(Default::default());
+        .mock(Default::default())
+        .unwrap();
     let _: DefaultMockClient<Identity, TestLayer> = ClientBuilder::new()
         .layer_outer_front(TestLayer)
-        .mock(Default::default());
+        .mock(Default::default())
+        .unwrap();
     let _: DefaultMockClient<TestLayer, TestLayer> = ClientBuilder::new()
         .layer_inner(TestLayer)
         .layer_outer(TestLayer)
-        .mock(Default::default());
+        .mock(Default::default())
+        .unwrap();
 }
 
 mod mock_transport_tests {
@@ -213,7 +205,7 @@ mod mock_transport_tests {
 
     #[tokio::test]
     async fn empty_response_test() {
-        let client = ClientBuilder::new().mock(MockTransport::default());
+        let client = ClientBuilder::new().mock(MockTransport::default()).unwrap();
         let resp = client.get("/").send().await.unwrap();
         assert_eq!(resp.status(), StatusCode::OK);
         assert!(resp.headers().is_empty());

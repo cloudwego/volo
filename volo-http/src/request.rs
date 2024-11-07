@@ -1,11 +1,13 @@
 //! Request types and utils.
 
+use std::str::FromStr;
+
 use http::{
     header::{self, HeaderMap, HeaderName},
     request::{Parts, Request},
-    uri::Scheme,
-    Uri,
+    uri::{Scheme, Uri},
 };
+use url::Url;
 
 /// [`Request`] with [`Body`] as default body.
 ///
@@ -38,7 +40,7 @@ pub trait RequestPartsExt: sealed::SealedRequestPartsExt {
 mod sealed {
     pub trait SealedRequestPartsExt {
         fn headers(&self) -> &http::header::HeaderMap;
-        fn uri(&self) -> &http::Uri;
+        fn uri(&self) -> &http::uri::Uri;
         fn extensions(&self) -> &http::Extensions;
     }
 }
@@ -54,6 +56,7 @@ impl sealed::SealedRequestPartsExt for Parts {
         &self.extensions
     }
 }
+
 impl<B> sealed::SealedRequestPartsExt for Request<B> {
     fn headers(&self) -> &HeaderMap {
         self.headers()
@@ -74,22 +77,11 @@ where
         simdutf8::basic::from_utf8(self.headers().get(header::HOST)?.as_bytes()).ok()
     }
 
-    fn url(&self) -> Option<url::Url> {
+    fn url(&self) -> Option<Url> {
+        let scheme = self.extensions().get::<Scheme>().unwrap_or(&Scheme::HTTP);
         let host = self.host()?;
-        let uri = self.uri();
+        let path = self.uri().path();
 
-        let mut url_str = String::new();
-
-        if let Some(scheme) = self.extensions().get::<Scheme>() {
-            url_str.push_str(scheme.as_str());
-            url_str.push_str("://");
-        } else {
-            url_str.push_str("http://");
-        }
-
-        url_str.push_str(host);
-        url_str.push_str(uri.path());
-
-        url::Url::parse(url_str.as_str()).ok()
+        Url::from_str(&format!("{scheme}://{host}{path}")).ok()
     }
 }

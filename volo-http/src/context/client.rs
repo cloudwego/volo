@@ -1,5 +1,7 @@
 //! Context and its utilities of client
 
+use std::time::Duration;
+
 use chrono::{DateTime, Local};
 use volo::{
     context::{Reusable, Role, RpcCx, RpcInfo},
@@ -59,8 +61,33 @@ impl ClientStats {
 
 /// Configuration of the request
 #[derive(Clone, Debug, Default)]
-pub struct Config;
+pub struct Config {
+    /// Timeout of the current request
+    pub timeout: Option<Duration>,
+}
+
+impl Config {
+    /// Create a default [`Config`]
+    #[inline]
+    pub fn new() -> Self {
+        Default::default()
+    }
+
+    /// Get current timeout of the request
+    #[inline]
+    pub fn timeout(&self) -> Option<&Duration> {
+        self.timeout.as_ref()
+    }
+
+    /// Set timeout to the request
+    #[inline]
+    pub fn set_timeout(&mut self, timeout: Option<Duration>) {
+        self.timeout = timeout;
+    }
+}
 
 impl Reusable for Config {
-    fn clear(&mut self) {}
+    fn clear(&mut self) {
+        self.timeout = None;
+    }
 }

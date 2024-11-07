@@ -1,9 +1,10 @@
 //! Generic error types for client
 
-use std::{error::Error, fmt};
+use std::{error::Error, fmt, net::SocketAddr};
 
 use http::uri::Uri;
 use paste::paste;
+use volo::{context::Endpoint, net::Address};
 
 use super::BoxError;
 use crate::body::BodyConvertError;
@@ -16,7 +17,8 @@ pub type Result<T, E = ClientError> = std::result::Result<T, E>;
 pub struct ClientError {
     kind: ErrorKind,
     source: Option<BoxError>,
-    url: Option<Uri>,
+    uri: Option<Uri>,
+    addr: Option<SocketAddr>,
 }
 
 impl ClientError {
@@ -28,51 +30,95 @@ impl ClientError {
         Self {
             kind,
             source: error.map(Into::into),
-            url: None,
+            uri: None,
+            addr: None,
         }
     }
 
-    /// Set a [`Uri`] to the [`ClientError`], it can be displayed when printing
-    pub fn with_url(self, url: Uri) -> Self {
-        Self {
-            kind: self.kind,
-            source: self.source,
-            url: Some(url),
-        }
+    /// Set a [`Uri`] to the [`ClientError`].
+    #[inline]
+    pub fn set_url(&mut self, uri: Uri) {
+        self.uri = Some(uri);
     }
 
-    /// Remote the [`Uri`] from the [`ClientError`]
-    pub fn without_url(self) -> Self {
-        Self {
-            kind: self.kind,
-            source: self.source,
-            url: None,
+    /// Set a [`SocketAddr`] to the [`ClientError`].
+    #[inline]
+    pub fn set_addr(&mut self, addr: SocketAddr) {
+        self.addr = Some(addr);
+    }
+
+    /// Consume current [`ClientError`] and return a new one with given [`Uri`].
+    #[inline]
+    pub fn with_url(mut self, uri: Uri) -> Self {
+        self.uri = Some(uri);
+        self
+    }
+
+    /// Remove [`Uri`] from the [`ClientError`].
+    #[inline]
+    pub fn without_url(mut self) -> Self {
+        self.uri = None;
+        self
+    }
+
+    /// Consume current [`ClientError`] and return a new one with given [`SocketAddr`].
+    #[inline]
+    pub fn with_addr(mut self, addr: SocketAddr) -> Self {
+        self.addr = Some(addr);
+        self
+    }
+
+    /// Consume current [`ClientError`] and return a new one with [`SocketAddr`] from the
+    /// [`Address`] if exists.
+    #[inline]
+    pub fn with_address(mut self, address: Address) -> Self {
+        match address {
+            Address::Ip(addr) => self.addr = Some(addr),
+            #[cfg(target_family = "unix")]
+            Address::Unix(_) => {}
         }
+        self
+    }
+
+    /// Consume current [`ClientError`] and return a new one with [`SocketAddr`] from the
+    /// [`Address`] if exists.
+    #[inline]
+    pub fn with_endpoint(mut self, ep: &Endpoint) -> Self {
+        if let Some(Address::Ip(addr)) = &ep.address {
+            self.addr = Some(*addr);
+        }
+        self
     }
 
     /// Get a reference to the [`ErrorKind`]
+    #[inline]
     pub fn kind(&self) -> &ErrorKind {
         &self.kind
     }
 
     /// Get a reference to the [`Uri`] if it exists
-    pub fn url(&self) -> Option<&Uri> {
-        self.url.as_ref()
+    #[inline]
+    pub fn uri(&self) -> Option<&Uri> {
+        self.uri.as_ref()
     }
 
-    /// Get a mutable reference to the [`Uri`] if it exists
-    pub fn url_mut(&mut self) -> Option<&mut Uri> {
-        self.url.as_mut()
+    /// Get a reference to the [`SocketAddr`] if it exists
+    #[inline]
+    pub fn addr(&self) -> Option<&SocketAddr> {
+        self.addr.as_ref()
     }
 }
 
 impl fmt::Display for ClientError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.kind)?;
-        if let Some(ref url) = self.url {
-            write!(f, "for url `{url}`")?;
+        if let Some(addr) = &self.addr {
+            write!(f, " to addr {addr}")?;
         }
-        if let Some(ref source) = self.source {
+        if let Some(uri) = &self.uri {
+            write!(f, " for uri `{uri}`")?;
+        }
+        if let Some(source) = &self.source {
             write!(f, ": {source}")?;
         }
         Ok(())
@@ -182,6 +228,7 @@ macro_rules! simple_error {
 simple_error!(Builder => NoAddress => "missing target address");
 simple_error!(Builder => BadScheme => "bad scheme");
 simple_error!(Builder => BadHostName => "bad host name");
+simple_error!(Builder => BadAddress => "bad address");
 simple_error!(Request => Timeout => "request timeout");
 simple_error!(LoadBalance => NoAvailableEndpoint => "no available endpoint");
 

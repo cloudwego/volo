@@ -29,6 +29,24 @@ pub enum Address {
     Unix(StdUnixSocketAddr),
 }
 
+impl Address {
+    pub fn ip_addr(&self) -> Option<&SocketAddr> {
+        match self {
+            Self::Ip(ip) => Some(ip),
+            #[cfg(target_family = "unix")]
+            Self::Unix(_) => None,
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    pub fn unix_addr(&self) -> Option<&StdUnixSocketAddr> {
+        match self {
+            Self::Ip(_) => None,
+            Self::Unix(unix) => Some(unix),
+        }
+    }
+}
+
 impl PartialEq for Address {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {

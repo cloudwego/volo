@@ -95,10 +95,8 @@ mod convert_service {
     #[cfg(feature = "__tls")]
     fn new_server_config(client_cx: &ClientContext) -> crate::context::server::Config {
         let mut config = crate::context::server::Config::default();
-        if client_cx
-            .rpc_info()
-            .callee()
-            .contains::<crate::client::TlsTransport>()
+        if client_cx.rpc_info().callee().get::<http::uri::Scheme>()
+            == Some(&http::uri::Scheme::HTTPS)
         {
             config.set_tls(true);
         }
@@ -138,7 +136,9 @@ mod helper_tests {
     #[tokio::test]
     async fn client_call_router() {
         let router: Router = Router::new().route("/get", get(|| async { HELLO_WORLD }));
-        let client = ClientBuilder::new().mock(MockTransport::server_service(router));
+        let client = ClientBuilder::new()
+            .mock(MockTransport::server_service(router))
+            .unwrap();
         {
             let ret = client
                 .get("/get")
