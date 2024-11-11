@@ -30,8 +30,8 @@ echo_command cargo clippy -p volo-grpc --no-default-features --features native-t
 echo_command cargo clippy -p volo-grpc --no-default-features --features native-tls-vendored -- --deny warnings
 echo_command cargo clippy -p volo-grpc --no-default-features --features grpc-web -- --deny warnings
 echo_command cargo clippy -p volo-http --no-default-features -- --deny warnings
-echo_command cargo clippy -p volo-http --no-default-features --features default_client -- --deny warnings
-echo_command cargo clippy -p volo-http --no-default-features --features default_server -- --deny warnings
+echo_command cargo clippy -p volo-http --no-default-features --features default-client -- --deny warnings
+echo_command cargo clippy -p volo-http --no-default-features --features default-server -- --deny warnings
 echo_command cargo clippy -p volo-http --no-default-features --features client,server -- --deny warnings
 echo_command cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
 echo_command cargo clippy -p volo -- --deny warnings
@@ -43,7 +43,7 @@ echo_command cargo clippy -p examples -- --deny warnings
 # Test
 echo_command cargo test -p volo-thrift
 echo_command cargo test -p volo-grpc --features rustls
-echo_command cargo test -p volo-http --features default_client,default_server
+echo_command cargo test -p volo-http --features default-client,default-server
 echo_command cargo test -p volo-http --features full
 echo_command cargo test -p volo --features rustls
 echo_command cargo test -p volo-build
