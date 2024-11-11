@@ -17,14 +17,7 @@ use volo::{
     net::Address,
 };
 
-use super::{target::RemoteTargetAddress, Target};
-#[cfg(feature = "__tls")]
-use crate::client::transport::TlsTransport;
-use crate::{
-    client::callopt::CallOpt,
-    error::client::{bad_host_name, no_address},
-    utils::consts,
-};
+use crate::error::client::{bad_host_name, no_address};
 
 /// The port for `DnsResolver`, and only used for `DnsResolver`.
 ///
@@ -33,6 +26,7 @@ use crate::{
 ///
 /// For setting port to `DnsResolver`, you can insert it into `Endpoint` of `callee` in
 /// `ClientContext`, the resolver will apply it.
+#[derive(Clone, Copy, Debug, Default)]
 pub struct Port(pub u16);
 
 impl Deref for Port {
@@ -99,14 +93,7 @@ impl Discover for DnsResolver {
         let port = match endpoint.get::<Port>() {
             Some(port) => port.0,
             None => {
-                #[cfg(feature = "__tls")]
-                if endpoint.contains::<TlsTransport>() {
-                    consts::HTTPS_DEFAULT_PORT
-                } else {
-                    consts::HTTP_DEFAULT_PORT
-                }
-                #[cfg(not(feature = "__tls"))]
-                consts::HTTP_DEFAULT_PORT
+                unreachable!();
             }
         };
 
@@ -128,42 +115,5 @@ impl Discover for DnsResolver {
 
     fn watch(&self, _: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {
         None
-    }
-}
-
-/// [`TargetParser`][TargetParser] for parsing [`Target`] and [`CallOpt`] to [`Endpoint`]
-///
-/// Because [`LoadBalance`][LoadBalance] accepts only [`Endpoint`], but we should create an HTTP
-/// target through [`Target`], the [`parse_target`] can parse them and apply to [`Endpoint`] for
-/// [LoadBalance] using.
-///
-/// [TargetParser]: crate::client::target::TargetParser
-/// [LoadBalance]: volo::loadbalance::LoadBalance
-pub fn parse_target(target: Target, _: Option<&CallOpt>, endpoint: &mut Endpoint) {
-    match target {
-        Target::None => (),
-        Target::Remote(rt) => {
-            let port = rt.port();
-
-            #[cfg(feature = "__tls")]
-            if rt.is_https() {
-                endpoint.insert(TlsTransport);
-            }
-
-            match rt.addr {
-                RemoteTargetAddress::Ip(ip) => {
-                    let sa = SocketAddr::new(ip, port);
-                    endpoint.set_address(Address::Ip(sa));
-                }
-                RemoteTargetAddress::Name(host) => {
-                    endpoint.insert(Port(port));
-                    endpoint.set_service_name(host);
-                }
-            }
-        }
-        #[cfg(target_family = "unix")]
-        Target::Local(unix_socket) => {
-            endpoint.set_address(Address::Unix(unix_socket.clone()));
-        }
     }
 }

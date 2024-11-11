@@ -2,17 +2,22 @@
 //!
 //! See [`RequestBuilder`] for more details.
 
-use std::error::Error;
+use std::{borrow::Cow, error::Error};
 
+use faststr::FastStr;
 use http::{
     header::{HeaderMap, HeaderName, HeaderValue},
-    uri::PathAndQuery,
-    Method, Request, Uri, Version,
+    method::Method,
+    request::Request,
+    uri::{PathAndQuery, Scheme, Uri},
+    version::Version,
 };
-use motore::service::Service;
-use volo::net::Address;
+use volo::{
+    client::{Apply, OneShotService, WithOptService},
+    net::Address,
+};
 
-use super::{callopt::CallOpt, target::Target, Client};
+use super::{insert_header, target::Target, CallOpt};
 use crate::{
     body::Body,
     context::ClientContext,
@@ -22,23 +27,24 @@ use crate::{
     },
     request::ClientRequest,
     response::ClientResponse,
+    utils::consts,
 };
 
 /// The builder for building a request.
 pub struct RequestBuilder<S, B = Body> {
-    client: Client<S>,
+    inner: S,
     target: Target,
-    call_opt: Option<CallOpt>,
-    request: Result<ClientRequest<B>>,
+    request: ClientRequest<B>,
+    status: Result<()>,
 }
 
-impl<S> RequestBuilder<S, Body> {
-    pub(crate) fn new(client: Client<S>) -> Self {
+impl<S> RequestBuilder<S> {
+    pub(super) fn new(inner: S) -> Self {
         Self {
-            client,
+            inner,
             target: Default::default(),
-            call_opt: Default::default(),
-            request: Ok(ClientRequest::default()),
+            request: ClientRequest::default(),
+            status: Ok(()),
         }
     }
 
@@ -48,23 +54,20 @@ impl<S> RequestBuilder<S, Body> {
         D: TryInto<Body>,
         D::Error: Error + Send + Sync + 'static,
     {
-        if self.request.is_err() {
+        if self.status.is_err() {
             return self;
         }
-        let Ok(req) = self.request else {
-            unreachable!();
-        };
 
         let body = match data.try_into() {
             Ok(body) => body,
             Err(err) => {
-                self.request = Err(builder_error(err));
+                self.status = Err(builder_error(err));
                 return self;
             }
         };
 
-        let (parts, _) = req.into_parts();
-        self.request = Ok(Request::from_parts(parts, body));
+        let (parts, _) = self.request.into_parts();
+        self.request = Request::from_parts(parts, body);
 
         self
     }
@@ -75,27 +78,24 @@ impl<S> RequestBuilder<S, Body> {
     where
         T: serde::Serialize,
     {
-        if self.request.is_err() {
+        if self.status.is_err() {
             return self;
         }
-        let Ok(req) = self.request else {
-            unreachable!();
-        };
 
         let json = match crate::utils::json::serialize(json) {
             Ok(json) => json,
             Err(err) => {
-                self.request = Err(builder_error(err));
+                self.status = Err(builder_error(err));
                 return self;
             }
         };
 
-        let (mut parts, _) = req.into_parts();
+        let (mut parts, _) = self.request.into_parts();
         parts.headers.insert(
             http::header::CONTENT_TYPE,
             crate::utils::consts::APPLICATION_JSON,
         );
-        self.request = Ok(Request::from_parts(parts, Body::from(json)));
+        self.request = Request::from_parts(parts, Body::from(json));
 
         self
     }
@@ -106,27 +106,24 @@ impl<S> RequestBuilder<S, Body> {
     where
         T: serde::Serialize,
     {
-        if self.request.is_err() {
+        if self.status.is_err() {
             return self;
         }
-        let Ok(req) = self.request else {
-            unreachable!();
-        };
 
         let form = match serde_urlencoded::to_string(form) {
             Ok(form) => form,
             Err(err) => {
-                self.request = Err(builder_error(err));
+                self.status = Err(builder_error(err));
                 return self;
             }
         };
 
-        let (mut parts, _) = req.into_parts();
+        let (mut parts, _) = self.request.into_parts();
         parts.headers.insert(
             http::header::CONTENT_TYPE,
             crate::utils::consts::APPLICATION_WWW_FORM_URLENCODED,
         );
-        self.request = Ok(Request::from_parts(parts, Body::from(form)));
+        self.request = Request::from_parts(parts, Body::from(form));
 
         self
     }
@@ -135,15 +132,13 @@ impl<S> RequestBuilder<S, Body> {
 impl<S, B> RequestBuilder<S, B> {
     /// Set method for the request.
     pub fn method(mut self, method: Method) -> Self {
-        if let Ok(req) = self.request.as_mut() {
-            *req.method_mut() = method;
-        }
+        *self.request.method_mut() = method;
         self
     }
 
     /// Get a reference to method in the request.
-    pub fn method_ref(&self) -> Option<&Method> {
-        self.request.as_ref().ok().map(Request::method)
+    pub fn method_ref(&self) -> &Method {
+        self.request.method()
     }
 
     /// Set uri for building request.
@@ -159,21 +154,21 @@ impl<S, B> RequestBuilder<S, B> {
         U: TryInto<Uri>,
         U::Error: Into<BoxError>,
     {
-        if self.request.is_err() {
+        if self.status.is_err() {
             return self;
         }
         let uri = match uri.try_into() {
             Ok(uri) => uri,
             Err(err) => {
-                self.request = Err(builder_error(err));
+                self.status = Err(builder_error(err));
                 return self;
             }
         };
-        if let Some(target) = Target::from_uri(&uri) {
-            match target {
+        if uri.host().is_some() {
+            match Target::from_uri(&uri) {
                 Ok(target) => self.target = target,
                 Err(err) => {
-                    self.request = Err(err);
+                    self.status = Err(err);
                     return self;
                 }
             }
@@ -183,18 +178,12 @@ impl<S, B> RequestBuilder<S, B> {
             .map(PathAndQuery::to_owned)
             .unwrap_or_else(|| PathAndQuery::from_static("/"))
             .into();
-        let Ok(req) = self.request.as_mut() else {
-            unreachable!();
-        };
-        *req.uri_mut() = rela_uri;
+        *self.request.uri_mut() = rela_uri;
 
         self
     }
 
     /// Set full uri for building request.
-    ///
-    /// In this function, scheme and host will be resolved as the target address, and the full uri
-    /// will be set as the request uri.
     ///
     /// This function is only used for using http(s) proxy.
     pub fn full_uri<U>(mut self, uri: U) -> Self
@@ -202,40 +191,18 @@ impl<S, B> RequestBuilder<S, B> {
         U: TryInto<Uri>,
         U::Error: Into<BoxError>,
     {
-        if self.request.is_err() {
+        if self.status.is_err() {
             return self;
         }
         let uri = match uri.try_into() {
             Ok(uri) => uri,
             Err(err) => {
-                self.request = Err(builder_error(err));
+                self.status = Err(builder_error(err));
                 return self;
             }
         };
-        if let Some(target) = Target::from_uri(&uri) {
-            match target {
-                Ok(target) => self.target = target,
-                Err(err) => {
-                    self.request = Err(err);
-                    return self;
-                }
-            }
-        }
-        let Ok(req) = self.request.as_mut() else {
-            unreachable!();
-        };
-        *req.uri_mut() = uri;
+        *self.request.uri_mut() = uri;
 
-        self
-    }
-
-    /// Set a [`CallOpt`] to the request.
-    ///
-    /// The [`CallOpt`] is used for service discover, default is an empty one.
-    ///
-    /// See [`CallOpt`] for more details.
-    pub fn with_callopt(mut self, call_opt: CallOpt) -> Self {
-        self.call_opt = Some(call_opt);
         self
     }
 
@@ -245,22 +212,19 @@ impl<S, B> RequestBuilder<S, B> {
     where
         T: serde::Serialize,
     {
-        if self.request.is_err() {
+        if self.status.is_err() {
             return self;
         }
         let query_str = match serde_urlencoded::to_string(query) {
             Ok(query) => query,
             Err(err) => {
-                self.request = Err(builder_error(err));
+                self.status = Err(builder_error(err));
                 return self;
             }
         };
-        let Ok(req) = self.request.as_mut() else {
-            unreachable!();
-        };
 
         // We should keep path only without query
-        let path_str = req.uri().path();
+        let path_str = self.request.uri().path();
         let mut path = String::with_capacity(path_str.len() + 1 + query_str.len());
         path.push_str(path_str);
         path.push('?');
@@ -270,73 +234,54 @@ impl<S, B> RequestBuilder<S, B> {
             unreachable!();
         };
 
-        *req.uri_mut() = uri;
+        *self.request.uri_mut() = uri;
 
         self
     }
 
     /// Get a reference to uri in the request.
-    pub fn uri_ref(&self) -> Option<&Uri> {
-        self.request.as_ref().ok().map(Request::uri)
+    pub fn uri_ref(&self) -> &Uri {
+        self.request.uri()
     }
 
     /// Set version of the HTTP request.
     pub fn version(mut self, version: Version) -> Self {
-        if let Ok(req) = self.request.as_mut() {
-            *req.version_mut() = version;
-        }
+        *self.request.version_mut() = version;
         self
     }
 
     /// Get a reference to version in the request.
-    pub fn version_ref(&self) -> Option<Version> {
-        self.request.as_ref().ok().map(Request::version)
+    pub fn version_ref(&self) -> Version {
+        self.request.version()
     }
 
     /// Insert a header into the request header map.
     pub fn header<K, V>(mut self, key: K, value: V) -> Self
     where
         K: TryInto<HeaderName>,
-        K::Error: Into<http::Error>,
+        K::Error: Error + Send + Sync + 'static,
         V: TryInto<HeaderValue>,
-        V::Error: Into<http::Error>,
+        V::Error: Error + Send + Sync + 'static,
     {
-        if self.request.is_err() {
+        if self.status.is_err() {
             return self;
         }
 
-        let key = match key.try_into() {
-            Ok(key) => key,
-            Err(err) => {
-                self.request = Err(builder_error(err.into()));
-                return self;
-            }
-        };
-        let value = match value.try_into() {
-            Ok(value) => value,
-            Err(err) => {
-                self.request = Err(builder_error(err.into()));
-                return self;
-            }
-        };
-
-        let Ok(req) = self.request.as_mut() else {
-            unreachable!();
-        };
-
-        req.headers_mut().insert(key, value);
+        if let Err(err) = insert_header(self.request.headers_mut(), key, value) {
+            self.status = Err(err);
+        }
 
         self
     }
 
     /// Get a reference to headers in the request.
-    pub fn headers(&self) -> Option<&HeaderMap> {
-        self.request.as_ref().ok().map(Request::headers)
+    pub fn headers(&self) -> &HeaderMap {
+        self.request.headers()
     }
 
     /// Get a mutable reference to headers in the request.
-    pub fn headers_mut(&mut self) -> Option<&mut HeaderMap> {
-        self.request.as_mut().ok().map(Request::headers_mut)
+    pub fn headers_mut(&mut self) -> &mut HeaderMap {
+        self.request.headers_mut()
     }
 
     /// Set target address for the request.
@@ -344,7 +289,7 @@ impl<S, B> RequestBuilder<S, B> {
     where
         A: Into<Address>,
     {
-        self.target = Target::from_address(address);
+        self.target = Target::from(address.into());
         self
     }
 
@@ -352,26 +297,42 @@ impl<S, B> RequestBuilder<S, B> {
     ///
     /// It uses http with port 80 by default.
     ///
-    /// For setting scheme and port, use [`Self::with_port`] and [`Self::with_https`] after
+    /// For setting scheme and port, use [`Self::with_scheme`] and [`Self::with_port`] after
     /// specifying host.
     pub fn host<H>(mut self, host: H) -> Self
     where
-        H: AsRef<str>,
+        H: Into<Cow<'static, str>>,
     {
-        self.target = Target::from_host(host);
+        // SAFETY: using HTTP is safe
+        self.target = unsafe {
+            Target::new_host_unchecked(
+                Scheme::HTTP,
+                FastStr::from(host.into()),
+                consts::HTTP_DEFAULT_PORT,
+            )
+        };
         self
     }
 
-    /// Set port for the target address of this request.
+    /// Set scheme for target of the request.
+    pub fn with_scheme(mut self, scheme: Scheme) -> Self {
+        if self.status.is_err() {
+            return self;
+        }
+        if let Err(err) = self.target.set_scheme(scheme) {
+            self.status = Err(err);
+        }
+        self
+    }
+
+    /// Set port for target address of this request.
     pub fn with_port(mut self, port: u16) -> Self {
-        self.target.set_port(port);
-        self
-    }
-
-    /// Set if the request uses https.
-    #[cfg(feature = "__tls")]
-    pub fn with_https(mut self, https: bool) -> Self {
-        self.target.set_https(https);
+        if self.status.is_err() {
+            return self;
+        }
+        if let Err(err) = self.target.set_port(port) {
+            self.status = Err(err);
+        }
         self
     }
 
@@ -385,53 +346,51 @@ impl<S, B> RequestBuilder<S, B> {
         &mut self.target
     }
 
-    /// Get a reference to [`CallOpt`].
-    pub fn callopt_ref(&self) -> &Option<CallOpt> {
-        &self.call_opt
-    }
-
-    /// Get a mutable reference to [`CallOpt`].
-    pub fn callopt_mut(&mut self) -> &mut Option<CallOpt> {
-        &mut self.call_opt
-    }
-
     /// Set a request body.
     pub fn body<B2>(self, body: B2) -> RequestBuilder<S, B2> {
-        let request = match self.request {
-            Ok(req) => {
-                let (parts, _) = req.into_parts();
-                Ok(Request::from_parts(parts, body))
-            }
-            Err(err) => Err(err),
-        };
+        let (parts, _) = self.request.into_parts();
+        let request = Request::from_parts(parts, body);
 
         RequestBuilder {
-            client: self.client,
+            inner: self.inner,
             target: self.target,
-            call_opt: self.call_opt,
             request,
+            status: self.status,
         }
     }
 
     /// Get a reference to body in the request.
-    pub fn body_ref(&self) -> Option<&B> {
-        self.request.as_ref().ok().map(Request::body)
+    pub fn body_ref(&self) -> &B {
+        self.request.body()
     }
-}
 
-impl<S, B> RequestBuilder<S, B>
-where
-    S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
-        + Send
-        + Sync
-        + 'static,
-    B: Send + 'static,
-{
+    /// Apply a [`CallOpt`] to the request.
+    pub fn with_callopt(self, callopt: CallOpt) -> RequestBuilder<WithOptService<S, CallOpt>, B> {
+        RequestBuilder {
+            inner: WithOptService::new(self.inner, callopt),
+            target: self.target,
+            request: self.request,
+            status: self.status,
+        }
+    }
+
     /// Send the request and get the response.
-    pub async fn send(self) -> Result<ClientResponse> {
-        self.client
-            .send_request(self.target, self.call_opt, self.request?)
-            .await
+    pub async fn send(self) -> Result<ClientResponse>
+    where
+        S: OneShotService<
+                ClientContext,
+                ClientRequest<B>,
+                Response = ClientResponse,
+                Error = ClientError,
+            > + Send
+            + Sync
+            + 'static,
+        B: Send + 'static,
+    {
+        self.status?;
+        let mut cx = ClientContext::new();
+        self.target.apply(&mut cx)?;
+        self.inner.call(&mut cx, self.request).await
     }
 }
 
@@ -443,8 +402,7 @@ mod request_tests {
 
     use serde::Deserialize;
 
-    use super::Client;
-    use crate::body::BodyConversion;
+    use crate::{body::BodyConversion, client::Client};
 
     #[allow(dead_code)]
     #[derive(Deserialize)]
@@ -471,7 +429,7 @@ mod request_tests {
     async fn set_query() {
         let data = test_data();
 
-        let client = Client::builder().build();
+        let client = Client::builder().build().unwrap();
         let resp = client
             .get("http://httpbin.org/get")
             .set_query(&data)
@@ -489,7 +447,7 @@ mod request_tests {
     async fn set_form() {
         let data = test_data();
 
-        let client = Client::builder().build();
+        let client = Client::builder().build().unwrap();
         let resp = client
             .post("http://httpbin.org/post")
             .form(&data)
@@ -506,7 +464,7 @@ mod request_tests {
     async fn set_json() {
         let data = test_data();
 
-        let client = Client::builder().build();
+        let client = Client::builder().build().unwrap();
         let resp = client
             .post("http://httpbin.org/post")
             .json(&data)
@@ -517,5 +475,87 @@ mod request_tests {
             .await
             .unwrap();
         assert_eq!(resp.json, Some(data));
+    }
+}
+
+#[cfg(test)]
+mod with_callopt_tests {
+    use std::{future::Future, time::Duration};
+
+    use http::status::StatusCode;
+    use motore::service::Service;
+    use volo::context::Context;
+
+    use crate::{
+        body::{Body, BodyConversion},
+        client::{layer::FailOnStatus, test_helpers::MockTransport, CallOpt, Client},
+        context::client::Config,
+        error::ClientError,
+        response::ClientResponse,
+    };
+
+    struct GetTimeoutAsSeconds;
+
+    impl<Cx, Req> Service<Cx, Req> for GetTimeoutAsSeconds
+    where
+        Cx: Context<Config = Config>,
+    {
+        type Response = ClientResponse;
+        type Error = ClientError;
+
+        fn call(
+            &self,
+            cx: &mut Cx,
+            _: Req,
+        ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
+            let timeout = cx.rpc_info().config().timeout();
+            let resp = match timeout {
+                Some(timeout) => {
+                    let secs = timeout.as_secs();
+                    ClientResponse::new(Body::from(format!("{secs}")))
+                }
+                None => {
+                    let mut resp = ClientResponse::new(Body::empty());
+                    *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
+                    resp
+                }
+            };
+            async { Ok(resp) }
+        }
+    }
+
+    #[tokio::test]
+    async fn callopt_test() {
+        let mut builder = Client::builder();
+        builder.set_request_timeout(Duration::from_secs(1));
+        let client = builder
+            .layer_outer_front(FailOnStatus::server_error())
+            .mock(MockTransport::service(GetTimeoutAsSeconds))
+            .unwrap();
+        // default timeout is 1 seconds
+        assert_eq!(
+            client
+                .get("/")
+                .send()
+                .await
+                .unwrap()
+                .into_string()
+                .await
+                .unwrap(),
+            "1"
+        );
+        // callopt set timeout to 5 seconds
+        assert_eq!(
+            client
+                .get("/")
+                .with_callopt(CallOpt::new().with_timeout(Duration::from_secs(5)))
+                .send()
+                .await
+                .unwrap()
+                .into_string()
+                .await
+                .unwrap(),
+            "5"
+        );
     }
 }

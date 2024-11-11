@@ -40,12 +40,12 @@ async fn main() -> Result<(), BoxError> {
     let client = {
         let mut builder = ClientBuilder::new();
         builder
-            .caller_name("example.http.client")
-            .callee_name("example.http.server")
+            .user_agent("example.http.client")
+            .default_host("example.http.server")
             // set default target address
             .address("127.0.0.1:8080".parse::<SocketAddr>().unwrap())
-            .header("Test", "Test")?;
-        builder.build()
+            .header("Test", "Test");
+        builder.build()?
     };
 
     // set host and override the default one
@@ -98,7 +98,7 @@ async fn main() -> Result<(), BoxError> {
     );
 
     // an empty client
-    let client = ClientBuilder::new().build();
+    let client = ClientBuilder::new().build()?;
     println!(
         "{}",
         client

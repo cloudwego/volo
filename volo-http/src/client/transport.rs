@@ -17,15 +17,6 @@ use crate::{
     response::ClientResponse,
 };
 
-/// TLS transport tag with no content
-///
-/// When implementing a service discover and TLS should be enable, just inserting it to the callee.
-///
-/// The struct is used for advanced users.
-#[cfg(feature = "__tls")]
-#[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
-pub struct TlsTransport;
-
 #[derive(Clone)]
 pub struct ClientTransport {
     client: http1::Builder,
@@ -60,18 +51,23 @@ impl ClientTransport {
     }
 
     async fn connect_to(&self, address: Address) -> Result<Conn, ClientError> {
-        self.mk_conn.make_connection(address).await.map_err(|err| {
-            tracing::error!("[Volo-HTTP] failed to make connection, error: {err}");
-            request_error(err)
-        })
+        self.mk_conn
+            .make_connection(address.clone())
+            .await
+            .map_err(|err| {
+                tracing::error!("[Volo-HTTP] failed to make connection, error: {err}");
+                request_error(err).with_address(address)
+            })
     }
 
     #[cfg(feature = "__tls")]
     async fn make_connection(&self, cx: &ClientContext) -> Result<Conn, ClientError> {
+        use http::uri::Scheme;
+
         use crate::error::client::bad_scheme;
 
         let callee = cx.rpc_info().callee();
-        let https = callee.contains::<TlsTransport>();
+        let https = callee.get::<Scheme>() == Some(&Scheme::HTTPS);
 
         if self.config.disable_tls && https {
             // TLS is disabled but the request still use TLS
@@ -124,12 +120,12 @@ impl ClientTransport {
         let io = TokioIo::new(conn);
         let (mut sender, conn) = self.client.handshake(io).await.map_err(|err| {
             tracing::error!("[Volo-HTTP] failed to handshake, error: {err}");
-            request_error(err)
+            request_error(err).with_endpoint(cx.rpc_info().callee())
         })?;
         tokio::spawn(conn);
         let resp = sender.send_request(req).await.map_err(|err| {
             tracing::error!("[Volo-HTTP] failed to send request, error: {err}");
-            request_error(err)
+            request_error(err).with_endpoint(cx.rpc_info().callee())
         })?;
         Ok(resp.map(crate::body::Body::from_incoming))
     }
