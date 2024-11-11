@@ -16,7 +16,6 @@ use http::{
 };
 use http_body::Body;
 use http_body_util::BodyExt;
-use hyper::body::Incoming;
 use volo::{context::Context, net::Address};
 
 use super::IntoResponse;
@@ -64,7 +63,7 @@ pub trait FromContext: Sized {
 ///
 /// [`FromRequest`] will consume [`ServerRequest`], so it can only be used once in a handler. If
 /// your extractor does not need to consume [`ServerRequest`], please use [`FromContext`] instead.
-pub trait FromRequest<B = Incoming, M = private::ViaRequest>: Sized {
+pub trait FromRequest<B = crate::body::Body, M = private::ViaRequest>: Sized {
     /// If the extractor fails, it will return this `Rejection` type.
     ///
     /// The `Rejection` should implement [`IntoResponse`]. If extractor fails in handler, the
@@ -614,10 +613,9 @@ mod extract_tests {
     use std::convert::Infallible;
 
     use http::request::Parts;
-    use hyper::body::Incoming;
 
     use super::{FromContext, FromRequest};
-    use crate::{context::ServerContext, server::handler::Handler};
+    use crate::{body::Body, context::ServerContext, server::handler::Handler};
 
     struct SomethingFromCx;
 
@@ -638,7 +636,7 @@ mod extract_tests {
         async fn from_request(
             _: &mut ServerContext,
             _: Parts,
-            _: Incoming,
+            _: Body,
         ) -> Result<Self, Self::Rejection> {
             unimplemented!()
         }
@@ -648,7 +646,7 @@ mod extract_tests {
     fn extractor() {
         fn assert_handler<H, T>(_: H)
         where
-            H: Handler<T, Incoming, Infallible>,
+            H: Handler<T, Body, Infallible>,
         {
         }
 

@@ -15,9 +15,9 @@ use url::Url;
 #[cfg(feature = "client")]
 pub type ClientRequest<B = crate::body::Body> = Request<B>;
 
-/// [`Request`] with [`Incoming`] as default body.
+/// [`Request`] with [`Body`] as default body.
 ///
-/// [`Incoming`]: hyper::body::Incoming
+/// [`Body`]: crate::body::Body
 #[cfg(feature = "server")]
 pub type ServerRequest<B = crate::body::Body> = Request<B>;
 
