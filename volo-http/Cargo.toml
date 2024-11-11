@@ -93,14 +93,14 @@ tokio-test.workspace = true
 [features]
 default = []
 
-default_client = ["client", "json"]
-default_server = ["server", "query", "form", "json", "multipart"]
+default-client = ["client", "json"]
+default-server = ["server", "query", "form", "json", "multipart"]
 
 full = [
     "client", "server", # core
     "query", "form", "json", # serde
     "tls", # https
-    "cookie", "multipart", "ws",
+    "cookie", "multipart", "ws", # exts
 ]
 
 client = ["hyper/client", "hyper/http1"] # client core
@@ -110,6 +110,7 @@ __serde = ["dep:serde"] # a private feature for enabling `serde` by `serde_xxx`
 query = ["__serde", "dep:serde_urlencoded"]
 form = ["__serde", "dep:serde_urlencoded"]
 json = ["__serde", "dep:sonic-rs"]
+json-utf8-lossy = ["json", "sonic-rs/utf8_lossy"] # json feature
 
 cookie = ["dep:cookie", "dep:cookie_store"]
 multipart = ["dep:multer"]
