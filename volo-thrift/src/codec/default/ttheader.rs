@@ -386,13 +386,13 @@ pub(crate) fn encode<Cx: ThriftContext>(
                     if let Some(biz_error) = cx.stats().biz_error() {
                         let mut ibuf = itoa::Buffer::new();
                         let status_code = ibuf.format(biz_error.status_code);
-                        dst.put_u16(TT_HEADER_BIZ_STATUS_KEY.as_bytes().len() as u16);
+                        dst.put_u16(TT_HEADER_BIZ_STATUS_KEY.len() as u16);
                         dst.put_slice(TT_HEADER_BIZ_STATUS_KEY.as_bytes());
                         dst.put_u16(status_code.len() as u16);
                         dst.put_slice(status_code.as_bytes());
                         string_kv_len += 1;
 
-                        dst.put_u16(TT_HEADER_BIZ_MESSAGE_KEY.as_bytes().len() as u16);
+                        dst.put_u16(TT_HEADER_BIZ_MESSAGE_KEY.len() as u16);
                         dst.put_slice(TT_HEADER_BIZ_MESSAGE_KEY.as_bytes());
                         dst.put_u16(biz_error.status_message.len() as u16);
                         dst.put_slice(biz_error.status_message.as_bytes());
@@ -408,9 +408,9 @@ pub(crate) fn encode<Cx: ThriftContext>(
                                     .expect("encode biz error extra")
                                     .into()
                             };
-                            dst.put_u16(TT_HEADER_BIZ_EXTRA_KEY.as_bytes().len() as u16);
+                            dst.put_u16(TT_HEADER_BIZ_EXTRA_KEY.len() as u16);
                             dst.put_slice(TT_HEADER_BIZ_EXTRA_KEY.as_bytes());
-                            dst.put_u16(extra_str.as_bytes().len() as u16);
+                            dst.put_u16(extra_str.len() as u16);
                             dst.put_slice(extra_str.as_bytes());
                             string_kv_len += 1;
                         }
@@ -600,7 +600,7 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                             len += 2;
                             len += key_len;
                             len += 2;
-                            len += value.as_bytes().len();
+                            len += value.len();
                         }
                     }
                     if let Some(at) = metainfo.get_all_transients() {
@@ -609,7 +609,7 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                             len += 2;
                             len += key_len;
                             len += 2;
-                            len += value.as_bytes().len();
+                            len += value.len();
                         }
                     }
                 }
@@ -620,36 +620,33 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                             len += 2;
                             len += key_len;
                             len += 2;
-                            len += value.as_bytes().len();
+                            len += value.len();
                         }
                     }
                     if thrift_cx.encode_conn_reset() {
                         len += 2;
-                        len += "crrst".as_bytes().len();
+                        len += "crrst".len();
                         len += 2;
-                        len += "1".as_bytes().len();
+                        len += "1".len();
                     }
                     if let Some(biz_error) = thrift_cx.stats().biz_error() {
                         len += 2;
-                        len += TT_HEADER_BIZ_STATUS_KEY.as_bytes().len();
+                        len += TT_HEADER_BIZ_STATUS_KEY.len();
                         len += 2;
-                        len += itoa::Buffer::new()
-                            .format(biz_error.status_code)
-                            .as_bytes()
-                            .len();
+                        len += itoa::Buffer::new().format(biz_error.status_code).len();
 
                         len += 2;
-                        len += TT_HEADER_BIZ_MESSAGE_KEY.as_bytes().len();
+                        len += TT_HEADER_BIZ_MESSAGE_KEY.len();
                         len += 2;
-                        len += biz_error.status_message.as_bytes().len();
+                        len += biz_error.status_message.len();
 
                         if let Some(extra) = &biz_error.extra {
                             len += 2;
-                            len += TT_HEADER_BIZ_EXTRA_KEY.as_bytes().len();
+                            len += TT_HEADER_BIZ_EXTRA_KEY.len();
                             len += 2;
                             let extra =
                                 sonic_rs::to_string(&extra).expect("encode biz error extra");
-                            len += extra.as_bytes().len();
+                            len += extra.len();
                             thrift_cx
                                 .extensions_mut()
                                 .insert(BizErrorExtra(extra.into()));
@@ -676,7 +673,7 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                 // WithHeader
                 len += 2;
                 len += 2;
-                len += "3".as_bytes().len();
+                len += "3".len();
 
                 // Config
                 let config = thrift_cx.rpc_info().config();
@@ -684,14 +681,14 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                     let timeout = timeout.as_millis().to_string();
                     len += 2;
                     len += 2;
-                    len += timeout.as_bytes().len();
+                    len += timeout.len();
                 }
 
                 if let Some(timeout) = config.connect_timeout() {
                     let timeout = timeout.as_millis().to_string();
                     len += 2;
                     len += 2;
-                    len += timeout.as_bytes().len();
+                    len += timeout.len();
                 }
 
                 // Caller
@@ -699,25 +696,25 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                 let svc = caller.service_name();
                 len += 2;
                 len += 2;
-                len += svc.as_bytes().len();
+                len += svc.len();
 
                 // Callee
                 let callee = thrift_cx.rpc_info().callee();
                 let method = thrift_cx.rpc_info().method();
                 len += 2;
                 len += 2;
-                len += method.as_bytes().len();
+                len += method.len();
 
                 let svc = callee.service_name();
                 len += 2;
                 len += 2;
-                len += svc.as_bytes().len();
+                len += svc.len();
 
                 if let Some(addr) = callee.address() {
                     let addr = addr.to_string();
                     len += 2;
                     len += 2;
-                    len += addr.as_bytes().len();
+                    len += addr.len();
                 }
             }
         };
