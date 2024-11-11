@@ -9,7 +9,7 @@ quiet() {
 }
 
 echo_command() {
-	echo "\`$@\`"
+	echo "$@"
 
 	if [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${DEBUG:-}" ]; then
 		# If we are in GitHub Actions or env `DEBUG` is non-empty,
