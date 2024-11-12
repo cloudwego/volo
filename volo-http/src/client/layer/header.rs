@@ -199,10 +199,10 @@ where
         mut req: ClientRequest<B>,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         if !req.headers().contains_key(header::HOST) {
-            if let Some(val) = &self.val {
-                req.headers_mut().insert(header::HOST, val.clone());
-            } else if let Some(val) = gen_host_by_ep(cx.rpc_info().callee()) {
+            if let Some(val) = gen_host_by_ep(cx.rpc_info().callee()) {
                 req.headers_mut().insert(header::HOST, val);
+            } else if let Some(val) = &self.val {
+                req.headers_mut().insert(header::HOST, val.clone());
             }
         }
         self.inner.call(cx, req)
