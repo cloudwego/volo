@@ -1,4 +1,5 @@
 use itertools::Itertools;
+use pilota_build::middle::context::Mode;
 use pilota_build::{
     codegen::thrift::DecodeHelper,
     db::RirDatabase,
@@ -7,6 +8,8 @@ use pilota_build::{
     CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
 };
 use quote::format_ident;
+use std::io::Write;
+use std::path::Path;
 use volo::FastStr;
 
 #[derive(Clone)]
@@ -15,7 +18,12 @@ pub struct VoloThriftBackend {
 }
 
 impl VoloThriftBackend {
-    fn codegen_service_anonymous_type(&self, stream: &mut String, def_id: DefId) {
+    fn codegen_service_anonymous_type(
+        &self,
+        stream: &mut String,
+        def_id: DefId,
+        base_dir: &Path,
+    ) {
         let service_name = self.cx().rust_name(def_id);
         let methods = self.cx().service_methods(def_id);
         let methods_names = methods.iter().map(|m| &**m.name).collect::<Vec<_>>();
@@ -267,8 +275,62 @@ impl VoloThriftBackend {
             ",",
             |variant_names, result_send_names| -> "{variant_names}({result_send_names})"
         );
-        stream.push_str(&format! {
-            r#"#[derive(Debug, Clone)]
+
+        if self.cx().split {
+            let req_file_name = format!("enum_{}.rs", req_recv_name);
+            let req_buf = base_dir.join(&req_file_name);
+            let req_file = req_buf.as_path();
+            let res_file_name = format!("enum_{}.rs", res_recv_name);
+            let res_buf = base_dir.join(&res_file_name);
+            let res_file = res_buf.as_path();
+            
+            let mut req_stream = String::new();
+            req_stream.push_str(&format! {
+                r#"#[derive(Debug, Clone)]
+            pub enum {req_recv_name} {{
+                {req_recv_variants}
+            }}
+
+            #[derive(Debug, Clone)]
+            pub enum {req_send_name} {{
+                {req_send_variants}
+            }}
+
+            {req_impl}"#
+            });
+
+            let mut res_stream = String::new();
+            res_stream.push_str(&format! {
+                r#"#[derive(Debug, Clone)]
+            pub enum {res_recv_name} {{
+                {res_recv_variants}
+            }}
+
+            #[derive(Debug, Clone)]
+            pub enum {res_send_name} {{
+                {res_send_variants}
+            }}
+
+            {res_impl}"#
+            });
+
+            let mut req_file_writer =
+                std::io::BufWriter::new(std::fs::File::create(&req_file).unwrap());
+            req_file_writer.write_all(req_stream.as_bytes()).unwrap();
+            req_file_writer.flush().unwrap();
+            pilota_build::fmt::fmt_file(req_file);
+
+            let mut res_file_writer =
+                std::io::BufWriter::new(std::fs::File::create(res_file).unwrap());
+            res_file_writer.write_all(res_stream.as_bytes()).unwrap();
+            res_file_writer.flush().unwrap();
+            pilota_build::fmt::fmt_file(res_file);
+            
+            stream.push_str(format!("include!(\"{}\");", &req_file_name).as_str());
+            stream.push_str(format!("include!(\"{}\");", &res_file_name).as_str());
+        } else {
+            stream.push_str(&format! {
+                r#"#[derive(Debug, Clone)]
             pub enum {req_recv_name} {{
                 {req_recv_variants}
             }}
@@ -290,7 +352,8 @@ impl VoloThriftBackend {
 
             {req_impl}
             {res_impl}"#
-        });
+            });
+        }
     }
 
     fn method_ty_path(&self, service_name: &Symbol, method: &Method, suffix: &str) -> FastStr {
@@ -370,6 +433,40 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         let mut client_methods = Vec::new();
         let mut oneshot_client_methods = Vec::new();
+
+        let path = self.cx().item_path(def_id);
+        let path = path.as_ref();
+
+        let base_dir = match self.cx().mode.as_ref() {
+            Mode::Workspace(info) => {
+                let mut dir = info.dir.clone();
+                if path.is_empty() {
+                    dir
+                } else {
+                    dir.push(path[0].0.as_str());
+                    if path.len() > 1 {
+                        dir.push("src");
+                        for segment in path.iter().skip(1) {
+                            dir.push(Path::new(segment.0.as_str()));
+                        }
+                    }
+                    dir
+                }
+            }
+            Mode::SingleFile { file_path } => {
+                let mut dir = file_path.clone();
+                dir.pop();
+                for segment in path {
+                    dir.push(Path::new(segment.0.as_str()));
+                }
+                dir
+            }
+        };
+        let base_dir = base_dir.as_path();
+
+        if self.cx().split {
+            std::fs::create_dir_all(&base_dir).expect("Failed to create base directory");
+        }
 
         all_methods.iter().for_each(|m| {
             let name = self.cx().rust_name(m.def_id);
@@ -529,8 +626,10 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             {res_send_name}::{variants}(
                 {user_handler}
             )),"#);
+        
+        let mut mod_rs_stream = String::new();
 
-        stream.push_str(&format! {
+        let server_string = format! {
             r#"pub struct {server_name}<S> {{
                 inner: S, // handler
             }}
@@ -601,8 +700,37 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     }}
                 }}
             }}"#
-        });
-        self.codegen_service_anonymous_type(stream, def_id);
+        };
+        
+        if self.cx().split {
+            let server_file = base_dir.join(format!("{}.rs", service_name));
+            let mut server_writer =
+                std::io::BufWriter::new(std::fs::File::create(&server_file).unwrap());
+            server_writer.write_all(server_string.as_bytes()).unwrap();
+            server_writer.flush().unwrap();
+            pilota_build::fmt::fmt_file(server_file);
+            
+            mod_rs_stream.push_str(format!("include!(\"{}.rs\");", service_name).as_str());
+        } else {
+            stream.push_str(&server_string);
+        }
+        
+        if self.cx().split {
+            self.codegen_service_anonymous_type(&mut mod_rs_stream, def_id, base_dir);
+        } else {
+            self.codegen_service_anonymous_type(stream, def_id, base_dir);
+        }
+        
+        if self.cx().split {
+            let mod_rs_file_path = base_dir.join("mod.rs");
+            let mut mod_rs_writer =
+                std::io::BufWriter::new(std::fs::File::create(&mod_rs_file_path).unwrap());
+            mod_rs_writer.write_all(mod_rs_stream.as_bytes()).unwrap();
+            mod_rs_writer.flush().unwrap();
+            pilota_build::fmt::fmt_file(mod_rs_file_path);
+            
+            stream.push_str(format!("include!(\"{}/mod.rs\");", service_name).as_str());
+        }
     }
 
     fn codegen_service_method(&self, _service_def_id: DefId, method: &Method) -> String {
