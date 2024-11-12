@@ -955,7 +955,11 @@ where
 #[cfg(feature = "json")]
 #[cfg(test)]
 mod client_tests {
-    use std::{collections::HashMap, future::Future};
+    use std::{
+        collections::HashMap,
+        future::Future,
+        net::{IpAddr, Ipv4Addr, SocketAddr},
+    };
 
     #[cfg(feature = "cookie")]
     use cookie::Cookie;
@@ -1120,6 +1124,50 @@ mod client_tests {
 
         let resp = client
             .get("/get")
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
+
+    #[tokio::test]
+    async fn client_builder_host_override() {
+        let mut builder = Client::builder();
+        builder.host("this.domain.must.be.invalid");
+        let client = builder.build().unwrap();
+
+        let resp = client
+            .get(HTTPBIN_GET)
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
+
+    #[tokio::test]
+    async fn client_builder_addr_override() {
+        let mut builder = Client::builder();
+        builder.default_host("httpbin.org").address(SocketAddr::new(
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+            8888,
+        ));
+        let client = builder.build().unwrap();
+
+        let addr = DnsResolver::default()
+            .resolve("httpbin.org", HTTP_DEFAULT_PORT)
+            .await
+            .unwrap();
+
+        let resp = client
+            .get(format!("http://{addr}/get"))
             .send()
             .await
             .unwrap()
