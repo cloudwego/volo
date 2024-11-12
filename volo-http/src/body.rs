@@ -36,11 +36,10 @@ pub struct Body {
 enum BodyRepr {
     /// Complete [`Bytes`], with a certain size and content
     Full(#[pin] Full<Bytes>),
-    /// Wrapper of [`hyper::body::Incoming`], it usually appers in request of server or response of
-    /// client.
+    /// Wrapper of [`Incoming`], it usually appears in request of server or response of client.
     ///
-    /// Althrough [`hyper::body::Incoming`] implements [`http_body::Body`], the type is so commonly
-    /// used, we wrap it here as [`Body::Hyper`] to avoid cost of [`Box`] with dynamic dispatch.
+    /// Althrough [`Incoming`] implements [`http_body::Body`], the type is so commonly used, we
+    /// wrap it here as [`BodyRepr::Hyper`] to avoid cost of [`Box`] with dynamic dispatch.
     Hyper(#[pin] Incoming),
     /// Boxed stream with `Item = Result<Frame<Bytes>, BoxError>`
     Stream(#[pin] StreamBody<BoxStream<'static, Result<Frame<Bytes>, BoxError>>>),
@@ -62,7 +61,7 @@ impl Body {
         }
     }
 
-    /// Create a body by [`hyper::body::Incoming`].
+    /// Create a body by [`Incoming`].
     ///
     /// Compared to [`Body::from_body`], this function avoids overhead of allocating by [`Box`]
     /// and dynamic dispatch by [`dyn http_body::Body`][http_body::Body].
