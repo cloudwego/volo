@@ -661,7 +661,28 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 inner: S, // handler
             }}
 
-            pub struct {mk_client_name};
+            impl<S> {server_name}<S> where S: {service_name} + ::core::marker::Send + ::core::marker::Sync + 'static {{
+                pub fn new(inner: S) -> ::volo_thrift::server::Server<Self, ::volo::layer::Identity, {req_recv_name}, ::volo_thrift::codec::default::DefaultMakeCodec<::volo_thrift::codec::default::ttheader::MakeTTHeaderCodec<::volo_thrift::codec::default::framed::MakeFramedCodec<::volo_thrift::codec::default::thrift::MakeThriftCodec>>>, ::volo_thrift::tracing::DefaultProvider> {{
+                    ::volo_thrift::server::Server::new(Self {{
+                        inner,
+                    }})
+                }}
+            }}
+
+            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, {req_recv_name}> for {server_name}<T> where T: {service_name} + Send + Sync + 'static {{
+                type Response = {res_send_name};
+                type Error = ::volo_thrift::ServerError;
+
+                async fn call<'s, 'cx>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> ::std::result::Result<Self::Response, Self::Error> {{
+                    match req {{
+                        {handler}
+                    }}
+                }}
+            }}"#
+        };
+
+        let client_string = format! {
+            r#" pub struct {mk_client_name};
 
             pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_thrift::context::ClientContext, {req_send_name}, ::std::option::Option<{res_recv_name}>, ::volo_thrift::ClientError>>;
 
@@ -706,35 +727,22 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 {{
                     ::volo_thrift::client::ClientBuilder::new(service_name, {mk_client_name})
                 }}
-            }}
-
-
-            impl<S> {server_name}<S> where S: {service_name} + ::core::marker::Send + ::core::marker::Sync + 'static {{
-                pub fn new(inner: S) -> ::volo_thrift::server::Server<Self, ::volo::layer::Identity, {req_recv_name}, ::volo_thrift::codec::default::DefaultMakeCodec<::volo_thrift::codec::default::ttheader::MakeTTHeaderCodec<::volo_thrift::codec::default::framed::MakeFramedCodec<::volo_thrift::codec::default::thrift::MakeThriftCodec>>>, ::volo_thrift::tracing::DefaultProvider> {{
-                    ::volo_thrift::server::Server::new(Self {{
-                        inner,
-                    }})
-                }}
-            }}
-
-            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, {req_recv_name}> for {server_name}<T> where T: {service_name} + Send + Sync + 'static {{
-                type Response = {res_send_name};
-                type Error = ::volo_thrift::ServerError;
-
-                async fn call<'s, 'cx>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> ::std::result::Result<Self::Response, Self::Error> {{
-                    match req {{
-                        {handler}
-                    }}
-                }}
             }}"#
         };
 
         if self.cx().split {
-            let server_file = base_dir.join(format!("{}.rs", service_name));
+            let server_name = format!("service_{}Server.rs", service_name);
+            let server_file = base_dir.join(&server_name);
             Self::write_file(&server_file, server_string);
-            mod_rs_stream.push_str(format!("include!(\"{}.rs\");", service_name).as_str());
+            mod_rs_stream.push_str(format!("include!(\"{}\");", server_name).as_str());
+
+            let client_name = format!("service_{}Client.rs", service_name);
+            let client_file = base_dir.join(&client_name);
+            Self::write_file(&client_file, client_string);
+            mod_rs_stream.push_str(format!("include!(\"{}\");", client_name).as_str());
         } else {
             stream.push_str(&server_string);
+            stream.push_str(&client_string);
         }
 
         if self.cx().split {
