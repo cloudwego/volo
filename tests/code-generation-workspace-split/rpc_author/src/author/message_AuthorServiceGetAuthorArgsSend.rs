@@ -132,7 +132,11 @@ impl ::pilota::thrift::Message for AuthorServiceGetAuthorArgsSend {
             .await
             {
                 if let Some(field_id) = __pilota_decoding_field_id {
-                    err.prepend_msg(&format!("decode struct `AuthorServiceGetAuthorArgsSend` field(#{}) failed, caused by: ", field_id));
+                    err.prepend_msg(&format!(
+                        "decode struct `AuthorServiceGetAuthorArgsSend` field(#{}) failed, caused \
+                         by: ",
+                        field_id
+                    ));
                 }
                 return ::std::result::Result::Err(err);
             };

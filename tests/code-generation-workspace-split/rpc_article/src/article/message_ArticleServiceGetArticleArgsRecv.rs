@@ -67,7 +67,11 @@ impl ::pilota::thrift::Message for ArticleServiceGetArticleArgsRecv {
             ::std::result::Result::Ok::<_, ::pilota::thrift::ThriftException>(())
         })() {
             if let Some(field_id) = __pilota_decoding_field_id {
-                err.prepend_msg(&format!("decode struct `ArticleServiceGetArticleArgsRecv` field(#{}) failed, caused by: ", field_id));
+                err.prepend_msg(&format!(
+                    "decode struct `ArticleServiceGetArticleArgsRecv` field(#{}) failed, caused \
+                     by: ",
+                    field_id
+                ));
             }
             return ::std::result::Result::Err(err);
         };
@@ -129,7 +133,11 @@ impl ::pilota::thrift::Message for ArticleServiceGetArticleArgsRecv {
             .await
             {
                 if let Some(field_id) = __pilota_decoding_field_id {
-                    err.prepend_msg(&format!("decode struct `ArticleServiceGetArticleArgsRecv` field(#{}) failed, caused by: ", field_id));
+                    err.prepend_msg(&format!(
+                        "decode struct `ArticleServiceGetArticleArgsRecv` field(#{}) failed, \
+                         caused by: ",
+                        field_id
+                    ));
                 }
                 return ::std::result::Result::Err(err);
             };

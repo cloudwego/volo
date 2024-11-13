@@ -1,9 +1,9 @@
 #[derive(Debug, Clone)]
-pub enum ImageServiceRequestRecv {
-    GetImage(ImageServiceGetImageArgsRecv),
+pub enum ImageServiceResponseSend {
+    GetImage(ImageServiceGetImageResultSend),
 }
 
-impl ::volo_thrift::EntryMessage for ImageServiceRequestRecv {
+impl ::volo_thrift::EntryMessage for ImageServiceResponseSend {
     fn encode<T: ::pilota::thrift::TOutputProtocol>(
         &self,
         __protocol: &mut T,
@@ -36,7 +36,7 @@ impl ::volo_thrift::EntryMessage for ImageServiceRequestRecv {
     ) -> ::core::result::Result<Self, ::pilota::thrift::ThriftException> {
         ::std::result::Result::Ok(match &*msg_ident.name {
             "GetImage" => Self::GetImage(
-                <ImageServiceGetImageArgsRecv as ::pilota::thrift::Message>::decode_async(
+                <ImageServiceGetImageResultSend as ::pilota::thrift::Message>::decode_async(
                     __protocol,
                 )
                 .await?,

@@ -1,15 +1,15 @@
+use std::{io::Write, path::Path};
+
 use itertools::Itertools;
-use pilota_build::middle::context::Mode;
 use pilota_build::{
     codegen::thrift::DecodeHelper,
     db::RirDatabase,
+    middle::context::Mode,
     rir::{self, Method},
     tags::RustWrapperArc,
     CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
 };
 use quote::format_ident;
-use std::io::Write;
-use std::path::Path;
 use volo::FastStr;
 
 #[derive(Clone)]
@@ -18,12 +18,7 @@ pub struct VoloThriftBackend {
 }
 
 impl VoloThriftBackend {
-    fn codegen_service_anonymous_type(
-        &self,
-        stream: &mut String,
-        def_id: DefId,
-        base_dir: &Path,
-    ) {
+    fn codegen_service_anonymous_type(&self, stream: &mut String, def_id: DefId, base_dir: &Path) {
         let service_name = self.cx().rust_name(def_id);
         let methods = self.cx().service_methods(def_id);
         let methods_names = methods.iter().map(|m| &**m.name).collect::<Vec<_>>();
@@ -56,7 +51,7 @@ impl VoloThriftBackend {
         let res_recv_name = format!("{service_name}ResponseRecv");
         let res_send_name = format!("{service_name}ResponseSend");
 
-        let req_impl = {
+        let (req_recv_impl, req_send_impl) = {
             let mk_decode = |is_async: bool, is_send: bool| {
                 let helper = DecodeHelper::new(is_async);
                 let mut match_methods = String::new();
@@ -102,7 +97,7 @@ impl VoloThriftBackend {
                 match_size = "_ => unreachable!(),".to_string();
             }
 
-            format! {
+            let recv_impl = format! {
                 r#"impl ::volo_thrift::EntryMessage for {req_recv_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
@@ -127,9 +122,11 @@ impl VoloThriftBackend {
                             {match_size}
                         }}
                     }}
-                }}
+                }}"#
+            };
 
-                impl ::volo_thrift::EntryMessage for {req_send_name} {{
+            let send_impl = format! {
+                r#"impl ::volo_thrift::EntryMessage for {req_send_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
@@ -154,10 +151,12 @@ impl VoloThriftBackend {
                         }}
                     }}
                 }}"#
-            }
+            };
+
+            (recv_impl, send_impl)
         };
 
-        let res_impl = {
+        let (res_recv_impl, res_send_impl) = {
             let mk_decode = |is_async: bool, is_send: bool| {
                 let helper = DecodeHelper::new(is_async);
                 let mut match_methods = String::new();
@@ -203,7 +202,8 @@ impl VoloThriftBackend {
             let send_decode_async = mk_decode(true, true);
             let recv_decode = mk_decode(false, false);
             let recv_decode_async = mk_decode(true, false);
-            format! {
+
+            let recv_impl = format! {
                 r#"impl ::volo_thrift::EntryMessage for {res_recv_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
@@ -228,9 +228,11 @@ impl VoloThriftBackend {
                             {match_size}
                         }}
                     }}
-                }}
+                }}"#
+            };
 
-                impl ::volo_thrift::EntryMessage for {res_send_name} {{
+            let send_impl = format! {
+                r#"impl ::volo_thrift::EntryMessage for {res_send_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
@@ -255,7 +257,9 @@ impl VoloThriftBackend {
                         }}
                     }}
                 }}"#
-            }
+            };
+
+            (recv_impl, send_impl)
         };
         let req_recv_variants = crate::join_multi_strs!(
             ",",
@@ -277,57 +281,70 @@ impl VoloThriftBackend {
         );
 
         if self.cx().split {
-            let req_file_name = format!("enum_{}.rs", req_recv_name);
-            let req_buf = base_dir.join(&req_file_name);
-            let req_file = req_buf.as_path();
-            let res_file_name = format!("enum_{}.rs", res_recv_name);
-            let res_buf = base_dir.join(&res_file_name);
-            let res_file = res_buf.as_path();
-            
-            let mut req_stream = String::new();
-            req_stream.push_str(&format! {
+            let req_recv_file_name = format!("enum_{}.rs", req_recv_name);
+            let req_recv_buf = base_dir.join(&req_recv_file_name);
+            let req_recv_file = req_recv_buf.as_path();
+
+            let req_send_file_name = format!("enum_{}.rs", req_send_name);
+            let req_send_buf = base_dir.join(&req_send_file_name);
+            let req_send_file = req_send_buf.as_path();
+
+            let res_recv_file_name = format!("enum_{}.rs", res_recv_name);
+            let res_recv_buf = base_dir.join(&res_recv_file_name);
+            let res_recv_file = res_recv_buf.as_path();
+
+            let res_send_file_name = format!("enum_{}.rs", res_send_name);
+            let res_send_buf = base_dir.join(&res_send_file_name);
+            let res_send_file = res_send_buf.as_path();
+
+            let req_recv_stream = format! {
                 r#"#[derive(Debug, Clone)]
             pub enum {req_recv_name} {{
                 {req_recv_variants}
             }}
+            
+            {req_recv_impl}
+            "#
+            };
 
-            #[derive(Debug, Clone)]
+            let req_send_stream = format! {
+                r#"#[derive(Debug, Clone)]
             pub enum {req_send_name} {{
                 {req_send_variants}
             }}
 
-            {req_impl}"#
-            });
+            {req_send_impl}
+            "#
+            };
 
-            let mut res_stream = String::new();
-            res_stream.push_str(&format! {
+            let res_recv_stream = format! {
                 r#"#[derive(Debug, Clone)]
             pub enum {res_recv_name} {{
                 {res_recv_variants}
             }}
+            {res_recv_impl}
+            "#
+            };
 
-            #[derive(Debug, Clone)]
+            let res_send_stream = format! {
+                r#"#[derive(Debug, Clone)]
             pub enum {res_send_name} {{
                 {res_send_variants}
             }}
 
-            {res_impl}"#
-            });
+            {res_send_impl}
+            "#
+            };
 
-            let mut req_file_writer =
-                std::io::BufWriter::new(std::fs::File::create(&req_file).unwrap());
-            req_file_writer.write_all(req_stream.as_bytes()).unwrap();
-            req_file_writer.flush().unwrap();
-            pilota_build::fmt::fmt_file(req_file);
+            Self::write_file(&req_recv_file, req_recv_stream);
+            Self::write_file(&req_send_file, req_send_stream);
+            Self::write_file(&res_recv_file, res_recv_stream);
+            Self::write_file(&res_send_file, res_send_stream);
 
-            let mut res_file_writer =
-                std::io::BufWriter::new(std::fs::File::create(res_file).unwrap());
-            res_file_writer.write_all(res_stream.as_bytes()).unwrap();
-            res_file_writer.flush().unwrap();
-            pilota_build::fmt::fmt_file(res_file);
-            
-            stream.push_str(format!("include!(\"{}\");", &req_file_name).as_str());
-            stream.push_str(format!("include!(\"{}\");", &res_file_name).as_str());
+            stream.push_str(format!("include!(\"{}\");", &req_recv_file_name).as_str());
+            stream.push_str(format!("include!(\"{}\");", &req_send_file_name).as_str());
+            stream.push_str(format!("include!(\"{}\");", &res_recv_file_name).as_str());
+            stream.push_str(format!("include!(\"{}\");", &res_send_file_name).as_str());
         } else {
             stream.push_str(&format! {
                 r#"#[derive(Debug, Clone)]
@@ -350,10 +367,20 @@ impl VoloThriftBackend {
                 {res_send_variants}
             }}
 
-            {req_impl}
-            {res_impl}"#
+            {req_recv_impl}
+            {req_send_impl}
+            {res_recv_impl}
+            {res_send_impl}
+            "#
             });
         }
+    }
+
+    fn write_file(path: &Path, stream: String) {
+        let mut req_file_writer = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
+        req_file_writer.write_all(stream.as_bytes()).unwrap();
+        req_file_writer.flush().unwrap();
+        pilota_build::fmt::fmt_file(path);
     }
 
     fn method_ty_path(&self, service_name: &Symbol, method: &Method, suffix: &str) -> FastStr {
@@ -626,7 +653,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             {res_send_name}::{variants}(
                 {user_handler}
             )),"#);
-        
+
         let mut mod_rs_stream = String::new();
 
         let server_string = format! {
@@ -701,34 +728,24 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 }}
             }}"#
         };
-        
+
         if self.cx().split {
             let server_file = base_dir.join(format!("{}.rs", service_name));
-            let mut server_writer =
-                std::io::BufWriter::new(std::fs::File::create(&server_file).unwrap());
-            server_writer.write_all(server_string.as_bytes()).unwrap();
-            server_writer.flush().unwrap();
-            pilota_build::fmt::fmt_file(server_file);
-            
+            Self::write_file(&server_file, server_string);
             mod_rs_stream.push_str(format!("include!(\"{}.rs\");", service_name).as_str());
         } else {
             stream.push_str(&server_string);
         }
-        
+
         if self.cx().split {
             self.codegen_service_anonymous_type(&mut mod_rs_stream, def_id, base_dir);
         } else {
             self.codegen_service_anonymous_type(stream, def_id, base_dir);
         }
-        
+
         if self.cx().split {
             let mod_rs_file_path = base_dir.join("mod.rs");
-            let mut mod_rs_writer =
-                std::io::BufWriter::new(std::fs::File::create(&mod_rs_file_path).unwrap());
-            mod_rs_writer.write_all(mod_rs_stream.as_bytes()).unwrap();
-            mod_rs_writer.flush().unwrap();
-            pilota_build::fmt::fmt_file(mod_rs_file_path);
-            
+            Self::write_file(&mod_rs_file_path, mod_rs_stream);
             stream.push_str(format!("include!(\"{}/mod.rs\");", service_name).as_str());
         }
     }
