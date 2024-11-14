@@ -14,8 +14,8 @@ use super::{Client, ClientBuilder, ClientInner, Target};
 use crate::{
     context::client::ClientContext,
     error::client::{ClientError, Result},
-    request::ClientRequest,
-    response::ClientResponse,
+    request::Request,
+    response::Response,
     utils::test_helpers::mock_address,
 };
 
@@ -27,11 +27,11 @@ pub type DefaultMockClient<IL = Identity, OL = Identity> =
 
 /// Mock transport [`Service`] without any network connection.
 pub enum MockTransport {
-    /// Always return a default [`ClientResponse`] with given [`StatusCode`], `HTTP/1.1` and
+    /// Always return a default [`Response`] with given [`StatusCode`], `HTTP/1.1` and
     /// nothing in headers and body.
     Status(StatusCode),
     /// A [`Service`] for processing the request.
-    Service(BoxService<ClientContext, ClientRequest, ClientResponse, ClientError>),
+    Service(BoxService<ClientContext, Request, Response, ClientError>),
 }
 
 impl Default for MockTransport {
@@ -46,16 +46,16 @@ impl MockTransport {
         Self::default()
     }
 
-    /// Create a [`MockTransport`] that always return a default [`ClientResponse`] with given
+    /// Create a [`MockTransport`] that always return a default [`Response`] with given
     /// [`StatusCode`], `HTTP/1.1` and nothing in headers and body.
     pub fn status_code(status: StatusCode) -> Self {
         Self::Status(status)
     }
 
-    /// Create a [`MockTransport`] from a [`Service`] with [`ClientContext`] and [`ClientRequest`].
+    /// Create a [`MockTransport`] from a [`Service`] with [`ClientContext`] and [`Request`].
     pub fn service<S>(service: S) -> Self
     where
-        S: Service<ClientContext, ClientRequest, Response = ClientResponse, Error = ClientError>
+        S: Service<ClientContext, Request, Response = Response, Error = ClientError>
             + Send
             + Sync
             + 'static,
@@ -63,24 +63,20 @@ impl MockTransport {
         Self::Service(BoxService::new(service))
     }
 
-    /// Create a [`MockTransport`] from a [`Service`] with [`ServerContext`] and [`ServerRequest`].
+    /// Create a [`MockTransport`] from a [`Service`] with [`ServerContext`] and [`Request`].
     ///
     /// Note that all of [`Router`], [`MethodRouter`] and [`Route`] are server [`Service`], they
     /// can be used here.
     ///
     /// [`ServerContext`]: crate::context::ServerContext
-    /// [`ServerRequest`]: crate::request::ServerRequest
     /// [`Router`]: crate::server::route::Router
     /// [`MethodRouter`]: crate::server::route::MethodRouter
     /// [`Route`]: crate::server::route::Route
     #[cfg(feature = "server")]
     pub fn server_service<S>(service: S) -> Self
     where
-        S: Service<
-                crate::context::ServerContext,
-                crate::request::ServerRequest,
-                Response = crate::response::ServerResponse,
-            > + Send
+        S: Service<crate::context::ServerContext, Request, Response = Response>
+            + Send
             + Sync
             + 'static,
         S::Error: Into<crate::error::BoxError>,
@@ -91,18 +87,18 @@ impl MockTransport {
     }
 }
 
-impl Service<ClientContext, ClientRequest> for MockTransport {
-    type Response = ClientResponse;
+impl Service<ClientContext, Request> for MockTransport {
+    type Response = Response;
     type Error = ClientError;
 
     async fn call(
         &self,
         cx: &mut ClientContext,
-        req: ClientRequest,
+        req: Request,
     ) -> Result<Self::Response, Self::Error> {
         match self {
             Self::Status(status) => {
-                let mut resp = ClientResponse::default();
+                let mut resp = Response::default();
                 status.clone_into(resp.status_mut());
                 Ok(resp)
             }

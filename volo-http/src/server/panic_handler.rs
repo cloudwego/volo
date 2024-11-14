@@ -1,7 +1,7 @@
 //! Collections for some panic handlers
 //!
 //! [`volo::catch_panic::Layer`] can handle panics in services and when panic occurs, it can
-//! respond a [`ServerResponse`]. This module has some useful handlers for handling panics and
+//! respond a [`Response`]. This module has some useful handlers for handling panics and
 //! returning a response.
 
 use std::any::Any;
@@ -11,7 +11,7 @@ use motore::service::Service;
 use volo::catch_panic;
 
 use super::IntoResponse;
-use crate::response::ServerResponse;
+use crate::response::Response;
 
 /// Panic handler which can return a fixed payload.
 ///
@@ -23,7 +23,7 @@ pub struct FixedPayload<R> {
 
 impl<S, Cx, Req, Resp> catch_panic::Handler<S, Cx, Req> for FixedPayload<Resp>
 where
-    S: Service<Cx, Req, Response = ServerResponse> + Send + Sync + 'static,
+    S: Service<Cx, Req, Response = Response> + Send + Sync + 'static,
     Cx: Send + 'static,
     Req: Send + 'static,
     Resp: IntoResponse + Clone,
@@ -45,7 +45,7 @@ pub fn always_internal_error<Cx, E>(
     _: &mut Cx,
     _: Box<dyn Any + Send>,
     panic_info: catch_panic::PanicInfo,
-) -> Result<ServerResponse, E> {
+) -> Result<Response, E> {
     tracing::error!("[Volo-HTTP] panic_handler: {panic_info}");
     Ok(StatusCode::INTERNAL_SERVER_ERROR.into_response())
 }

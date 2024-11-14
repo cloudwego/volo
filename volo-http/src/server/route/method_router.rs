@@ -23,8 +23,8 @@ use super::{Fallback, Route};
 use crate::{
     body::Body,
     context::ServerContext,
-    request::ServerRequest,
-    response::ServerResponse,
+    request::Request,
+    response::Response,
     server::{handler::Handler, IntoResponse},
 };
 
@@ -41,7 +41,7 @@ use crate::{
 /// use volo::service::service_fn;
 /// use volo_http::{
 ///     context::ServerContext,
-///     request::ServerRequest,
+///     request::Request,
 ///     server::route::{any, get, post_service, MethodRouter, Router},
 /// };
 ///
@@ -49,10 +49,7 @@ use crate::{
 ///     "Hello, World"
 /// }
 ///
-/// async fn index_fn(
-///     cx: &mut ServerContext,
-///     req: ServerRequest,
-/// ) -> Result<&'static str, Infallible> {
+/// async fn index_fn(cx: &mut ServerContext, req: Request) -> Result<&'static str, Infallible> {
 ///     Ok("Hello, World")
 /// }
 ///
@@ -78,17 +75,17 @@ pub struct MethodRouter<B = Body, E = Infallible> {
     fallback: Fallback<B, E>,
 }
 
-impl<B, E> Service<ServerContext, ServerRequest<B>> for MethodRouter<B, E>
+impl<B, E> Service<ServerContext, Request<B>> for MethodRouter<B, E>
 where
     B: Send,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = E;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let handler = match *req.method() {
             Method::OPTIONS => Some(&self.options),
@@ -146,8 +143,8 @@ where
     pub fn layer<L, B2, E2>(self, l: L) -> MethodRouter<B2, E2>
     where
         L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
-        L::Service: Service<ServerContext, ServerRequest<B2>, Error = E2> + Send + Sync + 'static,
-        <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
+        L::Service: Service<ServerContext, Request<B2>, Error = E2> + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, Request<B2>>>::Response: IntoResponse,
         B2: 'static,
     {
         let Self {
@@ -222,7 +219,7 @@ macro_rules! impl_method_register_for_builder {
         #[doc = concat!("Route `", stringify!($method) ,"` requests to the given service.")]
         pub fn [<$method _service>]<S>(mut self, service: S) -> MethodRouter<B, E>
         where
-            for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E>
+            for<'a> S: Service<ServerContext, Request<B>, Error = E>
                 + Send
                 + Sync
                 + 'a,
@@ -266,7 +263,7 @@ where
     /// Default is returning "405 Method Not Allowed".
     pub fn fallback_service<S>(mut self, service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'a,
+        for<'a> S: Service<ServerContext, Request<B>, Error = E> + Send + Sync + 'a,
         S::Response: IntoResponse,
     {
         self.fallback = Fallback::from_service(service);
@@ -295,7 +292,7 @@ macro_rules! impl_method_register {
         #[doc = concat!("Route `", stringify!($method) ,"` requests to the given service.")]
         pub fn [<$method _service>]<S, B, E>(service: S) -> MethodRouter<B, E>
         where
-            for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E>
+            for<'a> S: Service<ServerContext, Request<B>, Error = E>
                 + Send
                 + Sync
                 + 'a,
@@ -332,7 +329,7 @@ where
 /// Route any method to the given service.
 pub fn any_service<S, B, E>(service: S) -> MethodRouter<B, E>
 where
-    for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'a,
+    for<'a> S: Service<ServerContext, Request<B>, Error = E> + Send + Sync + 'a,
     S::Response: IntoResponse,
     B: Send + 'static,
     E: IntoResponse + 'static,
@@ -365,7 +362,7 @@ where
 
     fn from_service<S>(service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'a,
+        for<'a> S: Service<ServerContext, Request<B>, Error = E> + Send + Sync + 'a,
         S::Response: IntoResponse,
     {
         Self::Route(Route::new(

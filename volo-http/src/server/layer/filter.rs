@@ -4,8 +4,8 @@ use motore::{layer::Layer, Service};
 
 use crate::{
     context::ServerContext,
-    request::ServerRequest,
-    response::ServerResponse,
+    request::Request,
+    response::Response,
     server::{handler::HandlerWithoutRequest, IntoResponse},
 };
 
@@ -89,9 +89,9 @@ pub struct Filter<S, H, R, T> {
     _marker: PhantomData<(R, T)>,
 }
 
-impl<S, B, H, R, T> Service<ServerContext, ServerRequest<B>> for Filter<S, H, R, T>
+impl<S, B, H, R, T> Service<ServerContext, Request<B>> for Filter<S, H, R, T>
 where
-    S: Service<ServerContext, ServerRequest<B>> + Send + Sync + 'static,
+    S: Service<ServerContext, Request<B>> + Send + Sync + 'static,
     S::Response: IntoResponse,
     S::Error: IntoResponse,
     B: Send,
@@ -99,17 +99,17 @@ where
     R: IntoResponse + Send + Sync,
     T: Sync,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = S::Error;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let (mut parts, body) = req.into_parts();
         let res = self.handler.clone().handle(cx, &mut parts).await;
-        let req = ServerRequest::from_parts(parts, body);
+        let req = Request::from_parts(parts, body);
         match res {
             // do not filter it, call the service
             Ok(Ok(())) => self

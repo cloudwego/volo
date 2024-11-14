@@ -2,9 +2,7 @@ use http::StatusCode;
 use http_body::Body;
 use motore::{layer::Layer, Service};
 
-use crate::{
-    context::ServerContext, request::ServerRequest, response::ServerResponse, server::IntoResponse,
-};
+use crate::{context::ServerContext, request::Request, response::Response, server::IntoResponse};
 
 /// [`Layer`] for limiting body size
 ///
@@ -42,19 +40,19 @@ pub struct BodyLimitService<S> {
     limit: usize,
 }
 
-impl<S, B> Service<ServerContext, ServerRequest<B>> for BodyLimitService<S>
+impl<S, B> Service<ServerContext, Request<B>> for BodyLimitService<S>
 where
-    S: Service<ServerContext, ServerRequest<B>> + Send + Sync + 'static,
+    S: Service<ServerContext, Request<B>> + Send + Sync + 'static,
     S::Response: IntoResponse,
     B: Body + Send,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = S::Error;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let (parts, body) = req.into_parts();
         // get body size from content length
@@ -73,7 +71,7 @@ where
             }
         }
 
-        let req = ServerRequest::from_parts(parts, body);
+        let req = Request::from_parts(parts, body);
         Ok(self.service.call(cx, req).await?.into_response())
     }
 }

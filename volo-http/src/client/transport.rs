@@ -13,8 +13,8 @@ use volo::{
 use crate::{
     context::ClientContext,
     error::client::{no_address, request_error, ClientError},
-    request::ClientRequest,
-    response::ClientResponse,
+    request::Request,
+    response::Response,
 };
 
 #[derive(Clone)]
@@ -105,11 +105,7 @@ impl ClientTransport {
         self.connect_to(target_addr).await
     }
 
-    async fn request<B>(
-        &self,
-        cx: &ClientContext,
-        req: ClientRequest<B>,
-    ) -> Result<ClientResponse, ClientError>
+    async fn request<B>(&self, cx: &ClientContext, req: Request<B>) -> Result<Response, ClientError>
     where
         B: http_body::Body + Send + 'static,
         B::Data: Send,
@@ -131,19 +127,19 @@ impl ClientTransport {
     }
 }
 
-impl<B> Service<ClientContext, ClientRequest<B>> for ClientTransport
+impl<B> Service<ClientContext, Request<B>> for ClientTransport
 where
     B: http_body::Body + Send + 'static,
     B::Data: Send,
     B::Error: Into<Box<dyn Error + Send + Sync>> + 'static,
 {
-    type Response = ClientResponse;
+    type Response = Response;
     type Error = ClientError;
 
     async fn call(
         &self,
         cx: &mut ClientContext,
-        req: ClientRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let stat_enabled = self.config.stat_enable;
 

@@ -34,8 +34,8 @@ use volo::{
 use crate::{
     body::Body,
     context::{server::Config, ServerContext},
-    request::ServerRequest,
-    response::ServerResponse,
+    request::Request,
+    response::Response,
 };
 
 pub mod extract;
@@ -262,13 +262,12 @@ impl<S, L> Server<S, L> {
     /// The main entry point for the server.
     pub async fn run<MI, B, E>(self, mk_incoming: MI) -> Result<(), BoxError>
     where
-        S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'static,
+        S: Service<ServerContext, Request<B>, Error = E> + Send + Sync + 'static,
         S::Response: IntoResponse,
         E: IntoResponse,
         L: Layer<S> + Send + Sync + 'static,
-        L::Service:
-            Service<ServerContext, ServerRequest, Error = Infallible> + Send + Sync + 'static,
-        <L::Service as Service<ServerContext, ServerRequest>>::Response: IntoResponse,
+        L::Service: Service<ServerContext, Request, Error = Infallible> + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, Request>>::Response: IntoResponse,
         MI: MakeIncoming,
     {
         let server = Arc::new(self.server);
@@ -368,7 +367,7 @@ async fn serve<I, S, E>(
     #[cfg(feature = "__tls")] tls_config: Option<ServerTlsConfig>,
 ) where
     I: Incoming,
-    S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'static,
+    S: Service<ServerContext, Request, Error = E> + Clone + Send + Sync + 'static,
     S::Response: IntoResponse,
     E: IntoResponse,
 {
@@ -479,11 +478,11 @@ type HyperRequest = http::request::Request<hyper::body::Incoming>;
 
 impl<S, E> hyper::service::Service<HyperRequest> for HyperService<S>
 where
-    S: Service<ServerContext, ServerRequest, Error = E> + Clone + Send + Sync + 'static,
+    S: Service<ServerContext, Request, Error = E> + Clone + Send + Sync + 'static,
     S::Response: IntoResponse,
     E: IntoResponse,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = Infallible;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 

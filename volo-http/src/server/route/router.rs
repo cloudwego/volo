@@ -20,8 +20,8 @@ use super::{
 use crate::{
     body::Body,
     context::ServerContext,
-    request::ServerRequest,
-    response::ServerResponse,
+    request::Request,
+    response::Response,
     server::{handler::Handler, IntoResponse},
 };
 
@@ -229,7 +229,7 @@ where
     pub fn nest_service<U, S>(self, uri: U, service: S) -> Self
     where
         U: AsRef<str>,
-        S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'static,
+        S: Service<ServerContext, Request<B>, Error = E> + Send + Sync + 'static,
         S::Response: IntoResponse,
     {
         self.nest_route(
@@ -296,7 +296,7 @@ where
     /// Default is returning "404 Not Found".
     pub fn fallback_service<S>(mut self, service: S) -> Self
     where
-        for<'a> S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'a,
+        for<'a> S: Service<ServerContext, Request<B>, Error = E> + Send + Sync + 'a,
         S::Response: IntoResponse,
     {
         self.fallback = Fallback::from_service(service);
@@ -380,8 +380,8 @@ where
     pub fn layer<L, B2, E2>(self, l: L) -> Router<B2, E2>
     where
         L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
-        L::Service: Service<ServerContext, ServerRequest<B2>, Error = E2> + Send + Sync + 'static,
-        <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
+        L::Service: Service<ServerContext, Request<B2>, Error = E2> + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, Request<B2>>>::Response: IntoResponse,
         B2: 'static,
     {
         let routes = self
@@ -404,18 +404,18 @@ where
     }
 }
 
-impl<B, E> Service<ServerContext, ServerRequest<B>> for Router<B, E>
+impl<B, E> Service<ServerContext, Request<B>> for Router<B, E>
 where
     B: Send + 'static,
     E: 'static,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = E;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         if let Ok(matched) = self.matcher.at(req.uri().clone().path()) {
             if let Some(route) = self.routes.get(matched.value) {
@@ -435,18 +435,18 @@ enum Endpoint<B = Body, E = Infallible> {
     Service(Route<B, E>),
 }
 
-impl<B, E> Service<ServerContext, ServerRequest<B>> for Endpoint<B, E>
+impl<B, E> Service<ServerContext, Request<B>> for Endpoint<B, E>
 where
     B: Send + 'static,
     E: 'static,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = E;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         match self {
             Self::MethodRouter(mr) => mr.call(cx, req).await,
@@ -473,8 +473,8 @@ where
     fn layer<L, B2, E2>(self, l: L) -> Endpoint<B2, E2>
     where
         L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
-        L::Service: Service<ServerContext, ServerRequest<B2>, Error = E2> + Send + Sync,
-        <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
+        L::Service: Service<ServerContext, Request<B2>, Error = E2> + Send + Sync,
+        <L::Service as Service<ServerContext, Request<B2>>>::Response: IntoResponse,
         B2: 'static,
     {
         match self {

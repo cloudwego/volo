@@ -14,7 +14,7 @@ use pin_project::pin_project;
 use tokio::io::AsyncRead;
 use tokio_util::io::ReaderStream;
 
-use crate::{body::Body, response::ServerResponse, server::IntoResponse};
+use crate::{body::Body, response::Response, server::IntoResponse};
 
 const BUF_SIZE: usize = 4096;
 
@@ -52,9 +52,9 @@ impl FileResponse {
 }
 
 impl IntoResponse for FileResponse {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         let file = tokio::fs::File::from_std(self.file);
-        ServerResponse::builder()
+        Response::builder()
             .header(header::CONTENT_TYPE, self.content_type)
             .body(Body::from_body(FileBody {
                 reader: ReaderStream::with_capacity(file, BUF_SIZE),

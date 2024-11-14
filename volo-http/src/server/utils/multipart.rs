@@ -8,7 +8,7 @@
 //! ```rust
 //! use http::StatusCode;
 //! use volo_http::{
-//!     response::ServerResponse,
+//!     response::Response,
 //!     server::{
 //!         route::post,
 //!         utils::multipart::{Multipart, MultipartRejectionError},
@@ -58,7 +58,7 @@ use crate::{
 /// ```rust
 /// use http::StatusCode;
 /// use volo_http::{
-///     response::ServerResponse,
+///     response::Response,
 ///     server::utils::multipart::{Multipart, MultipartRejectionError},
 /// };
 ///
@@ -217,8 +217,8 @@ mod multipart_tests {
 
     use crate::{
         context::ServerContext,
-        request::ServerRequest,
-        response::ServerResponse,
+        request::Request,
+        response::Response,
         server::{
             test_helpers,
             utils::multipart::{Multipart, MultipartRejectionError},
@@ -239,7 +239,7 @@ mod multipart_tests {
 
     async fn run_handler<S>(service: S, port: u16)
     where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
+        S: Service<ServerContext, Request, Response = Response, Error = Infallible>
             + Send
             + Sync
             + 'static,
