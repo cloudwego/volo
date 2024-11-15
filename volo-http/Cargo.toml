@@ -34,6 +34,7 @@ http-body.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util = { workspace = true, features = ["tokio"] }
+ipnet.workspace = true
 itoa.workspace = true
 memchr.workspace = true
 metainfo.workspace = true

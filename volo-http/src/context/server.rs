@@ -1,5 +1,8 @@
 //! Context and its utilities of server
 
+use std::borrow::Cow;
+use std::str::FromStr;
+use faststr::FastStr;
 use volo::{
     context::{Context, Reusable, Role, RpcCx, RpcInfo},
     net::Address,
@@ -53,10 +56,14 @@ impl ServerCxInner {
 /// Configuration of the request
 ///
 /// It is empty currently
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Config {
     #[cfg(feature = "__tls")]
     tls: bool,
+
+    // client ip
+    remote_ip_headers: Vec<FastStr>,
+    trusted_cidrs: Vec<ipnet::IpNet>,
 }
 
 impl Config {
@@ -69,6 +76,48 @@ impl Config {
     #[cfg(feature = "__tls")]
     pub(crate) fn set_tls(&mut self, tls: bool) {
         self.tls = tls;
+    }
+
+    pub fn set_remote_ip_headers<I>(&mut self, headers: I)
+    where
+        I: IntoIterator,
+        I::Item: Into<Cow<'static, str>>,
+    {
+        let remote_ip_headers = headers.into_iter().map(Into::into)
+            .map(|s|
+                match s {
+                    Cow::Owned(s) => FastStr::from_str(&s).unwrap(),
+                    Cow::Borrowed(s) => FastStr::from_str(s).unwrap(),
+                }
+            )
+            .collect();
+        self.remote_ip_headers = remote_ip_headers;
+    }
+
+    pub(crate) fn remote_ip_headers(&self) -> &Vec<FastStr> {
+        &self.remote_ip_headers
+    }
+
+    pub fn set_trusted_cidrs<H>(&mut self, cidrs: H)
+    where
+        H: IntoIterator<Item=ipnet::IpNet>,
+    {
+        self.trusted_cidrs = cidrs.into_iter().collect();
+    }
+
+    pub(crate) fn trusted_cidrs(&self) -> &Vec<ipnet::IpNet> {
+        &self.trusted_cidrs
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            #[cfg(feature = "__tls")]
+            tls: false,
+            remote_ip_headers: vec!["X-Forwarded-For".into(), "X-Real-IP".into()],
+            trusted_cidrs: vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()],
+        }
     }
 }
 
