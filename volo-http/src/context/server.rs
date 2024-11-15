@@ -91,10 +91,8 @@ impl ClientIPConfig {
     /// ```rust
     /// use volo_http::context::server::ClientIPConfig;
     ///
-    /// let client_ip_config = ClientIPConfig::new()
-    ///     .with_remote_ip_headers(
-    ///         vec!["X-Real-IP", "X-Forwarded-For"]
-    ///     );
+    /// let client_ip_config =
+    ///     ClientIPConfig::new().with_remote_ip_headers(vec!["X-Real-IP", "X-Forwarded-For"]);
     /// ```
     pub fn with_remote_ip_headers<I>(
         self,
@@ -134,9 +132,7 @@ impl ClientIPConfig {
     /// use volo_http::context::server::ClientIPConfig;
     ///
     /// let client_ip_config = ClientIPConfig::new()
-    ///     .with_trusted_cidrs(
-    ///         vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()]
-    ///     );
+    ///     .with_trusted_cidrs(vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()]);
     /// ```
     pub fn with_trusted_cidrs<H>(self, cidrs: H) -> Self
     where
