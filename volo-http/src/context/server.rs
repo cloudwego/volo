@@ -85,6 +85,17 @@ impl ClientIPConfig {
     /// Get Real Client IP by parsing the given headers.
     ///
     /// See [`ClientIP`](crate::server::extract::ClientIP) for more details.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use volo_http::context::server::ClientIPConfig;
+    ///
+    /// let client_ip_config = ClientIPConfig::new()
+    ///     .with_remote_ip_headers(
+    ///         vec!["X-Real-IP", "X-Forwarded-For"]
+    ///     );
+    /// ```
     pub fn with_remote_ip_headers<I>(
         self,
         headers: I,
@@ -116,6 +127,17 @@ impl ClientIPConfig {
     /// Get Real Client IP if it is trusted, otherwise it will just return caller ip.
     ///
     /// See [`ClientIP`](crate::server::extract::ClientIP) for more details.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use volo_http::context::server::ClientIPConfig;
+    ///
+    /// let client_ip_config = ClientIPConfig::new()
+    ///     .with_trusted_cidrs(
+    ///         vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()]
+    ///     );
+    /// ```
     pub fn with_trusted_cidrs<H>(self, cidrs: H) -> Self
     where
         H: IntoIterator<Item = ipnet::IpNet>,
