@@ -53,7 +53,7 @@ impl ServerCxInner {
     impl_getter!(params, PathParamsVec);
 }
 
-/// Client IP config
+/// Config for extract client ip
 #[derive(Clone, Debug)]
 pub struct ClientIPConfig {
     remote_ip_headers: Vec<HeaderName>,
