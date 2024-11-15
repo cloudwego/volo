@@ -296,10 +296,10 @@ impl FromContext for Method {
 /// `cx.rpc_info().caller().address().ip()`.
 ///
 /// If you want to specify your own headers, you can use
-/// [`set_remote_ip_headers`](crate::server::Config::set_remote_ip_headers) to set the headers.
+/// [`with_remote_ip_headers`](crate::server::ClientIPConfig::with_remote_ip_headers) to set the headers.
 ///
 /// If you want to specify your own trusted cidrs, you can use
-/// [`set_trusted_cidrs`](crate::server::Config::set_trusted_cidrs) to set the cidrs.
+/// [`with_trusted_cidrs`](crate::server::ClientIPConfig::with_trusted_cidrs) to set the cidrs.
 ///
 /// # Example
 ///
