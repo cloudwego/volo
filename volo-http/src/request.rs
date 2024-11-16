@@ -4,22 +4,29 @@ use std::str::FromStr;
 
 use http::{
     header::{self, HeaderMap, HeaderName},
-    request::{Parts, Request},
+    request::Parts,
     uri::{Scheme, Uri},
 };
 use url::Url;
 
-/// [`Request`] with [`Body`] as default body.
+use crate::body::Body;
+
+/// [`Request`](http::request::Request) with [`Body`] as default body.
+///
+/// [`Body`]: crate::body::Body
+pub type Request<B = Body> = http::request::Request<B>;
+
+/// [`Request`](http::request::Request) with [`Body`] as default body.
 ///
 /// [`Body`]: crate::body::Body
 #[cfg(feature = "client")]
-pub type ClientRequest<B = crate::body::Body> = Request<B>;
+#[deprecated(note = "`ClientRequest` has been renamed to `Request`")]
+pub type ClientRequest<B = Body> = Request<B>;
 
-/// [`Request`] with [`Body`] as default body.
-///
-/// [`Body`]: crate::body::Body
+/// [`Request`](http::request::Request) with [`Body`] as default body.
 #[cfg(feature = "server")]
-pub type ServerRequest<B = crate::body::Body> = Request<B>;
+#[deprecated(note = "`ServerRequest` has been renamed to `Request`")]
+pub type ServerRequest<B = Body> = Request<B>;
 
 /// HTTP header [`X-Forwarded-For`][mdn].
 ///

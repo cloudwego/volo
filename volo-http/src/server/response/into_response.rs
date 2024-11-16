@@ -2,11 +2,10 @@ use std::{convert::Infallible, error::Error};
 
 use http::{
     header::{HeaderMap, HeaderValue, IntoHeaderName},
-    response::Response,
     status::StatusCode,
 };
 
-use crate::{body::Body, response::ServerResponse};
+use crate::{body::Body, response::Response};
 
 /// Try converting an object to a [`HeaderMap`]
 pub trait TryIntoResponseHeaders {
@@ -15,10 +14,10 @@ pub trait TryIntoResponseHeaders {
     fn try_into_response_headers(self) -> Result<HeaderMap, Self::Error>;
 }
 
-/// Convert an object into a [`ServerResponse`]
+/// Convert an object into a [`Response`]
 pub trait IntoResponse {
-    /// Consume self and convert it into a [`ServerResponse`]
-    fn into_response(self) -> ServerResponse;
+    /// Consume self and convert it into a [`Response`]
+    fn into_response(self) -> Response;
 }
 
 impl<K, V> TryIntoResponseHeaders for (K, V)
@@ -54,7 +53,7 @@ where
 }
 
 impl IntoResponse for Infallible {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }
 }
@@ -64,7 +63,7 @@ where
     T: TryInto<Body>,
     T::Error: IntoResponse,
 {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         let body = match self.try_into() {
             Ok(body) => body,
             Err(e) => {
@@ -83,7 +82,7 @@ where
     R: IntoResponse,
     E: IntoResponse,
 {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         match self {
             Ok(value) => value.into_response(),
             Err(err) => err.into_response(),
@@ -95,7 +94,7 @@ impl<T> IntoResponse for (StatusCode, T)
 where
     T: IntoResponse,
 {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         let mut resp = self.1.into_response();
         *resp.status_mut() = self.0;
         resp
@@ -103,7 +102,7 @@ where
 }
 
 impl IntoResponse for StatusCode {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         Response::builder()
             .status(self)
             .body(String::new().into())
@@ -115,7 +114,7 @@ impl<B> IntoResponse for http::Response<B>
 where
     B: Into<Body>,
 {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         let (parts, body) = self.into_parts();
         Response::from_parts(parts, body.into())
     }
@@ -126,7 +125,7 @@ where
     H: TryIntoResponseHeaders,
     R: IntoResponse,
 {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         let mut resp = self.1.into_response();
         if let Ok(headers) = self.0.try_into_response_headers() {
             resp.headers_mut().extend(headers);
@@ -140,13 +139,13 @@ impl<T> IntoResponse for crate::server::extract::Form<T>
 where
     T: serde::Serialize,
 {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         let Ok(body) = serde_urlencoded::to_string(&self.0) else {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         };
         let body = Body::from(body);
 
-        ServerResponse::builder()
+        Response::builder()
             .status(StatusCode::OK)
             .header(
                 http::header::CONTENT_TYPE,
@@ -162,13 +161,13 @@ impl<T> IntoResponse for crate::server::extract::Json<T>
 where
     T: serde::Serialize,
 {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         let Ok(body) = crate::utils::json::serialize(&self.0) else {
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         };
         let body = Body::from(body);
 
-        ServerResponse::builder()
+        Response::builder()
             .status(StatusCode::OK)
             .header(
                 http::header::CONTENT_TYPE,
@@ -181,7 +180,7 @@ where
 
 #[cfg(feature = "json")]
 impl IntoResponse for crate::utils::json::Error {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         StatusCode::BAD_REQUEST.into_response()
     }
 }

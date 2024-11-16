@@ -47,8 +47,8 @@ use crate::{
         client::{builder_error, Result},
         BoxError, ClientError,
     },
-    request::ClientRequest,
-    response::ClientResponse,
+    request::Request,
+    response::Response,
 };
 
 mod callopt;
@@ -856,9 +856,9 @@ impl<S> Client<S> {
     }
 }
 
-impl<S, B> OneShotService<ClientContext, ClientRequest<B>> for Client<S>
+impl<S, B> OneShotService<ClientContext, Request<B>> for Client<S>
 where
-    S: Service<ClientContext, ClientRequest<B>, Error = ClientError> + Send + Sync,
+    S: Service<ClientContext, Request<B>, Error = ClientError> + Send + Sync,
     B: Send,
 {
     type Response = S::Response;
@@ -867,7 +867,7 @@ where
     async fn call(
         self,
         cx: &mut ClientContext,
-        mut req: ClientRequest<B>,
+        mut req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         // set target
         self.inner.target.clone().apply(cx)?;
@@ -912,9 +912,9 @@ where
     }
 }
 
-impl<S, B> Service<ClientContext, ClientRequest<B>> for Client<S>
+impl<S, B> Service<ClientContext, Request<B>> for Client<S>
 where
-    S: Service<ClientContext, ClientRequest<B>, Error = ClientError> + Send + Sync,
+    S: Service<ClientContext, Request<B>, Error = ClientError> + Send + Sync,
     B: Send,
 {
     type Response = S::Response;
@@ -923,7 +923,7 @@ where
     fn call(
         &self,
         cx: &mut ClientContext,
-        req: ClientRequest<B>,
+        req: Request<B>,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         OneShotService::call(self.clone(), cx, req)
     }
@@ -943,7 +943,7 @@ impl<S> MkClient<Client<S>> for DefaultMkClient {
 static CLIENT: LazyLock<DefaultClient> = LazyLock::new(Default::default);
 
 /// Create a GET request to the specified URI.
-pub async fn get<U>(uri: U) -> Result<ClientResponse>
+pub async fn get<U>(uri: U) -> Result<Response>
 where
     U: TryInto<Uri>,
     U::Error: Into<BoxError>,

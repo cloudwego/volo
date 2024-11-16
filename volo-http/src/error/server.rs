@@ -4,7 +4,7 @@ use std::{error::Error, fmt};
 
 use http::StatusCode;
 
-use crate::{response::ServerResponse, server::IntoResponse};
+use crate::{response::Response, server::IntoResponse};
 
 /// [`Error`]s when extracting something from a [`Body`](crate::body::Body)
 #[derive(Debug)]
@@ -52,7 +52,7 @@ impl Error for ExtractBodyError {
 }
 
 impl IntoResponse for ExtractBodyError {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         let status = match self {
             Self::Generic(e) => e.to_status_code(),
             Self::String(_) => StatusCode::UNSUPPORTED_MEDIA_TYPE,
@@ -98,7 +98,7 @@ impl GenericRejectionError {
 }
 
 impl IntoResponse for GenericRejectionError {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         self.to_status_code().into_response()
     }
 }

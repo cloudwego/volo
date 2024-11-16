@@ -2,9 +2,7 @@ use std::time::Duration;
 
 use motore::{layer::Layer, Service};
 
-use crate::{
-    context::ServerContext, request::ServerRequest, response::ServerResponse, server::IntoResponse,
-};
+use crate::{context::ServerContext, request::Request, response::Response, server::IntoResponse};
 
 /// [`Layer`] for setting timeout to the request
 ///
@@ -68,7 +66,7 @@ where
 }
 
 trait TimeoutHandler<'r> {
-    fn call(self, cx: &'r ServerContext) -> ServerResponse;
+    fn call(self, cx: &'r ServerContext) -> Response;
 }
 
 impl<'r, F, R> TimeoutHandler<'r> for F
@@ -76,7 +74,7 @@ where
     F: FnOnce(&'r ServerContext) -> R + 'r,
     R: IntoResponse + 'r,
 {
-    fn call(self, cx: &'r ServerContext) -> ServerResponse {
+    fn call(self, cx: &'r ServerContext) -> Response {
         self(cx).into_response()
     }
 }
@@ -91,21 +89,21 @@ pub struct Timeout<S, H> {
     handler: H,
 }
 
-impl<S, B, H> Service<ServerContext, ServerRequest<B>> for Timeout<S, H>
+impl<S, B, H> Service<ServerContext, Request<B>> for Timeout<S, H>
 where
-    S: Service<ServerContext, ServerRequest<B>> + Send + Sync + 'static,
+    S: Service<ServerContext, Request<B>> + Send + Sync + 'static,
     S::Response: IntoResponse,
     S::Error: IntoResponse,
     B: Send,
     H: for<'r> TimeoutHandler<'r> + Clone + Sync,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = S::Error;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let fut_service = self.service.call(cx, req);
         let fut_timeout = tokio::time::sleep(self.duration);

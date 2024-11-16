@@ -18,7 +18,7 @@ use pin_project::pin_project;
 use tokio::time::{Instant, Sleep};
 
 use super::IntoResponse;
-use crate::{body::Body, error::BoxError, response::ServerResponse};
+use crate::{body::Body, error::BoxError, response::Response};
 
 /// Response of [SSE][sse] (Server-Sent Events), inclusing a stream with SSE [`Event`]s.
 ///
@@ -49,8 +49,8 @@ where
     S: Stream<Item = Result<Event, E>> + Send + Sync + 'static,
     E: Into<BoxError>,
 {
-    fn into_response(self) -> ServerResponse {
-        ServerResponse::builder()
+    fn into_response(self) -> Response {
+        Response::builder()
             .header(
                 header::CONTENT_TYPE,
                 HeaderValue::from_str(mime::TEXT_EVENT_STREAM.essence_str()).expect("infallible"),

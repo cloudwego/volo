@@ -21,7 +21,7 @@ use volo::{
 use crate::{
     client::{dns::Port, target::is_default_port},
     error::client::{builder_error, Result},
-    request::ClientRequest,
+    request::Request,
 };
 
 /// [`Layer`] for inserting a header to requests.
@@ -85,9 +85,9 @@ pub struct HeaderService<S> {
     val: HeaderValue,
 }
 
-impl<Cx, B, S> Service<Cx, ClientRequest<B>> for HeaderService<S>
+impl<Cx, B, S> Service<Cx, Request<B>> for HeaderService<S>
 where
-    S: Service<Cx, ClientRequest<B>>,
+    S: Service<Cx, Request<B>>,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -95,7 +95,7 @@ where
     fn call(
         &self,
         cx: &mut Cx,
-        mut req: ClientRequest<B>,
+        mut req: Request<B>,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         req.headers_mut().insert(self.key.clone(), self.val.clone());
         self.inner.call(cx, req)
@@ -185,10 +185,10 @@ fn gen_host_by_ep(ep: &Endpoint) -> Option<HeaderValue> {
     gen_host(scheme, name, addr, port)
 }
 
-impl<Cx, B, S> Service<Cx, ClientRequest<B>> for HostService<S>
+impl<Cx, B, S> Service<Cx, Request<B>> for HostService<S>
 where
     Cx: Context,
-    S: Service<Cx, ClientRequest<B>>,
+    S: Service<Cx, Request<B>>,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -196,7 +196,7 @@ where
     fn call(
         &self,
         cx: &mut Cx,
-        mut req: ClientRequest<B>,
+        mut req: Request<B>,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         if !req.headers().contains_key(header::HOST) {
             if let Some(val) = gen_host_by_ep(cx.rpc_info().callee()) {
@@ -256,9 +256,9 @@ pub struct UserAgentService<S> {
     val: HeaderValue,
 }
 
-impl<Cx, B, S> Service<Cx, ClientRequest<B>> for UserAgentService<S>
+impl<Cx, B, S> Service<Cx, Request<B>> for UserAgentService<S>
 where
-    S: Service<Cx, ClientRequest<B>>,
+    S: Service<Cx, Request<B>>,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -266,7 +266,7 @@ where
     fn call(
         &self,
         cx: &mut Cx,
-        mut req: ClientRequest<B>,
+        mut req: Request<B>,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         if !req.headers().contains_key(header::USER_AGENT) {
             req.headers_mut()

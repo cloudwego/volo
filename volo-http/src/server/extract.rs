@@ -1,4 +1,4 @@
-//! Traits and types for extracting data from [`ServerContext`] and [`ServerRequest`]
+//! Traits and types for extracting data from [`ServerContext`] and [`Request`]
 //!
 //! See [`FromContext`] and [`FromRequest`] for more details.
 
@@ -22,7 +22,7 @@ use super::IntoResponse;
 use crate::{
     context::ServerContext,
     error::server::{body_collection_error, ExtractBodyError},
-    request::{RequestPartsExt, ServerRequest},
+    request::{Request, RequestPartsExt},
     utils::macros::impl_deref_and_deref_mut,
 };
 
@@ -37,15 +37,15 @@ mod private {
 /// Extract a type from context ([`ServerContext`] and [`Parts`])
 ///
 /// This trait is used for handlers, which can extract something from [`ServerContext`] and
-/// [`ServerRequest`].
+/// [`Request`].
 ///
 /// [`FromContext`] only borrows [`ServerContext`] and [`Parts`]. If your extractor needs to
-/// consume [`Parts`] or the whole [`ServerRequest`], please use [`FromRequest`] instead.
+/// consume [`Parts`] or the whole [`Request`], please use [`FromRequest`] instead.
 pub trait FromContext: Sized {
     /// If the extractor fails, it will return this `Rejection` type.
     ///
     /// The `Rejection` should implement [`IntoResponse`]. If extractor fails in handler, the
-    /// rejection will be converted into a [`ServerResponse`](crate::response::ServerResponse) and
+    /// rejection will be converted into a [`Response`](crate::response::Response) and
     /// returned.
     type Rejection: IntoResponse;
 
@@ -56,18 +56,18 @@ pub trait FromContext: Sized {
     ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
-/// Extract a type from [`ServerRequest`] with its [`ServerContext`]
+/// Extract a type from [`Request`] with its [`ServerContext`]
 ///
 /// This trait is used for handlers, which can extract something from [`ServerContext`] and
-/// [`ServerRequest`].
+/// [`Request`].
 ///
-/// [`FromRequest`] will consume [`ServerRequest`], so it can only be used once in a handler. If
-/// your extractor does not need to consume [`ServerRequest`], please use [`FromContext`] instead.
+/// [`FromRequest`] will consume [`Request`], so it can only be used once in a handler. If
+/// your extractor does not need to consume [`Request`], please use [`FromContext`] instead.
 pub trait FromRequest<B = crate::body::Body, M = private::ViaRequest>: Sized {
     /// If the extractor fails, it will return this `Rejection` type.
     ///
     /// The `Rejection` should implement [`IntoResponse`]. If extractor fails in handler, the
-    /// rejection will be converted into a [`ServerResponse`](crate::response::ServerResponse) and
+    /// rejection will be converted into a [`Response`](crate::response::Response) and
     /// returned.
     type Rejection: IntoResponse;
 
@@ -274,7 +274,7 @@ impl FromContext for FullUri {
 }
 
 impl IntoResponse for http::Error {
-    fn into_response(self) -> crate::response::ServerResponse {
+    fn into_response(self) -> crate::response::Response {
         StatusCode::INTERNAL_SERVER_ERROR.into_response()
     }
 }
@@ -309,7 +309,7 @@ where
 
 #[cfg(feature = "query")]
 impl IntoResponse for serde_urlencoded::de::Error {
-    fn into_response(self) -> crate::response::ServerResponse {
+    fn into_response(self) -> crate::response::Response {
         StatusCode::BAD_REQUEST.into_response()
     }
 }
@@ -362,7 +362,7 @@ where
     }
 }
 
-impl<B> FromRequest<B> for ServerRequest<B>
+impl<B> FromRequest<B> for Request<B>
 where
     B: Send,
 {
@@ -373,7 +373,7 @@ where
         parts: Parts,
         body: B,
     ) -> Result<Self, Self::Rejection> {
-        Ok(ServerRequest::from_parts(parts, body))
+        Ok(Request::from_parts(parts, body))
     }
 }
 

@@ -76,7 +76,7 @@ mod server {
     use super::Extension;
     use crate::{
         context::ServerContext,
-        response::ServerResponse,
+        response::Response,
         server::{extract::FromContext, IntoResponse},
     };
 
@@ -103,7 +103,7 @@ mod server {
     }
 
     impl IntoResponse for ExtensionRejection {
-        fn into_response(self) -> ServerResponse {
+        fn into_response(self) -> Response {
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }

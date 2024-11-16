@@ -9,7 +9,7 @@ use super::{
     route::Route,
     IntoResponse,
 };
-use crate::{body::Body, context::ServerContext, request::ServerRequest, response::ServerResponse};
+use crate::{body::Body, context::ServerContext, request::Request, response::Response};
 
 /// A [`Layer`] from an async function
 ///
@@ -34,7 +34,7 @@ where
 
 /// Create a middleware from an async function
 ///
-/// The function must have the three params `&mut ServerContext`, `ServerRequest` and [`Next`],
+/// The function must have the three params `&mut ServerContext`, `Request` and [`Next`],
 /// and the three params must be at the end of function.
 ///
 /// There can also be some other types that implement
@@ -47,8 +47,8 @@ where
 /// ```
 /// use volo_http::{
 ///     context::ServerContext,
-///     request::ServerRequest,
-///     response::ServerResponse,
+///     request::Request,
+///     response::Response,
 ///     server::{
 ///         middleware::{from_fn, Next},
 ///         response::IntoResponse,
@@ -57,7 +57,7 @@ where
 /// };
 ///
 /// /// Caculate cost of inner services and print it
-/// async fn tracer(cx: &mut ServerContext, req: ServerRequest, next: Next) -> ServerResponse {
+/// async fn tracer(cx: &mut ServerContext, req: Request, next: Next) -> Response {
 ///     let start = std::time::Instant::now();
 ///     let resp = next.run(cx, req).await.into_response();
 ///     let elapsed = start.elapsed();
@@ -80,8 +80,8 @@ where
 /// use http::{header::HeaderMap, status::StatusCode, uri::Uri};
 /// use volo_http::{
 ///     context::ServerContext,
-///     request::ServerRequest,
-///     response::ServerResponse,
+///     request::Request,
+///     response::Response,
 ///     server::{
 ///         middleware::{from_fn, Next},
 ///         response::IntoResponse,
@@ -98,9 +98,9 @@ where
 /// async fn cookies_check(
 ///     uri: Uri,
 ///     cx: &mut ServerContext,
-///     req: ServerRequest,
+///     req: Request,
 ///     next: Next,
-/// ) -> Result<ServerResponse, StatusCode> {
+/// ) -> Result<Response, StatusCode> {
 ///     // User is not logged in, and not try to login.
 ///     let session = get_session(req.headers());
 ///     if uri.path() != "/api/v1/login" && session.is_none() {
@@ -129,8 +129,8 @@ where
 /// use volo_http::{
 ///     body::BodyConversion,
 ///     context::ServerContext,
-///     request::ServerRequest,
-///     response::ServerResponse,
+///     request::Request,
+///     response::Response,
 ///     server::{
 ///         middleware::{from_fn, Next},
 ///         response::IntoResponse,
@@ -138,21 +138,14 @@ where
 ///     },
 /// };
 ///
-/// async fn converter(
-///     cx: &mut ServerContext,
-///     req: ServerRequest,
-///     next: Next<String>,
-/// ) -> ServerResponse {
+/// async fn converter(cx: &mut ServerContext, req: Request, next: Next<String>) -> Response {
 ///     let (parts, body) = req.into_parts();
 ///     let s = body.into_string().await.unwrap();
-///     let req = ServerRequest::from_parts(parts, s);
+///     let req = Request::from_parts(parts, s);
 ///     next.run(cx, req).await.into_response()
 /// }
 ///
-/// async fn service(
-///     cx: &mut ServerContext,
-///     req: ServerRequest<String>,
-/// ) -> Result<ServerResponse, Infallible> {
+/// async fn service(cx: &mut ServerContext, req: Request<String>) -> Result<Response, Infallible> {
 ///     unimplemented!()
 /// }
 ///
@@ -169,10 +162,7 @@ pub fn from_fn<F, T, B, B2, E2>(f: F) -> FromFnLayer<F, T, B, B2, E2> {
 
 impl<S, F, T, B, B2, E2> Layer<S> for FromFnLayer<F, T, B, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
-        + Send
-        + Sync
-        + 'static,
+    S: Service<ServerContext, Request<B2>, Response = Response, Error = E2> + Send + Sync + 'static,
 {
     type Service = FromFn<Arc<S>, F, T, B, B2, E2>;
 
@@ -206,9 +196,9 @@ where
     }
 }
 
-impl<S, F, T, B, B2, E2> Service<ServerContext, ServerRequest<B>> for FromFn<S, F, T, B, B2, E2>
+impl<S, F, T, B, B2, E2> Service<ServerContext, Request<B>> for FromFn<S, F, T, B, B2, E2>
 where
-    S: Service<ServerContext, ServerRequest<B2>, Response = ServerResponse, Error = E2>
+    S: Service<ServerContext, Request<B2>, Response = Response, Error = E2>
         + Clone
         + Send
         + Sync
@@ -217,13 +207,13 @@ where
     B: Send,
     B2: 'static,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = Infallible;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let next = Next {
             service: Route::new(self.service.clone()),
@@ -244,11 +234,7 @@ pub struct Next<B = Body, E = Infallible> {
 
 impl<B, E> Next<B, E> {
     /// Call the inner [`Service`]
-    pub async fn run(
-        self,
-        cx: &mut ServerContext,
-        req: ServerRequest<B>,
-    ) -> Result<ServerResponse, E> {
+    pub async fn run(self, cx: &mut ServerContext, req: Request<B>) -> Result<Response, E> {
         self.service.call(cx, req).await
     }
 }
@@ -277,8 +263,8 @@ where
 ///
 /// The async function can be:
 ///
-/// - `async fn func(resp: ServerResponse) -> impl IntoResponse`
-/// - `async fn func(cx: &mut ServerContext, resp: ServerResponse) -> impl IntoResponse`
+/// - `async fn func(resp: Response) -> impl IntoResponse`
+/// - `async fn func(cx: &mut ServerContext, resp: Response) -> impl IntoResponse`
 ///
 /// # Examples
 ///
@@ -286,7 +272,7 @@ where
 ///
 /// ```
 /// use volo_http::{
-///     response::ServerResponse,
+///     response::Response,
 ///     server::{
 ///         middleware::map_response,
 ///         route::{get, Router},
@@ -297,7 +283,7 @@ where
 ///     "Hello, World"
 /// }
 ///
-/// async fn append_header(resp: ServerResponse) -> ((&'static str, &'static str), ServerResponse) {
+/// async fn append_header(resp: Response) -> ((&'static str, &'static str), Response) {
 ///     (("Server", "nginx"), resp)
 /// }
 ///
@@ -364,15 +350,15 @@ where
 #[cfg(test)]
 mod middleware_tests {
     use faststr::FastStr;
-    use http::{HeaderValue, Method, Response, StatusCode, Uri};
+    use http::{HeaderValue, Method, StatusCode, Uri};
     use motore::service::service_fn;
 
     use super::*;
     use crate::{
         body::{Body, BodyConversion},
         context::ServerContext,
-        request::ServerRequest,
-        response::ServerResponse,
+        request::Request,
+        response::Response,
         server::{
             response::IntoResponse,
             route::{any, get_service},
@@ -383,19 +369,19 @@ mod middleware_tests {
 
     async fn print_body_handler(
         _: &mut ServerContext,
-        req: ServerRequest<String>,
+        req: Request<String>,
     ) -> Result<Response<Body>, Infallible> {
         Ok(Response::new(req.into_body().into()))
     }
 
     async fn append_body_mw(
         cx: &mut ServerContext,
-        req: ServerRequest<String>,
+        req: Request<String>,
         next: Next<String>,
-    ) -> ServerResponse {
+    ) -> Response {
         let (parts, mut body) = req.into_parts();
         body += "test";
-        let req = ServerRequest::from_parts(parts, body);
+        let req = Request::from_parts(parts, body);
         next.run(cx, req).await.into_response()
     }
 
@@ -403,9 +389,9 @@ mod middleware_tests {
         method: Method,
         url: Uri,
         cx: &mut ServerContext,
-        req: ServerRequest<String>,
+        req: Request<String>,
         next: Next<String>,
-    ) -> ServerResponse {
+    ) -> Response {
         let mut resp = next.run(cx, req).await.into_response();
         resp.headers_mut().insert(
             "Access-Control-Allow-Methods",
@@ -435,9 +421,9 @@ mod middleware_tests {
         // Test case 3: Return type [`Result<_,_>`]
         async fn error_mw(
             _: &mut ServerContext,
-            _: ServerRequest<String>,
+            _: Request<String>,
             _: Next<String>,
-        ) -> Result<ServerResponse, StatusCode> {
+        ) -> Result<Response, StatusCode> {
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
         let service = from_fn(error_mw).layer(handler);
@@ -500,27 +486,27 @@ mod middleware_tests {
     async fn test_from_fn_converts() {
         async fn converter(
             cx: &mut ServerContext,
-            req: ServerRequest<String>,
+            req: Request<String>,
             next: Next<FastStr>,
-        ) -> ServerResponse {
+        ) -> Response {
             let (parts, body) = req.into_parts();
             let s = body.into_faststr().await.unwrap();
-            let req = ServerRequest::from_parts(parts, s);
-            let _: ServerRequest<FastStr> = req;
+            let req = Request::from_parts(parts, s);
+            let _: Request<FastStr> = req;
             next.run(cx, req).await.into_response()
         }
 
         async fn service(
             _: &mut ServerContext,
-            _: ServerRequest<FastStr>,
-        ) -> Result<ServerResponse, Infallible> {
+            _: Request<FastStr>,
+        ) -> Result<Response, Infallible> {
             Ok(Response::new(String::from("Hello, World").into()))
         }
 
         let route = Route::new(get_service(service_fn(service)));
         let service = from_fn(converter).layer(route);
 
-        let _: Result<ServerResponse, Infallible> = service
+        let _: Result<Response, Infallible> = service
             .call(
                 &mut empty_cx(),
                 simple_req(Method::GET, "/", String::from("")),
@@ -534,9 +520,7 @@ mod middleware_tests {
 
     #[tokio::test]
     async fn test_map_response() {
-        async fn append_header(
-            resp: ServerResponse,
-        ) -> ((&'static str, &'static str), ServerResponse) {
+        async fn append_header(resp: Response) -> ((&'static str, &'static str), Response) {
             (("Server", "nginx"), resp)
         }
 

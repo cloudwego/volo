@@ -8,7 +8,6 @@ use faststr::FastStr;
 use http::{
     header::{HeaderMap, HeaderName, HeaderValue},
     method::Method,
-    request::Request,
     uri::{PathAndQuery, Scheme, Uri},
     version::Version,
 };
@@ -25,8 +24,8 @@ use crate::{
         client::{builder_error, Result},
         BoxError, ClientError,
     },
-    request::ClientRequest,
-    response::ClientResponse,
+    request::Request,
+    response::Response,
     utils::consts,
 };
 
@@ -34,7 +33,7 @@ use crate::{
 pub struct RequestBuilder<S, B = Body> {
     inner: S,
     target: Target,
-    request: ClientRequest<B>,
+    request: Request<B>,
     status: Result<()>,
 }
 
@@ -43,7 +42,7 @@ impl<S> RequestBuilder<S> {
         Self {
             inner,
             target: Default::default(),
-            request: ClientRequest::default(),
+            request: Request::default(),
             status: Ok(()),
         }
     }
@@ -375,14 +374,10 @@ impl<S, B> RequestBuilder<S, B> {
     }
 
     /// Send the request and get the response.
-    pub async fn send(self) -> Result<ClientResponse>
+    pub async fn send(self) -> Result<Response>
     where
-        S: OneShotService<
-                ClientContext,
-                ClientRequest<B>,
-                Response = ClientResponse,
-                Error = ClientError,
-            > + Send
+        S: OneShotService<ClientContext, Request<B>, Response = Response, Error = ClientError>
+            + Send
             + Sync
             + 'static,
         B: Send + 'static,
@@ -491,7 +486,7 @@ mod with_callopt_tests {
         client::{layer::FailOnStatus, test_helpers::MockTransport, CallOpt, Client},
         context::client::Config,
         error::ClientError,
-        response::ClientResponse,
+        response::Response,
     };
 
     struct GetTimeoutAsSeconds;
@@ -500,7 +495,7 @@ mod with_callopt_tests {
     where
         Cx: Context<Config = Config>,
     {
-        type Response = ClientResponse;
+        type Response = Response;
         type Error = ClientError;
 
         fn call(
@@ -512,10 +507,10 @@ mod with_callopt_tests {
             let resp = match timeout {
                 Some(timeout) => {
                     let secs = timeout.as_secs();
-                    ClientResponse::new(Body::from(format!("{secs}")))
+                    Response::new(Body::from(format!("{secs}")))
                 }
                 None => {
-                    let mut resp = ClientResponse::new(Body::empty());
+                    let mut resp = Response::new(Body::empty());
                     *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
                     resp
                 }

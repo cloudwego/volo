@@ -4,7 +4,7 @@ use http::{
 };
 
 use super::IntoResponse;
-use crate::{body::Body, response::ServerResponse};
+use crate::{body::Body, response::Response};
 
 /// Response with 3XX Status Code and specified `Location`
 pub struct Redirect {
@@ -85,8 +85,8 @@ impl Redirect {
 }
 
 impl IntoResponse for Redirect {
-    fn into_response(self) -> ServerResponse {
-        ServerResponse::builder()
+    fn into_response(self) -> Response {
+        Response::builder()
             .status(self.status)
             .header(header::LOCATION, self.location)
             .body(Body::default())

@@ -9,7 +9,7 @@ use std::{
 use http::uri::Uri;
 use motore::{layer::Layer, service::Service};
 
-use crate::{context::ServerContext, request::ServerRequest, response::ServerResponse};
+use crate::{context::ServerContext, request::Request, response::Response};
 
 // The `matchit::Router` cannot be converted to `Iterator`, so using
 // `matchit::Router<MethodRouter>` is not convenient enough.
@@ -118,17 +118,17 @@ pub(super) struct StripPrefix<S> {
     inner: S,
 }
 
-impl<S, B, E> Service<ServerContext, ServerRequest<B>> for StripPrefix<S>
+impl<S, B, E> Service<ServerContext, Request<B>> for StripPrefix<S>
 where
-    S: Service<ServerContext, ServerRequest<B>, Response = ServerResponse, Error = E>,
+    S: Service<ServerContext, Request<B>, Response = Response, Error = E>,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = E;
 
     fn call(
         &self,
         cx: &mut ServerContext,
-        mut req: ServerRequest<B>,
+        mut req: Request<B>,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         let mut uri = String::from("/");
         if cx
