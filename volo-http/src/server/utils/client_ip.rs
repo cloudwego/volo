@@ -77,7 +77,7 @@ impl ClientIPConfig {
     /// # Example
     ///
     /// ```rust
-    /// use volo_http::server::layer::ClientIPConfig;
+    /// use volo_http::server::utils::client_ip::ClientIPConfig;
     ///
     /// let client_ip_config =
     ///     ClientIPConfig::new().with_remote_ip_headers(vec!["X-Real-IP", "X-Forwarded-For"]);
@@ -110,7 +110,7 @@ impl ClientIPConfig {
     /// # Example
     ///
     /// ```rust
-    /// use volo_http::server::layer::ClientIPConfig;
+    /// use volo_http::server::utils::client_ip::ClientIPConfig;
     ///
     /// let client_ip_config = ClientIPConfig::new()
     ///     .with_trusted_cidrs(vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()]);
@@ -145,10 +145,10 @@ impl ClientIPConfig {
 ///
 /// ```rust
 /// ///
-/// use volo_http::server::layer::ClientIP;
+/// use volo_http::server::utils::client_ip::ClientIP;
 /// use volo_http::server::{
-///     layer::{ClientIPConfig, ClientIPLayer},
 ///     route::{get, Router},
+///     utils::client_ip::{ClientIPConfig, ClientIPLayer},
 ///     Server,
 /// };
 ///
@@ -168,8 +168,8 @@ impl ClientIPConfig {
 /// use volo_http::{
 ///     context::ServerContext,
 ///     server::{
-///         layer::{ClientIP, ClientIPConfig, ClientIPLayer},
 ///         route::{get, Router},
+///         utils::client_ip::{ClientIP, ClientIPConfig, ClientIPLayer},
 ///         Server,
 ///     },
 /// };
@@ -275,8 +275,8 @@ mod client_ip_tests {
         body::BodyConversion,
         context::ServerContext,
         server::{
-            layer::{client_ip::ClientIPLayer, ClientIP, ClientIPConfig},
             route::{get, Route},
+            utils::client_ip::{ClientIP, ClientIPConfig, ClientIPLayer},
         },
         utils::test_helpers::simple_req,
     };

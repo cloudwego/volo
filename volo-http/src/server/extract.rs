@@ -23,7 +23,7 @@ use crate::{
     context::ServerContext,
     error::server::{body_collection_error, ExtractBodyError},
     request::{Request, RequestPartsExt},
-    server::layer::ClientIP,
+    server::utils::client_ip::ClientIP,
     utils::macros::impl_deref_and_deref_mut,
 };
 
