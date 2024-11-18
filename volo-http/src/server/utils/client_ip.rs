@@ -194,6 +194,9 @@ pub struct ClientIP(pub Option<IpAddr>);
 
 impl_deref_and_deref_mut!(ClientIP, Option<IpAddr>, 0);
 
+/// [`ClientIPLayer`] generated [`Service`]
+///
+/// See [`ClientIP`] for more details.
 #[derive(Clone)]
 pub struct ClientIPService<S> {
     service: S,
