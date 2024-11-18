@@ -201,8 +201,9 @@ impl<S, L> Server<S, L> {
     /// set client ip config
     ///
     /// See [`ClientIP`](crate::server::extract::ClientIP) for more details.
-    pub fn set_client_ip_config(&mut self, config: ClientIPConfig) {
+    pub fn set_client_ip_config(&mut self, config: ClientIPConfig) -> &mut Self {
         self.config.set_client_ip_config(config);
+        self
     }
 
     /// Set whether HTTP/1 connections should support half-closures.

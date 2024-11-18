@@ -64,8 +64,8 @@ impl Default for ClientIPConfig {
     fn default() -> Self {
         Self {
             remote_ip_headers: vec![
-                HeaderName::from_static("X-Forwarded-For"),
-                HeaderName::from_static("X-Real-IP"),
+                HeaderName::from_static("x-forwarded-for"),
+                HeaderName::from_static("x-real-ip"),
             ],
             trusted_cidrs: vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()],
         }
