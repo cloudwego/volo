@@ -174,14 +174,16 @@ impl ClientIPConfig {
 ///     layer::{ClientIPConfig, ClientIPLayer},
 ///     route::{get, Router},
 ///     Server,
-/// };
+/// };///
 ///
-/// async fn index() -> &'static str {
-///     "Hello, World"
+/// use volo_http::server::layer::ClientIP;
+///
+/// async fn handler(client_ip: ClientIP) -> String {
+///     client_ip.unwrap().to_string()
 /// }
 ///
 /// let router: Router = Router::new()
-///     .route("/", get(index))
+///     .route("/", get(handler))
 ///     .layer(ClientIPLayer::default());
 /// ```
 ///
@@ -198,8 +200,8 @@ impl ClientIPConfig {
 ///     },
 /// };
 ///
-/// async fn index() -> &'static str {
-///     "Hello, World"
+/// async fn handler(client_ip: ClientIP) -> String {
+///     client_ip.unwrap().to_string()
 /// }
 ///
 /// fn client_ip_handler(
@@ -210,7 +212,7 @@ impl ClientIPConfig {
 ///     unimplemented!()
 /// }
 ///
-/// let router: Router = Router::new().route("/", get(index)).layer(
+/// let router: Router = Router::new().route("/", get(handler)).layer(
 ///     ClientIPLayer::new(client_ip_handler).with_config(
 ///         ClientIPConfig::new()
 ///             .with_remote_ip_headers(vec!["x-real-ip", "x-forwarded-for"])
