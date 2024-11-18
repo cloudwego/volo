@@ -126,15 +126,13 @@ impl ClientIPConfig {
     }
 }
 
-/// Return real `ClientIP` by parsing the headers in `["X-Real-IP", "X-Forwarded-For"]` by default
-/// if ip is trusted, otherwise it will just return caller ip by calling
-/// `cx.rpc_info().caller().address().ip()`.
+/// Return original client IP Address
 ///
-/// If you want to specify your own headers, you can use
+/// If you want to get client IP by retrieving specific headers, you can use
 /// [`with_remote_ip_headers`](ClientIPConfig::with_remote_ip_headers) to set the
 /// headers.
 ///
-/// If you want to specify your own trusted cidrs, you can use
+/// If you want to get client IP that is trusted with specific cidrs, you can use
 /// [`with_trusted_cidrs`](ClientIPConfig::with_trusted_cidrs) to set the cidrs.
 ///
 /// # Example
