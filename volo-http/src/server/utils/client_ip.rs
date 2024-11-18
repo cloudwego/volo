@@ -207,6 +207,7 @@ impl<S> ClientIPService<S> {
     fn get_client_ip(&self, cx: &ServerContext, headers: &HeaderMap) -> ClientIP {
         let remote_ip = match &cx.rpc_info().caller().address {
             Some(Address::Ip(socket_addr)) => Some(socket_addr.ip()),
+            #[cfg(target_family = "unix")]
             Some(Address::Unix(_)) => None,
             None => return ClientIP(None),
         };
