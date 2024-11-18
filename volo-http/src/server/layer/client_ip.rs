@@ -6,11 +6,9 @@ use motore::{layer::Layer, Service};
 use volo::{context::Context, net::Address};
 
 use crate::{
-    context::ServerContext, server::IntoResponse,
+    context::ServerContext, request::Request, response::Response, server::IntoResponse,
     utils::macros::impl_deref_and_deref_mut,
 };
-use crate::request::Request;
-use crate::response::Response;
 
 /// [`Layer`] for extracting client ip
 ///
@@ -170,13 +168,13 @@ impl ClientIPConfig {
 /// ## Default config
 ///
 /// ```rust
+/// ///
+/// use volo_http::server::layer::ClientIP;
 /// use volo_http::server::{
 ///     layer::{ClientIPConfig, ClientIPLayer},
 ///     route::{get, Router},
 ///     Server,
-/// };///
-///
-/// use volo_http::server::layer::ClientIP;
+/// };
 ///
 /// async fn handler(client_ip: ClientIP) -> String {
 ///     client_ip.unwrap().to_string()
