@@ -6,9 +6,11 @@ use motore::{layer::Layer, Service};
 use volo::{context::Context, net::Address};
 
 use crate::{
-    context::ServerContext, request::ServerRequest, response::ServerResponse, server::IntoResponse,
+    context::ServerContext, server::IntoResponse,
     utils::macros::impl_deref_and_deref_mut,
 };
+use crate::request::Request;
+use crate::response::Response;
 
 /// [`Layer`] for extracting client ip
 ///
@@ -297,21 +299,21 @@ pub struct ClientIPService<S, H> {
     handler: H,
 }
 
-impl<S, B, H> Service<ServerContext, ServerRequest<B>> for ClientIPService<S, H>
+impl<S, B, H> Service<ServerContext, Request<B>> for ClientIPService<S, H>
 where
-    S: Service<ServerContext, ServerRequest<B>> + Send + Sync + 'static,
+    S: Service<ServerContext, Request<B>> + Send + Sync + 'static,
     S::Response: IntoResponse,
     S::Error: IntoResponse,
     B: Send,
     H: for<'r> ClientIPHandler<'r> + Clone + Sync,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = S::Error;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let client_ip = self.handler.clone().call(&self.config, cx, req.headers());
         cx.rpc_info_mut().caller_mut().tags.insert(client_ip);
