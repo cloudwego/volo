@@ -310,7 +310,7 @@ pub fn git_repo_init(path: &Path) -> anyhow::Result<()> {
     fn in_git_repo(path: &Path) -> bool {
         if let Ok(repo) = git2::Repository::discover(path) {
             // Don't check if the working directory itself is ignored.
-            if repo.workdir().map_or(false, |workdir| workdir == path) {
+            if repo.workdir() == Some(path) {
                 true
             } else {
                 !repo.is_path_ignored(path).unwrap_or(false)
