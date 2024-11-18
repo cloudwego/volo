@@ -1,59 +1,61 @@
-use std::{borrow::Cow, net::IpAddr, str::FromStr};
+use std::{net::IpAddr, str::FromStr};
 
 use http::{HeaderMap, HeaderName};
 use ipnet::IpNet;
 use motore::{layer::Layer, Service};
 use volo::{context::Context, net::Address};
 
-use crate::{
-    context::ServerContext, request::Request, response::Response, server::IntoResponse,
-    utils::macros::impl_deref_and_deref_mut,
-};
+use crate::{context::ServerContext, request::Request, utils::macros::impl_deref_and_deref_mut};
 
 /// [`Layer`] for extracting client ip
 ///
 /// See [`ClientIP`] for more details.
 #[derive(Clone)]
-pub struct ClientIPLayerImpl<H> {
+pub struct ClientIPLayer {
     config: ClientIPConfig,
-    handler: H,
+    handler: fn(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP,
 }
-
-/// [`Layer`] for extracting client ip
-///
-/// See [`ClientIP`] for more details.
-pub type ClientIPLayer =
-    ClientIPLayerImpl<fn(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP>;
 
 impl Default for ClientIPLayer {
     fn default() -> Self {
-        Self::new(default_client_ip_handler)
+        Self {
+            config: ClientIPConfig::default(),
+            handler: default_client_ip_handler,
+        }
     }
 }
 
-impl<H> ClientIPLayerImpl<H> {
-    /// Create a new [`ClientIPLayerImpl`]
-    pub fn new(handler: H) -> Self {
-        Self {
-            config: ClientIPConfig::default(),
-            handler,
-        }
+impl ClientIPLayer {
+    /// Create a new [`ClientIPLayer`]
+    pub fn new() -> Self {
+        Default::default()
     }
 
-    /// Create a new [`ClientIPLayerImpl`] with the given [`ClientIPConfig`]
+    /// Create a new [`ClientIPLayer`] with the given [`ClientIPConfig`]
     pub fn with_config(self, config: ClientIPConfig) -> Self {
         Self {
             config,
             handler: self.handler,
         }
     }
+
+    /// Create a new [`ClientIPLayer`] with the given handler
+    pub fn with_handler(
+        self,
+        handler: fn(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP,
+    ) -> Self {
+        Self {
+            config: self.config,
+            handler,
+        }
+    }
 }
 
-impl<S, H> Layer<S> for ClientIPLayerImpl<H>
+impl<S> Layer<S> for ClientIPLayer
 where
     S: Send + Sync + 'static,
 {
-    type Service = ClientIPService<S, H>;
+    type Service = ClientIPService<S>;
 
     fn layer(self, inner: S) -> Self::Service {
         ClientIPService {
@@ -111,15 +113,12 @@ impl ClientIPConfig {
     ) -> Result<Self, http::header::InvalidHeaderName>
     where
         I: IntoIterator,
-        I::Item: Into<Cow<'static, str>>,
+        I::Item: AsRef<str>,
     {
-        let headers = headers.into_iter().map(Into::into).collect::<Vec<_>>();
+        let headers = headers.into_iter().collect::<Vec<_>>();
         let mut remote_ip_headers = Vec::with_capacity(headers.len());
         for header_str in headers {
-            let header_value = match header_str {
-                Cow::Owned(s) => HeaderName::from_str(&s)?,
-                Cow::Borrowed(s) => HeaderName::from_str(s)?,
-            };
+            let header_value = HeaderName::from_str(header_str.as_ref())?;
             remote_ip_headers.push(header_value);
         }
 
@@ -182,7 +181,7 @@ impl ClientIPConfig {
 ///
 /// let router: Router = Router::new()
 ///     .route("/", get(handler))
-///     .layer(ClientIPLayer::default());
+///     .layer(ClientIPLayer::new());
 /// ```
 ///
 /// ## With custom config
@@ -211,37 +210,32 @@ impl ClientIPConfig {
 /// }
 ///
 /// let router: Router = Router::new().route("/", get(handler)).layer(
-///     ClientIPLayer::new(client_ip_handler).with_config(
-///         ClientIPConfig::new()
-///             .with_remote_ip_headers(vec!["x-real-ip", "x-forwarded-for"])
-///             .unwrap()
-///             .with_trusted_cidrs(vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()]),
-///     ),
+///     ClientIPLayer::new()
+///         .with_handler(client_ip_handler)
+///         .with_config(
+///             ClientIPConfig::new()
+///                 .with_remote_ip_headers(vec!["x-real-ip", "x-forwarded-for"])
+///                 .unwrap()
+///                 .with_trusted_cidrs(vec![
+///                     "0.0.0.0/0".parse().unwrap(),
+///                     "::/0".parse().unwrap(),
+///                 ]),
+///         ),
 /// );
 /// ```
 pub struct ClientIP(pub Option<IpAddr>);
 
 impl_deref_and_deref_mut!(ClientIP, Option<IpAddr>, 0);
 
-trait ClientIPHandler<'r> {
-    fn call(
-        self,
-        config: &'r ClientIPConfig,
-        cx: &'r ServerContext,
-        headers: &'r HeaderMap,
-    ) -> ClientIP;
+trait ClientIPHandler {
+    fn call(self, config: &ClientIPConfig, cx: &ServerContext, headers: &HeaderMap) -> ClientIP;
 }
 
-impl<'r, F> ClientIPHandler<'r> for F
+impl<F> ClientIPHandler for F
 where
-    F: FnOnce(&'r ClientIPConfig, &'r ServerContext, &'r HeaderMap) -> ClientIP,
+    F: FnOnce(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP,
 {
-    fn call(
-        self,
-        config: &'r ClientIPConfig,
-        cx: &'r ServerContext,
-        headers: &'r HeaderMap,
-    ) -> ClientIP {
+    fn call(self, config: &ClientIPConfig, cx: &ServerContext, headers: &HeaderMap) -> ClientIP {
         self(config, cx, headers)
     }
 }
@@ -254,7 +248,7 @@ fn default_client_ip_handler(
     let remote_ip_headers = &config.remote_ip_headers;
     let trusted_cidrs = &config.trusted_cidrs;
 
-    let remote_ip = match cx.rpc_info().caller().address() {
+    let remote_ip = match &cx.rpc_info().caller().address() {
         Some(Address::Ip(socket_addr)) => Some(socket_addr.ip()),
         Some(Address::Unix(_)) => None,
         None => return ClientIP(None),
@@ -295,21 +289,18 @@ fn default_client_ip_handler(
 }
 
 #[derive(Clone)]
-pub struct ClientIPService<S, H> {
+pub struct ClientIPService<S> {
     service: S,
     config: ClientIPConfig,
-    handler: H,
+    handler: fn(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP,
 }
 
-impl<S, B, H> Service<ServerContext, Request<B>> for ClientIPService<S, H>
+impl<S, B> Service<ServerContext, Request<B>> for ClientIPService<S>
 where
     S: Service<ServerContext, Request<B>> + Send + Sync + 'static,
-    S::Response: IntoResponse,
-    S::Error: IntoResponse,
     B: Send,
-    H: for<'r> ClientIPHandler<'r> + Clone + Sync,
 {
-    type Response = Response;
+    type Response = S::Response;
     type Error = S::Error;
 
     async fn call(
@@ -320,7 +311,7 @@ where
         let client_ip = self.handler.clone().call(&self.config, cx, req.headers());
         cx.rpc_info_mut().caller_mut().tags.insert(client_ip);
 
-        Ok(self.service.call(cx, req).await.into_response())
+        self.service.call(cx, req).await
     }
 }
 
@@ -349,7 +340,7 @@ mod client_ip_tests {
         }
 
         let route: Route<&str> = Route::new(get(handler));
-        let service = ClientIPLayer::default()
+        let service = ClientIPLayer::new()
             .with_config(
                 ClientIPConfig::default().with_trusted_cidrs(vec!["10.0.0.0/8".parse().unwrap()]),
             )
