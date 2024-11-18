@@ -233,14 +233,14 @@ impl<S> ClientIPService<S> {
                 None => continue,
             };
             for remote_ip in remote_ips.iter() {
-                if let Ok(remote_cidr) = IpAddr::from_str(remote_ip) {
+                if let Ok(remote_ip_addr) = IpAddr::from_str(remote_ip) {
                     if self
                         .config
                         .trusted_cidrs
                         .iter()
-                        .any(|cidr| cidr.contains(&remote_cidr))
+                        .any(|cidr| cidr.contains(&remote_ip_addr))
                     {
-                        return ClientIP(Some(remote_cidr));
+                        return ClientIP(Some(remote_ip_addr));
                     }
                 }
             }
