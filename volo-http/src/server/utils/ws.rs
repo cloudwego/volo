@@ -10,7 +10,7 @@
 //!
 //! use futures_util::{sink::SinkExt, stream::StreamExt};
 //! use volo_http::{
-//!     response::ServerResponse,
+//!     response::Response,
 //!     server::{
 //!         route::{get, Router},
 //!         utils::ws::{Message, WebSocket, WebSocketUpgrade},
@@ -28,7 +28,7 @@
 //!     }
 //! }
 //!
-//! async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
+//! async fn ws_handler(ws: WebSocketUpgrade) -> Response {
 //!     ws.on_upgrade(handle_socket)
 //! }
 //!
@@ -65,7 +65,7 @@ use tungstenite::{
 use crate::{
     body::Body,
     context::ServerContext,
-    response::ServerResponse,
+    response::Response,
     server::{extract::FromContext, IntoResponse},
 };
 
@@ -78,15 +78,15 @@ const HEADERVALUE_WEBSOCKET: HeaderValue = HeaderValue::from_static("websocket")
 /// http connection making the request can be upgraded to a websocket connection.
 ///
 /// [`WebSocketUpgrade`] must be used with [`WebSocketUpgrade::on_upgrade`] and a websocket
-/// handler, [`WebSocketUpgrade::on_upgrade`] will return a [`ServerResponse`] for the client and
+/// handler, [`WebSocketUpgrade::on_upgrade`] will return a [`Response`] for the client and
 /// the connection will then be upgraded later.
 ///
 /// # Example
 ///
 /// ```
-/// use volo_http::{response::ServerResponse, server::utils::ws::WebSocketUpgrade};
+/// use volo_http::{response::Response, server::utils::ws::WebSocketUpgrade};
 ///
-/// fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
+/// fn ws_handler(ws: WebSocketUpgrade) -> Response {
 ///     ws.on_upgrade(|socket| async { todo!() })
 /// }
 /// ```
@@ -227,14 +227,14 @@ impl<F> WebSocketUpgrade<F> {
     ///
     /// ```
     /// use volo_http::{
-    ///     response::ServerResponse,
+    ///     response::Response,
     ///     server::{
     ///         route::{get, Router},
     ///         utils::ws::{WebSocket, WebSocketUpgrade},
     ///     },
     /// };
     ///
-    /// async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
+    /// async fn ws_handler(ws: WebSocketUpgrade) -> Response {
     ///     ws.on_failed_upgrade(|err| eprintln!("Failed to upgrade connection, err: {err}"))
     ///         .on_upgrade(|socket| async { todo!() })
     /// }
@@ -267,14 +267,14 @@ impl<F> WebSocketUpgrade<F> {
     /// ```
     /// use futures_util::{sink::SinkExt, stream::StreamExt};
     /// use volo_http::{
-    ///     response::ServerResponse,
+    ///     response::Response,
     ///     server::{
     ///         route::{get, Router},
     ///         utils::ws::{WebSocket, WebSocketUpgrade},
     ///     },
     /// };
     ///
-    /// async fn ws_handler(ws: WebSocketUpgrade) -> ServerResponse {
+    /// async fn ws_handler(ws: WebSocketUpgrade) -> Response {
     ///     ws.on_upgrade(|mut socket| async move {
     ///         while let Some(Ok(msg)) = socket.next().await {
     ///             if msg.is_ping() || msg.is_pong() {
@@ -289,7 +289,7 @@ impl<F> WebSocketUpgrade<F> {
     ///
     /// let router: Router = Router::new().route("/ws", get(ws_handler));
     /// ```
-    pub fn on_upgrade<C, Fut>(self, callback: C) -> ServerResponse
+    pub fn on_upgrade<C, Fut>(self, callback: C) -> Response
     where
         C: FnOnce(WebSocket) -> Fut + Send + 'static,
         Fut: Future<Output = ()> + Send,
@@ -320,7 +320,7 @@ impl<F> WebSocketUpgrade<F> {
             callback(socket).await;
         };
 
-        let mut resp = ServerResponse::new(Body::empty());
+        let mut resp = Response::new(Body::empty());
         *resp.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
         resp.headers_mut()
             .insert(header::CONNECTION, HEADERVALUE_UPGRADE);
@@ -556,7 +556,7 @@ impl fmt::Display for WebSocketUpgradeRejectionError {
 }
 
 impl IntoResponse for WebSocketUpgradeRejectionError {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         self.to_status_code().into_response()
     }
 }
@@ -578,10 +578,10 @@ mod websocket_tests {
     use volo::net::Address;
 
     use super::*;
-    use crate::{request::ServerRequest, server::test_helpers, Server};
+    use crate::{request::Request, server::test_helpers, Server};
 
     fn simple_parts() -> Parts {
-        let req = ServerRequest::builder()
+        let req = Request::builder()
             .method(Method::GET)
             .version(Version::HTTP_11)
             .header(header::HOST, "localhost")
@@ -600,10 +600,10 @@ mod websocket_tests {
         port: u16,
     ) -> (
         WebSocketStream<MaybeTlsStream<TcpStream>>,
-        ServerResponse<Option<Vec<u8>>>,
+        Response<Option<Vec<u8>>>,
     )
     where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse, Error = Infallible>
+        S: Service<ServerContext, Request, Response = Response, Error = Infallible>
             + Send
             + Sync
             + 'static,
@@ -729,7 +729,7 @@ mod websocket_tests {
 
     #[tokio::test]
     async fn protocol_test() {
-        async fn handler(ws: WebSocketUpgrade) -> ServerResponse {
+        async fn handler(ws: WebSocketUpgrade) -> Response {
             ws.protocols(["soap", "wmap", "graphql-ws", "chat"])
                 .on_upgrade(|_| async {})
         }
@@ -758,7 +758,7 @@ mod websocket_tests {
             }
         }
 
-        async fn handler(ws: WebSocketUpgrade) -> ServerResponse {
+        async fn handler(ws: WebSocketUpgrade) -> Response {
             ws.on_upgrade(echo)
         }
 

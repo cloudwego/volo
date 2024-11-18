@@ -8,7 +8,7 @@ use volo::context::Context;
 use crate::{
     error::{client::request_error, ClientError},
     request::RequestPartsExt,
-    response::ClientResponse,
+    response::Response,
 };
 
 /// [`Layer`] for throwing service error with the response's error status code.
@@ -87,7 +87,7 @@ impl<Cx, Req, S, B> Service<Cx, Req> for FailOnStatusService<S>
 where
     Cx: Context + Send,
     Req: RequestPartsExt + Send,
-    S: Service<Cx, Req, Response = ClientResponse<B>, Error = ClientError> + Send + Sync,
+    S: Service<Cx, Req, Response = Response<B>, Error = ClientError> + Send + Sync,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -159,25 +159,25 @@ mod fail_on_status_tests {
     use super::FailOnStatus;
     use crate::{
         body::Body, client::test_helpers::MockTransport, context::ClientContext,
-        error::ClientError, request::ClientRequest, response::ClientResponse, ClientBuilder,
+        error::ClientError, request::Request, response::Response, ClientBuilder,
     };
 
     struct ReturnStatus;
 
-    impl Service<ClientContext, ClientRequest> for ReturnStatus {
-        type Response = ClientResponse;
+    impl Service<ClientContext, Request> for ReturnStatus {
+        type Response = Response;
         type Error = ClientError;
 
         fn call(
             &self,
             _: &mut ClientContext,
-            req: ClientRequest,
+            req: Request,
         ) -> impl std::future::Future<Output = Result<Self::Response, Self::Error>> + Send {
             let path = req.uri().path();
             assert_eq!(&path[..1], "/");
             let status_code = path[1..].parse::<u16>().expect("invalid uri");
             let status_code = StatusCode::from_u16(status_code).expect("invalid status code");
-            let mut resp = ClientResponse::new(Body::empty());
+            let mut resp = Response::new(Body::empty());
             *resp.status_mut() = status_code;
             async { Ok(resp) }
         }

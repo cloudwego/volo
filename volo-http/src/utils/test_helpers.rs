@@ -39,36 +39,36 @@ mod convert_service {
     use crate::{
         context::{server::ServerCxInner, ClientContext, ServerContext},
         error::{client::request_error, BoxError, ClientError},
-        request::{ClientRequest, ServerRequest},
-        response::{ClientResponse, ServerResponse},
+        request::Request,
+        response::Response,
     };
 
-    /// A wrapper that can convert a [`Service`] with [`ServerContext`] and [`ServerRequest`] to
-    /// [`ClientContext`] and [`ClientRequest`].
+    /// A wrapper that can convert a [`Service`] with [`ServerContext`] and [`Request`] to
+    /// [`ClientContext`] and [`Request`].
     pub struct ConvertService<S> {
         inner: S,
     }
 
     impl<S> ConvertService<S> {
         /// Create a [`ConvertService`] by a [`Service`] with [`ServerContext`] and
-        /// [`ServerRequest`].
+        /// [`Request`].
         pub fn new(inner: S) -> Self {
             Self { inner }
         }
     }
 
-    impl<S> Service<ClientContext, ClientRequest> for ConvertService<S>
+    impl<S> Service<ClientContext, Request> for ConvertService<S>
     where
-        S: Service<ServerContext, ServerRequest, Response = ServerResponse> + Send + Sync,
+        S: Service<ServerContext, Request, Response = Response> + Send + Sync,
         S::Error: Into<BoxError>,
     {
-        type Response = ClientResponse;
+        type Response = Response;
         type Error = ClientError;
 
         async fn call(
             &self,
             cx: &mut ClientContext,
-            req: ClientRequest,
+            req: Request,
         ) -> Result<Self::Response, Self::Error> {
             let mut server_cx = client_cx_to_server_cx(cx);
             self.inner

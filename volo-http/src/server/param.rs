@@ -15,8 +15,7 @@ use matchit::Params;
 
 use super::{extract::FromContext, IntoResponse};
 use crate::{
-    context::ServerContext, error::BoxError, response::ServerResponse,
-    utils::macros::all_the_tuples,
+    context::ServerContext, error::BoxError, response::Response, utils::macros::all_the_tuples,
 };
 
 /// Collected params from request uri
@@ -292,7 +291,7 @@ impl Error for PathParamsRejection {
 }
 
 impl IntoResponse for PathParamsRejection {
-    fn into_response(self) -> ServerResponse {
+    fn into_response(self) -> Response {
         StatusCode::BAD_REQUEST.into_response()
     }
 }

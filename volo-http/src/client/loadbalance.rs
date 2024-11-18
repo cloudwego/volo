@@ -25,8 +25,8 @@ use crate::{
         client::{lb_error, no_available_endpoint},
         ClientError,
     },
-    request::ClientRequest,
-    response::ClientResponse,
+    request::Request,
+    response::Response,
 };
 
 /// Default load balance with [`DnsResolver`]
@@ -146,13 +146,11 @@ where
     }
 }
 
-impl<LB, D, S, B> Service<ClientContext, ClientRequest<B>> for LoadBalanceService<LB, D, S>
+impl<LB, D, S, B> Service<ClientContext, Request<B>> for LoadBalanceService<LB, D, S>
 where
     LB: LoadBalance<D>,
     D: Discover,
-    S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
-        + Send
-        + Sync,
+    S: Service<ClientContext, Request<B>, Response = Response, Error = ClientError> + Send + Sync,
     B: Send,
 {
     type Response = S::Response;
@@ -161,7 +159,7 @@ where
     async fn call(
         &self,
         cx: &mut ClientContext,
-        req: ClientRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let callee = cx.rpc_info().callee();
 

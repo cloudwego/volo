@@ -10,8 +10,8 @@ use tokio::sync::RwLock;
 use crate::{
     context::ClientContext,
     error::ClientError,
-    request::{ClientRequest, RequestPartsExt},
-    response::ClientResponse,
+    request::{Request, RequestPartsExt},
+    response::Response,
     utils::cookie::CookieStore,
 };
 
@@ -32,9 +32,9 @@ impl<S> CookieService<S> {
     }
 }
 
-impl<S, B> Service<ClientContext, ClientRequest<B>> for CookieService<S>
+impl<S, B> Service<ClientContext, Request<B>> for CookieService<S>
 where
-    S: Service<ClientContext, ClientRequest<B>, Response = ClientResponse, Error = ClientError>
+    S: Service<ClientContext, Request<B>, Response = Response, Error = ClientError>
         + Send
         + Sync
         + 'static,
@@ -46,7 +46,7 @@ where
     async fn call(
         &self,
         cx: &mut ClientContext,
-        mut req: ClientRequest<B>,
+        mut req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let url = req.url();
 
@@ -58,7 +58,7 @@ where
                     .await
                     .add_cookie_header(&mut parts.headers, url);
             }
-            req = ClientRequest::from_parts(parts, body);
+            req = Request::from_parts(parts, body);
         }
 
         let resp = self.inner.call(cx, req).await?;

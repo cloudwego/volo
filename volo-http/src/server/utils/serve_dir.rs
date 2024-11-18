@@ -29,9 +29,7 @@ use http::{header::HeaderValue, status::StatusCode};
 use motore::service::Service;
 
 use super::FileResponse;
-use crate::{
-    context::ServerContext, request::ServerRequest, response::ServerResponse, server::IntoResponse,
-};
+use crate::{context::ServerContext, request::Request, response::Response, server::IntoResponse};
 
 /// [`ServeDir`] is a service for sending files from a given directory.
 pub struct ServeDir<E, F> {
@@ -76,18 +74,18 @@ impl<E> ServeDir<E, fn(&Path) -> HeaderValue> {
     }
 }
 
-impl<B, E, F> Service<ServerContext, ServerRequest<B>> for ServeDir<E, F>
+impl<B, E, F> Service<ServerContext, Request<B>> for ServeDir<E, F>
 where
     B: Send,
     F: Fn(&Path) -> HeaderValue + Sync,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = E;
 
     async fn call(
         &self,
         _: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         // Get relative path from uri
         let path = req.uri().path();

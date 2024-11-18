@@ -4,7 +4,7 @@ use async_stream::stream;
 use bytes::Bytes;
 use faststr::FastStr;
 use futures::Stream;
-use http::{header, Method, Request, StatusCode, Uri};
+use http::{header, Method, StatusCode, Uri};
 use http_body::Frame;
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
@@ -12,8 +12,8 @@ use volo::{catch_panic, service::service_fn};
 use volo_http::{
     body::{Body, BodyConversion},
     context::ServerContext,
-    request::ServerRequest,
-    response::ServerResponse,
+    request::Request,
+    response::Response,
     server::{
         extract::{Form, FullUri, Json, MaybeInvalid, Query},
         layer::{FilterLayer, TimeoutLayer},
@@ -105,16 +105,16 @@ async fn post_with_form(Form(info): Form<Login>) -> Result<String, StatusCode> {
 
 async fn test_body_and_err(
     _: &mut ServerContext,
-    _: ServerRequest<FastStr>,
-) -> Result<ServerResponse, StatusCode> {
-    Ok(ServerResponse::default())
+    _: Request<FastStr>,
+) -> Result<Response, StatusCode> {
+    Ok(Response::default())
 }
 
 async fn map_body_and_err_inner(
     cx: &mut ServerContext,
-    req: ServerRequest<Bytes>,
+    req: Request<Bytes>,
     next: Next<FastStr, StatusCode>,
-) -> ServerResponse {
+) -> Response {
     let (parts, body) = req.into_parts();
     let body = FastStr::from_bytes(body).unwrap_or_default();
     let req = Request::from_parts(parts, body);
@@ -123,9 +123,9 @@ async fn map_body_and_err_inner(
 
 async fn map_body_and_err_outer(
     cx: &mut ServerContext,
-    req: ServerRequest,
+    req: Request,
     next: Next<Bytes>,
-) -> ServerResponse {
+) -> Response {
     let (parts, body) = req.into_parts();
     let body = body.into_bytes().await.unwrap();
     let req = Request::from_parts(parts, body);
@@ -206,7 +206,7 @@ async fn extension(Extension(state): Extension<Arc<State>>) -> String {
     format!("State {{ foo: {}, bar: {} }}\n", state.foo, state.bar)
 }
 
-async fn service_fn_test(cx: &mut ServerContext, req: ServerRequest) -> Result<String, Infallible> {
+async fn service_fn_test(cx: &mut ServerContext, req: Request) -> Result<String, Infallible> {
     Ok(format!("cx: {cx:?}, req: {req:?}"))
 }
 
@@ -334,9 +334,9 @@ async fn tracing_from_fn(
     peer: Address,
     cookie_jar: CookieJar,
     cx: &mut ServerContext,
-    req: ServerRequest,
+    req: Request,
     next: Next,
-) -> ServerResponse {
+) -> Response {
     tracing::info!("{:?}", *cookie_jar);
     let count = cookie_jar.get("count").map_or(0usize, |val| {
         val.value().to_string().parse().unwrap_or(0usize)
@@ -361,7 +361,7 @@ async fn tracing_from_fn(
         .into_response()
 }
 
-async fn headers_map_response(response: ServerResponse) -> impl IntoResponse {
+async fn headers_map_response(response: Response) -> impl IntoResponse {
     (
         [
             ("Access-Control-Allow-Origin", "*"),

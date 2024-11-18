@@ -14,7 +14,7 @@ use http::status::StatusCode;
 use motore::{layer::Layer, service::Service, ServiceExt};
 
 use super::{handler::Handler, IntoResponse};
-use crate::{body::Body, context::ServerContext, request::ServerRequest, response::ServerResponse};
+use crate::{body::Body, context::ServerContext, request::Request, response::Response};
 
 pub mod method_router;
 pub mod router;
@@ -24,14 +24,14 @@ pub use self::{method_router::*, router::Router};
 
 /// The route service used for [`Router`].
 pub struct Route<B = Body, E = Infallible> {
-    inner: motore::service::BoxService<ServerContext, ServerRequest<B>, ServerResponse, E>,
+    inner: motore::service::BoxService<ServerContext, Request<B>, Response, E>,
 }
 
 impl<B, E> Route<B, E> {
     /// Create a new [`Route`] from a [`Service`].
     pub fn new<S>(inner: S) -> Self
     where
-        S: Service<ServerContext, ServerRequest<B>, Response = ServerResponse, Error = E>
+        S: Service<ServerContext, Request<B>, Response = Response, Error = E>
             + Send
             + Sync
             + 'static,
@@ -43,14 +43,14 @@ impl<B, E> Route<B, E> {
     }
 }
 
-impl<B, E> Service<ServerContext, ServerRequest<B>> for Route<B, E> {
-    type Response = ServerResponse;
+impl<B, E> Service<ServerContext, Request<B>> for Route<B, E> {
+    type Response = Response;
     type Error = E;
 
     fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         self.inner.call(cx, req)
     }
@@ -60,17 +60,17 @@ enum Fallback<B = Body, E = Infallible> {
     Route(Route<B, E>),
 }
 
-impl<B, E> Service<ServerContext, ServerRequest<B>> for Fallback<B, E>
+impl<B, E> Service<ServerContext, Request<B>> for Fallback<B, E>
 where
     B: Send,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = E;
 
     async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         match self {
             Self::Route(route) => route.call(cx, req).await,
@@ -97,7 +97,7 @@ where
 
     fn from_service<S>(service: S) -> Self
     where
-        S: Service<ServerContext, ServerRequest<B>, Error = E> + Send + Sync + 'static,
+        S: Service<ServerContext, Request<B>, Error = E> + Send + Sync + 'static,
         S::Response: IntoResponse,
     {
         Self::Route(Route::new(
@@ -117,8 +117,8 @@ where
     fn layer<L, B2, E2>(self, l: L) -> Fallback<B2, E2>
     where
         L: Layer<Route<B, E>> + Clone + Send + Sync + 'static,
-        L::Service: Service<ServerContext, ServerRequest<B2>, Error = E2> + Send + Sync + 'static,
-        <L::Service as Service<ServerContext, ServerRequest<B2>>>::Response: IntoResponse,
+        L::Service: Service<ServerContext, Request<B2>, Error = E2> + Send + Sync + 'static,
+        <L::Service as Service<ServerContext, Request<B2>>>::Response: IntoResponse,
         B2: 'static,
     {
         self.map(move |route: Route<B, E>| {
@@ -154,17 +154,17 @@ impl<B, E> RouteForStatusCode<B, E> {
     }
 }
 
-impl<B, E> Service<ServerContext, ServerRequest<B>> for RouteForStatusCode<B, E>
+impl<B, E> Service<ServerContext, Request<B>> for RouteForStatusCode<B, E>
 where
     B: Send,
 {
-    type Response = ServerResponse;
+    type Response = Response;
     type Error = E;
 
     async fn call(
         &self,
         _: &mut ServerContext,
-        _: ServerRequest<B>,
+        _: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         Ok(self.status.into_response())
     }

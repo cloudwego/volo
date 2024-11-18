@@ -1,15 +1,22 @@
 //! Response types for client and server.
 
-/// [`Response`] with [`Body`] as default body
-///
-/// [`Response`]: http::response::Response
-/// [`Body`]: crate::body::Body
-#[cfg(feature = "server")]
-pub type ServerResponse<B = crate::body::Body> = http::response::Response<B>;
+use crate::body::Body;
 
 /// [`Response`] with [`Body`] as default body
 ///
 /// [`Response`]: http::response::Response
-/// [`Body`]: crate::body::Body
+pub type Response<B = Body> = http::response::Response<B>;
+
+/// [`Response`] with [`Body`] as default body
+///
+/// [`Response`]: http::response::Response
+#[cfg(feature = "server")]
+#[deprecated(note = "`ServerResponse` has been renamed to `Response`")]
+pub type ServerResponse<B = Body> = Response<B>;
+
+/// [`Response`] with [`Body`] as default body
+///
+/// [`Response`]: http::response::Response
 #[cfg(feature = "client")]
-pub type ClientResponse<B = crate::body::Body> = http::response::Response<B>;
+#[deprecated(note = "`ClientResponse` has been renamed to `Response`")]
+pub type ClientResponse<B = Body> = Response<B>;

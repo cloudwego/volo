@@ -11,8 +11,8 @@ use super::{
     IntoResponse,
 };
 use crate::{
-    body::Body, context::ServerContext, request::ServerRequest, response::ServerResponse,
-    server::Server, utils::test_helpers::mock_address,
+    body::Body, context::ServerContext, request::Request, response::Response, server::Server,
+    utils::test_helpers::mock_address,
 };
 
 /// Wrap a [`Handler`] into a [`HandlerService`].
@@ -55,19 +55,19 @@ where
     /// Call the [`MethodRouter`] without [`ServerContext`].
     ///
     /// This function will generate an empty [`ServerContext`] and use it.
-    pub async fn call_without_cx(&self, req: ServerRequest<B>) -> Result<ServerResponse, E> {
+    pub async fn call_without_cx(&self, req: Request<B>) -> Result<Response, E> {
         self.call(&mut ServerContext::new(mock_address()), req)
             .await
     }
 
     /// Call the [`MethodRouter`] with only [`Method`] and [`Body`].
-    pub async fn call_route<D>(&self, method: Method, data: D) -> ServerResponse
+    pub async fn call_route<D>(&self, method: Method, data: D) -> Response
     where
         B: TryFrom<D>,
         B::Error: Debug,
     {
         self.call_without_cx(
-            ServerRequest::builder()
+            Request::builder()
                 .method(method)
                 .uri("/")
                 .body(B::try_from(data).expect("Failed to convert data to body"))
@@ -80,7 +80,7 @@ where
 
 impl<S, B> TestServer<S, B>
 where
-    S: Service<ServerContext, ServerRequest<B>>,
+    S: Service<ServerContext, Request<B>>,
     S::Response: IntoResponse,
     S::Error: IntoResponse,
 {
@@ -88,7 +88,7 @@ where
     pub async fn call(
         &self,
         cx: &mut ServerContext,
-        req: ServerRequest<B>,
+        req: Request<B>,
     ) -> Result<S::Response, S::Error> {
         self.inner.call(cx, req).await
     }
@@ -96,7 +96,7 @@ where
     /// Call the [`TestServer`] without [`ServerContext`].
     ///
     /// This function will generate an empty [`ServerContext`] and use it.
-    pub async fn call_without_cx(&self, req: ServerRequest<B>) -> Result<S::Response, S::Error> {
+    pub async fn call_without_cx(&self, req: Request<B>) -> Result<S::Response, S::Error> {
         self.call(&mut ServerContext::new(mock_address()), req)
             .await
     }
@@ -104,14 +104,14 @@ where
     /// Call the [`TestServer`] with only [`Method`], [`Uri`] and [`Body`].
     ///
     /// [`Uri`]: http::uri::Uri
-    pub async fn call_route<U, D>(&self, method: Method, uri: U, data: D) -> ServerResponse
+    pub async fn call_route<U, D>(&self, method: Method, uri: U, data: D) -> Response
     where
         U: AsRef<str>,
         B: TryFrom<D>,
         B::Error: Debug,
     {
         self.call_without_cx(
-            ServerRequest::builder()
+            Request::builder()
                 .method(method)
                 .uri(uri.as_ref().to_owned())
                 .body(B::try_from(data).expect("Failed to convert data to body"))
@@ -129,7 +129,7 @@ impl<S, L> Server<S, L> {
     pub fn into_test_server<B>(self) -> TestServer<L::Service, B>
     where
         L: Layer<S>,
-        S: Service<ServerContext, ServerRequest<B>>,
+        S: Service<ServerContext, Request<B>>,
     {
         TestServer {
             inner: self.layer.layer(self.service),
