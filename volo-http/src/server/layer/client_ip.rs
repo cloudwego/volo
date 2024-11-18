@@ -26,7 +26,7 @@ impl Default for ClientIPLayer {
 }
 
 impl ClientIPLayer {
-    /// Create a new [`ClientIPLayer`]
+    /// Create a new [`ClientIPLayer`] with default config
     pub fn new() -> Self {
         Default::default()
     }
@@ -39,7 +39,7 @@ impl ClientIPLayer {
         }
     }
 
-    /// Create a new [`ClientIPLayer`] with the given handler
+    /// Create a new [`ClientIPLayer`] with the given handler that parses the headers
     pub fn with_handler(
         self,
         handler: fn(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP,
@@ -151,8 +151,8 @@ impl ClientIPConfig {
     }
 }
 
-/// Return real `ClientIP` by parsing the headers in `["X-Forwarded-For", "X-Real-IP"]` if ip is
-/// trusted, otherwise it will just return caller ip by calling
+/// Return real `ClientIP` by parsing the headers in `["X-Forwarded-For", "X-Real-IP"]` by default
+/// if ip is trusted, otherwise it will just return caller ip by calling
 /// `cx.rpc_info().caller().address().ip()`.
 ///
 /// If you want to specify your own headers, you can use
@@ -165,6 +165,10 @@ impl ClientIPConfig {
 /// # Example
 ///
 /// ## Default config
+///
+/// default remote ip headers: `["X-Forwarded-For", "X-Real-IP"]`
+///
+/// default trusted cidrs: `["0.0.0.0/0", "::/0"]`
 ///
 /// ```rust
 /// ///
