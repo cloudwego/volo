@@ -178,14 +178,6 @@ impl ClientIPConfig {
 ///     client_ip.unwrap().to_string()
 /// }
 ///
-/// fn client_ip_handler(
-///     config: &ClientIPConfig,
-///     cx: &ServerContext,
-///     headers: &HeaderMap,
-/// ) -> ClientIP {
-///     unimplemented!()
-/// }
-///
 /// let router: Router = Router::new().route("/", get(handler)).layer(
 ///     ClientIPLayer::new().with_config(
 ///         ClientIPConfig::new()
