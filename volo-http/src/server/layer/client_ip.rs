@@ -209,7 +209,7 @@ pub struct ClientIPService<S> {
 
 impl<S> ClientIPService<S> {
     fn get_client_ip(&self, cx: &ServerContext, headers: &HeaderMap) -> ClientIP {
-        let remote_ip = match &cx.rpc_info().caller().address() {
+        let remote_ip = match &cx.rpc_info().caller().address {
             Some(Address::Ip(socket_addr)) => Some(socket_addr.ip()),
             Some(Address::Unix(_)) => None,
             None => return ClientIP(None),
@@ -249,11 +249,7 @@ impl<S> ClientIPService<S> {
             }
         }
 
-        if let Some(remote_ip) = remote_ip {
-            return ClientIP(Some(remote_ip));
-        }
-
-        ClientIP(None)
+        ClientIP(remote_ip)
     }
 }
 

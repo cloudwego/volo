@@ -298,14 +298,13 @@ impl FromContext for ClientIP {
         cx: &mut ServerContext,
         _: &mut Parts,
     ) -> Result<ClientIP, Self::Rejection> {
-        if let Some(client_ip) = cx.rpc_info.caller().tags.get::<ClientIP>() {
-            match client_ip.0 {
-                Some(ip) => Ok(ClientIP(Some(ip))),
-                None => Ok(ClientIP(None)),
-            }
-        } else {
-            Ok(ClientIP(None))
-        }
+        Ok(ClientIP(
+            cx.rpc_info
+                .caller()
+                .tags
+                .get::<ClientIP>()
+                .and_then(|v| v.0),
+        ))
     }
 }
 
