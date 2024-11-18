@@ -52,8 +52,8 @@ impl Default for ClientIPConfig {
     fn default() -> Self {
         Self {
             remote_ip_headers: vec![
-                HeaderName::from_static("x-forwarded-for"),
                 HeaderName::from_static("x-real-ip"),
+                HeaderName::from_static("x-forwarded-for"),
             ],
             trusted_cidrs: vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()],
         }
@@ -63,7 +63,7 @@ impl Default for ClientIPConfig {
 impl ClientIPConfig {
     /// Create a new [`ClientIPConfig`] with default values
     ///
-    /// default remote ip headers: `["X-Forwarded-For", "X-Real-IP"]`
+    /// default remote ip headers: `["X-Real-IP", "X-Forwarded-For"]`
     ///
     /// default trusted cidrs: `["0.0.0.0/0", "::/0"]`
     pub fn new() -> Self {
@@ -126,7 +126,7 @@ impl ClientIPConfig {
     }
 }
 
-/// Return real `ClientIP` by parsing the headers in `["X-Forwarded-For", "X-Real-IP"]` by default
+/// Return real `ClientIP` by parsing the headers in `["X-Real-IP", "X-Forwarded-For"]` by default
 /// if ip is trusted, otherwise it will just return caller ip by calling
 /// `cx.rpc_info().caller().address().ip()`.
 ///
@@ -141,7 +141,7 @@ impl ClientIPConfig {
 ///
 /// ## Default config
 ///
-/// default remote ip headers: `["X-Forwarded-For", "X-Real-IP"]`
+/// default remote ip headers: `["X-Real-IP", "X-Forwarded-For"]`
 ///
 /// default trusted cidrs: `["0.0.0.0/0", "::/0"]`
 ///
