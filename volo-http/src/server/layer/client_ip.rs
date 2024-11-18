@@ -167,6 +167,8 @@ impl ClientIPConfig {
 ///
 /// # Example
 ///
+/// ## Default config
+///
 /// ```rust
 /// use volo_http::server::{
 ///     layer::{ClientIPConfig, ClientIPLayer},
@@ -183,7 +185,7 @@ impl ClientIPConfig {
 ///     .layer(ClientIPLayer::default());
 /// ```
 ///
-/// ## with config
+/// ## With custom config
 ///
 /// ```rust
 /// use http::HeaderMap;
