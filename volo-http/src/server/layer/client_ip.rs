@@ -10,19 +10,9 @@ use crate::{context::ServerContext, request::Request, utils::macros::impl_deref_
 /// [`Layer`] for extracting client ip
 ///
 /// See [`ClientIP`] for more details.
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ClientIPLayer {
     config: ClientIPConfig,
-    handler: fn(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP,
-}
-
-impl Default for ClientIPLayer {
-    fn default() -> Self {
-        Self {
-            config: ClientIPConfig::default(),
-            handler: default_client_ip_handler,
-        }
-    }
 }
 
 impl ClientIPLayer {
@@ -33,21 +23,7 @@ impl ClientIPLayer {
 
     /// Create a new [`ClientIPLayer`] with the given [`ClientIPConfig`]
     pub fn with_config(self, config: ClientIPConfig) -> Self {
-        Self {
-            config,
-            handler: self.handler,
-        }
-    }
-
-    /// Create a new [`ClientIPLayer`] with the given handler that parses the headers
-    pub fn with_handler(
-        self,
-        handler: fn(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP,
-    ) -> Self {
-        Self {
-            config: self.config,
-            handler,
-        }
+        Self { config }
     }
 }
 
@@ -61,7 +37,6 @@ where
         ClientIPService {
             service: inner,
             config: self.config,
-            handler: self.handler,
         }
     }
 }
@@ -214,89 +189,72 @@ impl ClientIPConfig {
 /// }
 ///
 /// let router: Router = Router::new().route("/", get(handler)).layer(
-///     ClientIPLayer::new()
-///         .with_handler(client_ip_handler)
-///         .with_config(
-///             ClientIPConfig::new()
-///                 .with_remote_ip_headers(vec!["x-real-ip", "x-forwarded-for"])
-///                 .unwrap()
-///                 .with_trusted_cidrs(vec![
-///                     "0.0.0.0/0".parse().unwrap(),
-///                     "::/0".parse().unwrap(),
-///                 ]),
-///         ),
+///     ClientIPLayer::new().with_config(
+///         ClientIPConfig::new()
+///             .with_remote_ip_headers(vec!["x-real-ip", "x-forwarded-for"])
+///             .unwrap()
+///             .with_trusted_cidrs(vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()]),
+///     ),
 /// );
 /// ```
 pub struct ClientIP(pub Option<IpAddr>);
 
 impl_deref_and_deref_mut!(ClientIP, Option<IpAddr>, 0);
 
-trait ClientIPHandler {
-    fn call(self, config: &ClientIPConfig, cx: &ServerContext, headers: &HeaderMap) -> ClientIP;
-}
-
-impl<F> ClientIPHandler for F
-where
-    F: FnOnce(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP,
-{
-    fn call(self, config: &ClientIPConfig, cx: &ServerContext, headers: &HeaderMap) -> ClientIP {
-        self(config, cx, headers)
-    }
-}
-
-fn default_client_ip_handler(
-    config: &ClientIPConfig,
-    cx: &ServerContext,
-    headers: &HeaderMap,
-) -> ClientIP {
-    let remote_ip_headers = &config.remote_ip_headers;
-    let trusted_cidrs = &config.trusted_cidrs;
-
-    let remote_ip = match &cx.rpc_info().caller().address() {
-        Some(Address::Ip(socket_addr)) => Some(socket_addr.ip()),
-        Some(Address::Unix(_)) => None,
-        None => return ClientIP(None),
-    };
-
-    if let Some(remote_ip) = remote_ip {
-        if !trusted_cidrs
-            .iter()
-            .any(|cidr| cidr.contains(&IpNet::from(remote_ip)))
-        {
-            return ClientIP(None);
-        }
-    }
-
-    for remote_ip_header in remote_ip_headers.iter() {
-        let remote_ips = match headers
-            .get(remote_ip_header)
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.split(',').map(|s| s.trim()).collect::<Vec<_>>())
-        {
-            Some(remote_ips) => remote_ips,
-            None => continue,
-        };
-        for remote_ip in remote_ips.iter() {
-            if let Ok(remote_cidr) = IpAddr::from_str(remote_ip) {
-                if trusted_cidrs.iter().any(|cidr| cidr.contains(&remote_cidr)) {
-                    return ClientIP(Some(remote_cidr));
-                }
-            }
-        }
-    }
-
-    if let Some(remote_ip) = remote_ip {
-        return ClientIP(Some(remote_ip));
-    }
-
-    ClientIP(None)
-}
-
 #[derive(Clone)]
 pub struct ClientIPService<S> {
     service: S,
     config: ClientIPConfig,
-    handler: fn(&ClientIPConfig, &ServerContext, &HeaderMap) -> ClientIP,
+}
+
+impl<S> ClientIPService<S> {
+    fn get_client_ip(&self, cx: &ServerContext, headers: &HeaderMap) -> ClientIP {
+        let remote_ip = match &cx.rpc_info().caller().address() {
+            Some(Address::Ip(socket_addr)) => Some(socket_addr.ip()),
+            Some(Address::Unix(_)) => None,
+            None => return ClientIP(None),
+        };
+
+        if let Some(remote_ip) = remote_ip {
+            if !self
+                .config
+                .trusted_cidrs
+                .iter()
+                .any(|cidr| cidr.contains(&IpNet::from(remote_ip)))
+            {
+                return ClientIP(None);
+            }
+        }
+
+        for remote_ip_header in self.config.remote_ip_headers.iter() {
+            let remote_ips = match headers
+                .get(remote_ip_header)
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.split(',').map(|s| s.trim()).collect::<Vec<_>>())
+            {
+                Some(remote_ips) => remote_ips,
+                None => continue,
+            };
+            for remote_ip in remote_ips.iter() {
+                if let Ok(remote_cidr) = IpAddr::from_str(remote_ip) {
+                    if self
+                        .config
+                        .trusted_cidrs
+                        .iter()
+                        .any(|cidr| cidr.contains(&remote_cidr))
+                    {
+                        return ClientIP(Some(remote_cidr));
+                    }
+                }
+            }
+        }
+
+        if let Some(remote_ip) = remote_ip {
+            return ClientIP(Some(remote_ip));
+        }
+
+        ClientIP(None)
+    }
 }
 
 impl<S, B> Service<ServerContext, Request<B>> for ClientIPService<S>
@@ -312,7 +270,7 @@ where
         cx: &mut ServerContext,
         req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
-        let client_ip = self.handler.call(&self.config, cx, req.headers());
+        let client_ip = self.get_client_ip(cx, req.headers());
         cx.rpc_info_mut().caller_mut().tags.insert(client_ip);
 
         self.service.call(cx, req).await
