@@ -1,3 +1,6 @@
+//! Utilities for extracting original client ip
+//!
+//! See [`ClientIP`] for more details.
 use std::{net::IpAddr, str::FromStr};
 
 use http::{HeaderMap, HeaderName};
