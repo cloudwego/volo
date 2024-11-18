@@ -308,7 +308,7 @@ where
         cx: &mut ServerContext,
         req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
-        let client_ip = self.handler.clone().call(&self.config, cx, req.headers());
+        let client_ip = self.handler.call(&self.config, cx, req.headers());
         cx.rpc_info_mut().caller_mut().tags.insert(client_ip);
 
         self.service.call(cx, req).await
