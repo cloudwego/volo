@@ -145,7 +145,7 @@ impl ClientIPConfig {
     /// ```
     pub fn with_trusted_cidrs<H>(self, cidrs: H) -> Self
     where
-        H: IntoIterator<Item = ipnet::IpNet>,
+        H: IntoIterator<Item = IpNet>,
     {
         Self {
             remote_ip_headers: self.remote_ip_headers,
