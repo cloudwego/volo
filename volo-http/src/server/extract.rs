@@ -54,7 +54,7 @@ pub trait FromContext: Sized {
     fn from_context(
         cx: &mut ServerContext,
         parts: &mut Parts,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
+    ) -> impl Future<Output=Result<Self, Self::Rejection>> + Send;
 }
 
 /// Extract a type from [`ServerRequest`] with its [`ServerContext`]
@@ -77,7 +77,7 @@ pub trait FromRequest<B = crate::body::Body, M = private::ViaRequest>: Sized {
         cx: &mut ServerContext,
         parts: Parts,
         body: B,
-    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
+    ) -> impl Future<Output=Result<Self, Self::Rejection>> + Send;
 }
 
 /// Extract a type from query in uri.
@@ -336,7 +336,28 @@ impl FromContext for ClientIP {
 
         let remote_ip = match cx.rpc_info().caller().address() {
             Some(Address::Ip(socket_addr)) => socket_addr.ip(),
-            _ => return Ok(ClientIP(None)),
+            Some(Address::Unix(_)) => {
+                for remote_ip_header in remote_ip_headers.iter() {
+                    let remote_ips = match parts
+                        .headers
+                        .get(remote_ip_header)
+                        .and_then(|v| v.to_str().ok())
+                        .map(|v| v.split(',').map(|s| s.trim()).collect::<Vec<_>>())
+                    {
+                        Some(remote_ips) => remote_ips,
+                        None => continue,
+                    };
+                    for remote_ip in remote_ips.iter() {
+                        if let Ok(remote_cidr) = IpAddr::from_str(remote_ip) {
+                            if trusted_cidrs.iter().any(|cidr| cidr.contains(&remote_cidr)) {
+                                return Ok(ClientIP(Some(remote_cidr)));
+                            }
+                        }
+                    }
+                }
+                return Ok(ClientIP(None));
+            },
+            None => return Ok(ClientIP(None)),
         };
 
         if trusted_cidrs
@@ -363,7 +384,7 @@ impl FromContext for ClientIP {
             }
         }
 
-        Ok(ClientIP(Some(remote_ip)))
+        Ok(ClientIP(None))
     }
 }
 
@@ -732,8 +753,7 @@ mod extract_tests {
         fn assert_handler<H, T>(_: H)
         where
             H: Handler<T, Body, Infallible>,
-        {
-        }
+        {}
 
         async fn only_cx(_: SomethingFromCx) {}
         async fn only_req(_: SomethingFromReq) {}
@@ -743,8 +763,7 @@ mod extract_tests {
             _: SomethingFromCx,
             _: SomethingFromCx,
             _: SomethingFromReq,
-        ) {
-        }
+        ) {}
         async fn only_option_cx(_: Option<SomethingFromCx>) {}
         async fn only_option_req(_: Option<SomethingFromReq>) {}
         async fn only_result_cx(_: Result<SomethingFromCx, Infallible>) {}
@@ -753,8 +772,7 @@ mod extract_tests {
         async fn result_cx_req(
             _: Result<SomethingFromCx, Infallible>,
             _: Result<SomethingFromReq, Infallible>,
-        ) {
-        }
+        ) {}
 
         assert_handler(only_cx);
         assert_handler(only_req);
