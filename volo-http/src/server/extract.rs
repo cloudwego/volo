@@ -23,6 +23,7 @@ use crate::{
     context::ServerContext,
     error::server::{body_collection_error, ExtractBodyError},
     request::{Request, RequestPartsExt},
+    server::utils::client_ip::ClientIP,
     utils::macros::impl_deref_and_deref_mut,
 };
 
@@ -287,6 +288,23 @@ impl FromContext for Method {
         parts: &mut Parts,
     ) -> Result<Method, Self::Rejection> {
         Ok(parts.method.to_owned())
+    }
+}
+
+impl FromContext for ClientIP {
+    type Rejection = Infallible;
+
+    async fn from_context(
+        cx: &mut ServerContext,
+        _: &mut Parts,
+    ) -> Result<ClientIP, Self::Rejection> {
+        Ok(ClientIP(
+            cx.rpc_info
+                .caller()
+                .tags
+                .get::<ClientIP>()
+                .and_then(|v| v.0),
+        ))
     }
 }
 
