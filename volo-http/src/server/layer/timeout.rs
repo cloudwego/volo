@@ -113,7 +113,7 @@ where
         tokio::select! {
             resp = fut_service => resp.map(IntoResponse::into_response),
             _ = fut_timeout => {
-                Ok((self.handler.clone()).call(cx))
+                Ok(self.handler.clone().call(cx))
             },
         }
     }

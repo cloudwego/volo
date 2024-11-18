@@ -1,8 +1,5 @@
 //! Context and its utilities of server
 
-use std::{borrow::Cow, str::FromStr, sync::Arc};
-
-use http::HeaderName;
 use volo::{
     context::{Context, Reusable, Role, RpcCx, RpcInfo},
     net::Address,
@@ -53,102 +50,6 @@ impl ServerCxInner {
     impl_getter!(params, PathParamsVec);
 }
 
-/// Config for extract client ip
-#[derive(Clone, Debug)]
-pub struct ClientIPConfig {
-    remote_ip_headers: Vec<HeaderName>,
-    trusted_cidrs: Vec<ipnet::IpNet>,
-}
-
-impl Default for ClientIPConfig {
-    fn default() -> Self {
-        Self {
-            remote_ip_headers: vec![
-                HeaderName::from_static("x-forwarded-for"),
-                HeaderName::from_static("x-real-ip"),
-            ],
-            trusted_cidrs: vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()],
-        }
-    }
-}
-
-impl ClientIPConfig {
-    /// Create a new [`ClientIPConfig`] with default values
-    ///
-    /// default remote ip headers: `["X-Forwarded-For", "X-Real-IP"]`
-    ///
-    /// default trusted cidrs: `["0.0.0.0/0", "::/0"]`
-    pub fn new() -> Self {
-        Default::default()
-    }
-
-    /// Get Real Client IP by parsing the given headers.
-    ///
-    /// See [`ClientIP`](crate::server::extract::ClientIP) for more details.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use volo_http::context::server::ClientIPConfig;
-    ///
-    /// let client_ip_config =
-    ///     ClientIPConfig::new().with_remote_ip_headers(vec!["X-Real-IP", "X-Forwarded-For"]);
-    /// ```
-    pub fn with_remote_ip_headers<I>(
-        self,
-        headers: I,
-    ) -> Result<Self, http::header::InvalidHeaderName>
-    where
-        I: IntoIterator,
-        I::Item: Into<Cow<'static, str>>,
-    {
-        let headers = headers.into_iter().map(Into::into).collect::<Vec<_>>();
-        let mut remote_ip_headers = Vec::with_capacity(headers.len());
-        for header_str in headers {
-            let header_value = match header_str {
-                Cow::Owned(s) => HeaderName::from_str(&s)?,
-                Cow::Borrowed(s) => HeaderName::from_str(s)?,
-            };
-            remote_ip_headers.push(header_value);
-        }
-
-        Ok(Self {
-            remote_ip_headers,
-            trusted_cidrs: self.trusted_cidrs,
-        })
-    }
-
-    pub(crate) fn remote_ip_headers(&self) -> &Vec<HeaderName> {
-        &self.remote_ip_headers
-    }
-
-    /// Get Real Client IP if it is trusted, otherwise it will just return caller ip.
-    ///
-    /// See [`ClientIP`](crate::server::extract::ClientIP) for more details.
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use volo_http::context::server::ClientIPConfig;
-    ///
-    /// let client_ip_config = ClientIPConfig::new()
-    ///     .with_trusted_cidrs(vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()]);
-    /// ```
-    pub fn with_trusted_cidrs<H>(self, cidrs: H) -> Self
-    where
-        H: IntoIterator<Item = ipnet::IpNet>,
-    {
-        Self {
-            remote_ip_headers: self.remote_ip_headers,
-            trusted_cidrs: cidrs.into_iter().collect(),
-        }
-    }
-
-    pub(crate) fn trusted_cidrs(&self) -> &Vec<ipnet::IpNet> {
-        &self.trusted_cidrs
-    }
-}
-
 /// Configuration of the request
 ///
 /// It is empty currently
@@ -156,9 +57,6 @@ impl ClientIPConfig {
 pub struct Config {
     #[cfg(feature = "__tls")]
     tls: bool,
-
-    // client ip config
-    client_ip_config: Arc<ClientIPConfig>,
 }
 
 impl Config {
@@ -171,14 +69,6 @@ impl Config {
     #[cfg(feature = "__tls")]
     pub(crate) fn set_tls(&mut self, tls: bool) {
         self.tls = tls;
-    }
-
-    pub(crate) fn set_client_ip_config(&mut self, config: ClientIPConfig) {
-        self.client_ip_config = Arc::new(config);
-    }
-
-    pub(crate) fn client_ip_config(&self) -> Arc<ClientIPConfig> {
-        self.client_ip_config.clone()
     }
 }
 

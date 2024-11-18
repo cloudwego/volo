@@ -33,10 +33,7 @@ use volo::{
 
 use crate::{
     body::Body,
-    context::{
-        server::{ClientIPConfig, Config},
-        ServerContext,
-    },
+    context::{server::Config, ServerContext},
     request::ServerRequest,
     response::ServerResponse,
 };
@@ -196,14 +193,6 @@ impl<S, L> Server<S, L> {
     #[doc(hidden)]
     pub fn config_mut(&mut self) -> &mut Config {
         &mut self.config
-    }
-
-    /// set client ip config
-    ///
-    /// See [`ClientIP`](crate::server::extract::ClientIP) for more details.
-    pub fn set_client_ip_config(&mut self, config: ClientIPConfig) -> &mut Self {
-        self.config.set_client_ip_config(config);
-        self
     }
 
     /// Set whether HTTP/1 connections should support half-closures.

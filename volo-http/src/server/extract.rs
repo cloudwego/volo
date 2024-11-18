@@ -2,7 +2,7 @@
 //!
 //! See [`FromContext`] and [`FromRequest`] for more details.
 
-use std::{convert::Infallible, fmt, marker::PhantomData, net::IpAddr, str::FromStr};
+use std::{convert::Infallible, fmt, marker::PhantomData};
 
 use bytes::Bytes;
 use faststr::FastStr;
@@ -16,7 +16,6 @@ use http::{
 };
 use http_body::Body;
 use http_body_util::BodyExt;
-use ipnet::IpNet;
 use volo::{context::Context, net::Address};
 
 use super::IntoResponse;
@@ -24,6 +23,7 @@ use crate::{
     context::ServerContext,
     error::server::{body_collection_error, ExtractBodyError},
     request::{RequestPartsExt, ServerRequest},
+    server::layer::ClientIP,
     utils::macros::impl_deref_and_deref_mut,
 };
 
@@ -54,7 +54,7 @@ pub trait FromContext: Sized {
     fn from_context(
         cx: &mut ServerContext,
         parts: &mut Parts,
-    ) -> impl Future<Output=Result<Self, Self::Rejection>> + Send;
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
 /// Extract a type from [`ServerRequest`] with its [`ServerContext`]
@@ -77,7 +77,7 @@ pub trait FromRequest<B = crate::body::Body, M = private::ViaRequest>: Sized {
         cx: &mut ServerContext,
         parts: Parts,
         body: B,
-    ) -> impl Future<Output=Result<Self, Self::Rejection>> + Send;
+    ) -> impl Future<Output = Result<Self, Self::Rejection>> + Send;
 }
 
 /// Extract a type from query in uri.
@@ -291,100 +291,21 @@ impl FromContext for Method {
     }
 }
 
-/// Return real `ClientIP` by parsing the headers in `["X-Forwarded-For", "X-Real-IP"]` if ip is
-/// trusted, otherwise it will just return caller ip by calling
-/// `cx.rpc_info().caller().address().ip()`.
-///
-/// If you want to specify your own headers, you can use
-/// [`with_remote_ip_headers`](crate::server::ClientIPConfig::with_remote_ip_headers) to set the
-/// headers.
-///
-/// If you want to specify your own trusted cidrs, you can use
-/// [`with_trusted_cidrs`](crate::server::ClientIPConfig::with_trusted_cidrs) to set the cidrs.
-///
-/// # Example
-///
-/// ```rust,no_run
-/// use volo_http::{
-///     context::server::ClientIPConfig,
-///     server::{route::Router, Server},
-/// };
-///
-/// let app = Router::new();
-///
-/// let server = Server::new(app).set_client_ip_config(
-///     ClientIPConfig::new()
-///         .with_remote_ip_headers(vec!["x-real-ip", "x-forwarded-for"])?
-///         .with_trusted_cidrs(vec!["0.0.0.0/0".parse().unwrap(), "::/0".parse().unwrap()]),
-/// );
-/// ```
-#[derive(Debug)]
-pub struct ClientIP(pub Option<IpAddr>);
-
-impl_deref_and_deref_mut!(ClientIP, Option<IpAddr>, 0);
-
 impl FromContext for ClientIP {
     type Rejection = Infallible;
 
     async fn from_context(
         cx: &mut ServerContext,
-        parts: &mut Parts,
+        _: &mut Parts,
     ) -> Result<ClientIP, Self::Rejection> {
-        let client_ip_config = cx.rpc_info.config().client_ip_config();
-        let remote_ip_headers = client_ip_config.remote_ip_headers();
-        let trusted_cidrs = client_ip_config.trusted_cidrs();
-
-        let remote_ip = match cx.rpc_info().caller().address() {
-            Some(Address::Ip(socket_addr)) => socket_addr.ip(),
-            Some(Address::Unix(_)) => {
-                for remote_ip_header in remote_ip_headers.iter() {
-                    let remote_ips = match parts
-                        .headers
-                        .get(remote_ip_header)
-                        .and_then(|v| v.to_str().ok())
-                        .map(|v| v.split(',').map(|s| s.trim()).collect::<Vec<_>>())
-                    {
-                        Some(remote_ips) => remote_ips,
-                        None => continue,
-                    };
-                    for remote_ip in remote_ips.iter() {
-                        if let Ok(remote_cidr) = IpAddr::from_str(remote_ip) {
-                            if trusted_cidrs.iter().any(|cidr| cidr.contains(&remote_cidr)) {
-                                return Ok(ClientIP(Some(remote_cidr)));
-                            }
-                        }
-                    }
-                }
-                return Ok(ClientIP(None));
-            },
-            None => return Ok(ClientIP(None)),
-        };
-
-        if trusted_cidrs
-            .iter()
-            .any(|cidr| cidr.contains(&IpNet::from(remote_ip)))
-        {
-            for remote_ip_header in remote_ip_headers.iter() {
-                let remote_ips = match parts
-                    .headers
-                    .get(remote_ip_header)
-                    .and_then(|v| v.to_str().ok())
-                    .map(|v| v.split(',').map(|s| s.trim()).collect::<Vec<_>>())
-                {
-                    Some(remote_ips) => remote_ips,
-                    None => continue,
-                };
-                for remote_ip in remote_ips.iter() {
-                    if let Ok(remote_cidr) = IpAddr::from_str(remote_ip) {
-                        if trusted_cidrs.iter().any(|cidr| cidr.contains(&remote_cidr)) {
-                            return Ok(ClientIP(Some(remote_cidr)));
-                        }
-                    }
-                }
+        if let Some(client_ip) = cx.rpc_info.caller().tags.get::<ClientIP>() {
+            match client_ip.0 {
+                Some(ip) => Ok(ClientIP(Some(ip))),
+                None => Ok(ClientIP(None)),
             }
+        } else {
+            Ok(ClientIP(None))
         }
-
-        Ok(ClientIP(None))
     }
 }
 
@@ -708,20 +629,12 @@ fn json_content_type(headers: &HeaderMap) -> bool {
 mod extract_tests {
     #![deny(unused)]
 
-    use std::{convert::Infallible, net::SocketAddr, str::FromStr};
+    use std::convert::Infallible;
 
-    use http::{request::Parts, HeaderValue, Method};
-    use motore::Service;
-    use volo::{context::Context, net::Address};
+    use http::request::Parts;
 
-    use super::{ClientIP, FromContext, FromRequest};
-    use crate::{
-        body::{Body, BodyConversion},
-        context::{server::ClientIPConfig, ServerContext},
-        server::{handler::Handler, route::get},
-        utils::test_helpers::simple_req,
-        Router, Server,
-    };
+    use super::{FromContext, FromRequest};
+    use crate::{body::Body, context::ServerContext, server::handler::Handler};
 
     struct SomethingFromCx;
 
@@ -753,7 +666,8 @@ mod extract_tests {
         fn assert_handler<H, T>(_: H)
         where
             H: Handler<T, Body, Infallible>,
-        {}
+        {
+        }
 
         async fn only_cx(_: SomethingFromCx) {}
         async fn only_req(_: SomethingFromReq) {}
@@ -763,7 +677,8 @@ mod extract_tests {
             _: SomethingFromCx,
             _: SomethingFromCx,
             _: SomethingFromReq,
-        ) {}
+        ) {
+        }
         async fn only_option_cx(_: Option<SomethingFromCx>) {}
         async fn only_option_req(_: Option<SomethingFromReq>) {}
         async fn only_result_cx(_: Result<SomethingFromCx, Infallible>) {}
@@ -772,7 +687,8 @@ mod extract_tests {
         async fn result_cx_req(
             _: Result<SomethingFromCx, Infallible>,
             _: Result<SomethingFromReq, Infallible>,
-        ) {}
+        ) {
+        }
 
         assert_handler(only_cx);
         assert_handler(only_req);
@@ -784,48 +700,5 @@ mod extract_tests {
         assert_handler(only_result_req);
         assert_handler(option_cx_req);
         assert_handler(result_cx_req);
-    }
-
-    #[tokio::test]
-    async fn test_client_ip() {
-        async fn handler(client_ip: ClientIP) -> String {
-            client_ip.unwrap().to_string()
-        }
-
-        let router: Router<_> = Router::new().route("/", get(handler));
-        let mut server = Server::new(router);
-        server.set_client_ip_config(
-            ClientIPConfig::new().with_trusted_cidrs(vec!["10.0.0.0/8".parse().unwrap()]),
-        );
-
-        let mut cx = ServerContext::new(Address::from(
-            SocketAddr::from_str("10.0.0.1:8080").unwrap(),
-        ));
-        cx.rpc_info_mut().set_config(server.config.clone());
-
-        // Test case 1: no remote ip header
-        let req = simple_req(Method::GET, "/", "");
-        let resp = server.service.call(&mut cx, req).await.unwrap();
-        assert_eq!("10.0.0.1", resp.into_string().await.unwrap());
-
-        // Test case 2: with remote ip header
-        let mut req = simple_req(Method::GET, "/", "");
-        req.headers_mut()
-            .insert("X-Real-IP", HeaderValue::from_static("10.0.0.2"));
-        let resp = server.service.call(&mut cx, req).await.unwrap();
-        assert_eq!("10.0.0.2", resp.into_string().await.unwrap());
-
-        let mut req = simple_req(Method::GET, "/", "");
-        req.headers_mut()
-            .insert("X-Forwarded-For", HeaderValue::from_static("10.0.1.0"));
-        let resp = server.service.call(&mut cx, req).await.unwrap();
-        assert_eq!("10.0.1.0", resp.into_string().await.unwrap());
-
-        // Test case 3: with untrusted remote ip
-        let mut req = simple_req(Method::GET, "/", "");
-        req.headers_mut()
-            .insert("X-Real-IP", HeaderValue::from_static("11.0.0.1"));
-        let resp = server.service.call(&mut cx, req).await.unwrap();
-        assert_eq!("10.0.0.1", resp.into_string().await.unwrap());
     }
 }
