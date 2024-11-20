@@ -489,10 +489,16 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 dir
             }
         };
-        let base_dir = base_dir.as_path();
+
+        let base_dir = if let Some(suffix) = self.cx().names.get(&def_id) {
+            format!("{}_{suffix}", base_dir.display())
+        } else {
+            base_dir.display().to_string()
+        };
+        let base_dir = Path::new(&base_dir);
 
         if self.cx().split {
-            std::fs::create_dir_all(&base_dir).expect("Failed to create base directory");
+            std::fs::create_dir_all(base_dir).expect("Failed to create base directory");
         }
 
         all_methods.iter().for_each(|m| {
@@ -754,7 +760,13 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         if self.cx().split {
             let mod_rs_file_path = base_dir.join("mod.rs");
             Self::write_file(&mod_rs_file_path, mod_rs_stream);
-            stream.push_str(format!("include!(\"{}/mod.rs\");", service_name).as_str());
+            stream.push_str(
+                format!(
+                    "include!(\"{}/mod.rs\");",
+                    base_dir.file_name().unwrap().to_str().unwrap()
+                )
+                .as_str(),
+            );
         }
     }
 
@@ -851,7 +863,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
 fn rust_name(cx: &Context, def_id: DefId) -> FastStr {
     let name = cx.rust_name(def_id);
-    if cx.names.contains(&def_id) {
+    if cx.names.contains_key(&def_id) {
         name.0
     } else {
         name.0.upper_camel_ident()

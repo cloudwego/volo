@@ -1,10 +1,3 @@
 
-pub trait ArticleService {
-    fn get_article(
-        &self,
-        req: GetArticleRequest,
-    ) -> impl ::std::future::Future<
-        Output = ::core::result::Result<GetArticleResponse, ::volo_thrift::ServerError>,
-    > + Send;
-}
-include!("ArticleService/mod.rs");
+pub trait articleService {}
+include!("articleService_0/mod.rs");

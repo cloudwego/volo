@@ -30,3 +30,5 @@ struct GetArticleResponse {
 service ArticleService {
     GetArticleResponse GetArticle(1: GetArticleRequest req),
 }
+
+service articleService {}

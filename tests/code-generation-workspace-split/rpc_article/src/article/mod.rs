@@ -1,9 +1,10 @@
 include!("enum_Status.rs");
-include!("message_ArticleServiceGetArticleArgsRecv.rs");
+include!("message_Article.rs");
 include!("enum_ArticleServiceGetArticleResultSend.rs");
 include!("message_GetArticleResponse.rs");
+include!("message_ArticleServiceGetArticleArgsRecv.rs");
+include!("service_articleService.rs");
 include!("message_ArticleServiceGetArticleArgsSend.rs");
 include!("message_GetArticleRequest.rs");
-include!("service_ArticleService.rs");
+include!("service_ArticleService_2.rs");
 include!("enum_ArticleServiceGetArticleResultRecv.rs");
-include!("message_Article.rs");
