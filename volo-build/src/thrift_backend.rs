@@ -281,29 +281,13 @@ impl VoloThriftBackend {
         );
 
         if self.cx().split {
-            let req_recv_file_name = format!("enum_{}.rs", req_recv_name);
-            let req_recv_buf = base_dir.join(&req_recv_file_name);
-            let req_recv_file = req_recv_buf.as_path();
-
-            let req_send_file_name = format!("enum_{}.rs", req_send_name);
-            let req_send_buf = base_dir.join(&req_send_file_name);
-            let req_send_file = req_send_buf.as_path();
-
-            let res_recv_file_name = format!("enum_{}.rs", res_recv_name);
-            let res_recv_buf = base_dir.join(&res_recv_file_name);
-            let res_recv_file = res_recv_buf.as_path();
-
-            let res_send_file_name = format!("enum_{}.rs", res_send_name);
-            let res_send_buf = base_dir.join(&res_send_file_name);
-            let res_send_file = res_send_buf.as_path();
-
             let req_recv_stream = format! {
                 r#"#[derive(Debug, Clone)]
-            pub enum {req_recv_name} {{
-                {req_recv_variants}
-            }}
-            
-            {req_recv_impl}
+                pub enum {req_recv_name} {{
+                    {req_recv_variants}
+                }}
+
+                {req_recv_impl}
             "#
             };
 
@@ -336,15 +320,30 @@ impl VoloThriftBackend {
             "#
             };
 
-            Self::write_file(&req_recv_file, req_recv_stream);
-            Self::write_file(&req_send_file, req_send_stream);
-            Self::write_file(&res_recv_file, res_recv_stream);
-            Self::write_file(&res_send_file, res_send_stream);
-
-            stream.push_str(format!("include!(\"{}\");", &req_recv_file_name).as_str());
-            stream.push_str(format!("include!(\"{}\");", &req_send_file_name).as_str());
-            stream.push_str(format!("include!(\"{}\");", &res_recv_file_name).as_str());
-            stream.push_str(format!("include!(\"{}\");", &res_send_file_name).as_str());
+            Self::write_item(
+                stream,
+                base_dir,
+                format!("enum_{}.rs", &req_recv_name),
+                req_recv_stream,
+            );
+            Self::write_item(
+                stream,
+                base_dir,
+                format!("enum_{}.rs", &res_recv_name),
+                res_recv_stream,
+            );
+            Self::write_item(
+                stream,
+                base_dir,
+                format!("enum_{}.rs", &req_send_name),
+                req_send_stream,
+            );
+            Self::write_item(
+                stream,
+                base_dir,
+                format!("enum_{}.rs", &res_send_name),
+                res_send_stream,
+            );
         } else {
             stream.push_str(&format! {
                 r#"#[derive(Debug, Clone)]
@@ -374,6 +373,13 @@ impl VoloThriftBackend {
             "#
             });
         }
+    }
+
+    fn write_item(stream: &mut String, base_dir: &Path, name: String, impl_str: String) {
+        let req_recv_buf = base_dir.join(&name);
+        let req_recv_file = req_recv_buf.as_path();
+        Self::write_file(&req_recv_file, impl_str);
+        stream.push_str(format!("include!(\"{}\");", &name).as_str());
     }
 
     fn write_file(path: &Path, stream: String) {
@@ -464,7 +470,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         let path = self.cx().item_path(def_id);
         let path = path.as_ref();
 
+        // Locate directory based on the full item path
         let base_dir = match self.cx().mode.as_ref() {
+            // In a workspace mode, the base directory is next to the `.rs` file for the service
             Mode::Workspace(info) => {
                 let mut dir = info.dir.clone();
                 if path.is_empty() {
@@ -480,6 +488,8 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     dir
                 }
             }
+            // In single file mode, the files directory is the root
+            // The base directory path is the root + the item path
             Mode::SingleFile { file_path } => {
                 let mut dir = file_path.clone();
                 dir.pop();
@@ -737,15 +747,18 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         };
 
         if self.cx().split {
-            let server_name = format!("service_{}Server.rs", service_name);
-            let server_file = base_dir.join(&server_name);
-            Self::write_file(&server_file, server_string);
-            mod_rs_stream.push_str(format!("include!(\"{}\");", server_name).as_str());
-
-            let client_name = format!("service_{}Client.rs", service_name);
-            let client_file = base_dir.join(&client_name);
-            Self::write_file(&client_file, client_string);
-            mod_rs_stream.push_str(format!("include!(\"{}\");", client_name).as_str());
+            Self::write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("service_{}Server.rs", service_name),
+                server_string,
+            );
+            Self::write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("service_{}Client.rs", service_name),
+                client_string,
+            );
         } else {
             stream.push_str(&server_string);
             stream.push_str(&client_string);
