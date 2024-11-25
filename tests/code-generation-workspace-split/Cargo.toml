@@ -4,8 +4,8 @@ name = "gen"
 test = false
 
 [dependencies.pilota-build]
-branch = "fix/context-mode-pub"
-git = "https://github.com/missingdays/pilota"
+branch = "main"
+git = "https://github.com/cloudwego/pilota"
 
 [dependencies.volo-build]
 workspace = true
@@ -31,8 +31,8 @@ lazy_static = "1"
 serde = "1"
 
 [workspace.dependencies.pilota]
-branch = "fix/context-mode-pub"
-git = "https://github.com/missingdays/pilota"
+branch = "main"
+git = "https://github.com/cloudwego/pilota"
 
 [workspace.dependencies.volo]
 path = "../../volo"
