@@ -18,10 +18,6 @@ version = "0.0.0"
 
 [workspace]
 members = [
-    "common",
-    "rpc_article",
-    "rpc_author",
-    "rpc_image",
 ]
 
 [workspace.dependencies]
