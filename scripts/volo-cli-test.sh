@@ -43,13 +43,22 @@ append_volo_dep_item() {
 	echo "$1 = { path = \"$VOLO_DIR/$1\" }" >> Cargo.toml
 }
 
+append_pilota_dep_item() {
+	echo "$1 = { git = \"https://github.com/cloudwego/pilota.git\", branch = \"main\" }" >> Cargo.toml
+}
+
 patch_cargo_toml() {
 	echo "[patch.crates-io]" >> Cargo.toml
+
 	append_volo_dep_item volo
 	append_volo_dep_item volo-build
 	append_volo_dep_item volo-thrift
 	append_volo_dep_item volo-grpc
 	append_volo_dep_item volo-http
+
+	append_pilota_dep_item pilota
+	append_pilota_dep_item pilota-build
+	append_pilota_dep_item pilota-thrift-parser
 }
 
 thrift_test() {
