@@ -378,7 +378,7 @@ impl VoloThriftBackend {
     fn write_item(stream: &mut String, base_dir: &Path, name: String, impl_str: String) {
         let req_recv_buf = base_dir.join(&name);
         let req_recv_file = req_recv_buf.as_path();
-        Self::write_file(&req_recv_file, impl_str);
+        Self::write_file(req_recv_file, impl_str);
         stream.push_str(format!("include!(\"{}\");", &name).as_str());
     }
 
