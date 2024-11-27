@@ -22,29 +22,22 @@ maintenance = { status = "actively-developed" }
 volo = { version = "0.10", path = "../volo" }
 
 ahash.workspace = true
-async-broadcast.workspace = true
 bytes.workspace = true
-chrono.workspace = true
 faststr.workspace = true
 futures.workspace = true
 futures-util.workspace = true
-hickory-resolver.workspace = true
 http.workspace = true
 http-body.workspace = true
 http-body-util.workspace = true
 hyper.workspace = true
 hyper-util = { workspace = true, features = ["tokio"] }
-ipnet.workspace = true
 itoa.workspace = true
-memchr.workspace = true
 metainfo.workspace = true
 mime.workspace = true
-mime_guess.workspace = true
 motore.workspace = true
 parking_lot.workspace = true
 paste.workspace = true
 pin-project.workspace = true
-scopeguard.workspace = true
 simdutf8.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = [
@@ -62,7 +55,16 @@ url.workspace = true
 # =====optional=====
 
 # server optional
-matchit = { workspace = true, optional = true }
+ipnet = { workspace = true, optional = true } # client ip
+matchit = { workspace = true, optional = true } # route matching
+memchr = { workspace = true, optional = true } # sse
+scopeguard = { workspace = true, optional = true } # defer
+
+# client optional
+async-broadcast = { workspace = true, optional = true } # service discover
+chrono = { workspace = true, optional = true } # stat
+hickory-resolver = { workspace = true, optional = true } # dns resolver
+mime_guess = { workspace = true, optional = true }
 
 # serde and form, query, json
 serde = { workspace = true, optional = true }
@@ -106,8 +108,14 @@ full = [
 
 http1 = ["hyper/http1", "hyper-util/http1"]
 
-client = ["http1", "hyper/client"] # client core
-server = ["http1", "hyper-util/server", "dep:matchit"] # server core
+client = [
+    "http1", "hyper/client",
+    "dep:async-broadcast", "dep:chrono", "dep:hickory-resolver",
+] # client core
+server = [
+    "http1", "hyper-util/server",
+    "dep:ipnet", "dep:matchit", "dep:memchr", "dep:scopeguard", "dep:mime_guess",
+] # server core
 
 __serde = ["dep:serde"] # a private feature for enabling `serde` by `serde_xxx`
 query = ["__serde", "dep:serde_urlencoded"]
