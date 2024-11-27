@@ -56,3 +56,5 @@ multiplex = []
 # unsafe-codec can achieve better performance for thrift binary protocol, but may cause undefined behavior
 # if the thrift message is malformed.
 unsafe-codec = []
+# This will use unwrap_unchecked instead of unwrap in some places.
+unsafe_unchecked = ["volo/unsafe_unchecked"]
