@@ -7,7 +7,7 @@ use std::{net::SocketAddr, ops::Deref, sync::Arc};
 use async_broadcast::Receiver;
 use faststr::FastStr;
 use hickory_resolver::{
-    config::{ResolverConfig, ResolverOpts},
+    config::{LookupIpStrategy, ResolverConfig, ResolverOpts},
     AsyncResolver, TokioAsyncResolver,
 };
 use volo::{
@@ -64,9 +64,27 @@ impl DnsResolver {
 
 impl Default for DnsResolver {
     fn default() -> Self {
-        Self {
-            resolver: AsyncResolver::tokio_from_system_conf().expect("failed to init dns resolver"),
+        let (conf, mut opts) = hickory_resolver::system_conf::read_system_conf()
+            .expect("[Volo-HTTP] DnsResolver: failed to parse dns config");
+        if conf
+            .name_servers()
+            .first()
+            .expect("[Volo-HTTP] DnsResolver: no nameserver found")
+            .socket_addr
+            .is_ipv6()
+        {
+            // The default `LookupIpStrategy` is always `Ipv4thenIpv6`, it may not work in an IPv6
+            // only environment.
+            //
+            // Here we trust the system configuration and check its first name server.
+            //
+            // If the first nameserver is an IPv4 address, we keep the default configuration.
+            //
+            // If the first nameserver is an IPv6 address, we need to update the policy to prefer
+            // IPv6 addresses.
+            opts.ip_strategy = LookupIpStrategy::Ipv6thenIpv4;
         }
+        Self::new(conf, opts)
     }
 }
 
