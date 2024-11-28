@@ -528,7 +528,7 @@ where
         parts: Parts,
         body: B,
     ) -> Result<Self, Self::Rejection> {
-        if !content_type_eq(&parts.headers, mime::APPLICATION_WWW_FORM_URLENCODED) {
+        if !content_type_matches(&parts.headers, mime::APPLICATION, mime::WWW_FORM_URLENCODED) {
             return Err(crate::error::server::invalid_content_type());
         }
 
@@ -555,7 +555,7 @@ where
         parts: Parts,
         body: B,
     ) -> Result<Self, Self::Rejection> {
-        if !json_content_type(&parts.headers) {
+        if !content_type_matches(&parts.headers, mime::APPLICATION, mime::JSON) {
             return Err(crate::error::server::invalid_content_type());
         }
 
@@ -580,48 +580,26 @@ fn get_header_value(map: &HeaderMap, key: HeaderName) -> Option<&str> {
     map.get(key)?.to_str().ok()
 }
 
-#[cfg(feature = "form")]
-fn content_type_eq(map: &HeaderMap, val: mime::Mime) -> bool {
-    let Some(ty) = get_header_value(map, header::CONTENT_TYPE) else {
+#[cfg(any(feature = "form", feature = "json"))]
+fn content_type_matches(
+    headers: &HeaderMap,
+    ty: mime::Name<'static>,
+    subtype: mime::Name<'static>,
+) -> bool {
+    use std::str::FromStr;
+
+    let Some(content_type) = headers.get(header::CONTENT_TYPE) else {
         return false;
     };
-    ty == val.essence_str()
-}
-
-#[cfg(feature = "json")]
-fn json_content_type(headers: &HeaderMap) -> bool {
-    let content_type = match headers.get(header::CONTENT_TYPE) {
-        Some(content_type) => content_type,
-        None => {
-            return false;
-        }
+    let Ok(content_type) = content_type.to_str() else {
+        return false;
+    };
+    let Ok(mime) = mime::Mime::from_str(content_type) else {
+        return false;
     };
 
-    let content_type = match content_type.to_str() {
-        Ok(s) => s,
-        Err(_) => {
-            return false;
-        }
-    };
-
-    let mime_type = match content_type.parse::<mime::Mime>() {
-        Ok(mime_type) => mime_type,
-        Err(_) => {
-            return false;
-        }
-    };
-
-    // `application/json` or `application/json+foo`
-    if mime_type.type_() == mime::APPLICATION && mime_type.subtype() == mime::JSON {
-        return true;
-    }
-
-    // `application/foo+json`
-    if mime_type.suffix() == Some(mime::JSON) {
-        return true;
-    }
-
-    false
+    // `text/xml` or `image/svg+xml`
+    (mime.type_() == ty && mime.subtype() == subtype) || mime.suffix() == Some(subtype)
 }
 
 #[cfg(test)]
