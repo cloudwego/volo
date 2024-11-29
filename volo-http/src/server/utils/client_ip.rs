@@ -268,7 +268,7 @@ where
         req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         let client_ip = self.get_client_ip(cx, req.headers());
-        cx.rpc_info_mut().caller_mut().insert(client_ip);
+        cx.extensions_mut().insert(client_ip);
 
         self.service.call(cx, req).await
     }
