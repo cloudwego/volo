@@ -1,0 +1,21 @@
+common_crate_name: "common" # common_crate_name = "common" by default
+touch_all: true
+dedups: [] # remove the repeated structure generation in one entry
+special_namings: []
+split_generated_files: true
+# repos: # exsit if non-local
+# { repo }: # repo = extract the name from url by default
+# url: { git } # url = repo git url
+# ref: { ref } # ref = "HEAD" by default
+# lock: { commit hash } # lock is the last commit hash
+services:
+  - idl:
+      source: local
+      path: proto/echo.proto
+      includes:
+      - proto
+    codegen_option:
+      touch: []
+      keep_unknown_fields: false # A->B->C, B could use this to transfer the unknown fields which is needed by A and C.
+      config:
+        crate_name: rpc_echo
