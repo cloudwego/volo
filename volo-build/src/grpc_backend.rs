@@ -1,6 +1,6 @@
-use std::io::Write;
-use std::path::Path;
+use crate::util::{get_base_dir, write_file, write_item};
 use itertools::Itertools;
+use pilota_build::middle::context::Mode;
 use pilota_build::{
     db::RirDatabase,
     rir,
@@ -8,9 +8,9 @@ use pilota_build::{
     tags::protobuf::{ClientStreaming, ServerStreaming},
     CodegenBackend, Context, DefId, IdentName, Symbol,
 };
-use pilota_build::middle::context::Mode;
+use std::io::Write;
+use std::path::Path;
 use volo::FastStr;
-use crate::util::{get_base_dir, write_file, write_item};
 
 pub struct MkGrpcBackend;
 
@@ -440,7 +440,7 @@ impl CodegenBackend for VoloGrpcBackend {
             }}"
         );
 
-        let req_enum_send_impl =  format! {
+        let req_enum_send_impl = format! {
             r#"
             pub enum {req_enum_name_send} {{
                 {req_enum_send_variants}
@@ -604,13 +604,43 @@ impl CodegenBackend for VoloGrpcBackend {
 
         if self.cx().split {
             let mut mod_rs_stream = String::new();
-            write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", req_enum_name_send), req_enum_send_impl);
-            write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", req_enum_name_recv), req_enum_recv_impl);
-            write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", resp_enum_name_send), resp_enum_send_impl);
-            write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", resp_enum_name_recv), resp_enum_recv_impl);
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("enum_{}.rs", req_enum_name_send),
+                req_enum_send_impl,
+            );
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("enum_{}.rs", req_enum_name_recv),
+                req_enum_recv_impl,
+            );
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("enum_{}.rs", resp_enum_name_send),
+                resp_enum_send_impl,
+            );
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("enum_{}.rs", resp_enum_name_recv),
+                resp_enum_recv_impl,
+            );
 
-            write_item(&mut mod_rs_stream, base_dir, format!("client_{}.rs", client_name), client_impl);
-            write_item(&mut mod_rs_stream, base_dir, format!("server_{}.rs", server_name), server_impl);
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("client_{}.rs", client_name),
+                client_impl,
+            );
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("server_{}.rs", server_name),
+                server_impl,
+            );
 
             let mod_rs_file_path = base_dir.join("mod.rs");
             write_file(&mod_rs_file_path, mod_rs_stream);
@@ -619,7 +649,7 @@ impl CodegenBackend for VoloGrpcBackend {
                     "include!(\"{}/mod.rs\");",
                     base_dir.file_name().unwrap().to_str().unwrap()
                 )
-                    .as_str(),
+                .as_str(),
             );
         } else {
             stream.push_str(&format! {
@@ -634,7 +664,6 @@ impl CodegenBackend for VoloGrpcBackend {
             "#});
         }
     }
-
 
     fn codegen_service_method(&self, _service_def_id: DefId, method: &rir::Method) -> String {
         let client_streaming = self
