@@ -24,12 +24,12 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.80.0"
 
 [workspace.dependencies]
-#pilota = "0.11"
-#pilota-build = "0.11"
-#pilota-thrift-parser = "0.11"
-pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
-pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
-pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+pilota = "0.11"
+pilota-build = "0.11"
+pilota-thrift-parser = "0.11"
+# pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+# pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+# pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
 
 motore = "0.4"
 # motore = { git = "https://github.com/cloudwego/motore.git", branch = "main" }

@@ -4,8 +4,7 @@ name = "gen"
 test = false
 
 [dependencies.pilota-build]
-branch = "main"
-git = "https://github.com/cloudwego/pilota"
+version = "*"
 
 [dependencies.volo-build]
 workspace = true
@@ -17,8 +16,7 @@ publish = false
 version = "0.0.0"
 
 [workspace]
-members = [
-]
+members = []
 
 [workspace.dependencies]
 anyhow = "1"
@@ -27,8 +25,7 @@ lazy_static = "1"
 serde = "1"
 
 [workspace.dependencies.pilota]
-branch = "main"
-git = "https://github.com/cloudwego/pilota"
+version = "*"
 
 [workspace.dependencies.volo]
 path = "../../volo"
