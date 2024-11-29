@@ -1,7 +1,10 @@
+use std::{io::Write, path::Path};
+
 use itertools::Itertools;
 use pilota_build::{
     codegen::thrift::DecodeHelper,
     db::RirDatabase,
+    middle::context::Mode,
     rir::{self, Method},
     tags::RustWrapperArc,
     CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
@@ -15,7 +18,7 @@ pub struct VoloThriftBackend {
 }
 
 impl VoloThriftBackend {
-    fn codegen_service_anonymous_type(&self, stream: &mut String, def_id: DefId) {
+    fn codegen_service_anonymous_type(&self, stream: &mut String, def_id: DefId, base_dir: &Path) {
         let service_name = self.cx().rust_name(def_id);
         let methods = self.cx().service_methods(def_id);
         let methods_names = methods.iter().map(|m| &**m.name).collect::<Vec<_>>();
@@ -48,7 +51,7 @@ impl VoloThriftBackend {
         let res_recv_name = format!("{service_name}ResponseRecv");
         let res_send_name = format!("{service_name}ResponseSend");
 
-        let req_impl = {
+        let (req_recv_impl, req_send_impl) = {
             let mk_decode = |is_async: bool, is_send: bool| {
                 let helper = DecodeHelper::new(is_async);
                 let mut match_methods = String::new();
@@ -94,7 +97,7 @@ impl VoloThriftBackend {
                 match_size = "_ => unreachable!(),".to_string();
             }
 
-            format! {
+            let recv_impl = format! {
                 r#"impl ::volo_thrift::EntryMessage for {req_recv_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
@@ -119,9 +122,11 @@ impl VoloThriftBackend {
                             {match_size}
                         }}
                     }}
-                }}
+                }}"#
+            };
 
-                impl ::volo_thrift::EntryMessage for {req_send_name} {{
+            let send_impl = format! {
+                r#"impl ::volo_thrift::EntryMessage for {req_send_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
@@ -146,10 +151,12 @@ impl VoloThriftBackend {
                         }}
                     }}
                 }}"#
-            }
+            };
+
+            (recv_impl, send_impl)
         };
 
-        let res_impl = {
+        let (res_recv_impl, res_send_impl) = {
             let mk_decode = |is_async: bool, is_send: bool| {
                 let helper = DecodeHelper::new(is_async);
                 let mut match_methods = String::new();
@@ -195,7 +202,8 @@ impl VoloThriftBackend {
             let send_decode_async = mk_decode(true, true);
             let recv_decode = mk_decode(false, false);
             let recv_decode_async = mk_decode(true, false);
-            format! {
+
+            let recv_impl = format! {
                 r#"impl ::volo_thrift::EntryMessage for {res_recv_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
@@ -220,9 +228,11 @@ impl VoloThriftBackend {
                             {match_size}
                         }}
                     }}
-                }}
+                }}"#
+            };
 
-                impl ::volo_thrift::EntryMessage for {res_send_name} {{
+            let send_impl = format! {
+                r#"impl ::volo_thrift::EntryMessage for {res_send_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
                             {match_encode}
@@ -247,7 +257,9 @@ impl VoloThriftBackend {
                         }}
                     }}
                 }}"#
-            }
+            };
+
+            (recv_impl, send_impl)
         };
         let req_recv_variants = crate::join_multi_strs!(
             ",",
@@ -267,8 +279,74 @@ impl VoloThriftBackend {
             ",",
             |variant_names, result_send_names| -> "{variant_names}({result_send_names})"
         );
-        stream.push_str(&format! {
-            r#"#[derive(Debug, Clone)]
+
+        if self.cx().split {
+            let req_recv_stream = format! {
+                r#"#[derive(Debug, Clone)]
+                pub enum {req_recv_name} {{
+                    {req_recv_variants}
+                }}
+
+                {req_recv_impl}
+            "#
+            };
+
+            let req_send_stream = format! {
+                r#"#[derive(Debug, Clone)]
+            pub enum {req_send_name} {{
+                {req_send_variants}
+            }}
+
+            {req_send_impl}
+            "#
+            };
+
+            let res_recv_stream = format! {
+                r#"#[derive(Debug, Clone)]
+            pub enum {res_recv_name} {{
+                {res_recv_variants}
+            }}
+            {res_recv_impl}
+            "#
+            };
+
+            let res_send_stream = format! {
+                r#"#[derive(Debug, Clone)]
+            pub enum {res_send_name} {{
+                {res_send_variants}
+            }}
+
+            {res_send_impl}
+            "#
+            };
+
+            Self::write_item(
+                stream,
+                base_dir,
+                format!("enum_{}.rs", &req_recv_name),
+                req_recv_stream,
+            );
+            Self::write_item(
+                stream,
+                base_dir,
+                format!("enum_{}.rs", &res_recv_name),
+                res_recv_stream,
+            );
+            Self::write_item(
+                stream,
+                base_dir,
+                format!("enum_{}.rs", &req_send_name),
+                req_send_stream,
+            );
+            Self::write_item(
+                stream,
+                base_dir,
+                format!("enum_{}.rs", &res_send_name),
+                res_send_stream,
+            );
+        } else {
+            stream.push_str(&format! {
+                r#"#[derive(Debug, Clone)]
             pub enum {req_recv_name} {{
                 {req_recv_variants}
             }}
@@ -288,9 +366,27 @@ impl VoloThriftBackend {
                 {res_send_variants}
             }}
 
-            {req_impl}
-            {res_impl}"#
-        });
+            {req_recv_impl}
+            {req_send_impl}
+            {res_recv_impl}
+            {res_send_impl}
+            "#
+            });
+        }
+    }
+
+    fn write_item(stream: &mut String, base_dir: &Path, name: String, impl_str: String) {
+        let req_recv_buf = base_dir.join(&name);
+        let req_recv_file = req_recv_buf.as_path();
+        Self::write_file(req_recv_file, impl_str);
+        stream.push_str(format!("include!(\"{}\");", &name).as_str());
+    }
+
+    fn write_file(path: &Path, stream: String) {
+        let mut req_file_writer = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
+        req_file_writer.write_all(stream.as_bytes()).unwrap();
+        req_file_writer.flush().unwrap();
+        pilota_build::fmt::fmt_file(path);
     }
 
     fn method_ty_path(&self, service_name: &Symbol, method: &Method, suffix: &str) -> FastStr {
@@ -370,6 +466,50 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         let mut client_methods = Vec::new();
         let mut oneshot_client_methods = Vec::new();
+
+        let path = self.cx().item_path(def_id);
+        let path = path.as_ref();
+
+        // Locate directory based on the full item path
+        let base_dir = match self.cx().mode.as_ref() {
+            // In a workspace mode, the base directory is next to the `.rs` file for the service
+            Mode::Workspace(info) => {
+                let mut dir = info.dir.clone();
+                if path.is_empty() {
+                    dir
+                } else {
+                    dir.push(path[0].0.as_str());
+                    if path.len() > 1 {
+                        dir.push("src");
+                        for segment in path.iter().skip(1) {
+                            dir.push(Path::new(segment.0.as_str()));
+                        }
+                    }
+                    dir
+                }
+            }
+            // In single file mode, the files directory is the root
+            // The base directory path is the root + the item path
+            Mode::SingleFile { file_path } => {
+                let mut dir = file_path.clone();
+                dir.pop();
+                for segment in path {
+                    dir.push(Path::new(segment.0.as_str()));
+                }
+                dir
+            }
+        };
+
+        let base_dir = if let Some(suffix) = self.cx().names.get(&def_id) {
+            format!("{}_{suffix}", base_dir.display())
+        } else {
+            base_dir.display().to_string()
+        };
+        let base_dir = Path::new(&base_dir);
+
+        if self.cx().split {
+            std::fs::create_dir_all(base_dir).expect("Failed to create base directory");
+        }
 
         all_methods.iter().for_each(|m| {
             let name = self.cx().rust_name(m.def_id);
@@ -530,12 +670,35 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 {user_handler}
             )),"#);
 
-        stream.push_str(&format! {
+        let mut mod_rs_stream = String::new();
+
+        let server_string = format! {
             r#"pub struct {server_name}<S> {{
                 inner: S, // handler
             }}
 
-            pub struct {mk_client_name};
+            impl<S> {server_name}<S> where S: {service_name} + ::core::marker::Send + ::core::marker::Sync + 'static {{
+                pub fn new(inner: S) -> ::volo_thrift::server::Server<Self, ::volo::layer::Identity, {req_recv_name}, ::volo_thrift::codec::default::DefaultMakeCodec<::volo_thrift::codec::default::ttheader::MakeTTHeaderCodec<::volo_thrift::codec::default::framed::MakeFramedCodec<::volo_thrift::codec::default::thrift::MakeThriftCodec>>>, ::volo_thrift::tracing::DefaultProvider> {{
+                    ::volo_thrift::server::Server::new(Self {{
+                        inner,
+                    }})
+                }}
+            }}
+
+            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, {req_recv_name}> for {server_name}<T> where T: {service_name} + Send + Sync + 'static {{
+                type Response = {res_send_name};
+                type Error = ::volo_thrift::ServerError;
+
+                async fn call<'s, 'cx>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> ::std::result::Result<Self::Response, Self::Error> {{
+                    match req {{
+                        {handler}
+                    }}
+                }}
+            }}"#
+        };
+
+        let client_string = format! {
+            r#" pub struct {mk_client_name};
 
             pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_thrift::context::ClientContext, {req_send_name}, ::std::option::Option<{res_recv_name}>, ::volo_thrift::ClientError>>;
 
@@ -580,29 +743,44 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 {{
                     ::volo_thrift::client::ClientBuilder::new(service_name, {mk_client_name})
                 }}
-            }}
-
-
-            impl<S> {server_name}<S> where S: {service_name} + ::core::marker::Send + ::core::marker::Sync + 'static {{
-                pub fn new(inner: S) -> ::volo_thrift::server::Server<Self, ::volo::layer::Identity, {req_recv_name}, ::volo_thrift::codec::default::DefaultMakeCodec<::volo_thrift::codec::default::ttheader::MakeTTHeaderCodec<::volo_thrift::codec::default::framed::MakeFramedCodec<::volo_thrift::codec::default::thrift::MakeThriftCodec>>>, ::volo_thrift::tracing::DefaultProvider> {{
-                    ::volo_thrift::server::Server::new(Self {{
-                        inner,
-                    }})
-                }}
-            }}
-
-            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, {req_recv_name}> for {server_name}<T> where T: {service_name} + Send + Sync + 'static {{
-                type Response = {res_send_name};
-                type Error = ::volo_thrift::ServerError;
-
-                async fn call<'s, 'cx>(&'s self, _cx: &'cx mut ::volo_thrift::context::ServerContext, req: {req_recv_name}) -> ::std::result::Result<Self::Response, Self::Error> {{
-                    match req {{
-                        {handler}
-                    }}
-                }}
             }}"#
-        });
-        self.codegen_service_anonymous_type(stream, def_id);
+        };
+
+        if self.cx().split {
+            Self::write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("service_{}Server.rs", service_name),
+                server_string,
+            );
+            Self::write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("service_{}Client.rs", service_name),
+                client_string,
+            );
+        } else {
+            stream.push_str(&server_string);
+            stream.push_str(&client_string);
+        }
+
+        if self.cx().split {
+            self.codegen_service_anonymous_type(&mut mod_rs_stream, def_id, base_dir);
+        } else {
+            self.codegen_service_anonymous_type(stream, def_id, base_dir);
+        }
+
+        if self.cx().split {
+            let mod_rs_file_path = base_dir.join("mod.rs");
+            Self::write_file(&mod_rs_file_path, mod_rs_stream);
+            stream.push_str(
+                format!(
+                    "include!(\"{}/mod.rs\");",
+                    base_dir.file_name().unwrap().to_str().unwrap()
+                )
+                .as_str(),
+            );
+        }
     }
 
     fn codegen_service_method(&self, _service_def_id: DefId, method: &Method) -> String {
@@ -698,7 +876,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
 fn rust_name(cx: &Context, def_id: DefId) -> FastStr {
     let name = cx.rust_name(def_id);
-    if cx.names.contains(&def_id) {
+    if cx.names.contains_key(&def_id) {
         name.0
     } else {
         name.0.upper_camel_ident()

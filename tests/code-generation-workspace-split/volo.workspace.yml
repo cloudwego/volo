@@ -1,0 +1,33 @@
+common_crate_name: "common" # common_crate_name = "common" by default
+touch_all: true
+dedups: [] # remove the repeated structure generation in one entry
+special_namings: []
+split_generated_files: true
+# repos: # exsit if non-local
+# { repo }: # repo = extract the name from url by default
+# url: { git } # url = repo git url
+# ref: { ref } # ref = "HEAD" by default
+# lock: { commit hash } # lock is the last commit hash
+services:
+  - idl:
+      source: local
+      # repo: { repo } # required for git source
+      path: thrift/article.thrift # git path must be relative to the repo root dir
+      # includes: { includes list } # required for protobuf
+    codegen_option:
+      touch: []
+      keep_unknown_fields: false # A->B->C, B could use this to transfer the unknown fields which is needed by A and C.
+      config:
+        crate_name: rpc_article
+  - idl:
+      source: local
+      path: thrift/author.thrift
+    codegen_option:
+      config:
+        crate_name: rpc_author
+  - idl:
+      source: local
+      path: thrift/image.thrift
+    codegen_option:
+      config:
+        crate_name: rpc_image

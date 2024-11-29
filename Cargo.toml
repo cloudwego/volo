@@ -27,12 +27,12 @@ rust-version = "1.80.0"
 pilota = "0.11"
 pilota-build = "0.11"
 pilota-thrift-parser = "0.11"
-# pilota = { git = "https://github.com/cloudwego/pilota", branch = "main" }
-# pilota-build = { git = "https://github.com/cloudwego/pilota", branch = "main" }
-# pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota", branch = "main" }
+# pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+# pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+# pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
 
 motore = "0.4"
-# motore = { git = "https://github.com/cloudwego/motore", branch = "main" }
+# motore = { git = "https://github.com/cloudwego/motore.git", branch = "main" }
 
 metainfo = "0.7"
 

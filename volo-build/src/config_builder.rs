@@ -125,6 +125,17 @@ impl InnerBuilder {
         }
     }
 
+    pub fn split_generated_files(self, split_generated_files: bool) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.split_generated_files(split_generated_files))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(inner.split_generated_files(split_generated_files))
+            }
+        }
+    }
+
     pub fn common_crate_name(self, name: FastStr) -> Self {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.common_crate_name(name)),
@@ -192,6 +203,7 @@ impl ConfigBuilder {
                     .add_services(service_builders)
                     .ignore_unused(!entry.common_option.touch_all)
                     .special_namings(entry.common_option.special_namings)
+                    .split_generated_files(entry.common_option.split_generated_files)
                     .dedup(entry.common_option.dedups)
                     .write()?;
 

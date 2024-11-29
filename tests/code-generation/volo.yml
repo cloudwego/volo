@@ -3,6 +3,7 @@ entries:
   proto:
     filename: proto_gen.rs
     protocol: protobuf
+    split_generated_files: true
     repos:
       protobuf:
         url: https://github.com/protocolbuffers/protobuf.git
@@ -18,6 +19,7 @@ entries:
   thrift:
     filename: thrift_gen.rs
     protocol: thrift
+    split_generated_files: true
     repos:
       thrift:
         url: https://github.com/apache/thrift.git

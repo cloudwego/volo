@@ -106,6 +106,7 @@ where
             .dedup(config.common_option.dedups)
             .special_namings(config.common_option.special_namings)
             .common_crate_name(config.common_crate_name)
+            .split_generated_files(config.common_option.split_generated_files)
             .pilota_builder
             .compile_with_config(idl_services, pilota_build::Output::Workspace(work_dir));
     }
@@ -145,6 +146,13 @@ where
         keep_unknown_fields: impl IntoIterator<Item = PathBuf>,
     ) -> Self {
         self.pilota_builder = self.pilota_builder.keep_unknown_fields(keep_unknown_fields);
+        self
+    }
+
+    pub fn split_generated_files(mut self, split_generated_files: bool) -> Self {
+        self.pilota_builder = self
+            .pilota_builder
+            .split_generated_files(split_generated_files);
         self
     }
 
