@@ -10,6 +10,7 @@ use pilota_build::{
 };
 use pilota_build::middle::context::Mode;
 use volo::FastStr;
+use crate::util::{get_base_dir, write_file, write_item};
 
 pub struct MkGrpcBackend;
 
@@ -234,20 +235,6 @@ impl VoloGrpcBackend {
             .into()
         }
     }
-
-    fn write_item(stream: &mut String, base_dir: &Path, name: String, impl_str: String) {
-        let path_buf = base_dir.join(&name);
-        let path = path_buf.as_path();
-        Self::write_file(path, impl_str);
-        stream.push_str(format!("include!(\"{}\");", &name).as_str());
-    }
-
-    fn write_file(path: &Path, stream: String) {
-        let mut file_writer = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
-        file_writer.write_all(stream.as_bytes()).unwrap();
-        file_writer.flush().unwrap();
-        pilota_build::fmt::fmt_file(path);
-    }
 }
 
 impl CodegenBackend for VoloGrpcBackend {
@@ -274,43 +261,8 @@ impl CodegenBackend for VoloGrpcBackend {
 
         let path = self.cx().item_path(def_id);
         let path = path.as_ref();
-
-        // Locate directory based on the full item path
-        let base_dir = match self.cx().mode.as_ref() {
-            // In a workspace mode, the base directory is next to the `.rs` file for the service
-            Mode::Workspace(info) => {
-                let mut dir = info.dir.clone();
-                if path.is_empty() {
-                    dir
-                } else {
-                    dir.push(path[0].0.as_str());
-                    if path.len() > 1 {
-                        dir.push("src");
-                        for segment in path.iter().skip(1) {
-                            dir.push(Path::new(segment.0.as_str()));
-                        }
-                    }
-                    dir
-                }
-            }
-            // In single file mode, the files directory is the root
-            // The base directory path is the root + the item path
-            Mode::SingleFile { file_path } => {
-                let mut dir = file_path.clone();
-                dir.pop();
-                for segment in path {
-                    dir.push(Path::new(segment.0.as_str()));
-                }
-                dir
-            }
-        };
-
-        let base_dir = if let Some(suffix) = self.cx().names.get(&def_id) {
-            format!("{}_{suffix}", base_dir.display())
-        } else {
-            base_dir.display().to_string()
-        };
-        let base_dir = Path::new(&base_dir);
+        let buf = get_base_dir(self.cx().mode.as_ref(), self.cx().names.get(&def_id), path);
+        let base_dir = buf.as_path();
 
         if self.cx().split {
             std::fs::create_dir_all(base_dir).expect("Failed to create base directory");
@@ -652,16 +604,16 @@ impl CodegenBackend for VoloGrpcBackend {
 
         if self.cx().split {
             let mut mod_rs_stream = String::new();
-            Self::write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", req_enum_name_send), req_enum_send_impl);
-            Self::write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", req_enum_name_recv), req_enum_recv_impl);
-            Self::write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", resp_enum_name_send), resp_enum_send_impl);
-            Self::write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", resp_enum_name_recv), resp_enum_recv_impl);
+            write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", req_enum_name_send), req_enum_send_impl);
+            write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", req_enum_name_recv), req_enum_recv_impl);
+            write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", resp_enum_name_send), resp_enum_send_impl);
+            write_item(&mut mod_rs_stream, base_dir, format!("enum_{}.rs", resp_enum_name_recv), resp_enum_recv_impl);
 
-            Self::write_item(&mut mod_rs_stream, base_dir, format!("client_{}.rs", client_name), client_impl);
-            Self::write_item(&mut mod_rs_stream, base_dir, format!("server_{}.rs", server_name), server_impl);
+            write_item(&mut mod_rs_stream, base_dir, format!("client_{}.rs", client_name), client_impl);
+            write_item(&mut mod_rs_stream, base_dir, format!("server_{}.rs", server_name), server_impl);
 
             let mod_rs_file_path = base_dir.join("mod.rs");
-            Self::write_file(&mod_rs_file_path, mod_rs_stream);
+            write_file(&mod_rs_file_path, mod_rs_stream);
             stream.push_str(
                 format!(
                     "include!(\"{}/mod.rs\");",
