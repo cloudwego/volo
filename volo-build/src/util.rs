@@ -9,8 +9,7 @@ use std::{
 
 use anyhow::{bail, Context};
 use mockall_double::double;
-use pilota_build::middle::context::Mode;
-use pilota_build::Symbol;
+use pilota_build::{middle::context::Mode, Symbol};
 use serde::de::Error;
 use volo::FastStr;
 
