@@ -1,4 +1,3 @@
-use crate::util::{get_base_dir, write_file, write_item};
 use itertools::Itertools;
 use pilota_build::{
     db::RirDatabase,
@@ -8,6 +7,8 @@ use pilota_build::{
     CodegenBackend, Context, DefId, IdentName, Symbol,
 };
 use volo::FastStr;
+
+use crate::util::{get_base_dir, write_file, write_item};
 
 pub struct MkGrpcBackend;
 
