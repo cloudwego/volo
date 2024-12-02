@@ -1,6 +1,5 @@
 use crate::util::{get_base_dir, write_file, write_item};
 use itertools::Itertools;
-use pilota_build::middle::context::Mode;
 use pilota_build::{
     db::RirDatabase,
     rir,
@@ -8,8 +7,6 @@ use pilota_build::{
     tags::protobuf::{ClientStreaming, ServerStreaming},
     CodegenBackend, Context, DefId, IdentName, Symbol,
 };
-use std::io::Write;
-use std::path::Path;
 use volo::FastStr;
 
 pub struct MkGrpcBackend;
