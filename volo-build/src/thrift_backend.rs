@@ -1,11 +1,10 @@
-use std::{io::Write, path::Path};
+use std::path::Path;
 
 use crate::util::{get_base_dir, write_file, write_item};
 use itertools::Itertools;
 use pilota_build::{
     codegen::thrift::DecodeHelper,
     db::RirDatabase,
-    middle::context::Mode,
     rir::{self, Method},
     tags::RustWrapperArc,
     CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
