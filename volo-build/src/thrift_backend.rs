@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use crate::util::{get_base_dir, write_file, write_item};
 use itertools::Itertools;
 use pilota_build::{
     codegen::thrift::DecodeHelper,
@@ -11,6 +10,8 @@ use pilota_build::{
 };
 use quote::format_ident;
 use volo::FastStr;
+
+use crate::util::{get_base_dir, write_file, write_item};
 
 #[derive(Clone)]
 pub struct VoloThriftBackend {
