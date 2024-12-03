@@ -1,0 +1,38 @@
+[[bin]]
+bench = false
+name = "gen"
+test = false
+
+[dependencies.pilota-build]
+version = "*"
+
+[dependencies.volo-build]
+workspace = true
+
+[package]
+edition = "2021"
+name = "code-generation-workspace-split-grpc"
+publish = false
+version = "0.0.0"
+
+[workspace]
+members = []
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+lazy_static = "1"
+serde = "1"
+volo-grpc = "*"
+
+[workspace.dependencies.pilota]
+version = "*"
+
+[workspace.dependencies.volo]
+path = "../../volo"
+
+[workspace.dependencies.volo-build]
+path = "../../volo-build"
+
+[workspace.dependencies.volo-thrift]
+path = "../../volo-thrift"

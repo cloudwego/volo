@@ -1,16 +1,17 @@
-use std::{io::Write, path::Path};
+use std::path::Path;
 
 use itertools::Itertools;
 use pilota_build::{
     codegen::thrift::DecodeHelper,
     db::RirDatabase,
-    middle::context::Mode,
     rir::{self, Method},
     tags::RustWrapperArc,
     CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
 };
 use quote::format_ident;
 use volo::FastStr;
+
+use crate::util::{get_base_dir, write_file, write_item};
 
 #[derive(Clone)]
 pub struct VoloThriftBackend {
@@ -320,25 +321,25 @@ impl VoloThriftBackend {
             "#
             };
 
-            Self::write_item(
+            write_item(
                 stream,
                 base_dir,
                 format!("enum_{}.rs", &req_recv_name),
                 req_recv_stream,
             );
-            Self::write_item(
+            write_item(
                 stream,
                 base_dir,
                 format!("enum_{}.rs", &res_recv_name),
                 res_recv_stream,
             );
-            Self::write_item(
+            write_item(
                 stream,
                 base_dir,
                 format!("enum_{}.rs", &req_send_name),
                 req_send_stream,
             );
-            Self::write_item(
+            write_item(
                 stream,
                 base_dir,
                 format!("enum_{}.rs", &res_send_name),
@@ -373,20 +374,6 @@ impl VoloThriftBackend {
             "#
             });
         }
-    }
-
-    fn write_item(stream: &mut String, base_dir: &Path, name: String, impl_str: String) {
-        let req_recv_buf = base_dir.join(&name);
-        let req_recv_file = req_recv_buf.as_path();
-        Self::write_file(req_recv_file, impl_str);
-        stream.push_str(format!("include!(\"{}\");", &name).as_str());
-    }
-
-    fn write_file(path: &Path, stream: String) {
-        let mut req_file_writer = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
-        req_file_writer.write_all(stream.as_bytes()).unwrap();
-        req_file_writer.flush().unwrap();
-        pilota_build::fmt::fmt_file(path);
     }
 
     fn method_ty_path(&self, service_name: &Symbol, method: &Method, suffix: &str) -> FastStr {
@@ -469,43 +456,8 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         let path = self.cx().item_path(def_id);
         let path = path.as_ref();
-
-        // Locate directory based on the full item path
-        let base_dir = match self.cx().mode.as_ref() {
-            // In a workspace mode, the base directory is next to the `.rs` file for the service
-            Mode::Workspace(info) => {
-                let mut dir = info.dir.clone();
-                if path.is_empty() {
-                    dir
-                } else {
-                    dir.push(path[0].0.as_str());
-                    if path.len() > 1 {
-                        dir.push("src");
-                        for segment in path.iter().skip(1) {
-                            dir.push(Path::new(segment.0.as_str()));
-                        }
-                    }
-                    dir
-                }
-            }
-            // In single file mode, the files directory is the root
-            // The base directory path is the root + the item path
-            Mode::SingleFile { file_path } => {
-                let mut dir = file_path.clone();
-                dir.pop();
-                for segment in path {
-                    dir.push(Path::new(segment.0.as_str()));
-                }
-                dir
-            }
-        };
-
-        let base_dir = if let Some(suffix) = self.cx().names.get(&def_id) {
-            format!("{}_{suffix}", base_dir.display())
-        } else {
-            base_dir.display().to_string()
-        };
-        let base_dir = Path::new(&base_dir);
+        let buf = get_base_dir(self.cx().mode.as_ref(), self.cx().names.get(&def_id), path);
+        let base_dir = buf.as_path();
 
         if self.cx().split {
             std::fs::create_dir_all(base_dir).expect("Failed to create base directory");
@@ -747,13 +699,13 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         };
 
         if self.cx().split {
-            Self::write_item(
+            write_item(
                 &mut mod_rs_stream,
                 base_dir,
                 format!("service_{}Server.rs", service_name),
                 server_string,
             );
-            Self::write_item(
+            write_item(
                 &mut mod_rs_stream,
                 base_dir,
                 format!("service_{}Client.rs", service_name),
@@ -772,7 +724,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         if self.cx().split {
             let mod_rs_file_path = base_dir.join("mod.rs");
-            Self::write_file(&mod_rs_file_path, mod_rs_stream);
+            write_file(&mod_rs_file_path, mod_rs_stream);
             stream.push_str(
                 format!(
                     "include!(\"{}/mod.rs\");",

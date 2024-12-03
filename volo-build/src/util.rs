@@ -9,6 +9,7 @@ use std::{
 
 use anyhow::{bail, Context};
 use mockall_double::double;
+use pilota_build::{middle::context::Mode, Symbol};
 use serde::de::Error;
 use volo::FastStr;
 
@@ -856,4 +857,58 @@ mod tests {
             "The specified repo 'test' already exists in entry 'test_entry' with different url"
         );
     }
+}
+
+pub(crate) fn write_item(stream: &mut String, base_dir: &Path, name: String, impl_str: String) {
+    let path_buf = base_dir.join(&name);
+    let path = path_buf.as_path();
+    write_file(path, impl_str);
+    stream.push_str(format!("include!(\"{}\");", &name).as_str());
+}
+
+pub(crate) fn write_file(path: &Path, stream: String) {
+    let mut file_writer = std::io::BufWriter::new(std::fs::File::create(path).unwrap());
+    file_writer.write_all(stream.as_bytes()).unwrap();
+    file_writer.flush().unwrap();
+    pilota_build::fmt::fmt_file(path);
+}
+
+pub(crate) fn get_base_dir(mode: &Mode, def_id: Option<&usize>, path: &[Symbol]) -> PathBuf {
+    // Locate directory based on the full item path
+    let base_dir = match mode {
+        // In a workspace mode, the base directory is next to the `.rs` file for the service
+        Mode::Workspace(info) => {
+            let mut dir = info.dir.clone();
+            if path.is_empty() {
+                dir
+            } else {
+                dir.push(path[0].0.as_str());
+                if path.len() > 1 {
+                    dir.push("src");
+                    for segment in path.iter().skip(1) {
+                        dir.push(Path::new(segment.0.as_str()));
+                    }
+                }
+                dir
+            }
+        }
+        // In single file mode, the files directory is the root
+        // The base directory path is the root + the item path
+        Mode::SingleFile { file_path } => {
+            let mut dir = file_path.clone();
+            dir.pop();
+            for segment in path {
+                dir.push(Path::new(segment.0.as_str()));
+            }
+            dir
+        }
+    };
+
+    let base_dir = if let Some(suffix) = def_id {
+        format!("{}_{suffix}", base_dir.display())
+    } else {
+        base_dir.display().to_string()
+    };
+    let base_dir = Path::new(&base_dir);
+    base_dir.to_path_buf()
 }

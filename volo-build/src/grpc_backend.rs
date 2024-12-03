@@ -8,6 +8,8 @@ use pilota_build::{
 };
 use volo::FastStr;
 
+use crate::util::{get_base_dir, write_file, write_item};
+
 pub struct MkGrpcBackend;
 
 impl pilota_build::MakeBackend for MkGrpcBackend {
@@ -254,6 +256,16 @@ impl CodegenBackend for VoloGrpcBackend {
         let resp_enum_name_send = format!("{}ResponseSend", service_name);
         let req_enum_name_recv = format!("{}RequestRecv", service_name);
         let resp_enum_name_recv = format!("{}ResponseRecv", service_name);
+
+        let path = self.cx().item_path(def_id);
+        let path = path.as_ref();
+        let buf = get_base_dir(self.cx().mode.as_ref(), self.cx().names.get(&def_id), path);
+        let base_dir = buf.as_path();
+
+        if self.cx().split {
+            std::fs::create_dir_all(base_dir).expect("Failed to create base directory");
+        }
+
         let paths = s
             .methods
             .iter()
@@ -426,8 +438,9 @@ impl CodegenBackend for VoloGrpcBackend {
             }}"
         );
 
-        stream.push_str(&format! {
-            r#"pub enum {req_enum_name_send} {{
+        let req_enum_send_impl = format! {
+            r#"
+            pub enum {req_enum_name_send} {{
                 {req_enum_send_variants}
             }}
 
@@ -437,8 +450,11 @@ impl CodegenBackend for VoloGrpcBackend {
                         {req_send_into_body}
                     }}
                 }}
-            }}
+            }}"#
+        };
 
+        let req_enum_recv_impl = format! {
+            r#"
             pub enum {req_enum_name_recv} {{
                 {req_enum_recv_variants}
             }}
@@ -450,8 +466,11 @@ impl CodegenBackend for VoloGrpcBackend {
                         _ => ::std::result::Result::Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
                     }}
                 }}
-            }}
+            }}"#
+        };
 
+        let resp_enum_send_impl = format! {
+            r#"
             pub enum {resp_enum_name_send} {{
                 {resp_enum_send_variants}
             }}
@@ -462,8 +481,11 @@ impl CodegenBackend for VoloGrpcBackend {
                         {resp_send_into_body}
                     }}
                 }}
-            }}
+            }}"#
+        };
 
+        let resp_enum_recv_impl = format! {
+            r#"
             pub enum {resp_enum_name_recv} {{
                 {resp_enum_recv_variants}
             }}
@@ -478,8 +500,11 @@ impl CodegenBackend for VoloGrpcBackend {
                         _ => ::std::result::Result::Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
                     }}
                 }}
-            }}
+            }}"#
+        };
 
+        let client_impl = format! {
+            r#"
             pub struct {client_builder_name} {{}}
             impl {client_builder_name} {{
                 pub fn new(
@@ -522,8 +547,11 @@ impl CodegenBackend for VoloGrpcBackend {
 
             impl<S: ::volo::client::OneShotService<::volo_grpc::context::ClientContext,::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + Send + Sync + 'static> {oneshot_client_name}<S> {{
                 {oneshot_client_methods}
-            }}
+            }}"#
+        };
 
+        let server_impl = format! {
+            r#"
             pub struct {server_name}<S> {{
                 inner: ::std::sync::Arc<S>,
             }}
@@ -570,7 +598,69 @@ impl CodegenBackend for VoloGrpcBackend {
             impl<S: {service_name}> ::volo_grpc::server::NamedService for {server_name}<S> {{
                 const NAME: &'static str = "{name}";
             }}"#
-        });
+        };
+
+        if self.cx().split {
+            let mut mod_rs_stream = String::new();
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("enum_{}.rs", req_enum_name_send),
+                req_enum_send_impl,
+            );
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("enum_{}.rs", req_enum_name_recv),
+                req_enum_recv_impl,
+            );
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("enum_{}.rs", resp_enum_name_send),
+                resp_enum_send_impl,
+            );
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("enum_{}.rs", resp_enum_name_recv),
+                resp_enum_recv_impl,
+            );
+
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("client_{}.rs", client_name),
+                client_impl,
+            );
+            write_item(
+                &mut mod_rs_stream,
+                base_dir,
+                format!("server_{}.rs", server_name),
+                server_impl,
+            );
+
+            let mod_rs_file_path = base_dir.join("mod.rs");
+            write_file(&mod_rs_file_path, mod_rs_stream);
+            stream.push_str(
+                format!(
+                    "include!(\"{}/mod.rs\");",
+                    base_dir.file_name().unwrap().to_str().unwrap()
+                )
+                .as_str(),
+            );
+        } else {
+            stream.push_str(&format! {
+                r#"
+            {req_enum_send_impl}
+            {req_enum_recv_impl}
+            {resp_enum_send_impl}
+            {resp_enum_recv_impl}
+
+            {client_impl}
+            {server_impl}
+            "#});
+        }
     }
 
     fn codegen_service_method(&self, _service_def_id: DefId, method: &rir::Method) -> String {
