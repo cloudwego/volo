@@ -11,11 +11,11 @@ split_generated_files: true
 services:
   - idl:
       source: local
-      path: proto/echo.proto
+      path: ../../examples/proto/streaming.proto
       includes:
-      - proto
+      - ../../examples/proto
     codegen_option:
       touch: []
       keep_unknown_fields: false # A->B->C, B could use this to transfer the unknown fields which is needed by A and C.
       config:
-        crate_name: rpc_echo
+        crate_name: rpc_streaming
