@@ -5,7 +5,7 @@ use std::sync::Arc;
 use faststr::FastStr;
 use http::status::StatusCode;
 use motore::{
-    layer::{Identity, Layer},
+    layer::Layer,
     service::{BoxService, Service},
 };
 use volo::client::MkClient;
@@ -21,9 +21,6 @@ use crate::{
 
 /// Default mock service of [`Client`]
 pub type ClientMockService = MockTransport;
-/// Default [`Client`] without any extra [`Layer`]s
-pub type DefaultMockClient<IL = Identity, OL = Identity> =
-    Client<<OL as Layer<<IL as Layer<ClientMockService>>::Service>>::Service>;
 
 /// Mock transport [`Service`] without any network connection.
 pub enum MockTransport {
@@ -109,19 +106,29 @@ impl Service<ClientContext, Request> for MockTransport {
 
 impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Build a mock HTTP client with a [`MockTransport`] service.
-    pub fn mock(self, transport: MockTransport) -> Result<C::Target>
+    pub fn mock<ReqBody, RespBody>(self, transport: MockTransport) -> Result<C::Target>
     where
         IL: Layer<ClientMockService>,
         IL::Service: Send + Sync + 'static,
         // remove loadbalance here
         OL: Layer<IL::Service>,
-        OL::Service: Send + Sync + 'static,
-        C: MkClient<Client<OL::Service>>,
+        OL::Service: Service<
+                ClientContext,
+                Request<ReqBody>,
+                Response = Response<RespBody>,
+                Error = ClientError,
+            > + Send
+            + Sync
+            + 'static,
+        C: MkClient<Client<ReqBody, RespBody>>,
+        ReqBody: Send + 'static,
+        RespBody: Send,
     {
         self.status?;
 
         let meta_service = transport;
         let service = self.outer_layer.layer(self.inner_layer.layer(meta_service));
+        let service = BoxService::new(service);
 
         let client_inner = ClientInner {
             service,
@@ -136,61 +143,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         };
         Ok(self.mk_client.mk_client(client))
     }
-}
-
-#[allow(unused)]
-fn client_types_check() {
-    struct TestLayer;
-    struct TestService<S> {
-        inner: S,
-    }
-
-    impl<S> Layer<S> for TestLayer {
-        type Service = TestService<S>;
-
-        fn layer(self, inner: S) -> Self::Service {
-            TestService { inner }
-        }
-    }
-
-    impl<S, Cx, Req> Service<Cx, Req> for TestService<S>
-    where
-        S: Service<Cx, Req>,
-    {
-        type Response = S::Response;
-        type Error = S::Error;
-
-        fn call(
-            &self,
-            cx: &mut Cx,
-            req: Req,
-        ) -> impl std::future::Future<Output = Result<Self::Response, Self::Error>> + Send {
-            self.inner.call(cx, req)
-        }
-    }
-
-    let _: DefaultMockClient = ClientBuilder::new().mock(Default::default()).unwrap();
-    let _: DefaultMockClient<TestLayer> = ClientBuilder::new()
-        .layer_inner(TestLayer)
-        .mock(Default::default())
-        .unwrap();
-    let _: DefaultMockClient<TestLayer> = ClientBuilder::new()
-        .layer_inner_front(TestLayer)
-        .mock(Default::default())
-        .unwrap();
-    let _: DefaultMockClient<Identity, TestLayer> = ClientBuilder::new()
-        .layer_outer(TestLayer)
-        .mock(Default::default())
-        .unwrap();
-    let _: DefaultMockClient<Identity, TestLayer> = ClientBuilder::new()
-        .layer_outer_front(TestLayer)
-        .mock(Default::default())
-        .unwrap();
-    let _: DefaultMockClient<TestLayer, TestLayer> = ClientBuilder::new()
-        .layer_inner(TestLayer)
-        .layer_outer(TestLayer)
-        .mock(Default::default())
-        .unwrap();
 }
 
 mod mock_transport_tests {
