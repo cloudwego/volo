@@ -295,13 +295,11 @@ impl FromContext for ClientIp {
     type Rejection = Infallible;
 
     async fn from_context(cx: &mut ServerContext, _: &mut Parts) -> Result<Self, Self::Rejection> {
-        Ok(ClientIp(
-            cx.rpc_info
-                .caller()
-                .tags
-                .get::<ClientIp>()
-                .and_then(|v| v.0),
-        ))
+        if let Some(client_ip) = cx.extensions().get::<ClientIp>() {
+            Ok(client_ip.to_owned())
+        } else {
+            Ok(ClientIp(None))
+        }
     }
 }
 
