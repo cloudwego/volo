@@ -4051,7 +4051,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "volo"
-version = "0.10.3"
+version = "0.10.4"
 dependencies = [
  "async-broadcast",
  "dashmap",
