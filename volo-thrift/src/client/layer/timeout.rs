@@ -25,7 +25,7 @@ where
             Some(duration) => {
                 let start = std::time::Instant::now();
                 match tokio::time::timeout(duration, self.inner.call(cx, req)).await {
-                    Ok(r) => r.map_err(Into::into),
+                    Ok(r) => r,
                     Err(_) => {
                         let msg = format!(
                             "[VOLO] thrift rpc call timeout, rpcinfo: {:?}, elpased: {:?}, \
@@ -43,7 +43,7 @@ where
                     }
                 }
             }
-            None => self.inner.call(cx, req).await.map_err(Into::into),
+            None => self.inner.call(cx, req).await,
         }
     }
 }

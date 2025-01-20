@@ -97,7 +97,7 @@ where
                 .await
                 .map_err(|err| err.into())?,
             _ => {
-                return self.service.call(cx, req).await.map_err(Into::into);
+                return self.service.call(cx, req).await;
             }
         };
 

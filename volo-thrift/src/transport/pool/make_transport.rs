@@ -54,6 +54,6 @@ where
 
     async fn call(&self, kv: (K, Ver)) -> Result<Self::Response, Self::Error> {
         let mt = self.inner.clone();
-        self.pool.get(kv.0, kv.1, mt).await.map_err(Into::into)
+        self.pool.get(kv.0, kv.1, mt).await
     }
 }
