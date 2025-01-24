@@ -7,9 +7,10 @@ on:
       - '**/Cargo.lock'
 jobs:
   security-audit:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, amd64]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
       - uses: actions-rs/audit-check@v1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

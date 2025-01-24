@@ -15,21 +15,23 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - test-linux
-      # - test-linux-aarch64
+      - test-linux-aarch64
       - test-macos
       - test-windows
       - lint
+      - docs-check
+      - test-cli
     steps:
       - run: exit 0
 
   lint:
-    runs-on: [self-hosted, X64]
+    runs-on: [self-hosted, Linux, amd64]
 
     strategy:
       matrix:
         rust: [nightly]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           components: rustfmt,clippy
@@ -42,13 +44,13 @@ jobs:
           cargo fmt -- --check
 
   docs-check:
-    runs-on: [self-hosted, X64]
+    runs-on: [self-hosted, Linux, amd64]
 
     strategy:
       matrix:
         rust: [nightly]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           components: rustfmt,clippy
@@ -62,79 +64,79 @@ jobs:
           cargo rustdoc -p volo-thrift --all-features -- --deny warnings
 
   test-linux:
-    runs-on: [self-hosted, X64]
+    runs-on: [self-hosted, Linux, amd64]
 
     strategy:
       matrix:
         rust: [nightly, stable]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           components: rustfmt,clippy
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
+          bash scripts/install-linux-dependencies.sh
           bash scripts/clippy-and-test.sh
 
-  # test-linux-aarch64:
-  #   runs-on: [self-hosted, arm]
-
-  #   strategy:
-  #     matrix:
-  #       rust: [nightly, stable]
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - uses: dtolnay/rust-toolchain@master
-  #       with:
-  #         components: rustfmt,clippy
-  #         toolchain: ${{matrix.rust}}
-  #     - name: Run tests
-  #       run: |
-  #         bash scripts/clippy-and-test.sh
-
-  test-macos:
-    runs-on: macos-latest
+  test-linux-aarch64:
+    runs-on: [self-hosted, Linux, aarch64]
 
     strategy:
       matrix:
         rust: [nightly, stable]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           components: rustfmt,clippy
           toolchain: ${{matrix.rust}}
-      # - uses: Swatinem/rust-cache@v1
+      - name: Run tests
+        run: |
+          bash scripts/install-linux-dependencies.sh
+          bash scripts/clippy-and-test.sh
+
+  test-macos:
+    runs-on: [self-hosted, macOS]
+
+    strategy:
+      matrix:
+        rust: [nightly, stable]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          components: rustfmt,clippy
+          toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
           bash scripts/clippy-and-test.sh
 
   test-windows:
-    runs-on: windows-latest
-
-    strategy:
-      matrix:
-        rust: [nightly, stable]
-    steps:
-      - uses: actions/checkout@v3
-      - uses: dtolnay/rust-toolchain@master
-        with:
-          components: rustfmt,clippy
-          toolchain: ${{matrix.rust}}
-      # - uses: Swatinem/rust-cache@v1
-      - name: Run tests
-        run: |
-          bash scripts/clippy-and-test.sh
-
-  test-cli:
-    runs-on: [self-hosted, X64]
+    runs-on: [self-hosted, Windows]
 
     strategy:
       matrix:
         rust: [stable]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          components: rustfmt,clippy
+          toolchain: ${{matrix.rust}}
+      - name: Run tests
+        run: |
+          bash scripts/clippy-and-test.sh
+
+  test-cli:
+    runs-on: [self-hosted, Linux, amd64]
+
+    strategy:
+      matrix:
+        rust: [stable]
+    steps:
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
         with:
           components: rustfmt

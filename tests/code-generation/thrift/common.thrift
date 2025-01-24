@@ -1,5 +1,5 @@
 # for test dedups
-namespace rs common 
+namespace rs common
 
 struct CommonReq {
 }
