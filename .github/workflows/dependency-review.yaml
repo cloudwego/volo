@@ -6,9 +6,9 @@ permissions:
 
 jobs:
   dependency-review:
-    runs-on: [self-hosted, X64]
+    runs-on: [self-hosted, Linux, amd64]
     steps:
       - name: 'Checkout Repository'
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: 'Dependency Review'
         uses: actions/dependency-review-action@v1
