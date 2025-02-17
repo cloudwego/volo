@@ -1,5 +1,9 @@
 pub mod buf_reader;
 
+// used internally.
+#[doc(hidden)]
+pub mod server_remote_error;
+
 use std::{borrow::Borrow, fmt, sync::Arc};
 
 #[derive(Debug, PartialEq, PartialOrd, Eq, Hash)]

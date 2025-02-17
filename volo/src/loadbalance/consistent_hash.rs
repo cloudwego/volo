@@ -465,12 +465,12 @@ mod tests {
 
     async fn consistent_hash_balance_tests() {
         // TODO: Using standard deviation to evaluate load balancing is better?
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut instances = vec![];
         for _ in 0..50 {
-            let w = rng.gen_range(10..=100);
-            let sub_net = rng.gen_range(0..=255);
-            let port = rng.gen_range(1000..=65535);
+            let w = rng.random_range(10..=100);
+            let sub_net = rng.random_range(0..=255);
+            let port = rng.random_range(1000..=65535);
             instances.push(new_instance(format!("172.17.0.{}:{}", sub_net, port), w));
             instances.push(new_instance(format!("192.168.32.{}:{}", sub_net, port), w));
         }
@@ -508,9 +508,9 @@ mod tests {
             virtual_factor: 100,
             weighted: true,
         };
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         for i in 0..30 {
-            let w = rng.gen_range(10..=100);
+            let w = rng.random_range(10..=100);
             instances.push(new_instance(format!("127.0.0.1:{}", i), w));
         }
         let discovery = StaticDiscover::new(instances.clone());
@@ -519,7 +519,7 @@ mod tests {
         let virtual_nodes = lb.build_weighted_instances(instances.clone()).virtual_nodes;
         let virtual_nodes: BTreeSet<_> = virtual_nodes.into_iter().collect();
 
-        let remove_index = rng.gen_range(0..instances.len());
+        let remove_index = rng.random_range(0..instances.len());
         let _remove_instance = instances.remove(remove_index);
         let new_virtual_nodes = lb.build_weighted_instances(instances.clone()).virtual_nodes;
         for node in new_virtual_nodes {

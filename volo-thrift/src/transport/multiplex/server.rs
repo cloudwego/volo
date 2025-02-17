@@ -61,13 +61,20 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                             )
                                             .await
                                         {
+                                            stat_tracer.iter().for_each(|f| f(&cx));
+                                            if let ThriftException::Transport(te) = &e {
+                                                if volo::util::server_remote_error::is_remote_closed_error(te.io_error())
+                                                    && !volo::util::server_remote_error::remote_closed_error_log_enabled()
+                                                {
+                                                    return;
+                                                }
+                                            }
                                             // log it
                                             error!(
                                                 "[VOLO] server send response error: {:?}, cx: \
                                                  {:?}, peer_addr: {:?}",
                                                 e, cx, peer_addr
                                             );
-                                            stat_tracer.iter().for_each(|f| f(&cx));
                                             return;
                                         }
                                         stat_tracer.iter().for_each(|f| f(&cx));
@@ -94,12 +101,21 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                             .encode::<DummyMessage, ServerContext>(&mut cx, msg)
                                             .await
                                         {
+                                            stat_tracer.iter().for_each(|f| f(&cx));
+                                            if let ThriftException::Transport(te) = &e {
+                                                if volo::util::server_remote_error::is_remote_closed_error(te.io_error())
+                                                    && !volo::util::server_remote_error::remote_closed_error_log_enabled()
+                                                {
+                                                    return;
+                                                }
+                                            }
                                             // log it
                                             error!(
                                                 "[VOLO] server send error error: {:?}, cx: {:?}, \
                                                  peer_addr: {:?}",
                                                 e, cx, peer_addr
                                             );
+                                            return;
                                         }
                                         stat_tracer.iter().for_each(|f| f(&cx));
                                         return;

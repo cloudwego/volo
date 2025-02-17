@@ -108,6 +108,14 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                 .instrument(span_provider.on_encode(tracing_cx))
                                 .await
                                 {
+                                    if let ThriftException::Transport(te) = &e {
+                                        if volo::util::server_remote_error::is_remote_closed_error(te.io_error())
+                                            && !volo::util::server_remote_error::remote_closed_error_log_enabled()
+                                        {
+                                            stat_tracer.iter().for_each(|f| f(&cx));
+                                            return Err(());
+                                        }
+                                    }
                                     error!(
                                         "[VOLO] server send response error: {:?}, cx: {:?}, \
                                          peer_addr: {:?}",

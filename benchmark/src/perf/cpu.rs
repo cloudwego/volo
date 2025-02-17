@@ -81,7 +81,7 @@ pub async fn record_usage(cpu_usage_list: &mut Vec<f32>, cancel: CancellationTok
     loop {
         tokio::select! {
             _ = tokio::time::sleep(DEFAULT_INTERVAL) => {
-                system.refresh_processes_specifics(sysinfo::ProcessesToUpdate::Some(&[pid]), true, ProcessRefreshKind::new().with_cpu());
+                system.refresh_processes_specifics(sysinfo::ProcessesToUpdate::Some(&[pid]), true, ProcessRefreshKind::nothing().with_cpu());
                 let cpu_usage = system
                     .process(pid)
                     .unwrap()
