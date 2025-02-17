@@ -34,7 +34,7 @@ escape_tmp_dir() {
 
 init() {
 	export VOLO_DIR="$PWD"
-	echo_command cargo build -p volo-cli -j `nproc`
+	echo_command cargo build -p volo-cli
 	export VOLO_CLI="$PWD/target/debug/volo"
 	trap 'echo "Failed to run $LINENO: $BASH_COMMAND (exit code: $?)" && exit 1' ERR
 }
@@ -68,7 +68,7 @@ thrift_test() {
 
 	echo_command "${VOLO_CLI}" init thrift-test "${idl_path}"
 	patch_cargo_toml
-	echo_command cargo build -j `nproc`
+	echo_command cargo build
 
 	escape_tmp_dir
 }
@@ -81,7 +81,7 @@ grpc_test() {
 
 	echo_command "${VOLO_CLI}" init --includes "${idl_dir}" grpc-test "${idl_path}"
 	patch_cargo_toml
-	echo_command cargo build -j `nproc`
+	echo_command cargo build
 
 	escape_tmp_dir
 }
@@ -91,7 +91,7 @@ http_test() {
 
 	echo_command "${VOLO_CLI}" http init http-test
 	patch_cargo_toml
-	echo_command cargo build -j `nproc`
+	echo_command cargo build
 
 	escape_tmp_dir
 }
