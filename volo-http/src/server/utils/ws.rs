@@ -765,14 +765,14 @@ mod websocket_tests {
         let (mut ws_stream, _) =
             run_ws_handler(test_helpers::to_service(handler), None, 25231).await;
 
-        let input = Message::Text("foobar".to_owned());
+        let input = Message::Text("foobar".into());
         ws_stream.send(input.clone()).await.unwrap();
         let output = ws_stream.next().await.unwrap().unwrap();
         assert_eq!(input, output);
 
-        let input = Message::Ping("foobar".to_owned().into_bytes());
+        let input = Message::Ping("foobar".into());
         ws_stream.send(input).await.unwrap();
         let output = ws_stream.next().await.unwrap().unwrap();
-        assert_eq!(output, Message::Pong("foobar".to_owned().into_bytes()));
+        assert_eq!(output, Message::Pong("foobar".into()));
     }
 }

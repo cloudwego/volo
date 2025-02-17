@@ -5,7 +5,6 @@ pub const ENABLE_REMOTE_CLOSED_ERROR_LOG_ENV_KEY: &str = "VOLO_ENABLE_REMOTE_CLO
 pub static ENABLE_REMOTE_CLOSE_ERROR_LOG: std::sync::LazyLock<bool> =
     std::sync::LazyLock::new(|| std::env::var(ENABLE_REMOTE_CLOSED_ERROR_LOG_ENV_KEY).is_ok());
 
-
 pub fn remote_closed_error_log_enabled() -> bool {
     *ENABLE_REMOTE_CLOSE_ERROR_LOG
 }
