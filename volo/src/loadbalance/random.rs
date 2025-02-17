@@ -12,11 +12,11 @@ use crate::{
 };
 
 #[inline]
-fn pick_one(weight: isize, iter: &[Arc<Instance>]) -> Option<(usize, Arc<Instance>)> {
+fn pick_one(weight: usize, iter: &[Arc<Instance>]) -> Option<(usize, Arc<Instance>)> {
     if weight == 0 {
         return None;
     }
-    let mut weight = rand::thread_rng().gen_range(0..weight);
+    let mut weight = rand::rng().random_range(0..weight) as isize;
     for (offset, instance) in iter.iter().enumerate() {
         weight -= instance.weight as isize;
         if weight <= 0 {
@@ -29,7 +29,7 @@ fn pick_one(weight: isize, iter: &[Arc<Instance>]) -> Option<(usize, Arc<Instanc
 #[derive(Debug)]
 pub struct InstancePicker {
     shared_instances: Arc<WeightedInstances>,
-    sum_of_weights: isize,
+    sum_of_weights: usize,
     owned_instances: OnceCell<Vec<Arc<Instance>>>,
     last_pick: Option<(usize, Arc<Instance>)>,
 }
@@ -54,7 +54,7 @@ impl Iterator for InstancePicker {
                     .get_or_init(|| shared_instances.to_vec());
                 let owned = self.owned_instances.get_mut().unwrap();
 
-                self.sum_of_weights -= last_pick.weight as isize;
+                self.sum_of_weights -= last_pick.weight as usize;
                 owned.remove(*last_offset);
 
                 (*last_offset, *last_pick) = pick_one(self.sum_of_weights, owned)?;
@@ -67,7 +67,7 @@ impl Iterator for InstancePicker {
 
 #[derive(Debug, Clone)]
 struct WeightedInstances {
-    sum_of_weights: isize,
+    sum_of_weights: usize,
     instances: Vec<Arc<Instance>>,
 }
 
@@ -75,7 +75,7 @@ impl From<Vec<Arc<Instance>>> for WeightedInstances {
     fn from(instances: Vec<Arc<Instance>>) -> Self {
         let sum_of_weights = instances
             .iter()
-            .fold(0, |lhs, rhs| lhs + rhs.weight as isize);
+            .fold(0, |lhs, rhs| lhs + rhs.weight as usize);
         Self {
             instances,
             sum_of_weights,

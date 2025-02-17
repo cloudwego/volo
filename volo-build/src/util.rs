@@ -223,6 +223,7 @@ mod outer {
 
         use anyhow::bail;
 
+        #[allow(dead_code)]
         pub fn get_repo_latest_commit_id(repo: &str, r#ref: &str) -> anyhow::Result<String> {
             let commit_list = match Command::new("git")
                 .arg("ls-remote")
