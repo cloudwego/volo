@@ -473,6 +473,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 if let Some(RustWrapperArc(true)) = self.cx().tags(a.tags_id).as_ref().and_then(|tags| tags.get::<RustWrapperArc>()) {
                     ty = format!("::std::sync::Arc<{ty}>");
                 }
+                if a.kind == rir::FieldKind::Optional{
+                    ty = format!("Option<{ty}>")
+                };
                 format!(", {name}: {ty}")
             }).join("");
             let method_name_str = &**m.name;
@@ -753,6 +756,11 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             .map(|a| {
                 let ty = self.inner.codegen_item_ty(a.ty.kind.clone());
                 let ident = self.cx().rust_name(a.def_id); // use the rust name as string format which will escape the keyword
+                let ty = if a.kind == rir::FieldKind::Optional {
+                    format!("Option<{ty}>")
+                } else {
+                    format!("{ty}")
+                };
                 format!("{ident}: {ty}")
             })
             .join(",");
