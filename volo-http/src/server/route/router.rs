@@ -430,6 +430,7 @@ where
     }
 }
 
+#[allow(clippy::large_enum_variant)]
 enum Endpoint<B = Body, E = Infallible> {
     MethodRouter(MethodRouter<B, E>),
     Service(Route<B, E>),

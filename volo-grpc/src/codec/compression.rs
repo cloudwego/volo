@@ -137,6 +137,7 @@ impl CompressionEncoding {
     }
 
     /// Get the value of `grpc-encoding` header. Returns an error if the encoding isn't supported.
+    #[allow(clippy::result_large_err)]
     pub fn from_encoding_header(
         headers: &http::HeaderMap,
         config: &Option<Vec<Self>>,

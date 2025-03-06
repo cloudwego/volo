@@ -666,6 +666,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// - Transport through network or unix domain socket.
     ///
     /// [`DnsResolver`]: crate::client::dns::DnsResolver
+    #[allow(clippy::result_large_err)]
     pub fn build(mut self) -> Result<C::Target>
     where
         IL: Layer<ClientMetaService>,
@@ -700,6 +701,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// default layers,
     ///
     /// See [`ClientBuilder::build`] for more details.
+    #[allow(clippy::result_large_err)]
     pub fn build_without_extra_layers(self) -> Result<C::Target>
     where
         IL: Layer<ClientTransport>,
@@ -743,6 +745,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     }
 }
 
+#[allow(clippy::result_large_err)]
 fn insert_header<K, V>(headers: &mut HeaderMap, key: K, value: V) -> Result<()>
 where
     K: TryInto<HeaderName>,

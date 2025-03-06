@@ -482,6 +482,7 @@ impl Status {
     }
 
     /// Take the `Status` value from `trailers' if it is available, else from 'status_code'.
+    #[allow(clippy::result_large_err)]
     pub fn infer_grpc_status(
         trailers: Option<&HeaderMap>,
         status_code: http::StatusCode,
@@ -548,6 +549,7 @@ impl Status {
     }
 
     /// Convert to HeaderMap
+    #[allow(clippy::result_large_err)]
     pub fn to_header_map(&self) -> Result<HeaderMap, Self> {
         let mut header_map = HeaderMap::with_capacity(3 + self.metadata.len());
         self.add_header(&mut header_map)?;
@@ -555,6 +557,7 @@ impl Status {
     }
 
     /// Insert the associated code, message, and binary details field into the `HeaderMap`.
+    #[allow(clippy::result_large_err)]
     pub(crate) fn add_header(&self, header_map: &mut HeaderMap) -> Result<(), Self> {
         header_map.extend(self.metadata.clone().into_sanitized_headers());
 
