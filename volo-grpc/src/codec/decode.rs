@@ -116,6 +116,7 @@ impl<T: Message + Default> RecvStream<T> {
         }
     }
 
+    #[allow(clippy::result_large_err)]
     fn decode_chunk(&mut self) -> Result<Option<T>, Status> {
         if let State::Header = self.state {
             // data is not enough to decode header, return and keep reading

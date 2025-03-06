@@ -109,6 +109,7 @@ impl Service<ClientContext, Request> for MockTransport {
 
 impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Build a mock HTTP client with a [`MockTransport`] service.
+    #[allow(clippy::result_large_err)]
     pub fn mock(self, transport: MockTransport) -> Result<C::Target>
     where
         IL: Layer<ClientMockService>,

@@ -50,6 +50,7 @@ impl Header {
     ///
     /// [`ClientError`]: crate::error::client::ClientError
     /// [`ErrorKind::Builder`]: crate::error::client::ErrorKind::Builder
+    #[allow(clippy::result_large_err)]
     pub fn try_new<K, V>(key: K, val: V) -> Result<Self>
     where
         K: TryInto<HeaderName>,

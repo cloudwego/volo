@@ -54,6 +54,7 @@ pub enum RemoteTargetAddress {
     Name(FastStr),
 }
 
+#[allow(clippy::result_large_err)]
 fn check_scheme(scheme: &Scheme) -> Result<()> {
     if scheme == &Scheme::HTTPS {
         #[cfg(not(feature = "__tls"))]
@@ -122,6 +123,7 @@ impl Target {
     }
 
     /// Create a [`Target`] through a scheme, host name and a port
+    #[allow(clippy::result_large_err)]
     pub fn new_host<S>(scheme: Option<Scheme>, host: S, port: Option<u16>) -> Result<Self>
     where
         S: Into<Cow<'static, str>>,
@@ -138,6 +140,7 @@ impl Target {
     }
 
     /// Create a [`Target`] through a scheme, ip address and a port
+    #[allow(clippy::result_large_err)]
     pub fn new_addr(scheme: Option<Scheme>, ip: IpAddr, port: Option<u16>) -> Result<Self> {
         let scheme = scheme.unwrap_or(Scheme::HTTP);
         check_scheme(&scheme)?;
@@ -160,6 +163,7 @@ impl Target {
     }
 
     /// Create a [`Target`] from [`Uri`]
+    #[allow(clippy::result_large_err)]
     pub fn from_uri(uri: &Uri) -> Result<Self> {
         let scheme = uri.scheme().cloned().unwrap_or(Scheme::HTTP);
         check_scheme(&scheme)?;
@@ -188,6 +192,7 @@ impl Target {
     ///
     /// Note that if the previous is default port of the previous scheme, the port will be also
     /// updated to default port of the new scheme.
+    #[allow(clippy::result_large_err)]
     pub fn set_scheme(&mut self, scheme: Scheme) -> Result<()> {
         let rt = match self.remote_mut() {
             Some(rt) => rt,
@@ -205,6 +210,7 @@ impl Target {
     }
 
     /// Set a new port to the [`Target`]
+    #[allow(clippy::result_large_err)]
     pub fn set_port(&mut self, port: u16) -> Result<()> {
         let rt = match self.remote_mut() {
             Some(rt) => rt,

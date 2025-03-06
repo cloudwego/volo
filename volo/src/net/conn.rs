@@ -23,6 +23,7 @@ pub trait DynStream: AsyncRead + AsyncWrite + Send + 'static {}
 
 impl<T> DynStream for T where T: AsyncRead + AsyncWrite + Send + 'static {}
 
+#[allow(clippy::large_enum_variant)]
 #[pin_project(project = IoStreamProj)]
 pub enum ConnStream {
     Tcp(#[pin] TcpStream),
