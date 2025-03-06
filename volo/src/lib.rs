@@ -3,6 +3,7 @@
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
+#![allow(clippy::large_enum_variant)]
 
 pub use motore::{layer, layer::Layer, service, Service};
 pub use tokio::main;

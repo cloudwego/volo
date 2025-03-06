@@ -474,7 +474,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     ty = format!("::std::sync::Arc<{ty}>");
                 }
                 if a.kind == rir::FieldKind::Optional{
-                    ty = format!("Option<{ty}>")
+                    ty = format!("::std::option::Option<{ty}>")
                 };
                 format!(", {name}: {ty}")
             }).join("");
@@ -757,7 +757,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 let ty = self.inner.codegen_item_ty(a.ty.kind.clone());
                 let ident = self.cx().rust_name(a.def_id); // use the rust name as string format which will escape the keyword
                 let ty = if a.kind == rir::FieldKind::Optional {
-                    format!("Option<{ty}>")
+                    format!("::std::option::Option<{ty}>")
                 } else {
                     format!("{ty}")
                 };

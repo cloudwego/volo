@@ -338,10 +338,10 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
             // means connection pool is dropped
             Either::Left((Err(e), _)) => {
                 tracing::error!("[VOLO] wait a idle connection error: {:?}", e);
-                Err(TransportException::from(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("wait a idle connection error: {:?}", e),
-                ))
+                Err(TransportException::from(std::io::Error::other(format!(
+                    "wait a idle connection error: {:?}",
+                    e
+                )))
                 .into())
             }
             // maybe there is no more connection put back into pool and waiter will block forever,

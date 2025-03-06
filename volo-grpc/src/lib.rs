@@ -3,6 +3,7 @@
 )]
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
+#![allow(clippy::result_large_err)]
 
 pub mod body;
 pub mod client;

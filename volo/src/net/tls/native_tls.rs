@@ -70,7 +70,7 @@ impl Acceptor for NativeTlsAcceptor {
             .accept(tcp_stream)
             .await
             .map(ConnStream::from)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))
+            .map_err(io::Error::other)
     }
 }
 
