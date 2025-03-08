@@ -1,6 +1,7 @@
 use http::Uri;
 use volo::FastStr;
 
+#[derive(Clone)]
 pub struct UriExtension(pub Uri);
 
 impl UriExtension {
