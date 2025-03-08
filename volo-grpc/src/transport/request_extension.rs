@@ -45,7 +45,8 @@ mod tests {
             .parse()
             .unwrap();
         let ext = UriExtension(base_uri);
-        let computed = ext.join_path_faststr(&"/com.sample.ServiceName/OpenTokenizerSession".into());
+        let computed =
+            ext.join_path_faststr(&"/com.sample.ServiceName/OpenTokenizerSession".into());
 
         let uri: Uri = "https://tokenizer.agw.prod.internal:8443/override-path/com.sample.ServiceName/OpenTokenizerSession?token=1".parse().unwrap();
         assert_eq!(computed, uri);
