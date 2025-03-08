@@ -12,7 +12,7 @@ use motore::Service;
 use tower::{util::ServiceExt, Service as TowerService};
 use volo::net::Address;
 
-use super::connect::Connector;
+use super::{connect::Connector, request_extension::UriExtension};
 use crate::{
     body::boxed,
     client::Http2Config,
@@ -140,10 +140,16 @@ where
 
         let body = http_body_util::StreamBody::new(message.into_body(send_compression));
 
+        let uri = if let Some(uri_ext) = extensions.get::<UriExtension>() {
+            uri_ext.join_path_faststr(path)
+        } else {
+            build_uri(target.clone(), path)
+        };
+
         let mut req = http::Request::builder()
             .version(http::Version::HTTP_2)
             .method(http::Method::POST)
-            .uri(build_uri(target.clone(), path))
+            .uri(uri)
             .extension(extensions)
             .body(body)
             .map_err(|err| Status::from_error(err.into()))?;
