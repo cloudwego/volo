@@ -1,5 +1,5 @@
 use http::{uri::Parts, Uri};
-use volo::{net::Address, FastStr};
+use volo::FastStr;
 
 #[derive(Clone)]
 pub struct UriExtension(pub Uri);

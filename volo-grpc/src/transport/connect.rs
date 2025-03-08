@@ -13,11 +13,11 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 #[cfg(feature = "__tls")]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 use volo::net::tls::{ClientTlsConfig, TlsMakeTransport};
-use volo::{net::{
+use volo::net::{
     conn::Conn,
     dial::{Config, DefaultMakeTransport, MakeTransport},
     Address,
-}, FastStr};
+};
 
 #[derive(Clone, Debug)]
 pub struct Connector {
