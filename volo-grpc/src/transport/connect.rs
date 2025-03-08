@@ -1,12 +1,10 @@
 #[cfg(target_family = "unix")]
 use std::os::unix::net::SocketAddr as UnixSocketAddr;
 use std::{
-    io,
-    net::SocketAddr,
-    pin::Pin,
-    task::{Context, Poll},
+    io, net::SocketAddr, pin::Pin, sync::Arc, task::{Context, Poll}
 };
 
+use dashmap::DashMap;
 use futures_util::future::BoxFuture;
 use hyper::rt::ReadBufCursor;
 use hyper_util::client::legacy::connect::{Connected, Connection};
@@ -15,14 +13,20 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 #[cfg(feature = "__tls")]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 use volo::net::tls::{ClientTlsConfig, TlsMakeTransport};
-use volo::net::{
+use volo::{net::{
     conn::Conn,
     dial::{Config, DefaultMakeTransport, MakeTransport},
     Address,
-};
+}, FastStr};
 
 #[derive(Clone, Debug)]
-pub enum Connector {
+pub struct Connector {
+    address_slots: Option<Arc<DashMap<hyper::Uri, Address>>>,
+    inner: ConnectorInner
+}
+
+#[derive(Clone, Debug)]
+pub enum ConnectorInner {
     Default(DefaultMakeTransport),
     #[cfg(feature = "__tls")]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
@@ -37,7 +41,10 @@ impl Connector {
             mt.set_read_timeout(cfg.read_timeout);
             mt.set_write_timeout(cfg.write_timeout);
         }
-        Self::Default(mt)
+        Self {
+            address_slots: None,
+            inner: ConnectorInner::Default(mt),
+        }
     }
 
     #[cfg(feature = "__tls")]
@@ -49,7 +56,15 @@ impl Connector {
             mt.set_read_timeout(cfg.read_timeout);
             mt.set_write_timeout(cfg.write_timeout);
         }
-        Self::Tls(mt)
+        Self {
+            address_slots: None,
+            inner: ConnectorInner::Tls(mt),
+        }
+    }
+
+    pub fn with_address_slots(mut self, address_slots: Arc<DashMap<hyper::Uri, Address>>) -> Self {
+        self.address_slots = Some(address_slots);
+        self
     }
 }
 
@@ -64,15 +79,15 @@ impl UnaryService<Address> for Connector {
     type Error = io::Error;
 
     async fn call(&self, addr: Address) -> Result<Self::Response, Self::Error> {
-        match self {
-            Self::Default(mkt) => mkt.make_connection(addr).await,
+        match &self.inner {
+            ConnectorInner::Default(mkt) => mkt.make_connection(addr).await,
             #[cfg(feature = "__tls")]
-            Self::Tls(mkt) => mkt.make_connection(addr).await,
+            ConnectorInner::Tls(mkt) => mkt.make_connection(addr).await,
         }
     }
 }
 
-impl tower::Service<hyper::Uri> for Connector {
+impl tower::Service<http::Uri> for Connector {
     type Response = ConnectionWrapper;
 
     type Error = io::Error;
@@ -83,41 +98,47 @@ impl tower::Service<hyper::Uri> for Connector {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, uri: hyper::Uri) -> Self::Future {
+    fn call(&mut self, uri: http::Uri) -> Self::Future {
         let connector = self.clone();
+        let slots = self.address_slots.clone();
         Box::pin(async move {
             let authority = uri.authority().expect("authority required").as_str();
-            let target: Address = match uri.scheme_str() {
-                Some("http") | Some("https") => {
-                    Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            "authority must be valid SocketAddr",
-                        )
-                    })?)
-                }
-                #[cfg(target_family = "unix")]
-                Some("http+unix") => {
-                    use hex::FromHex;
 
-                    let bytes = Vec::from_hex(authority).map_err(|_| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            "authority must be hex-encoded path",
-                        )
-                    })?;
-                    Address::Unix(UnixSocketAddr::from_pathname(
-                        String::from_utf8(bytes).map_err(|_| {
+            let target: Address = if let Some(Some((_uri, addr))) = slots.map(|map| map.remove(&uri)) {
+                addr
+            } else {
+                match uri.scheme_str() {
+                    Some("http") | Some("https") => {
+                        Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
                             io::Error::new(
                                 io::ErrorKind::InvalidInput,
-                                "authority must be valid UTF-8",
+                                "authority must be valid SocketAddr",
                             )
-                        })?,
-                    )?)
+                        })?)
+                    }
+                    #[cfg(target_family = "unix")]
+                    Some("http+unix") => {
+                        use hex::FromHex;
+    
+                        let bytes = Vec::from_hex(authority).map_err(|_| {
+                            io::Error::new(
+                                io::ErrorKind::InvalidInput,
+                                "authority must be hex-encoded path",
+                            )
+                        })?;
+                        Address::Unix(UnixSocketAddr::from_pathname(
+                            String::from_utf8(bytes).map_err(|_| {
+                                io::Error::new(
+                                    io::ErrorKind::InvalidInput,
+                                    "authority must be valid UTF-8",
+                                )
+                            })?,
+                        )?)
+                    }
+                    _ => unimplemented!(),
                 }
-                _ => unimplemented!(),
             };
-
+            
             Ok(ConnectionWrapper {
                 inner: connector.make_connection(target).await?,
             })

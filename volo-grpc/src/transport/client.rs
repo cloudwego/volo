@@ -1,8 +1,10 @@
-use std::{io, marker::PhantomData};
+use std::{io, marker::PhantomData, sync::Arc, time::Instant};
 
 use bytes::Bytes;
+use dashmap::DashMap;
+use futures::Stream;
 use http::{
-    header::{CONTENT_TYPE, TE},
+    header::{CONTENT_TYPE, HOST, TE},
     HeaderValue,
 };
 use http_body::Frame;
@@ -12,7 +14,10 @@ use motore::Service;
 use tower::{util::ServiceExt, Service as TowerService};
 use volo::net::Address;
 
-use super::{connect::Connector, request_extension::UriExtension};
+use super::{
+    connect::Connector,
+    request_extension::UriExtension,
+};
 use crate::{
     body::boxed,
     client::Http2Config,
@@ -32,12 +37,14 @@ pub struct ClientTransport<U> {
         Connector,
         StreamBody<crate::BoxStream<'static, Result<Frame<Bytes>, crate::Status>>>,
     >,
+    address_slots: Arc<DashMap<hyper::Uri, Address>>,
     _marker: PhantomData<fn(U)>,
 }
 
 impl<U> Clone for ClientTransport<U> {
     fn clone(&self) -> Self {
         Self {
+            address_slots: self.address_slots.clone(),
             http_client: self.http_client.clone(),
             _marker: self._marker,
         }
@@ -53,8 +60,12 @@ impl<U> ClientTransport<U> {
             rpc_config.read_timeout,
             rpc_config.write_timeout,
         );
+
+        let base = Instant::now();
+        let address_slots = Arc::new(DashMap::new());
         let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
+            .set_host(false)
             .http2_only(true)
             .http2_initial_stream_window_size(http2_config.init_stream_window_size)
             .http2_initial_connection_window_size(http2_config.init_connection_window_size)
@@ -65,9 +76,10 @@ impl<U> ClientTransport<U> {
             .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
             .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
             .http2_max_send_buf_size(http2_config.max_send_buf_size)
-            .build(Connector::new(Some(config)));
+            .build(Connector::new(Some(config)).with_address_slots(address_slots.clone()));
 
         ClientTransport {
+            address_slots,
             http_client,
             _marker: PhantomData,
         }
@@ -85,8 +97,11 @@ impl<U> ClientTransport<U> {
             rpc_config.read_timeout,
             rpc_config.write_timeout,
         );
+
+        let address_slots = Arc::new(DashMap::new());
         let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
+            .set_host(false)
             .http2_only(true)
             .http2_initial_stream_window_size(http2_config.init_stream_window_size)
             .http2_initial_connection_window_size(http2_config.init_connection_window_size)
@@ -97,14 +112,22 @@ impl<U> ClientTransport<U> {
             .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
             .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
             .http2_max_send_buf_size(http2_config.max_send_buf_size)
-            .build(Connector::new_with_tls(Some(config), tls_config));
+            .build(
+                Connector::new_with_tls(Some(config), tls_config)
+                    .with_address_slots(address_slots.clone()),
+            );
 
         ClientTransport {
+            address_slots,
             http_client,
             _marker: PhantomData,
         }
     }
 }
+
+pub type HttpRequest = http::Request<
+    StreamBody<std::pin::Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, Status>> + Send + Sync>>>,
+>;
 
 impl<T, U> Service<ClientContext, Request<T>> for ClientTransport<U>
 where
@@ -127,7 +150,7 @@ where
             io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
         })?;
 
-        let (metadata, mut extensions, message) = volo_req.into_parts();
+        let (metadata, extensions, message) = volo_req.into_parts();
         let path = cx.rpc_info.method();
         let rpc_config = cx.rpc_info.config();
         let accept_compressions = &rpc_config.accept_compressions;
@@ -142,12 +165,13 @@ where
 
         // Get uri carried in extension
         let uri = if let Some(uri_ext) = extensions.get::<UriExtension>() {
+            self.address_slots.insert(uri_ext.base_url(), target);
             uri_ext.join_path_faststr(path)
         } else {
             build_uri(target.clone(), path)
         };
 
-        let mut req = http::Request::builder()
+        let mut req: HttpRequest = http::Request::builder()
             .version(http::Version::HTTP_2)
             .method(http::Method::POST)
             .uri(uri)
