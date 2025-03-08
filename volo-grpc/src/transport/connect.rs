@@ -88,12 +88,14 @@ impl tower::Service<hyper::Uri> for Connector {
         Box::pin(async move {
             let authority = uri.authority().expect("authority required").as_str();
             let target: Address = match uri.scheme_str() {
-                Some("http") => Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "authority must be valid SocketAddr",
-                    )
-                })?),
+                Some("http") | Some("https") => {
+                    Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
+                        io::Error::new(
+                            io::ErrorKind::InvalidInput,
+                            "authority must be valid SocketAddr",
+                        )
+                    })?)
+                }
                 #[cfg(target_family = "unix")]
                 Some("http+unix") => {
                     use hex::FromHex;

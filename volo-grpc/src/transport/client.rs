@@ -127,7 +127,7 @@ where
             io::Error::new(std::io::ErrorKind::InvalidData, "address is required")
         })?;
 
-        let (metadata, extensions, message) = volo_req.into_parts();
+        let (metadata, mut extensions, message) = volo_req.into_parts();
         let path = cx.rpc_info.method();
         let rpc_config = cx.rpc_info.config();
         let accept_compressions = &rpc_config.accept_compressions;
@@ -140,6 +140,7 @@ where
 
         let body = http_body_util::StreamBody::new(message.into_body(send_compression));
 
+        // Get uri carried in extension
         let uri = if let Some(uri_ext) = extensions.get::<UriExtension>() {
             uri_ext.join_path_faststr(path)
         } else {
