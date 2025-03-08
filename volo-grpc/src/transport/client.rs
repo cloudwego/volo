@@ -1,10 +1,10 @@
-use std::{io, marker::PhantomData, sync::Arc, time::Instant};
+use std::{io, marker::PhantomData, sync::Arc};
 
 use bytes::Bytes;
 use dashmap::DashMap;
 use futures::Stream;
 use http::{
-    header::{CONTENT_TYPE, HOST, TE},
+    header::{CONTENT_TYPE, TE},
     HeaderValue,
 };
 use http_body::Frame;
@@ -61,7 +61,6 @@ impl<U> ClientTransport<U> {
             rpc_config.write_timeout,
         );
 
-        let base = Instant::now();
         let address_slots = Arc::new(DashMap::new());
         let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
