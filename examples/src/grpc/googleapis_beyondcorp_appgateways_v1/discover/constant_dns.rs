@@ -25,10 +25,7 @@ where
     type Key = ();
     type Error = T::Error;
 
-    async fn discover(
-        &self,
-        endpoint: &Endpoint,
-    ) -> Result<Vec<Arc<Instance>>, Self::Error> {
+    async fn discover(&self, endpoint: &Endpoint) -> Result<Vec<Arc<Instance>>, Self::Error> {
         self.0.discover(endpoint).await
     }
 
@@ -51,13 +48,13 @@ pub struct ConstantDnsDiscover {
 }
 
 impl ConstantDnsDiscover {
-    pub fn new(
-        resolver: DnsResolver,
-        service_name: String,
-        host: String,
-        port: u16,
-    ) -> Self {
-        Self { resolver, service_name, host, port }
+    pub fn new(resolver: DnsResolver, service_name: String, host: String, port: u16) -> Self {
+        Self {
+            resolver,
+            service_name,
+            host,
+            port,
+        }
     }
 }
 
@@ -70,14 +67,13 @@ impl Discover for ConstantDnsDiscover {
         endpoint: &'s Endpoint,
     ) -> Result<Vec<Arc<Instance>>, Self::Error> {
         let mut endpoint = Endpoint::new(self.service_name.clone().into());
-        let addr =
-            self.resolver.resolve(&self.host, self.port).await.ok_or_else(
-                || {
-                    LoadBalanceError::Discover(
-                        anyhow!("unable to resolve: {}", &self.host).into(),
-                    )
-                },
-            )?;
+        let addr = self
+            .resolver
+            .resolve(&self.host, self.port)
+            .await
+            .ok_or_else(|| {
+                LoadBalanceError::Discover(anyhow!("unable to resolve: {}", &self.host).into())
+            })?;
         endpoint.set_address(addr);
         self.resolver.discover(&endpoint).await
     }
@@ -91,4 +87,3 @@ impl Discover for ConstantDnsDiscover {
         None
     }
 }
-

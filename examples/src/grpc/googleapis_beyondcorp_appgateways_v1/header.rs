@@ -21,7 +21,12 @@ pub struct HeaderLayer {
 
 impl HeaderLayer {
     pub fn new(endpoint: RpcEndpoint) -> Self {
-        Self { inner: RpcHeader { endpoint, metadata: None } }
+        Self {
+            inner: RpcHeader {
+                endpoint,
+                metadata: None,
+            },
+        }
     }
 
     pub fn metadata(mut self, metadata: Option<MetadataMap>) -> Self {
@@ -52,12 +57,7 @@ impl<S> HeaderService<S> {
 
 impl<T, U, S> Service<ClientContext, Request<T>> for HeaderService<S>
 where
-    S: Service<
-            ClientContext,
-            Request<T>,
-            Response = Response<U>,
-            Error = Status,
-        >
+    S: Service<ClientContext, Request<T>, Response = Response<U>, Error = Status>
         + Send
         + 'static
         + Sync,

@@ -30,7 +30,9 @@ pub struct LazyDiscover {
 impl LazyDiscover {
     pub fn new(endpoint: RpcEndpoint) -> Self {
         let resolver = DnsResolver::default();
-        Self { inner: Arc::new(LazyDiscoverInternal { endpoint, resolver }) }
+        Self {
+            inner: Arc::new(LazyDiscoverInternal { endpoint, resolver }),
+        }
     }
 }
 
@@ -55,9 +57,7 @@ impl Discover for LazyDiscover {
                 .await
             }
             Host::Ipv4(ip) => StaticDiscover::new(vec![Arc::new(Instance {
-                address: Address::Ip(SocketAddr::V4(SocketAddrV4::new(
-                    ip, ep.port,
-                ))),
+                address: Address::Ip(SocketAddr::V4(SocketAddrV4::new(ip, ep.port))),
                 weight: 1,
                 tags: Default::default(),
             })])
@@ -65,9 +65,7 @@ impl Discover for LazyDiscover {
             .await
             .map_err(|_e| LoadBalanceError::Retry),
             Host::Ipv6(ip) => StaticDiscover::new(vec![Arc::new(Instance {
-                address: Address::Ip(SocketAddr::V6(SocketAddrV6::new(
-                    ip, ep.port, 0, 0,
-                ))),
+                address: Address::Ip(SocketAddr::V6(SocketAddrV6::new(ip, ep.port, 0, 0))),
                 weight: 1,
                 tags: Default::default(),
             })])
@@ -82,8 +80,7 @@ impl Discover for LazyDiscover {
     fn watch(
         &self,
         _keys: Option<&[Self::Key]>,
-    ) -> Option<async_broadcast::Receiver<volo::discovery::Change<Self::Key>>>
-    {
+    ) -> Option<async_broadcast::Receiver<volo::discovery::Change<Self::Key>>> {
         None
     }
 }

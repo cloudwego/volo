@@ -112,10 +112,6 @@ impl<U> ClientTransport<U> {
     }
 }
 
-pub type HttpRequest = http::Request<
-    StreamBody<std::pin::Pin<Box<dyn Stream<Item = Result<Frame<Bytes>, Status>> + Send + Sync>>>,
->;
-
 impl<T, U> Service<ClientContext, Request<T>> for ClientTransport<U>
 where
     T: crate::message::SendEntryMessage + Send + 'static,
@@ -157,7 +153,7 @@ where
             build_uri(target.clone(), path)
         };
 
-        let mut req: HttpRequest = http::Request::builder()
+        let mut req = http::Request::builder()
             .version(http::Version::HTTP_2)
             .method(http::Method::POST)
             .uri(uri)

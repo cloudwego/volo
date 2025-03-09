@@ -3,7 +3,6 @@ use std::str::FromStr;
 use anyhow::anyhow;
 use url::{Host, Url};
 
-
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RpcEndpoint {
     pub host: Host,
@@ -32,7 +31,12 @@ impl RpcEndpoint {
 
         let tls = ["https", "tls", "xds"].contains(&u.scheme());
 
-        Ok(RpcEndpoint { host, port, server_name, tls })
+        Ok(RpcEndpoint {
+            host,
+            port,
+            server_name,
+            tls,
+        })
     }
 
     pub fn uri(&self) -> http::Uri {
