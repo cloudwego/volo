@@ -1,7 +1,6 @@
 use std::{io, marker::PhantomData};
 
 use bytes::Bytes;
-use futures::Stream;
 use http::{
     header::{ACCEPT, CONTENT_TYPE, TE},
     HeaderValue,
