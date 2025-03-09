@@ -1,7 +1,6 @@
 use std::{io, marker::PhantomData, sync::Arc};
 
 use bytes::Bytes;
-use dashmap::DashMap;
 use futures::Stream;
 use http::{
     header::{CONTENT_TYPE, TE},
@@ -15,7 +14,7 @@ use tower::{util::ServiceExt, Service as TowerService};
 use volo::net::Address;
 
 use super::{
-    connect::Connector,
+    connect::{Connector, ADDRESS_HINT},
     request_extension::UriExtension,
 };
 use crate::{
@@ -37,14 +36,12 @@ pub struct ClientTransport<U> {
         Connector,
         StreamBody<crate::BoxStream<'static, Result<Frame<Bytes>, crate::Status>>>,
     >,
-    address_slots: Arc<DashMap<hyper::Uri, Address>>,
     _marker: PhantomData<fn(U)>,
 }
 
 impl<U> Clone for ClientTransport<U> {
     fn clone(&self) -> Self {
         Self {
-            address_slots: self.address_slots.clone(),
             http_client: self.http_client.clone(),
             _marker: self._marker,
         }
@@ -61,7 +58,6 @@ impl<U> ClientTransport<U> {
             rpc_config.write_timeout,
         );
 
-        let address_slots = Arc::new(DashMap::new());
         let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
             .set_host(false)
@@ -75,10 +71,9 @@ impl<U> ClientTransport<U> {
             .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
             .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
             .http2_max_send_buf_size(http2_config.max_send_buf_size)
-            .build(Connector::new(Some(config)).with_address_slots(address_slots.clone()));
+            .build(Connector::new(Some(config)));
 
         ClientTransport {
-            address_slots,
             http_client,
             _marker: PhantomData,
         }
@@ -97,7 +92,6 @@ impl<U> ClientTransport<U> {
             rpc_config.write_timeout,
         );
 
-        let address_slots = Arc::new(DashMap::new());
         let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
             .set_host(false)
@@ -111,13 +105,9 @@ impl<U> ClientTransport<U> {
             .http2_keep_alive_while_idle(http2_config.http2_keepalive_while_idle)
             .http2_max_concurrent_reset_streams(http2_config.max_concurrent_reset_streams)
             .http2_max_send_buf_size(http2_config.max_send_buf_size)
-            .build(
-                Connector::new_with_tls(Some(config), tls_config)
-                    .with_address_slots(address_slots.clone()),
-            );
+            .build(Connector::new_with_tls(Some(config), tls_config));
 
         ClientTransport {
-            address_slots,
             http_client,
             _marker: PhantomData,
         }
@@ -164,7 +154,6 @@ where
 
         // Get uri carried in extension
         let uri = if let Some(uri_ext) = extensions.get::<UriExtension>() {
-            self.address_slots.insert(uri_ext.base_url(), target);
             uri_ext.join_path_faststr(path)
         } else {
             build_uri(target.clone(), path)
@@ -199,36 +188,42 @@ where
             }
         }
 
-        let resp = http_client
-            .ready()
+        ADDRESS_HINT
+            .scope(target, async move {
+                let resp = http_client
+                    .ready()
+                    .await
+                    .map_err(|err| Status::from_error(err.into()))?
+                    .call(req)
+                    .await
+                    .map_err(|err| Status::from_error(err.into()))?;
+
+                let status_code = resp.status();
+                let headers = resp.headers();
+
+                if let Some(status) = Status::from_header_map(headers) {
+                    if status.code() != Code::Ok {
+                        return Err(status);
+                    }
+                }
+
+                let accept_compression = CompressionEncoding::from_encoding_header(
+                    headers,
+                    &rpc_config.accept_compressions,
+                )?;
+
+                let (parts, body) = resp.into_parts();
+
+                let body = U::from_body(
+                    Some(path),
+                    boxed(body),
+                    Kind::Response(status_code),
+                    accept_compression,
+                )?;
+                let resp = hyper::Response::from_parts(parts, body);
+                Ok(Response::from_http(resp))
+            })
             .await
-            .map_err(|err| Status::from_error(err.into()))?
-            .call(req)
-            .await
-            .map_err(|err| Status::from_error(err.into()))?;
-
-        let status_code = resp.status();
-        let headers = resp.headers();
-
-        if let Some(status) = Status::from_header_map(headers) {
-            if status.code() != Code::Ok {
-                return Err(status);
-            }
-        }
-
-        let accept_compression =
-            CompressionEncoding::from_encoding_header(headers, &rpc_config.accept_compressions)?;
-
-        let (parts, body) = resp.into_parts();
-
-        let body = U::from_body(
-            Some(path),
-            boxed(body),
-            Kind::Response(status_code),
-            accept_compression,
-        )?;
-        let resp = hyper::Response::from_parts(parts, body);
-        Ok(Response::from_http(resp))
     }
 }
 

@@ -1,10 +1,9 @@
-#[cfg(target_family = "unix")]
-use std::os::unix::net::SocketAddr as UnixSocketAddr;
 use std::{
-    io, net::SocketAddr, pin::Pin, sync::Arc, task::{Context, Poll}
+    io,
+    pin::Pin,
+    task::{Context, Poll},
 };
 
-use dashmap::DashMap;
 use futures_util::future::BoxFuture;
 use hyper::rt::ReadBufCursor;
 use hyper_util::client::legacy::connect::{Connected, Connection};
@@ -19,10 +18,13 @@ use volo::net::{
     Address,
 };
 
+tokio::task_local! {
+    pub static ADDRESS_HINT: Address;
+}
+
 #[derive(Clone, Debug)]
 pub struct Connector {
-    address_slots: Option<Arc<DashMap<hyper::Uri, Address>>>,
-    inner: ConnectorInner
+    inner: ConnectorInner,
 }
 
 #[derive(Clone, Debug)]
@@ -42,7 +44,6 @@ impl Connector {
             mt.set_write_timeout(cfg.write_timeout);
         }
         Self {
-            address_slots: None,
             inner: ConnectorInner::Default(mt),
         }
     }
@@ -57,14 +58,8 @@ impl Connector {
             mt.set_write_timeout(cfg.write_timeout);
         }
         Self {
-            address_slots: None,
             inner: ConnectorInner::Tls(mt),
         }
-    }
-
-    pub fn with_address_slots(mut self, address_slots: Arc<DashMap<hyper::Uri, Address>>) -> Self {
-        self.address_slots = Some(address_slots);
-        self
     }
 }
 
@@ -98,47 +93,10 @@ impl tower::Service<http::Uri> for Connector {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, uri: http::Uri) -> Self::Future {
+    fn call(&mut self, _uri: http::Uri) -> Self::Future {
         let connector = self.clone();
-        let slots = self.address_slots.clone();
         Box::pin(async move {
-            let authority = uri.authority().expect("authority required").as_str();
-
-            let target: Address = if let Some(Some((_uri, addr))) = slots.map(|map| map.remove(&uri)) {
-                addr
-            } else {
-                match uri.scheme_str() {
-                    Some("http") | Some("https") => {
-                        Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidInput,
-                                "authority must be valid SocketAddr",
-                            )
-                        })?)
-                    }
-                    #[cfg(target_family = "unix")]
-                    Some("http+unix") => {
-                        use hex::FromHex;
-    
-                        let bytes = Vec::from_hex(authority).map_err(|_| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidInput,
-                                "authority must be hex-encoded path",
-                            )
-                        })?;
-                        Address::Unix(UnixSocketAddr::from_pathname(
-                            String::from_utf8(bytes).map_err(|_| {
-                                io::Error::new(
-                                    io::ErrorKind::InvalidInput,
-                                    "authority must be valid UTF-8",
-                                )
-                            })?,
-                        )?)
-                    }
-                    _ => unimplemented!(),
-                }
-            };
-            
+            let target = ADDRESS_HINT.get();
             Ok(ConnectionWrapper {
                 inner: connector.make_connection(target).await?,
             })

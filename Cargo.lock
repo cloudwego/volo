@@ -4148,7 +4148,6 @@ dependencies = [
  "async-stream",
  "base64",
  "bytes",
- "dashmap",
  "flate2",
  "futures",
  "futures-util",

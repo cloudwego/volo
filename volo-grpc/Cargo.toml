@@ -69,7 +69,6 @@ tracing.workspace = true
 
 tokio-rustls = { workspace = true, optional = true }
 tokio-native-tls = { workspace = true, optional = true }
-dashmap.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
