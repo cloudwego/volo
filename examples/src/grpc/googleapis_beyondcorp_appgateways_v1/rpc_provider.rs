@@ -5,7 +5,6 @@ use volo_gen::proto_gen::google::cloud::beyondcorp::appgateways::v1::{
     AppGatewaysServiceClient, AppGatewaysServiceClientBuilder,
 };
 use volo_grpc::metadata::MetadataMap;
-use volo_http::client::dns::DnsResolver;
 
 use crate::{discover::LazyDiscover, endpoint::RpcEndpoint, header::HeaderLayer};
 
