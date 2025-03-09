@@ -40,7 +40,6 @@ pub struct RpcProvider {
     caller_name: String,
     callee_name: String,
 
-    resolver: DnsResolver,
     metadata: Option<MetadataMap>,
     inner: Arc<RpcProviderInner>,
 }
@@ -55,7 +54,6 @@ impl RpcProvider {
             caller_name: "volo".into(),
             callee_name: "app_gateway_service".into(),
 
-            resolver: DnsResolver::default(),
             metadata: None,
             inner: Arc::new(RpcProviderInner::new(tls_connector)),
         }
