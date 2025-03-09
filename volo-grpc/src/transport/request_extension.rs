@@ -65,7 +65,7 @@ mod tests {
         let computed =
             ext.join_path_faststr(&"/com.sample.ServiceName/OpenTokenizerSession".into());
 
-        let uri: Uri = "https://1.1.1.1:8443/override-path/com.sample.ServiceName/OpenTokenizerSession?token=1".parse().unwrap();
+        let uri: Uri = "https://tokenizer.agw.prod.internal:8443/override-path/com.sample.ServiceName/OpenTokenizerSession?token=1".parse().unwrap();
         assert_eq!(computed, uri);
     }
 }
