@@ -8,10 +8,7 @@ license.workspace = true
 authors.workspace = true
 publish = false
 
-# googleapis_beyondcorp_appgateways_v1
-[[bin]]
-name = "googleapis_beyondcorp_appgateways_v1"
-path = "src/grpc/googleapis_beyondcorp_appgateways_v1/client.rs"
+
 # hello
 [[bin]]
 name = "hello-grpc-server"
@@ -37,6 +34,12 @@ required-features = ["__tls"]
 [[bin]]
 name = "hello-tls-grpc-client"
 path = "src/grpc/tls/client.rs"
+required-features = ["__tls"]
+
+# googleapis_beyondcorp_appgateways_v1
+[[bin]]
+name = "googleapis_beyondcorp_appgateways_v1"
+path = "src/grpc/googleapis_beyondcorp_appgateways_v1/client.rs"
 required-features = ["__tls"]
 
 # compression
