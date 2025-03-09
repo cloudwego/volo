@@ -1,9 +1,9 @@
-use std::{io, marker::PhantomData, sync::Arc};
+use std::{io, marker::PhantomData};
 
 use bytes::Bytes;
 use futures::Stream;
 use http::{
-    header::{CONTENT_TYPE, TE},
+    header::{ACCEPT, CONTENT_TYPE, TE},
     HeaderValue,
 };
 use http_body::Frame;
@@ -60,7 +60,6 @@ impl<U> ClientTransport<U> {
 
         let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
-            .set_host(false)
             .http2_only(true)
             .http2_initial_stream_window_size(http2_config.init_stream_window_size)
             .http2_initial_connection_window_size(http2_config.init_connection_window_size)
@@ -94,7 +93,6 @@ impl<U> ClientTransport<U> {
 
         let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
-            .set_host(false)
             .http2_only(true)
             .http2_initial_stream_window_size(http2_config.init_stream_window_size)
             .http2_initial_connection_window_size(http2_config.init_connection_window_size)
@@ -171,6 +169,8 @@ where
             .insert(TE, HeaderValue::from_static("trailers"));
         req.headers_mut()
             .insert(CONTENT_TYPE, HeaderValue::from_static("application/grpc"));
+        req.headers_mut()
+            .insert(ACCEPT, HeaderValue::from_static("application/grpc"));
 
         // insert compression headers
         if let Some(send_compression) = send_compression {
