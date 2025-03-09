@@ -6,6 +6,11 @@ entries:
     services:
       - idl:
           source: local
+          path: ../proto/googleapis_beyondcorp_appgateways_v1.proto
+          includes:
+            - ../proto
+      - idl:
+          source: local
           path: ../proto/echo.proto
           includes:
             - ../proto

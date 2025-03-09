@@ -8,6 +8,10 @@ license.workspace = true
 authors.workspace = true
 publish = false
 
+# googleapis_beyondcorp_appgateways_v1
+[[bin]]
+name = "googleapis_beyondcorp_appgateways_v1"
+path = "src/grpc/googleapis_beyondcorp_appgateways_v1/client.rs"
 # hello
 [[bin]]
 name = "hello-grpc-server"
@@ -138,6 +142,8 @@ volo-http = { path = "../volo-http", features = [
 ] }
 
 volo-gen = { path = "./volo-gen" }
+url.workspace = true
+async-broadcast.workspace = true
 
 [features]
 __tls = []
