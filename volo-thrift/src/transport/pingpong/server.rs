@@ -81,7 +81,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     match msg {
                         Ok(Some(ThriftMessage { data: Ok(req), .. })) => {
                             cx.stats.record_process_start_at();
-                            let resp = service.call(&mut cx, req).await.map_err(Into::into);
+                            let resp = Box::pin(service.call(&mut cx, req)).await.map_err(Into::into);
                             cx.stats.record_process_end_at();
 
                             if exit_mark.load(Ordering::Relaxed) {

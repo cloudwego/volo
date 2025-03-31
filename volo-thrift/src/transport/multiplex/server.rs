@@ -206,7 +206,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                             metainfo::METAINFO
                                 .scope(RefCell::new(mi), async move {
                                     cx.stats.record_process_start_at();
-                                    let resp = svc.call(&mut cx, req).await.map_err(Into::into);
+                                    let resp = Box::pin(svc.call(&mut cx, req)).await.map_err(Into::into);
                                     cx.stats.record_process_end_at();
 
                                     if exit_mark.load(Ordering::Relaxed) {
