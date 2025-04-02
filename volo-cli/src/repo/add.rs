@@ -30,11 +30,10 @@ pub struct Add {
 impl CliCommand for Add {
     fn run(&self, cx: Context) -> anyhow::Result<()> {
         volo_build::util::with_config(|config| {
-            let entry = if config.entries.contains_key(&cx.entry_name) {
-                config.entries.get_mut(&cx.entry_name).unwrap()
-            } else {
-                unreachable!("The specified entry should exist when add new repo.");
-            };
+            let entry = config
+                .entries
+                .get_mut(&cx.entry_name)
+                .expect("The specified entry should exist when add new repo.");
 
             let mut new_repo = None;
             // repo name is valid when the repo and git arg are not conflicted with the entry's

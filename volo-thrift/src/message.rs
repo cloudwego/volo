@@ -78,8 +78,8 @@ impl EntryMessage for Bytes {
     ) -> Result<Self, ThriftException> {
         Err(ThriftException::Protocol(ProtocolException::new(
             pilota::thrift::ProtocolExceptionKind::NotImplemented,
-            "Binary repost is not supported in pure Buffered protocol since we don't know the \
-             length of the message",
+            "Binary response decode is not supported for pure Buffered protocol since we don't \
+             know the length of the message",
         )))
     }
 
