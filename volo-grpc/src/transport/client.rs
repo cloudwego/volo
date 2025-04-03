@@ -2,7 +2,7 @@ use std::{io, marker::PhantomData};
 
 use bytes::Bytes;
 use http::{
-    header::{CONTENT_TYPE, TE},
+    header::{ACCEPT, CONTENT_TYPE, TE},
     HeaderValue,
 };
 use http_body::Frame;
@@ -12,7 +12,10 @@ use motore::Service;
 use tower::{util::ServiceExt, Service as TowerService};
 use volo::net::Address;
 
-use super::connect::Connector;
+use super::{
+    connect::{Connector, ADDRESS_HINT},
+    request_extension::UriExtension,
+};
 use crate::{
     body::boxed,
     client::Http2Config,
@@ -53,6 +56,7 @@ impl<U> ClientTransport<U> {
             rpc_config.read_timeout,
             rpc_config.write_timeout,
         );
+
         let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
             .http2_only(true)
@@ -85,6 +89,7 @@ impl<U> ClientTransport<U> {
             rpc_config.read_timeout,
             rpc_config.write_timeout,
         );
+
         let http_client = hyper_util::client::legacy::Client::builder(TokioExecutor::new())
             .timer(TokioTimer::new())
             .http2_only(true)
@@ -140,10 +145,17 @@ where
 
         let body = http_body_util::StreamBody::new(message.into_body(send_compression));
 
+        // Get uri carried in extension
+        let uri = if let Some(uri_ext) = extensions.get::<UriExtension>() {
+            uri_ext.join_path_faststr(path)
+        } else {
+            build_uri(target.clone(), path)
+        };
+
         let mut req = http::Request::builder()
             .version(http::Version::HTTP_2)
             .method(http::Method::POST)
-            .uri(build_uri(target.clone(), path))
+            .uri(uri)
             .extension(extensions)
             .body(body)
             .map_err(|err| Status::from_error(err.into()))?;
@@ -152,6 +164,8 @@ where
             .insert(TE, HeaderValue::from_static("trailers"));
         req.headers_mut()
             .insert(CONTENT_TYPE, HeaderValue::from_static("application/grpc"));
+        req.headers_mut()
+            .insert(ACCEPT, HeaderValue::from_static("application/grpc"));
 
         // insert compression headers
         if let Some(send_compression) = send_compression {
@@ -169,36 +183,42 @@ where
             }
         }
 
-        let resp = http_client
-            .ready()
+        ADDRESS_HINT
+            .scope(target, async move {
+                let resp = http_client
+                    .ready()
+                    .await
+                    .map_err(|err| Status::from_error(err.into()))?
+                    .call(req)
+                    .await
+                    .map_err(|err| Status::from_error(err.into()))?;
+
+                let status_code = resp.status();
+                let headers = resp.headers();
+
+                if let Some(status) = Status::from_header_map(headers) {
+                    if status.code() != Code::Ok {
+                        return Err(status);
+                    }
+                }
+
+                let accept_compression = CompressionEncoding::from_encoding_header(
+                    headers,
+                    &rpc_config.accept_compressions,
+                )?;
+
+                let (parts, body) = resp.into_parts();
+
+                let body = U::from_body(
+                    Some(path),
+                    boxed(body),
+                    Kind::Response(status_code),
+                    accept_compression,
+                )?;
+                let resp = hyper::Response::from_parts(parts, body);
+                Ok(Response::from_http(resp))
+            })
             .await
-            .map_err(|err| Status::from_error(err.into()))?
-            .call(req)
-            .await
-            .map_err(|err| Status::from_error(err.into()))?;
-
-        let status_code = resp.status();
-        let headers = resp.headers();
-
-        if let Some(status) = Status::from_header_map(headers) {
-            if status.code() != Code::Ok {
-                return Err(status);
-            }
-        }
-
-        let accept_compression =
-            CompressionEncoding::from_encoding_header(headers, &rpc_config.accept_compressions)?;
-
-        let (parts, body) = resp.into_parts();
-
-        let body = U::from_body(
-            Some(path),
-            boxed(body),
-            Kind::Response(status_code),
-            accept_compression,
-        )?;
-        let resp = hyper::Response::from_parts(parts, body);
-        Ok(Response::from_http(resp))
     }
 }
 

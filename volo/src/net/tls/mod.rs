@@ -156,6 +156,7 @@ impl fmt::Debug for TlsAcceptor {
 pub struct TlsConnectorBuilder {
     pub(super) default_root_certs: bool,
     pub(super) pems: Vec<Vec<u8>>,
+    pub(super) alpn_protocols: Vec<Vec<u8>>,
 }
 
 impl Default for TlsConnectorBuilder {
@@ -163,6 +164,7 @@ impl Default for TlsConnectorBuilder {
         Self {
             default_root_certs: true,
             pems: Vec::new(),
+            alpn_protocols: Vec::new(),
         }
     }
 }
@@ -185,6 +187,11 @@ impl TlsConnectorBuilder {
         let cert = std::fs::read(cert_path.as_ref())?;
         self.pems.push(cert);
         Ok(self)
+    }
+
+    pub fn add_alpn_protocol<T: Into<Vec<u8>>>(mut self, alpn_protocol: T) -> Self {
+        self.alpn_protocols.push(alpn_protocol.into());
+        self
     }
 
     #[cfg(feature = "rustls")]

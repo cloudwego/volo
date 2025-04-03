@@ -784,6 +784,7 @@ name = "examples"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-broadcast",
  "async-stream",
  "bytes",
  "faststr",
@@ -801,6 +802,7 @@ dependencies = [
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
+ "url",
  "volo",
  "volo-gen",
  "volo-grpc",

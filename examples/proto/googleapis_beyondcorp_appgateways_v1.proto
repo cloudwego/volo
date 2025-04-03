@@ -1,0 +1,61 @@
+syntax = "proto3";
+
+// Source:
+// https://github.com/googleapis/googleapis/blob/df58085901d8fb80c2c021e405923bb2351a6f29/google/cloud/beyondcorp/appgateways/v1/app_gateways_service.proto#L48C9-L48C27
+// With modification
+
+package google.cloud.beyondcorp.appgateways.v1;
+
+service AppGatewaysService {
+  // Lists AppGateways in a given project and location.
+  rpc ListAppGateways(ListAppGatewaysRequest)
+      returns (ListAppGatewaysResponse) {
+      }
+}
+
+// Request message for BeyondCorp.ListAppGateways.
+message ListAppGatewaysRequest {
+  // Required. The resource name of the AppGateway location using the form:
+  // `projects/{project_id}/locations/{location_id}`
+  string parent = 1;
+
+  // Optional. The maximum number of items to return.
+  // If not specified, a default value of 50 will be used by the service.
+  // Regardless of the page_size value, the response may include a partial list
+  // and a caller should only rely on response's
+  // [next_page_token][BeyondCorp.ListAppGatewaysResponse.next_page_token] to
+  // determine if there are more instances left to be queried.
+  int32 page_size = 2;
+
+  // Optional. The next_page_token value returned from a previous
+  // ListAppGatewaysRequest, if any.
+  string page_token = 3;
+
+  // Optional. A filter specifying constraints of a list operation.
+  string filter = 4;
+
+  // Optional. Specifies the ordering of results. See
+  // [Sorting
+  // order](https://cloud.google.com/apis/design/design_patterns#sorting_order)
+  // for more information.
+  string order_by = 5;
+}
+
+// Response message for BeyondCorp.ListAppGateways.
+message ListAppGatewaysResponse {
+  // A list of BeyondCorp AppGateways in the project.
+  repeated AppGateway app_gateways = 1;
+
+  // A token to retrieve the next page of results, or empty if there are no more
+  // results in the list.
+  string next_page_token = 2;
+
+  // A list of locations that could not be reached.
+  repeated string unreachable = 3;
+}
+
+message AppGateway {
+  // Required. Unique resource name of the AppGateway.
+  // The name is ignored when creating an AppGateway.
+  string name = 1;
+}

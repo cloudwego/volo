@@ -44,9 +44,10 @@ impl Connector for RustlsConnector {
                 .add(cert)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
         }
-        let client_config = ClientConfig::builder()
+        let mut client_config = ClientConfig::builder()
             .with_root_certificates(certs)
             .with_no_client_auth();
+        client_config.alpn_protocols = builder.alpn_protocols;
         let connector = TlsConnector::from(Arc::new(client_config));
         Ok(Self(connector))
     }

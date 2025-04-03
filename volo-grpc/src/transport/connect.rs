@@ -1,8 +1,5 @@
-#[cfg(target_family = "unix")]
-use std::os::unix::net::SocketAddr as UnixSocketAddr;
 use std::{
     io,
-    net::SocketAddr,
     pin::Pin,
     task::{Context, Poll},
 };
@@ -21,8 +18,17 @@ use volo::net::{
     Address,
 };
 
+tokio::task_local! {
+    pub static ADDRESS_HINT: Address;
+}
+
 #[derive(Clone, Debug)]
-pub enum Connector {
+pub struct Connector {
+    inner: ConnectorInner,
+}
+
+#[derive(Clone, Debug)]
+pub enum ConnectorInner {
     Default(DefaultMakeTransport),
     #[cfg(feature = "__tls")]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
@@ -37,7 +43,9 @@ impl Connector {
             mt.set_read_timeout(cfg.read_timeout);
             mt.set_write_timeout(cfg.write_timeout);
         }
-        Self::Default(mt)
+        Self {
+            inner: ConnectorInner::Default(mt),
+        }
     }
 
     #[cfg(feature = "__tls")]
@@ -49,7 +57,9 @@ impl Connector {
             mt.set_read_timeout(cfg.read_timeout);
             mt.set_write_timeout(cfg.write_timeout);
         }
-        Self::Tls(mt)
+        Self {
+            inner: ConnectorInner::Tls(mt),
+        }
     }
 }
 
@@ -64,15 +74,15 @@ impl UnaryService<Address> for Connector {
     type Error = io::Error;
 
     async fn call(&self, addr: Address) -> Result<Self::Response, Self::Error> {
-        match self {
-            Self::Default(mkt) => mkt.make_connection(addr).await,
+        match &self.inner {
+            ConnectorInner::Default(mkt) => mkt.make_connection(addr).await,
             #[cfg(feature = "__tls")]
-            Self::Tls(mkt) => mkt.make_connection(addr).await,
+            ConnectorInner::Tls(mkt) => mkt.make_connection(addr).await,
         }
     }
 }
 
-impl tower::Service<hyper::Uri> for Connector {
+impl tower::Service<http::Uri> for Connector {
     type Response = ConnectionWrapper;
 
     type Error = io::Error;
@@ -83,39 +93,10 @@ impl tower::Service<hyper::Uri> for Connector {
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, uri: hyper::Uri) -> Self::Future {
+    fn call(&mut self, _uri: http::Uri) -> Self::Future {
         let connector = self.clone();
         Box::pin(async move {
-            let authority = uri.authority().expect("authority required").as_str();
-            let target: Address = match uri.scheme_str() {
-                Some("http") => Address::Ip(authority.parse::<SocketAddr>().map_err(|_| {
-                    io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "authority must be valid SocketAddr",
-                    )
-                })?),
-                #[cfg(target_family = "unix")]
-                Some("http+unix") => {
-                    use hex::FromHex;
-
-                    let bytes = Vec::from_hex(authority).map_err(|_| {
-                        io::Error::new(
-                            io::ErrorKind::InvalidInput,
-                            "authority must be hex-encoded path",
-                        )
-                    })?;
-                    Address::Unix(UnixSocketAddr::from_pathname(
-                        String::from_utf8(bytes).map_err(|_| {
-                            io::Error::new(
-                                io::ErrorKind::InvalidInput,
-                                "authority must be valid UTF-8",
-                            )
-                        })?,
-                    )?)
-                }
-                _ => unimplemented!(),
-            };
-
+            let target = ADDRESS_HINT.get();
             Ok(ConnectionWrapper {
                 inner: connector.make_connection(target).await?,
             })
