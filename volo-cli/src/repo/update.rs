@@ -38,17 +38,19 @@ impl CliCommand for Update {
             }
 
             // check if the repo exists in the config
-            self.repos.iter().for_each(|g| {
-                if !entry.repos.contains_key(&FastStr::new(g)) {
-                    eprintln!("git repo {g} not exists in config");
-                } else {
-                    let r = entry.repos.get_mut(&FastStr::new(g)).unwrap().update();
-                    if r.is_err() {
-                        eprintln!("update git repo {g} failed");
+            self.repos
+                .iter()
+                .for_each(|g| match entry.repos.get_mut(&FastStr::new(g)) {
+                    Some(r) => {
+                        let r = r.update();
+                        if r.is_err() {
+                            eprintln!("update git repo {g} failed");
+                        }
                     }
-                }
-            });
-
+                    None => {
+                        eprintln!("git repo {g} not exists in config");
+                    }
+                });
             Ok(())
         })
     }

@@ -3,8 +3,8 @@ use std::{future::Future, sync::Arc};
 use bytes::{Buf, Bytes};
 pub use pilota::thrift::Message;
 use pilota::thrift::{
-    TAsyncInputProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier, TOutputProtocol,
-    ThriftException,
+    ProtocolException, TAsyncInputProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier,
+    TOutputProtocol, ThriftException,
 };
 
 pub trait EntryMessage: Sized + Send {
@@ -76,7 +76,11 @@ impl EntryMessage for Bytes {
         _protocol: &mut T,
         _msg_ident: &TMessageIdentifier,
     ) -> Result<Self, ThriftException> {
-        unreachable!();
+        Err(ThriftException::Protocol(ProtocolException::new(
+            pilota::thrift::ProtocolExceptionKind::NotImplemented,
+            "Binary response decode is not supported for pure Buffered protocol since we don't \
+             know the length of the message",
+        )))
     }
 
     fn size<T: TLengthProtocol>(&self, _protocol: &mut T) -> usize {

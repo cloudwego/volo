@@ -473,15 +473,14 @@ pub fn check_and_get_repo_name(
     let r#ref = FastStr::new(r#ref.as_deref().unwrap_or("HEAD"));
     let repo_name = match (repo.as_ref(), git.as_ref()) {
         (Some(repo_name), Some(git)) => {
-            // check repo by repo name index
             let key: FastStr = repo_name.clone().into();
-            if repos.contains_key(&key) {
-                let repo = repos.get(&key).unwrap();
+            // check repo by repo name index
+            if let Some(repo) = repos.get(&key) {
                 if repo.url != git {
                     bail!(
                         "The specified repo '{}' already exists in entry '{}' with different url",
                         key,
-                        entry_name,
+                        entry_name
                     );
                 } else if repo.r#ref != r#ref {
                     bail!(
@@ -492,17 +491,19 @@ pub fn check_and_get_repo_name(
                         r#ref
                     );
                 }
-            } else {
-                // check repo by git url index
-                if url_map.contains_key(&FastStr::new(git)) {
-                    bail!(
-                        "The specified repo '{}' is indexed by the existed repo name '{}' in \
-                         entry '{}', please use the existed one",
-                        git,
-                        url_map.get(&FastStr::new(git)).unwrap(),
-                        entry_name
-                    );
-                }
+            }
+            // check repo by git url index
+            else if let Some(repo) = url_map.get(&FastStr::new(git)) {
+                bail!(
+                    "The specified repo '{}' is indexed by the existed repo name '{}' in entry \
+                     '{}', please use the existed one",
+                    git,
+                    repo,
+                    entry_name
+                );
+            }
+            // create a new repo by the git url
+            else {
                 let lock = get_repo_latest_commit_id(git, &r#ref)?.into();
                 let _ = new_repo.insert(Repo {
                     url: git.clone().into(),
@@ -510,7 +511,7 @@ pub fn check_and_get_repo_name(
                     lock,
                 });
             }
-            key.clone()
+            key
         }
         (Some(repo_name), _) => {
             // the repo should exist in the entry
@@ -527,9 +528,8 @@ pub fn check_and_get_repo_name(
         }
         (_, Some(git)) => {
             let key = FastStr::new(git);
-            if url_map.contains_key(&key) {
-                // check repo by git url index
-                let repo = url_map.get(&key).unwrap();
+            // check repo by git url index
+            if let Some(repo) = url_map.get(&key) {
                 let existed_ref = &repos
                     .get(repo)
                     .expect("the repo index should exist for the git index map")
