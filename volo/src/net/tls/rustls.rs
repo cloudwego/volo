@@ -22,6 +22,23 @@ impl Default for RustlsConnector {
     }
 }
 
+fn rustls_crypto_provider() -> rustls::crypto::CryptoProvider {
+    #[cfg(all(feature = "rustls-aws-lc-rs", not(feature = "rustls-ring")))]
+    {
+        return rustls::crypto::aws_lc_rs::default_provider();
+    }
+
+    #[cfg(all(feature = "rustls-ring", not(feature = "rustls-aws-lc-rs")))]
+    {
+        return rustls::crypto::ring::default_provider();
+    }
+
+    #[allow(unreachable_code)]
+    {
+        panic!("only one of `rustls-aws-lc-rs` or `rustls-ring` can be selected.")
+    }
+}
+
 impl Connector for RustlsConnector {
     fn build(builder: TlsConnectorBuilder) -> Result<Self> {
         let mut certs = if builder.default_root_certs {
@@ -44,7 +61,9 @@ impl Connector for RustlsConnector {
                 .add(cert)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
         }
-        let client_config = ClientConfig::builder()
+        let client_config = ClientConfig::builder_with_provider(Arc::new(rustls_crypto_provider()))
+            .with_protocol_versions(rustls::DEFAULT_VERSIONS)
+            .expect("something wrong on rustls ClientConfig")
             .with_root_certificates(certs)
             .with_no_client_auth();
         let connector = TlsConnector::from(Arc::new(client_config));
@@ -72,7 +91,9 @@ impl Acceptor for RustlsAcceptor {
             .pop()
             .map(PrivateKeyDer::Pkcs8)
             .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "No private key found"))?;
-        let server_config = ServerConfig::builder()
+        let server_config = ServerConfig::builder_with_provider(Arc::new(rustls_crypto_provider()))
+            .with_protocol_versions(rustls::DEFAULT_VERSIONS)
+            .expect("something wrong on rustls ServerConfig")
             .with_no_client_auth()
             .with_single_cert(cert, key)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;

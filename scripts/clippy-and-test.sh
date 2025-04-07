@@ -35,6 +35,8 @@ echo_command cargo clippy -p volo-http --no-default-features --features default-
 echo_command cargo clippy -p volo-http --no-default-features --features client,server -- --deny warnings
 echo_command cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
 echo_command cargo clippy -p volo -- --deny warnings
+echo_command cargo clippy -p volo --no-default-features --features rustls-aws-lc-rs -- --deny warnings
+echo_command cargo clippy -p volo --no-default-features --features rustls-ring -- --deny warnings
 echo_command cargo clippy -p volo-build -- --deny warnings
 echo_command cargo clippy -p volo-cli -- --deny warnings
 echo_command cargo clippy -p volo-macros -- --deny warnings
