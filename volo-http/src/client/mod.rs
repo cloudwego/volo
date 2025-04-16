@@ -967,7 +967,7 @@ mod client_tests {
     use http::{header, status::StatusCode};
     use serde::Deserialize;
 
-    use super::{dns::DnsResolver, get, Client};
+    use super::{dns::DnsResolver, get, test_helpers::DebugLayer, Client};
     #[cfg(feature = "cookie")]
     use crate::client::cookie::CookieLayer;
     use crate::{body::BodyConversion, utils::consts::HTTP_DEFAULT_PORT};
@@ -1001,7 +1001,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_with_header() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.header(header::USER_AGENT, USER_AGENT_VAL);
         let client = builder.build().unwrap();
 
@@ -1020,7 +1020,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_with_host() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.host("httpbin.org");
         let client = builder.build().unwrap();
 
@@ -1042,7 +1042,7 @@ mod client_tests {
             .resolve("httpbin.org", HTTP_DEFAULT_PORT)
             .await
             .unwrap();
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.default_host("httpbin.org").address(addr);
         let client = builder.build().unwrap();
 
@@ -1060,7 +1060,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_host_override() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.host("this.domain.must.be.invalid");
         let client = builder.build().unwrap();
 
@@ -1078,7 +1078,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_addr_override() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.default_host("httpbin.org").address(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             8888,
@@ -1105,7 +1105,7 @@ mod client_tests {
     #[cfg(feature = "__tls")]
     #[tokio::test]
     async fn client_builder_with_https() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder
             .host("httpbin.org")
             .with_scheme(http::uri::Scheme::HTTPS);
@@ -1130,7 +1130,7 @@ mod client_tests {
             .resolve("httpbin.org", crate::utils::consts::HTTPS_DEFAULT_PORT)
             .await
             .unwrap();
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder
             .default_host("httpbin.org")
             .address(addr)
@@ -1151,7 +1151,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_with_port() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.host("httpbin.org").with_port(443);
         let client = builder.build().unwrap();
 
@@ -1166,7 +1166,7 @@ mod client_tests {
     async fn client_disable_tls() {
         use crate::error::client::bad_scheme;
 
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.disable_tls(true);
         let client = builder.build().unwrap();
         assert_eq!(
@@ -1185,7 +1185,9 @@ mod client_tests {
     #[cfg(feature = "cookie")]
     #[tokio::test]
     async fn cookie_store() {
-        let mut builder = Client::builder().layer_inner(CookieLayer::new(Default::default()));
+        let mut builder = Client::builder()
+            .layer_inner(DebugLayer::default())
+            .layer_inner(CookieLayer::new(Default::default()));
 
         builder.host("httpbin.org");
 
