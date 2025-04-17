@@ -475,5 +475,4 @@ async fn handle_conn_multiplex<R, W, Req, Svc, Resp, MkC>(
         peer_addr,
     )
     .await;
-    conn_cnt.fetch_sub(1, Ordering::Relaxed);
 }
