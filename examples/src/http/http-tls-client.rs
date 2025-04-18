@@ -19,12 +19,11 @@ async fn main() {
     let client = {
         let mut builder = Client::builder();
         builder.set_tls_config(connector);
-        builder.build()
+        builder.build().expect("failed to build client")
     };
 
     let resp = client
         .get("https://[::1]:8080/")
-        .expect("invalid uri")
         .send()
         .await
         .expect("request failed")
