@@ -35,7 +35,9 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(index))
-        .layer(TimeoutLayer::new(Duration::from_secs(5)));
+        .layer(TimeoutLayer::new(Duration::from_secs(5), |_: &_| {
+            http::StatusCode::REQUEST_TIMEOUT
+        }));
 
     let addr: SocketAddr = "[::]:8080".parse().unwrap();
     let addr = volo::net::Address::from(addr);
