@@ -42,12 +42,12 @@ where
                     if let Some(config)=compression_encoding{
                         compressed_buf.clear();
                         encoder.encode(item, &mut compressed_buf)
-                            .map_err(|err| Status::internal(format!("Error encoding: {}", err)))?;
+                            .map_err(|err| Status::internal(format!("Error encoding: {err}")))?;
                         compress(config,&mut compressed_buf,&mut buf)
-                            .map_err(|err| Status::internal(format!("Error compressing: {}", err)))?;
+                            .map_err(|err| Status::internal(format!("Error compressing: {err}")))?;
                     }else{
                         encoder.encode(item, &mut buf)
-                            .map_err(|err| Status::internal(format!("Error encoding: {}", err)))?;
+                            .map_err(|err| Status::internal(format!("Error encoding: {err}")))?;
                     }
                     let len = buf.len() - PREFIX_LEN;
                     assert!(len <= u32::MAX as usize);

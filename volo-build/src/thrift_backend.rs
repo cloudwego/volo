@@ -705,13 +705,13 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             write_item(
                 &mut mod_rs_stream,
                 base_dir,
-                format!("service_{}Server.rs", service_name),
+                format!("service_{service_name}Server.rs"),
                 server_string,
             );
             write_item(
                 &mut mod_rs_stream,
                 base_dir,
-                format!("service_{}Client.rs", service_name),
+                format!("service_{service_name}Client.rs"),
                 client_string,
             );
         } else {
