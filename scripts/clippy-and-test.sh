@@ -40,7 +40,8 @@ echo_command cargo clippy -p volo --no-default-features --features rustls-ring -
 echo_command cargo clippy -p volo-build -- --deny warnings
 echo_command cargo clippy -p volo-cli -- --deny warnings
 echo_command cargo clippy -p volo-macros -- --deny warnings
-echo_command cargo clippy -p examples -- -A clippy::literal_string_with_formatting_args --deny warnings
+echo_command cargo clippy -p examples -- --deny warnings
+echo_command cargo clippy -p examples --features tls -- --deny warnings
 
 # Test
 echo_command cargo test -p volo-thrift
