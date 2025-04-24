@@ -140,6 +140,8 @@ volo-http = { path = "../volo-http", features = [
 volo-gen = { path = "./volo-gen" }
 
 [features]
+tls = ["rustls"]
+
 __tls = []
 rustls = ["__tls", "volo/rustls", "volo-grpc/rustls", "volo-http/rustls"]
 native-tls = [

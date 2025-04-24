@@ -115,7 +115,7 @@ where
         let target = rpc_info.callee().address().ok_or_else(|| {
             TransportException::from(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("address is required, rpc_info: {:?}", rpc_info),
+                format!("address is required, rpc_info: {rpc_info:?}"),
             ))
         })?;
         let oneway = cx.message_type == TMessageType::OneWay;

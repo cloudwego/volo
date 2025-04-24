@@ -162,7 +162,7 @@ fn gen_host(
                 if is_default_port(scheme, sa.port()) {
                     HeaderValue::try_from(format!("{}", sa.ip())).ok()
                 } else {
-                    HeaderValue::try_from(format!("{}", sa)).ok()
+                    HeaderValue::try_from(format!("{sa}")).ok()
                 }
             }
             #[cfg(target_family = "unix")]

@@ -35,6 +35,6 @@ pub async fn process_request(recoder: &Recoder, req: Request) -> Response {
 
 pub fn process_response(action: &str, msg: &str) {
     if action == REPORT_ACTION {
-        println!("{}", msg);
+        println!("{msg}");
     }
 }

@@ -95,7 +95,7 @@ mod tests {
     fn test_display_trait() {
         let data = TestData;
         let borrowed_ref: Ref<'_, TestData> = (&data).into();
-        assert_eq!(format!("{}", borrowed_ref), format!("{}", data));
+        assert_eq!(format!("{borrowed_ref}"), format!("{}", data));
     }
 
     #[test]

@@ -209,7 +209,7 @@ where
             let str = instance.address.to_string();
             let vnode_lens = virtual_factor * weight;
             // try to reuse the buffer
-            let mut buf = format!("{}#{}", str, vnode_lens).into_bytes();
+            let mut buf = format!("{str}#{vnode_lens}").into_bytes();
             let mut sharp_pos = 0;
             for (i, bytei) in buf.iter().enumerate() {
                 if *bytei == b'#' {
@@ -338,7 +338,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_consistent_hash_balancer() {
-        test_with_meta_info(|| consistent_hash_balancer_tests()).await;
+        test_with_meta_info(consistent_hash_balancer_tests).await;
     }
 
     async fn consistent_hash_balancer_tests() {
@@ -374,7 +374,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_consistent_hash_consistent() {
-        test_with_meta_info(|| consistent_hash_consistent_tests()).await;
+        test_with_meta_info(consistent_hash_consistent_tests).await;
     }
 
     async fn consistent_hash_consistent_tests() {
@@ -460,7 +460,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_consistent_hash_balance() {
-        test_with_meta_info(|| consistent_hash_balance_tests()).await;
+        test_with_meta_info(consistent_hash_balance_tests).await;
     }
 
     async fn consistent_hash_balance_tests() {
@@ -471,8 +471,8 @@ mod tests {
             let w = rng.random_range(10..=100);
             let sub_net = rng.random_range(0..=255);
             let port = rng.random_range(1000..=65535);
-            instances.push(new_instance(format!("172.17.0.{}:{}", sub_net, port), w));
-            instances.push(new_instance(format!("192.168.32.{}:{}", sub_net, port), w));
+            instances.push(new_instance(format!("172.17.0.{sub_net}:{port}"), w));
+            instances.push(new_instance(format!("192.168.32.{sub_net}:{port}"), w));
         }
         let result = simulate_random_picks(instances.clone(), 1000000).await;
         let sum_visits = result.values().sum::<usize>();
@@ -485,10 +485,10 @@ mod tests {
             let expect = instance.weight as f64 / sum_weight as f64 * sum_visits as f64;
             let eps = (exact - expect).abs() / expect;
             // compute the standard deviation
-            deviation = deviation + (eps * eps);
+            deviation += eps * eps;
             max_eps = max_eps.max(eps);
         }
-        println!("max_eps: {}", max_eps);
+        println!("max_eps: {max_eps}");
         println!(
             "standard deviation: {}",
             (deviation / instances.len() as f64).sqrt()
@@ -498,7 +498,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_consistent_hash_change() {
-        test_with_meta_info(|| consistent_hash_change_tests()).await;
+        test_with_meta_info(consistent_hash_change_tests).await;
     }
 
     async fn consistent_hash_change_tests() {
@@ -511,7 +511,7 @@ mod tests {
         let mut rng = rand::rng();
         for i in 0..30 {
             let w = rng.random_range(10..=100);
-            instances.push(new_instance(format!("127.0.0.1:{}", i), w));
+            instances.push(new_instance(format!("127.0.0.1:{i}"), w));
         }
         let discovery = StaticDiscover::new(instances.clone());
         let mut lb = ConsistentHashBalance::new(opt.clone());
