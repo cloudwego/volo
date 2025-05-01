@@ -40,8 +40,7 @@ pub fn read_config_from_file(f: &File) -> Result<Config, serde_yaml::Error> {
                 Ok(Config::new())
             } else {
                 Err(serde_yaml::Error::custom(format!(
-                    "failed to read config file, err: {}",
-                    e
+                    "failed to read config file, err: {e}"
                 )))
             }
         }
@@ -95,7 +94,7 @@ mod tests {
                 assert!(file.metadata().is_ok());
             }
             Err(err) => {
-                eprintln!("Error: {}", err);
+                eprintln!("Error: {err}");
                 panic!("Failed to create new file");
             }
         }
@@ -108,7 +107,7 @@ mod tests {
                 assert!(file.metadata().is_ok());
             }
             Err(err) => {
-                eprintln!("Error: {}", err);
+                eprintln!("Error: {err}");
                 panic!("Failed to append to existing file");
             }
         }

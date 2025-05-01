@@ -38,7 +38,7 @@ impl VoloGrpcBackend {
         let ty_str = if global_path {
             format!("{}", ty.global_path("volo_gen"))
         } else {
-            format!("{}", ty)
+            format!("{ty}")
         };
 
         if streaming {
@@ -58,7 +58,7 @@ impl VoloGrpcBackend {
         let ret_ty_str = if global_path {
             format!("{}", ret_ty.global_path("volo_gen"))
         } else {
-            format!("{}", ret_ty)
+            format!("{ret_ty}")
         };
 
         if streaming {
@@ -240,11 +240,11 @@ impl CodegenBackend for VoloGrpcBackend {
 
     fn codegen_service_impl(&self, def_id: DefId, stream: &mut String, s: &rir::Service) {
         let service_name = self.cx().rust_name(def_id);
-        let server_name = format!("{}Server", service_name);
-        let client_builder_name = format!("{}ClientBuilder", service_name);
-        let generic_client_name = format!("{}GenericClient", service_name);
-        let client_name = format!("{}Client", service_name);
-        let oneshot_client_name = format!("{}OneShotClient", service_name);
+        let server_name = format!("{service_name}Server");
+        let client_builder_name = format!("{service_name}ClientBuilder");
+        let generic_client_name = format!("{service_name}GenericClient");
+        let client_name = format!("{service_name}Client");
+        let oneshot_client_name = format!("{service_name}OneShotClient");
 
         let file_id = self.cx().node(def_id).unwrap().file_id;
         let file = self.cx().file(file_id).unwrap();
@@ -252,10 +252,10 @@ impl CodegenBackend for VoloGrpcBackend {
         let package = file.package.iter().join(".");
         let name = format!("{package}.{}", s.name);
 
-        let req_enum_name_send = format!("{}RequestSend", service_name);
-        let resp_enum_name_send = format!("{}ResponseSend", service_name);
-        let req_enum_name_recv = format!("{}RequestRecv", service_name);
-        let resp_enum_name_recv = format!("{}ResponseRecv", service_name);
+        let req_enum_name_send = format!("{service_name}RequestSend");
+        let resp_enum_name_send = format!("{service_name}ResponseSend");
+        let req_enum_name_recv = format!("{service_name}RequestRecv");
+        let resp_enum_name_recv = format!("{service_name}ResponseRecv");
 
         let path = self.cx().item_path(def_id);
         let path = path.as_ref();
@@ -385,7 +385,7 @@ impl CodegenBackend for VoloGrpcBackend {
             );
         });
 
-        let mk_client_name = format!("Mk{}", generic_client_name);
+        let mk_client_name = format!("Mk{generic_client_name}");
 
         let client_methods = client_methods.join("\n");
         let oneshot_client_methods = oneshot_client_methods.join("\n");
@@ -605,38 +605,38 @@ impl CodegenBackend for VoloGrpcBackend {
             write_item(
                 &mut mod_rs_stream,
                 base_dir,
-                format!("enum_{}.rs", req_enum_name_send),
+                format!("enum_{req_enum_name_send}.rs"),
                 req_enum_send_impl,
             );
             write_item(
                 &mut mod_rs_stream,
                 base_dir,
-                format!("enum_{}.rs", req_enum_name_recv),
+                format!("enum_{req_enum_name_recv}.rs"),
                 req_enum_recv_impl,
             );
             write_item(
                 &mut mod_rs_stream,
                 base_dir,
-                format!("enum_{}.rs", resp_enum_name_send),
+                format!("enum_{resp_enum_name_send}.rs"),
                 resp_enum_send_impl,
             );
             write_item(
                 &mut mod_rs_stream,
                 base_dir,
-                format!("enum_{}.rs", resp_enum_name_recv),
+                format!("enum_{resp_enum_name_recv}.rs"),
                 resp_enum_recv_impl,
             );
 
             write_item(
                 &mut mod_rs_stream,
                 base_dir,
-                format!("client_{}.rs", client_name),
+                format!("client_{client_name}.rs"),
                 client_impl,
             );
             write_item(
                 &mut mod_rs_stream,
                 base_dir,
-                format!("server_{}.rs", server_name),
+                format!("server_{server_name}.rs"),
                 server_impl,
             );
 

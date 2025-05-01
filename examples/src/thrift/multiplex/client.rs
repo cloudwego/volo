@@ -19,7 +19,7 @@ async fn main() {
 
     let futs = |i| async move {
         let req = volo_gen::thrift_gen::hello::HelloRequest {
-            name: format!("volo{}", i).into(),
+            name: format!("volo{i}").into(),
         };
         let resp = CLIENT
             .clone()

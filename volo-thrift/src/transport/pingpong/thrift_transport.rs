@@ -90,7 +90,7 @@ where
     ) -> Result<Option<ThriftMessage<T>>, ClientError> {
         let thrift_msg = self.decoder.decode(cx).await.map_err(|e| {
             let mut e = e;
-            e.append_msg(&format!(", cx: {:?}", cx));
+            e.append_msg(&format!(", cx: {cx:?}"));
             tracing::error!("[VOLO] transport[{}] decode error: {}", self.id, e);
             e
         })?;
@@ -106,7 +106,7 @@ where
                 );
                 return Err(ClientError::Application(ApplicationException::new(
                     ApplicationExceptionKind::BAD_SEQUENCE_ID,
-                    format!("seq_id not match, cx: {:?}", cx),
+                    format!("seq_id not match, cx: {cx:?}"),
                 )));
             }
         };

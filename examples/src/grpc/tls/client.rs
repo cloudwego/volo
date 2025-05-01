@@ -19,12 +19,12 @@ async fn main() {
     let tls_config = ClientTlsConfig::new("example.com", connector);
 
     let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
-    let client = volo_gen::proto_gen::hello::GreeterClientBuilder::new("hello")
+    let client = volo_gen::proto_gen::helloworld::GreeterClientBuilder::new("hello")
         .tls_config(tls_config)
         .address(addr)
         .build();
 
-    let req = volo_gen::proto_gen::hello::HelloRequest {
+    let req = volo_gen::proto_gen::helloworld::HelloRequest {
         name: FastStr::from_static_str("Volo"),
     };
     let resp = client.say_hello(req).await;

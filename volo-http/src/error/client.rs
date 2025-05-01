@@ -17,7 +17,12 @@ pub type Result<T, E = ClientError> = std::result::Result<T, E>;
 pub struct ClientError {
     kind: ErrorKind,
     source: Option<BoxError>,
-    uri: Option<Uri>,
+    // The type `Uri` takes up 88 bytes, which causes the entire `ClientError` to take up 144 bytes
+    // and clippy will throw `clippy::result_large_err`.
+    //
+    // Considering that the field will not be used in the hot path, in order to avoid the problem
+    // of `ClientError` being too large, we added `Box` to `Uri`.
+    uri: Option<Box<Uri>>,
     addr: Option<SocketAddr>,
 }
 
@@ -38,7 +43,7 @@ impl ClientError {
     /// Set a [`Uri`] to the [`ClientError`].
     #[inline]
     pub fn set_url(&mut self, uri: Uri) {
-        self.uri = Some(uri);
+        self.uri = Some(Box::new(uri));
     }
 
     /// Set a [`SocketAddr`] to the [`ClientError`].
@@ -50,7 +55,7 @@ impl ClientError {
     /// Consume current [`ClientError`] and return a new one with given [`Uri`].
     #[inline]
     pub fn with_url(mut self, uri: Uri) -> Self {
-        self.uri = Some(uri);
+        self.uri = Some(Box::new(uri));
         self
     }
 
@@ -99,7 +104,7 @@ impl ClientError {
     /// Get a reference to the [`Uri`] if it exists
     #[inline]
     pub fn uri(&self) -> Option<&Uri> {
-        self.uri.as_ref()
+        self.uri.as_deref()
     }
 
     /// Get a reference to the [`SocketAddr`] if it exists

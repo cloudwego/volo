@@ -27,13 +27,7 @@ rust-version = "1.80.0"
 pilota = "0.11"
 pilota-build = "0.11"
 pilota-thrift-parser = "0.11"
-# pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
-# pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
-# pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
-
 motore = "0.4"
-# motore = { git = "https://github.com/cloudwego/motore.git", branch = "main" }
-
 metainfo = "0.7"
 
 ahash = "0.8"
@@ -58,11 +52,11 @@ futures = "0.3"
 futures-util = "0.3"
 flate2 = "1"
 git2 = { version = "0.20", default-features = false }
-governor = "0.8"
+governor = "0.10"
 h2 = "0.4"
 heck = "0.5"
 hex = "0.4"
-hickory-resolver = "0.24"
+hickory-resolver = "0.25"
 http = "1"
 http-body = "1"
 http-body-util = "0.1"
@@ -110,17 +104,17 @@ serde_urlencoded = "0.7"
 serde_yaml = "0.9"
 simdutf8 = "0.1"
 socket2 = "0.5"
-sonic-rs = "0.3"
+sonic-rs = "0.5"
 syn = "2"
-sysinfo = "0.33"
+sysinfo = "0.34"
 tempfile = "3"
 thiserror = "2"
 tokio = "1"
 tokio-stream = "0.1"
 tokio-test = "0.4"
 tokio-util = "0.7"
-tonic = "0.12"
-tonic-web = "0.12"
+tonic = "0.13"
+tonic-web = "0.13"
 tower = "0.5"
 tracing = "0.1"
 tracing-subscriber = "0.3"
@@ -152,3 +146,10 @@ codegen-units = 1
 panic = 'unwind'
 incremental = false
 overflow-checks = false
+
+[patch.crates-io]
+# pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+# pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+# pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+# motore = { git = "https://github.com/cloudwego/motore.git", branch = "main" }
+# metainfo = { git = "https://github.com/cloudwego/metainfo.git", branch = "main"}

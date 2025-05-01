@@ -514,6 +514,6 @@ mod tests {
             pilota::thrift::TMessageType::Call,
         )
         .rpc_info;
-        println!("{:?}", ri);
+        println!("{ri:?}");
     }
 }

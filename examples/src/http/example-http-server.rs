@@ -176,7 +176,7 @@ async fn box_body_test() -> Body {
 }
 
 async fn full_uri(uri: FullUri) -> String {
-    format!("{}\n", uri)
+    format!("{uri}\n")
 }
 
 async fn redirect_to_index() -> Redirect {

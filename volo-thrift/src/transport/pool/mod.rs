@@ -339,8 +339,7 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
             Either::Left((Err(e), _)) => {
                 tracing::error!("[VOLO] wait a idle connection error: {:?}", e);
                 Err(TransportException::from(std::io::Error::other(format!(
-                    "wait a idle connection error: {:?}",
-                    e
+                    "wait a idle connection error: {e:?}"
                 )))
                 .into())
             }

@@ -47,8 +47,8 @@ impl<S> VoloToTonicService<S> {
 impl<S> tower::Service<http::Request<BoxBody>> for VoloToTonicService<S>
 where
     S: tower::Service<
-            http::Request<tonic::body::BoxBody>,
-            Response = http::Response<tonic::body::BoxBody>,
+            http::Request<tonic::body::Body>,
+            Response = http::Response<tonic::body::Body>,
         > + Send
         + Clone
         + 'static,
@@ -67,8 +67,7 @@ where
         let mut inner = self.inner.clone();
         async move {
             let req = req.map(|body| {
-                body.map_err(|err| tonic::Status::from_error(Box::new(err)))
-                    .boxed_unsync()
+                tonic::body::Body::new(body.map_err(|err| tonic::Status::from_error(Box::new(err))))
             });
             inner.call(req).await.map(|res| {
                 res.map(|body| {
@@ -92,7 +91,7 @@ impl<S> TonicToVoloService<S> {
     }
 }
 
-impl<S> tower::Service<http::Request<tonic::body::BoxBody>> for TonicToVoloService<S>
+impl<S> tower::Service<http::Request<tonic::body::Body>> for TonicToVoloService<S>
 where
     S: tower::Service<http::Request<BoxBody>, Response = http::Response<BoxBody>>
         + Send
@@ -101,7 +100,7 @@ where
     S::Error: Into<BoxError> + Send,
     S::Future: Send,
 {
-    type Response = http::Response<tonic::body::BoxBody>;
+    type Response = http::Response<tonic::body::Body>;
     type Error = S::Error;
     type Future = BoxFuture<'static, Result<Self::Response, Self::Error>>;
 
@@ -109,7 +108,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, req: http::Request<tonic::body::BoxBody>) -> Self::Future {
+    fn call(&mut self, req: http::Request<tonic::body::Body>) -> Self::Future {
         let mut inner = self.inner.clone();
         async move {
             let req = req.map(|body| {
@@ -118,8 +117,9 @@ where
             });
             inner.call(req).await.map(|res| {
                 res.map(|body| {
-                    body.map_err(|err| tonic::Status::from_error(Box::new(err)))
-                        .boxed_unsync()
+                    tonic::body::Body::new(
+                        body.map_err(|err| tonic::Status::from_error(Box::new(err))),
+                    )
                 })
             })
         }

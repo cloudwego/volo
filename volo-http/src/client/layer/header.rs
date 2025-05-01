@@ -50,7 +50,6 @@ impl Header {
     ///
     /// [`ClientError`]: crate::error::client::ClientError
     /// [`ErrorKind::Builder`]: crate::error::client::ErrorKind::Builder
-    #[allow(clippy::result_large_err)]
     pub fn try_new<K, V>(key: K, val: V) -> Result<Self>
     where
         K: TryInto<HeaderName>,
@@ -162,7 +161,7 @@ fn gen_host(
                 if is_default_port(scheme, sa.port()) {
                     HeaderValue::try_from(format!("{}", sa.ip())).ok()
                 } else {
-                    HeaderValue::try_from(format!("{}", sa)).ok()
+                    HeaderValue::try_from(format!("{sa}")).ok()
                 }
             }
             #[cfg(target_family = "unix")]

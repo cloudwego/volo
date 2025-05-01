@@ -41,7 +41,7 @@ pub fn read_config_from_file(f: &mut File) -> Result<SingleConfig, serde_yaml::E
             } else {
                 let mut s = String::with_capacity(metadata.len() as usize);
                 f.read_to_string(&mut s).map_err(|e| {
-                    serde_yaml::Error::custom(format!("failed to read config file, err: {}", e))
+                    serde_yaml::Error::custom(format!("failed to read config file, err: {e}"))
                 })?;
                 match serde_yaml::from_str(s.as_str()) {
                     Ok(config) => Ok(config),
@@ -64,8 +64,7 @@ pub fn read_config_from_file(f: &mut File) -> Result<SingleConfig, serde_yaml::E
                 Ok(SingleConfig::new())
             } else {
                 Err(serde_yaml::Error::custom(format!(
-                    "failed to read config file, err: {}",
-                    e
+                    "failed to read config file, err: {e}"
                 )))
             }
         }
@@ -586,7 +585,7 @@ pub fn detect_protocol<P: AsRef<Path>>(path: P) -> IdlProtocol {
         Some("thrift") => IdlProtocol::Thrift,
         Some("proto") => IdlProtocol::Protobuf,
         _ => {
-            eprintln!("invalid file ext {:?}", path);
+            eprintln!("invalid file ext {path:?}");
             std::process::exit(1);
         }
     }
@@ -680,7 +679,7 @@ mod tests {
                 assert!(file.metadata().is_ok());
             }
             Err(err) => {
-                eprintln!("Error: {}", err);
+                eprintln!("Error: {err}");
                 panic!("Failed to create new file");
             }
         }
@@ -693,7 +692,7 @@ mod tests {
                 assert!(file.metadata().is_ok());
             }
             Err(err) => {
-                eprintln!("Error: {}", err);
+                eprintln!("Error: {err}");
                 panic!("Failed to append to existing file");
             }
         }

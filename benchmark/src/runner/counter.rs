@@ -103,6 +103,6 @@ impl Counter {
                 total
             )
         };
-        println!("{}", result);
+        println!("{result}");
     }
 }

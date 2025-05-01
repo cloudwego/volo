@@ -15,15 +15,12 @@ pub fn log_and_return_exception<Resp>(
     } else if let Some(s) = payload.downcast_ref::<&str>() {
         s.to_string()
     } else {
-        format!("{:?}", payload)
+        format!("{payload:?}")
     };
 
     // There may be some redundant information in the panic_info, but it's better to keep it, since
     // it seems that the payload and message are subject to change in the future.
-    let message = format!(
-        "panicked in biz logic: {}, panic_info: {}",
-        payload_msg, panic_info
-    );
+    let message = format!("panicked in biz logic: {payload_msg}, panic_info: {panic_info}");
 
     tracing::error!("[Volo-Thrift] {}, cx: {:?}", message, cx);
     Err(ServerError::Application(ApplicationException::new(

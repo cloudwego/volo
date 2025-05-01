@@ -43,13 +43,13 @@ fn build_request(base_uri: &str, content_type: &str, accept: &str) -> Request<Fu
 
     let bytes = match content_type {
         "grpc-web" => encode_body(),
-        _ => panic!("invalid content type {}", content_type),
+        _ => panic!("invalid content type {content_type}"),
     };
 
     Request::builder()
         .method(Method::POST)
-        .header(CONTENT_TYPE, format!("application/{}", content_type))
-        .header(ACCEPT, format!("application/{}", accept))
+        .header(CONTENT_TYPE, format!("application/{content_type}"))
+        .header(ACCEPT, format!("application/{accept}"))
         .uri(request_uri)
         .body(Full::new(bytes))
         .unwrap()

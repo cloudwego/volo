@@ -158,7 +158,7 @@ impl Display for BizError {
         let mut extra_str = String::new();
         if let Some(extra) = &self.extra {
             for (k, v) in extra {
-                extra_str.push_str(&format!("{}: {},", k, v));
+                extra_str.push_str(&format!("{k}: {v},"));
             }
         }
         write!(

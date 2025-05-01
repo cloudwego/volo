@@ -131,7 +131,7 @@ where
     ) -> Result<Self::Response, Self::Error> {
         let rpc_info = &cx.rpc_info;
         let target = rpc_info.callee().address().ok_or_else(|| {
-            let msg = format!("address is required, rpcinfo: {:?}", rpc_info);
+            let msg = format!("address is required, rpcinfo: {rpc_info:?}");
             ClientError::Transport(io::Error::new(io::ErrorKind::InvalidData, msg).into())
         })?;
         let oneway = cx.message_type == TMessageType::OneWay;
@@ -144,7 +144,7 @@ where
                 return Err(ClientError::Transport(
                     pilota::thrift::TransportException::from(io::Error::new(
                         io::ErrorKind::UnexpectedEof,
-                        format!("an unexpected end of file from server, cx: {:?}", cx),
+                        format!("an unexpected end of file from server, cx: {cx:?}"),
                     )),
                 ));
             }

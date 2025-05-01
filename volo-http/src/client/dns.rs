@@ -8,7 +8,8 @@ use async_broadcast::Receiver;
 use faststr::FastStr;
 use hickory_resolver::{
     config::{LookupIpStrategy, ResolverConfig, ResolverOpts},
-    AsyncResolver, TokioAsyncResolver,
+    name_server::TokioConnectionProvider,
+    Resolver, TokioResolver,
 };
 use volo::{
     context::Endpoint,
@@ -40,7 +41,7 @@ impl Deref for Port {
 /// A service discover implementation for DNS.
 #[derive(Clone)]
 pub struct DnsResolver {
-    resolver: TokioAsyncResolver,
+    resolver: TokioResolver,
 }
 
 impl DnsResolver {
@@ -48,9 +49,10 @@ impl DnsResolver {
     ///
     /// For using system config, you can create a new instance by `DnsResolver::default()`.
     pub fn new(config: ResolverConfig, options: ResolverOpts) -> Self {
-        Self {
-            resolver: AsyncResolver::tokio(config, options),
-        }
+        let mut builder = Resolver::builder_with_config(config, TokioConnectionProvider::default());
+        builder.options_mut().clone_from(&options);
+        let resolver = builder.build();
+        Self { resolver }
     }
 
     /// Resolve a host to an IP address and then set the port to it for getting an [`Address`].

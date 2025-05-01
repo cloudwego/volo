@@ -49,14 +49,14 @@ where
         let config = match std::fs::read(work_dir.join("volo.workspace.yml")) {
             Ok(config) => config,
             Err(e) => {
-                eprintln!("failed to read volo.workspace.yml file, err: {}", e);
+                eprintln!("failed to read volo.workspace.yml file, err: {e}");
                 std::process::exit(1);
             }
         };
         let config = match serde_yaml::from_slice::<WorkspaceConfig>(&config) {
             Ok(config) => config,
             Err(e) => {
-                eprintln!("failed to parse volo.workspace.yml, err: {}", e);
+                eprintln!("failed to parse volo.workspace.yml, err: {e}");
                 std::process::exit(1);
             }
         };
