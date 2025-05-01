@@ -1,4 +1,3 @@
-use core::cell::OnceCell;
 use std::{hash::Hash, sync::Arc};
 
 use dashmap::{mapref::entry::Entry, DashMap};
@@ -12,26 +11,27 @@ use crate::{
 };
 
 #[inline]
-fn pick_one(weight: usize, iter: &[Arc<Instance>]) -> Option<(usize, Arc<Instance>)> {
-    if weight == 0 {
+fn pick_one(
+    sum_of_weight: usize,
+    prefix_sum_of_weights: &[usize],
+    instances: &[Arc<Instance>],
+) -> Option<(usize, Arc<Instance>)> {
+    if sum_of_weight == 0 {
         return None;
     }
-    let mut weight = rand::rng().random_range(0..weight) as isize;
-    for (offset, instance) in iter.iter().enumerate() {
-        weight -= instance.weight as isize;
-        if weight <= 0 {
-            return Some((offset, instance.clone()));
-        }
-    }
-    None
+    let weight = rand::rng().random_range(0..sum_of_weight);
+    let index = prefix_sum_of_weights
+        .binary_search(&weight)
+        .unwrap_or_else(|index| index);
+    Some((index, instances[index].clone()))
 }
 
 #[derive(Debug)]
 pub struct InstancePicker {
     shared_instances: Arc<WeightedInstances>,
     sum_of_weights: usize,
-    owned_instances: OnceCell<Vec<Arc<Instance>>>,
-    last_pick: Option<(usize, Arc<Instance>)>,
+    last_offset: Option<usize>,
+    iter_times: usize,
 }
 
 impl Iterator for InstancePicker {
@@ -39,27 +39,28 @@ impl Iterator for InstancePicker {
 
     fn next(&mut self) -> Option<Self::Item> {
         let shared_instances = &self.shared_instances.instances;
+        let prefix_sum_of_weights = &self.shared_instances.prefix_sum_of_weights;
         if shared_instances.is_empty() {
             return None;
         }
-
-        match &mut self.last_pick {
+        self.iter_times += 1;
+        match &mut self.last_offset {
             None => {
-                let (offset, instance) = pick_one(self.sum_of_weights, shared_instances)?;
-                self.last_pick = Some((offset, instance.clone()));
+                let (offset, instance) =
+                    pick_one(self.sum_of_weights, prefix_sum_of_weights, shared_instances)?;
+                self.last_offset = Some(offset);
                 Some(instance.address.clone())
             }
-            Some((last_offset, last_pick)) => {
-                self.owned_instances
-                    .get_or_init(|| shared_instances.to_vec());
-                let owned = self.owned_instances.get_mut().unwrap();
-
-                self.sum_of_weights -= last_pick.weight as usize;
-                owned.remove(*last_offset);
-
-                (*last_offset, *last_pick) = pick_one(self.sum_of_weights, owned)?;
-
-                Some(last_pick.clone().address.clone())
+            Some(last_offset) => {
+                if self.iter_times > shared_instances.len() {
+                    return None;
+                }
+                let mut offset = *last_offset + 1;
+                if offset == shared_instances.len() {
+                    offset = 0;
+                }
+                *last_offset = offset;
+                Some(shared_instances[offset].address.clone())
             }
         }
     }
@@ -68,16 +69,21 @@ impl Iterator for InstancePicker {
 #[derive(Debug, Clone)]
 struct WeightedInstances {
     sum_of_weights: usize,
+    prefix_sum_of_weights: Vec<usize>,
     instances: Vec<Arc<Instance>>,
 }
 
 impl From<Vec<Arc<Instance>>> for WeightedInstances {
     fn from(instances: Vec<Arc<Instance>>) -> Self {
-        let sum_of_weights = instances
-            .iter()
-            .fold(0, |lhs, rhs| lhs + rhs.weight as usize);
+        let mut sum_of_weights = 0;
+        let mut prefix_sum_of_weights = Vec::with_capacity(instances.len());
+        for instance in instances.iter() {
+            sum_of_weights += instance.weight as usize;
+            prefix_sum_of_weights.push(sum_of_weights);
+        }
         Self {
             instances,
+            prefix_sum_of_weights,
             sum_of_weights,
         }
     }
@@ -137,8 +143,8 @@ where
         };
         let sum_of_weights = weighted_list.sum_of_weights;
         Ok(InstancePicker {
-            owned_instances: OnceCell::new(),
-            last_pick: None,
+            last_offset: None,
+            iter_times: 0,
             shared_instances: weighted_list,
             sum_of_weights,
         })
@@ -154,7 +160,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::{LoadBalance, WeightedRandomBalance};
+    use crate::discovery::WeightedStaticDiscover;
     use crate::{context::Endpoint, discovery::StaticDiscover};
+    use rand::{rng, RngCore};
+    use std::collections::HashMap;
 
     #[tokio::test]
     async fn test_weighted_random() {
@@ -168,5 +177,44 @@ mod tests {
         let all = picker.collect::<Vec<_>>();
         assert_eq!(all.len(), 2);
         assert_ne!(all[0], all[1]);
+    }
+
+    #[tokio::test]
+    async fn test_weighted_random_load_balance() {
+        let cycle = 10;
+
+        let empty = Endpoint::new("".into());
+        let mut weighted_instances = Vec::with_capacity(100);
+        let mut total_weight = 0;
+        for i in 0..100 {
+            let addr = format!("127.0.0.{}:8000", i).parse().unwrap();
+            let weight = rng().next_u32() % 100 + 1;
+            weighted_instances.push((addr, weight));
+            total_weight += weight;
+        }
+        let discover = WeightedStaticDiscover::from(weighted_instances.clone());
+        let lb = WeightedRandomBalance::with_discover(&discover);
+
+        let mut actual_weights: HashMap<String, u32> = HashMap::new();
+        for _ in 0..(total_weight * cycle) {
+            let mut picker = lb.get_picker(&empty, &discover).await.unwrap();
+            let addr = picker.next().unwrap();
+            let count = actual_weights.entry(addr.to_string()).or_insert(0);
+            *count += 1;
+        }
+        for instance in weighted_instances.iter() {
+            let addr = instance.0.to_string();
+            let weight = instance.1;
+            let count = *actual_weights.entry(addr.to_string()).or_insert(0);
+
+            let expected_rate = (weight as f64) / (total_weight as f64);
+            let actual_rate = (count as f64) / ((total_weight * cycle) as f64);
+
+            println!(
+                "addr: {}, expected: {}, actual: {}",
+                addr, expected_rate, actual_rate
+            );
+            assert!((expected_rate - actual_rate).abs() < 0.01);
+        }
     }
 }
