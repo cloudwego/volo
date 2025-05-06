@@ -19,7 +19,7 @@ fn pick_one(
     if sum_of_weight == 0 {
         return None;
     }
-    if instances.len() == 0 {
+    if instances.is_empty() {
         return None;
     }
     let weight = rand::rng().random_range(0..sum_of_weight);
