@@ -165,8 +165,8 @@ impl Discover for StaticDiscover {
     }
 }
 
-/// [`WeightedStaticDiscover`] is a simple implementation of [`Discover`] that returns a static list of
-/// instances with weight.
+/// [`WeightedStaticDiscover`] is a simple implementation of [`Discover`] that returns a static list 
+/// of instances with weight.
 #[derive(Clone)]
 pub struct WeightedStaticDiscover {
     instances: Vec<Arc<Instance>>,
