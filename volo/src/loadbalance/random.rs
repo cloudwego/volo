@@ -162,11 +162,15 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::{LoadBalance, WeightedRandomBalance};
-    use crate::discovery::WeightedStaticDiscover;
-    use crate::{context::Endpoint, discovery::StaticDiscover};
-    use rand::{rng, RngCore};
     use std::collections::HashMap;
+
+    use rand::{rng, RngCore};
+
+    use super::{LoadBalance, WeightedRandomBalance};
+    use crate::{
+        context::Endpoint,
+        discovery::{StaticDiscover, WeightedStaticDiscover},
+    };
 
     #[tokio::test]
     async fn test_weighted_random() {
