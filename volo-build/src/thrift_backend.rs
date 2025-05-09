@@ -756,6 +756,16 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             .map(|a| {
                 let ty = self.inner.codegen_item_ty(a.ty.kind.clone());
                 let ident = self.cx().rust_name(a.def_id); // use the rust name as string format which will escape the keyword
+                let ty = if let Some(RustWrapperArc(true)) = self
+                    .cx()
+                    .tags(a.tags_id)
+                    .as_ref()
+                    .and_then(|tags| tags.get::<RustWrapperArc>())
+                {
+                    format!("::std::sync::Arc<{ty}>")
+                } else {
+                    format!("{ty}")
+                };
                 let ty = if a.kind == rir::FieldKind::Optional {
                     format!("::std::option::Option<{ty}>")
                 } else {
