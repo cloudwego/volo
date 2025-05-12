@@ -187,6 +187,18 @@ impl ConnStream {
             }
         }
     }
+
+    pub fn negotiated_alpn(&self) -> Option<Vec<u8>> {
+        match self {
+            #[cfg(feature = "rustls")]
+            Self::Rustls(tokio_rustls::TlsStream::Client(stream)) => {
+                stream.get_ref().1.alpn_protocol().map(ToOwned::to_owned)
+            }
+            #[cfg(feature = "native-tls")]
+            Self::NativeTls(stream) => stream.get_ref().negotiated_alpn().unwrap_or_default(),
+            _ => None,
+        }
+    }
 }
 
 impl From<TcpStream> for ConnStream {

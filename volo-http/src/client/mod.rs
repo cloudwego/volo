@@ -14,8 +14,8 @@ use std::{
 use faststr::FastStr;
 use http::{
     header::{HeaderMap, HeaderName, HeaderValue},
+    method::Method,
     uri::{Scheme, Uri},
-    Method,
 };
 use metainfo::{MetaInfo, METAINFO};
 use motore::{
@@ -39,7 +39,7 @@ use self::{
         Timeout,
     },
     loadbalance::{DefaultLB, LbConfig},
-    transport::{ClientConfig, ClientTransport, ClientTransportConfig},
+    transport::protocol::{ClientConfig, ClientTransport, ClientTransportConfig},
 };
 use crate::{
     body::Body,
@@ -53,6 +53,8 @@ use crate::{
 };
 
 mod callopt;
+#[cfg(test)]
+mod client_tests;
 #[cfg(feature = "cookie")]
 pub mod cookie;
 pub mod dns;
@@ -487,16 +489,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         &mut self.headers
     }
 
-    /// Get a reference to HTTP configuration of the client.
-    pub fn http_config_ref(&self) -> &ClientConfig {
-        &self.http_config
-    }
-
-    /// Get a mutable reference to HTTP configuration of the client.
-    pub fn http_config_mut(&mut self) -> &mut ClientConfig {
-        &mut self.http_config
-    }
-
     /// Get a reference to builder configuration of the client.
     pub fn builder_config_ref(&self) -> &BuilderConfig {
         &self.builder_config
@@ -528,24 +520,15 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// the socket level.
     ///
     /// Default is false.
+    #[deprecated(
+        since = "0.4.0",
+        note = "`set_title_case_headers` has been removed into `http1_config`"
+    )]
+    #[cfg(feature = "http1")]
     pub fn set_title_case_headers(&mut self, title_case_headers: bool) -> &mut Self {
-        self.http_config.title_case_headers = title_case_headers;
-        self
-    }
-
-    /// Set whether to support preserving original header cases.
-    ///
-    /// Currently, this will record the original cases received, and store them
-    /// in a private extension on the `Response`. It will also look for and use
-    /// such an extension in any provided `Request`.
-    ///
-    /// Since the relevant extension is still private, there is no way to
-    /// interact with the original cases. The only effect this can have now is
-    /// to forward the cases in a proxy-like fashion.
-    ///
-    /// Default is false.
-    pub fn set_preserve_header_case(&mut self, preserve_header_case: bool) -> &mut Self {
-        self.http_config.preserve_header_case = preserve_header_case;
+        self.http_config
+            .h1
+            .set_title_case_headers(title_case_headers);
         self
     }
 
@@ -562,9 +545,26 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// allocation will occur for each response, and there will be a performance drop of about 5%.
     ///
     /// Default is 100.
+    #[deprecated(
+        since = "0.4.0",
+        note = "`set_max_headers` has been removed into `http1_config`"
+    )]
+    #[cfg(feature = "http1")]
     pub fn set_max_headers(&mut self, max_headers: usize) -> &mut Self {
-        self.http_config.max_headers = Some(max_headers);
+        self.http_config.h1.set_max_headers(max_headers);
         self
+    }
+
+    /// Get configuration of http1 part.
+    #[cfg(feature = "http1")]
+    pub fn http1_config(&mut self) -> &mut self::transport::protocol::Http1Config {
+        &mut self.http_config.h1
+    }
+
+    /// Get configuration of http2 part.
+    #[cfg(feature = "http2")]
+    pub fn http2_config(&mut self) -> &mut self::transport::protocol::Http2Config {
+        &mut self.http_config.h2
     }
 
     /// Set the maximum idle time for a connection.
@@ -723,9 +723,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         let transport = ClientTransport::new(
             self.http_config,
             transport_config,
-            self.connector,
             #[cfg(feature = "__tls")]
-            self.tls_config.unwrap_or_default(),
+            self.tls_config,
         );
         let service = self
             .outer_layer
@@ -772,7 +771,7 @@ struct ClientInner<ReqBody, RespBody> {
 ///
 /// # Examples
 ///
-/// ```
+/// ```no_run
 /// use volo_http::{body::BodyConversion, client::Client};
 ///
 /// # tokio_test::block_on(async {
@@ -875,12 +874,8 @@ where
         // set target
         self.inner.target.clone().apply(cx)?;
 
-        // also save a scheme in request
-        {
-            if let Some(scheme) = cx.rpc_info().callee().get::<Scheme>() {
-                req.extensions_mut().insert(scheme.to_owned());
-            }
-        }
+        // save scheme in request
+        req.extensions_mut().insert(cx.scheme().to_owned());
 
         // set default callee name
         {
@@ -951,292 +946,4 @@ where
     U::Error: Into<BoxError>,
 {
     CLIENT.clone().get(uri).send().await
-}
-
-// The `httpbin.org` always responses a json data.
-#[cfg(feature = "json")]
-#[cfg(test)]
-mod client_tests {
-    use std::{
-        collections::HashMap,
-        net::{IpAddr, Ipv4Addr, SocketAddr},
-    };
-
-    #[cfg(feature = "cookie")]
-    use cookie::Cookie;
-    use http::{header, status::StatusCode};
-    use serde::Deserialize;
-
-    use super::{dns::DnsResolver, get, test_helpers::DebugLayer, Client};
-    #[cfg(feature = "cookie")]
-    use crate::client::cookie::CookieLayer;
-    use crate::{body::BodyConversion, utils::consts::HTTP_DEFAULT_PORT};
-
-    #[derive(Deserialize)]
-    struct HttpBinResponse {
-        args: HashMap<String, String>,
-        headers: HashMap<String, String>,
-        #[allow(unused)]
-        origin: String,
-        url: String,
-    }
-
-    const HTTPBIN_GET: &str = "http://httpbin.org/get";
-    #[cfg(feature = "__tls")]
-    const HTTPBIN_GET_HTTPS: &str = "https://httpbin.org/get";
-    const USER_AGENT_KEY: &str = "User-Agent";
-    const USER_AGENT_VAL: &str = "volo-http-unit-test";
-
-    #[tokio::test]
-    async fn simple_get() {
-        let resp = get(HTTPBIN_GET)
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET);
-    }
-
-    #[tokio::test]
-    async fn client_builder_with_header() {
-        let mut builder = Client::builder().layer_inner(DebugLayer::default());
-        builder.header(header::USER_AGENT, USER_AGENT_VAL);
-        let client = builder.build().unwrap();
-
-        let resp = client
-            .get(HTTPBIN_GET)
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert!(resp.args.is_empty());
-        assert_eq!(resp.headers.get(USER_AGENT_KEY).unwrap(), USER_AGENT_VAL);
-        assert_eq!(resp.url, HTTPBIN_GET);
-    }
-
-    #[tokio::test]
-    async fn client_builder_with_host() {
-        let mut builder = Client::builder().layer_inner(DebugLayer::default());
-        builder.host("httpbin.org");
-        let client = builder.build().unwrap();
-
-        let resp = client
-            .get("/get")
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET);
-    }
-
-    #[tokio::test]
-    async fn client_builder_with_address() {
-        let addr = DnsResolver::default()
-            .resolve("httpbin.org", HTTP_DEFAULT_PORT)
-            .await
-            .unwrap();
-        let mut builder = Client::builder().layer_inner(DebugLayer::default());
-        builder.default_host("httpbin.org").address(addr);
-        let client = builder.build().unwrap();
-
-        let resp = client
-            .get("/get")
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET);
-    }
-
-    #[tokio::test]
-    async fn client_builder_host_override() {
-        let mut builder = Client::builder().layer_inner(DebugLayer::default());
-        builder.host("this.domain.must.be.invalid");
-        let client = builder.build().unwrap();
-
-        let resp = client
-            .get(HTTPBIN_GET)
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET);
-    }
-
-    #[tokio::test]
-    async fn client_builder_addr_override() {
-        let mut builder = Client::builder().layer_inner(DebugLayer::default());
-        builder.default_host("httpbin.org").address(SocketAddr::new(
-            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-            8888,
-        ));
-        let client = builder.build().unwrap();
-
-        let addr = DnsResolver::default()
-            .resolve("httpbin.org", HTTP_DEFAULT_PORT)
-            .await
-            .unwrap();
-
-        let resp = client
-            .get(format!("http://{addr}/get"))
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET);
-    }
-
-    #[cfg(feature = "__tls")]
-    #[tokio::test]
-    async fn client_builder_with_https() {
-        let mut builder = Client::builder().layer_inner(DebugLayer::default());
-        builder
-            .host("httpbin.org")
-            .with_scheme(http::uri::Scheme::HTTPS);
-        let client = builder.build().unwrap();
-
-        let resp = client
-            .get("/get")
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET_HTTPS);
-    }
-
-    #[cfg(feature = "__tls")]
-    #[tokio::test]
-    async fn client_builder_with_address_and_https() {
-        let addr = DnsResolver::default()
-            .resolve("httpbin.org", crate::utils::consts::HTTPS_DEFAULT_PORT)
-            .await
-            .unwrap();
-        let mut builder = Client::builder().layer_inner(DebugLayer::default());
-        builder
-            .default_host("httpbin.org")
-            .address(addr)
-            .with_scheme(http::uri::Scheme::HTTPS);
-        let client = builder.build().unwrap();
-
-        let resp = client
-            .get("/get")
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET_HTTPS);
-    }
-
-    #[tokio::test]
-    async fn client_builder_with_port() {
-        let mut builder = Client::builder().layer_inner(DebugLayer::default());
-        builder.host("httpbin.org").with_port(443);
-        let client = builder.build().unwrap();
-
-        let resp = client.get("/get").send().await.unwrap();
-        // Send HTTP request to the HTTPS port (443), `httpbin.org` will response `400 Bad
-        // Request`.
-        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
-    }
-
-    #[cfg(feature = "__tls")]
-    #[tokio::test]
-    async fn client_disable_tls() {
-        use crate::error::client::bad_scheme;
-
-        let mut builder = Client::builder().layer_inner(DebugLayer::default());
-        builder.disable_tls(true);
-        let client = builder.build().unwrap();
-        assert_eq!(
-            format!(
-                "{}",
-                client
-                    .get("https://httpbin.org/get")
-                    .send()
-                    .await
-                    .expect_err("HTTPS with disable_tls should fail")
-            ),
-            format!("{}", bad_scheme()),
-        );
-    }
-
-    #[cfg(feature = "cookie")]
-    #[tokio::test]
-    async fn cookie_store() {
-        let mut builder = Client::builder()
-            .layer_inner(DebugLayer::default())
-            .layer_inner(CookieLayer::new(Default::default()));
-
-        builder.host("httpbin.org");
-
-        let client = builder.build().unwrap();
-
-        // test server add cookie
-        let resp = client
-            .get("http://httpbin.org/cookies/set?key=value")
-            .send()
-            .await
-            .unwrap();
-        let cookies = resp
-            .headers()
-            .get_all(http::header::SET_COOKIE)
-            .iter()
-            .filter_map(|value| {
-                std::str::from_utf8(value.as_bytes())
-                    .ok()
-                    .and_then(|val| Cookie::parse(val).map(|c| c.into_owned()).ok())
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(cookies[0].name(), "key");
-        assert_eq!(cookies[0].value(), "value");
-
-        #[derive(serde::Deserialize)]
-        struct CookieResponse {
-            #[serde(default)]
-            cookies: HashMap<String, String>,
-        }
-        let resp = client
-            .get("http://httpbin.org/cookies")
-            .send()
-            .await
-            .unwrap();
-        let json = resp.into_json::<CookieResponse>().await.unwrap();
-        assert_eq!(json.cookies["key"], "value");
-
-        // test server delete cookie
-        _ = client
-            .get("http://httpbin.org/cookies/delete?key")
-            .send()
-            .await
-            .unwrap();
-        let resp = client
-            .get("http://httpbin.org/cookies")
-            .send()
-            .await
-            .unwrap();
-        let json = resp.into_json::<CookieResponse>().await.unwrap();
-        assert_eq!(json.cookies.len(), 0);
-    }
 }

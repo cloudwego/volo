@@ -85,9 +85,16 @@ where
     }
 
     fn url(&self) -> Option<Url> {
-        let scheme = self.extensions().get::<Scheme>().unwrap_or(&Scheme::HTTP);
         let host = self.host()?;
-        let path = self.uri().path();
+        let uri = self.uri();
+        let path = uri.path();
+        let scheme = if let Some(scheme) = uri.scheme() {
+            scheme
+        } else if let Some(scheme) = self.extensions().get::<Scheme>() {
+            scheme
+        } else {
+            &Scheme::HTTP
+        };
 
         Url::from_str(&format!("{scheme}://{host}{path}")).ok()
     }

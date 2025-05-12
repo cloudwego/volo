@@ -252,6 +252,7 @@ macro_rules! simple_error {
 
 simple_error!(Builder => NoAddress => "missing target address");
 simple_error!(Builder => BadScheme => "bad scheme");
+simple_error!(Builder => BadVersion => "bad http protocol version");
 simple_error!(Builder => BadHostName => "bad host name");
 simple_error!(Builder => BadAddress => "bad address");
 simple_error!(Request => Timeout => "request timeout");
