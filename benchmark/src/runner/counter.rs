@@ -29,7 +29,7 @@ impl Counter {
 
     pub fn add_record(&self, idx: usize, err: bool, cost: usize) {
         unsafe {
-            (*self.costs.get())[idx] = cost;
+            (&mut (*self.costs.get()))[idx] = cost;
         }
         if err {
             self.failed.fetch_add(1, Ordering::Relaxed);
