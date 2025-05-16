@@ -10,7 +10,7 @@ use futures::{future, Stream};
 use futures_util::ready;
 use http::StatusCode;
 use http_body::Body;
-use pilota::prost::Message;
+use pilota::pb::Message;
 use tracing::{debug, trace};
 
 use super::{DefaultDecoder, BUFFER_SIZE, PREFIX_LEN};
@@ -174,9 +174,9 @@ impl<T: Message + Default> RecvStream<T> {
                     };
                     return Err(Status::new(Code::Internal, message));
                 }
-                DefaultDecoder::<T>::decode(&mut self.decoder, &mut self.decompress_buf)
+                DefaultDecoder::<T>::decode(&mut self.decoder, self.decompress_buf.clone().freeze())
             } else {
-                DefaultDecoder::<T>::decode(&mut self.decoder, &mut buf)
+                DefaultDecoder::<T>::decode(&mut self.decoder, buf.freeze())
             };
 
             return match decode_result {
@@ -223,7 +223,7 @@ impl<T: Message + Default> Stream for RecvStream<T> {
                     return Poll::Ready(Some(Err(status)));
                 }
                 None => {
-                    if self.buf.has_remaining() {
+                    if self.buf.has_remaining_mut() {
                         debug!("[VOLO] unexpected EOF decoding stream");
                         return Poll::Ready(Some(Err(Status::new(
                             Code::Internal,

@@ -24,9 +24,13 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.80.0"
 
 [workspace.dependencies]
-pilota = "0.11"
-pilota-build = "0.11"
-pilota-thrift-parser = "0.11"
+# pilota = "0.11"
+# pilota-build = "0.11"
+# pilota-thrift-parser = "0.11"
+pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/pb_unknown_fields" }
+pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/pb_unknown_fields" }
+pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/pb_unknown_fields" }
+
 motore = "0.4"
 metainfo = "0.7"
 
@@ -124,7 +128,10 @@ url_path = "0.1"
 walkdir = "2"
 
 # Optional dependencies
-rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = [
+  "std",
+  "tls12",
+] }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 webpki-roots = "0.26"

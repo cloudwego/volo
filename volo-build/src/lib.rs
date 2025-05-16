@@ -49,8 +49,7 @@ impl Builder<thrift_backend::MkThriftBackend, parser::ThriftParser> {
 impl Builder<grpc_backend::MkGrpcBackend, parser::ProtobufParser> {
     pub fn protobuf() -> Self {
         Builder {
-            pilota_builder: pilota_build::Builder::protobuf()
-                .with_backend(grpc_backend::MkGrpcBackend),
+            pilota_builder: pilota_build::Builder::pb().with_backend(grpc_backend::MkGrpcBackend),
             out_dir: Default::default(),
             filename: "volo_gen.rs".into(),
             idls: Default::default(),

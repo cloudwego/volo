@@ -9,8 +9,8 @@ pub mod encode;
 
 use std::{io, marker::PhantomData, mem::size_of};
 
-use bytes::BytesMut;
-use pilota::prost::Message;
+use bytes::Bytes;
+use pilota::{pb::Message, LinkedBytes};
 
 use crate::{status::Code::Internal, Status};
 
@@ -28,7 +28,7 @@ pub trait Encoder {
     type Error: From<io::Error>;
 
     /// Encodes a message into the buffer.
-    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error>;
+    fn encode(&mut self, item: Self::Item, dst: &mut LinkedBytes) -> Result<(), Self::Error>;
 }
 
 #[derive(Debug, Clone)]
@@ -38,7 +38,7 @@ impl<T: Message> Encoder for DefaultEncoder<T> {
     type Item = T;
     type Error = Status;
 
-    fn encode(&mut self, item: Self::Item, dst: &mut BytesMut) -> Result<(), Self::Error> {
+    fn encode(&mut self, item: Self::Item, dst: &mut LinkedBytes) -> Result<(), Self::Error> {
         item.encode(dst)
             .map_err(|e| Status::new(Internal, e.to_string()))
     }
@@ -59,7 +59,7 @@ pub trait Decoder {
     type Error: From<io::Error>;
 
     /// Decode a message from the buffer.
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error>;
+    fn decode(&mut self, src: Bytes) -> Result<Option<Self::Item>, Self::Error>;
 }
 
 #[derive(Debug, Clone)]
@@ -69,7 +69,7 @@ impl<T: Message + Default> Decoder for DefaultDecoder<T> {
     type Item = T;
     type Error = Status;
 
-    fn decode(&mut self, src: &mut BytesMut) -> Result<Option<Self::Item>, Self::Error> {
+    fn decode(&mut self, src: Bytes) -> Result<Option<Self::Item>, Self::Error> {
         Message::decode(src)
             .map(Some)
             .map_err(|e| Status::new(Internal, e.to_string()))

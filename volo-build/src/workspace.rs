@@ -24,7 +24,7 @@ impl Builder<crate::thrift_backend::MkThriftBackend, crate::parser::ThriftParser
 impl Builder<crate::grpc_backend::MkGrpcBackend, crate::parser::ProtobufParser> {
     pub fn protobuf() -> Self {
         Self {
-            pilota_builder: pilota_build::Builder::protobuf()
+            pilota_builder: pilota_build::Builder::pb()
                 .with_backend(crate::grpc_backend::MkGrpcBackend),
         }
     }

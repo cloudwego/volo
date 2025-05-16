@@ -1,7 +1,7 @@
-use bytes::{BufMut, Bytes, BytesMut};
+use bytes::{BufMut, Bytes};
 use futures::{Stream, StreamExt};
 use http_body::Frame;
-use pilota::prost::Message;
+use pilota::{pb::Message, LinkedBytes};
 
 use super::{DefaultEncoder, PREFIX_LEN};
 use crate::{
@@ -21,11 +21,11 @@ where
     T: Message + 'static,
 {
     Box::pin(async_stream::stream! {
-        let mut buf = BytesMut::with_capacity(BUFFER_SIZE);
+        let mut buf = LinkedBytes::with_capacity(BUFFER_SIZE);
         let mut compressed_buf= if compression_encoding.is_some() {
-            BytesMut::with_capacity(BUFFER_SIZE)
+            LinkedBytes::with_capacity(BUFFER_SIZE)
         } else {
-           BytesMut::new()
+           LinkedBytes::new()
         };
 
         futures_util::pin_mut!(source);
@@ -40,7 +40,7 @@ where
                     let mut encoder=DefaultEncoder::default();
 
                     if let Some(config)=compression_encoding{
-                        compressed_buf.clear();
+                        compressed_buf.reset();
                         encoder.encode(item, &mut compressed_buf)
                             .map_err(|err| Status::internal(format!("Error encoding: {err}")))?;
                         compress(config,&mut compressed_buf,&mut buf)
@@ -49,15 +49,15 @@ where
                         encoder.encode(item, &mut buf)
                             .map_err(|err| Status::internal(format!("Error encoding: {err}")))?;
                     }
-                    let len = buf.len() - PREFIX_LEN;
+                    let len = buf.bytes().len() - PREFIX_LEN;
                     assert!(len <= u32::MAX as usize);
                     {
-                        let mut buf = &mut buf[..PREFIX_LEN];
+                        let mut buf = &mut buf.bytes_mut()[..PREFIX_LEN];
                         buf.put_u8(compression_encoding.is_some() as u8);
                         buf.put_u32(len as u32);
                     }
 
-                    yield Ok(Frame::data(buf.split_to(len + PREFIX_LEN).freeze()));
+                    yield Ok(Frame::data(buf.bytes_mut().split_to(len + PREFIX_LEN).freeze()));
                 },
                 Some(Err(status)) => yield Err(status),
                 None => break,
