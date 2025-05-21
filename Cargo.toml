@@ -160,3 +160,4 @@ overflow-checks = false
 # pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
 # motore = { git = "https://github.com/cloudwego/motore.git", branch = "main" }
 # metainfo = { git = "https://github.com/cloudwego/metainfo.git", branch = "main"}
+linkedbytes = { git = "https://github.com/Ggiggle/linkedbytes.git", branch = "feat/into_iter" }
