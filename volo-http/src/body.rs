@@ -16,6 +16,7 @@ use futures_util::stream::Stream;
 use http_body::{Frame, SizeHint};
 use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
 use hyper::body::Incoming;
+use linkedbytes::{LinkedBytes, Node};
 use pin_project::pin_project;
 #[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
@@ -330,5 +331,45 @@ impl From<String> for Body {
         Self {
             repr: BodyRepr::Full(Full::new(Bytes::from(value))),
         }
+    }
+}
+
+impl From<LinkedBytes> for Body {
+    fn from(value: LinkedBytes) -> Self {
+        let stream = async_stream::stream! {
+            for node in value.into_iter_list() {
+                match node {
+                    Node::Bytes(bytes) => {
+                        yield Ok(Frame::data(bytes));
+                    }
+                    Node::BytesMut(bytes) => {
+                        yield Ok(Frame::data(bytes.freeze()));
+                    }
+                    Node::FastStr(faststr) => {
+                        yield Ok(Frame::data(faststr.into_bytes()));
+                    }
+                }
+            }
+        };
+        Self {
+            repr: BodyRepr::Stream(StreamBody::new(Box::pin(stream))),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_from_linked_bytes() {
+        let mut bytes = LinkedBytes::new();
+        bytes.insert(Bytes::from_static(b"Hello,"));
+        bytes.insert_faststr(FastStr::new(" world!"));
+        let body = Body::from(bytes);
+        assert_eq!(
+            body.into_bytes().await.unwrap(),
+            Bytes::from_static(b"Hello, world!")
+        );
     }
 }

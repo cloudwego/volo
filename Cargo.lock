@@ -355,9 +355,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.22"
+version = "1.2.23"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "32db95edf998450acc7881c932f94cd9b05c87b4b2599e8bab064753da4acfd1"
+checksum = "5f4ac86a9e5bc1e2b3449ab9d7d3a6a405e3d1bb28d7b9be8614f55846ae3766"
 dependencies = [
  "jobserver",
  "libc",
@@ -1306,9 +1306,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-util"
-version = "0.1.11"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "497bbc33a26fdd4af9ed9c70d63f61cf56a938375fbb32df34db9b1cd6d643f2"
+checksum = "cf9f1e950e0d9d1d3c47184416723cf29c0d1f93bd8cccf37e4beb6b44f31710"
 dependencies = [
  "bytes",
  "futures-channel",
@@ -1336,7 +1336,7 @@ dependencies = [
  "js-sys",
  "log",
  "wasm-bindgen",
- "windows-core 0.61.1",
+ "windows-core 0.61.2",
 ]
 
 [[package]]
@@ -1397,9 +1397,9 @@ checksum = "00210d6893afc98edb752b664b8890f0ef174c8adbb8d0be9710fa66fbbf72d3"
 
 [[package]]
 name = "icu_properties"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2549ca8c7241c82f59c80ba2a6f415d931c5b58d24fb8412caa1a1f02c49139a"
+checksum = "016c619c1eeb94efb86809b015c58f479963de65bdb6253345c1a1276f22e32b"
 dependencies = [
  "displaydoc",
  "icu_collections",
@@ -1413,9 +1413,9 @@ dependencies = [
 
 [[package]]
 name = "icu_properties_data"
-version = "2.0.0"
+version = "2.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8197e866e47b68f8f7d95249e172903bec06004b18b2937f1095d40a0c57de04"
+checksum = "298459143998310acd25ffe6810ed544932242d3f07083eee1084d83a71bd632"
 
 [[package]]
 name = "icu_provider"
@@ -1652,9 +1652,8 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linkedbytes"
-version = "0.1.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "487640b2e3f554987c1345fc71c3eda34d6d750fba63a39147205ccc93f920cd"
+version = "0.1.9"
+source = "git+https://github.com/Ggiggle/linkedbytes.git?branch=feat/into_iter#e1b6778d737653c82950878143fd503d8a2168dd"
 dependencies = [
  "bytes",
  "faststr",
@@ -2262,7 +2261,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.11.11"
-source = "git+https://github.com/cloudwego/pilota.git?branch=feat/pb_unknown_fields#d63416e227c82ca906f6c5623cd45fe66f9a3bef"
+source = "git+https://github.com/cloudwego/pilota.git?branch=feat/pb_unknown_fields#ed060621e214b19596fd2c03251e0d27d6d3387b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2283,7 +2282,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.11.32"
-source = "git+https://github.com/cloudwego/pilota.git?branch=feat/pb_unknown_fields#d63416e227c82ca906f6c5623cd45fe66f9a3bef"
+source = "git+https://github.com/cloudwego/pilota.git?branch=feat/pb_unknown_fields#ed060621e214b19596fd2c03251e0d27d6d3387b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2315,7 +2314,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.11.7"
-source = "git+https://github.com/cloudwego/pilota.git?branch=feat/pb_unknown_fields#d63416e227c82ca906f6c5623cd45fe66f9a3bef"
+source = "git+https://github.com/cloudwego/pilota.git?branch=feat/pb_unknown_fields#ed060621e214b19596fd2c03251e0d27d6d3387b"
 dependencies = [
  "nom 7.1.3",
 ]
@@ -4156,7 +4155,7 @@ dependencies = [
 
 [[package]]
 name = "volo-http"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "ahash",
  "async-broadcast",
@@ -4177,6 +4176,7 @@ dependencies = [
  "ipnet",
  "itoa",
  "libc",
+ "linkedbytes",
  "matchit 0.8.6",
  "memchr",
  "metainfo",
@@ -4454,15 +4454,15 @@ dependencies = [
 
 [[package]]
 name = "windows-core"
-version = "0.61.1"
+version = "0.61.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "46ec44dc15085cea82cf9c78f85a9114c463a369786585ad2882d1ff0b0acf40"
+checksum = "c0fdd3ddb90610c7638aa2b3a3ab2904fb9e5cdbecc643ddb3647212781c4ae3"
 dependencies = [
  "windows-implement 0.60.0",
  "windows-interface 0.59.1",
  "windows-link",
- "windows-result 0.3.3",
- "windows-strings 0.4.1",
+ "windows-result 0.3.4",
+ "windows-strings 0.4.2",
 ]
 
 [[package]]
@@ -4521,7 +4521,7 @@ version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4286ad90ddb45071efd1a66dfa43eb02dd0dfbae1545ad6cc3c51cf34d7e8ba3"
 dependencies = [
- "windows-result 0.3.3",
+ "windows-result 0.3.4",
  "windows-strings 0.3.1",
  "windows-targets 0.53.0",
 ]
@@ -4537,9 +4537,9 @@ dependencies = [
 
 [[package]]
 name = "windows-result"
-version = "0.3.3"
+version = "0.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b895b5356fc36103d0f64dd1e94dfa7ac5633f1c9dd6e80fe9ec4adef69e09d"
+checksum = "56f42bd332cc6c8eac5af113fc0c1fd6a8fd2aa08a0119358686e5160d0586c6"
 dependencies = [
  "windows-link",
 ]
@@ -4555,9 +4555,9 @@ dependencies = [
 
 [[package]]
 name = "windows-strings"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2a7ab927b2637c19b3dbe0965e75d8f2d30bdd697a1516191cad2ec4df8fb28a"
+checksum = "56e6c93f3a0c3b36176cb1327a4958a0353d5d166c2a35cb268ace15e91d3b57"
 dependencies = [
  "windows-link",
 ]

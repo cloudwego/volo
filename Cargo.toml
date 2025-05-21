@@ -152,3 +152,6 @@ codegen-units = 1
 panic = 'unwind'
 incremental = false
 overflow-checks = false
+
+[patch.crates-io]
+linkedbytes = { git = "https://github.com/Ggiggle/linkedbytes.git", branch = "feat/into_iter" }
