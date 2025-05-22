@@ -1,13 +1,12 @@
 use std::error::Error;
 
-use motore::{make::MakeConnection, service::Service};
+use motore::{make::MakeConnection, service::UnaryService};
 use volo::net::{dial::DefaultMakeTransport, Address};
 
-use crate::{
-    context::ClientContext,
-    error::{client::request_error, ClientError},
-};
+use super::connector::PeerInfo;
+use crate::error::{client::request_error, ClientError};
 
+#[derive(Clone, Debug)]
 pub struct PlainMakeConnection<MkC = DefaultMakeTransport> {
     mk_conn: MkC,
 }
@@ -27,7 +26,7 @@ impl Default for PlainMakeConnection<DefaultMakeTransport> {
     }
 }
 
-impl<MkC> Service<ClientContext, Address> for PlainMakeConnection<MkC>
+impl<MkC> UnaryService<PeerInfo> for PlainMakeConnection<MkC>
 where
     MkC: MakeConnection<Address> + Sync,
     MkC::Error: Error + Send + Sync + 'static,
@@ -35,17 +34,13 @@ where
     type Response = MkC::Connection;
     type Error = ClientError;
 
-    async fn call(
-        &self,
-        _: &mut ClientContext,
-        req: Address,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn call(&self, req: PeerInfo) -> Result<Self::Response, Self::Error> {
         tracing::debug!("[Volo-HTTP] connecting to target: {req:?}");
-        match self.mk_conn.make_connection(req.clone()).await {
+        match self.mk_conn.make_connection(req.address.clone()).await {
             Ok(conn) => Ok(conn),
             Err(err) => {
                 tracing::error!("[Volo-HTTP] failed to make connection, error: {err}");
-                Err(request_error(err).with_address(req))
+                Err(request_error(err).with_address(req.address))
             }
         }
     }

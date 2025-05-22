@@ -39,7 +39,10 @@ use self::{
         Timeout,
     },
     loadbalance::{DefaultLB, LbConfig},
-    transport::protocol::{ClientConfig, ClientTransport, ClientTransportConfig},
+    transport::{
+        pool,
+        protocol::{ClientConfig, ClientTransport, ClientTransportConfig},
+    },
 };
 use crate::{
     body::Body,
@@ -76,7 +79,8 @@ pub mod prelude {
 /// A builder for configuring an HTTP [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB> {
     http_config: ClientConfig,
-    builder_config: BuilderConfig,
+    client_config: ClientTransportConfig,
+    pool_config: pool::Config,
     connector: DefaultMakeTransport,
     target: Target,
     timeout: Option<Duration>,
@@ -93,32 +97,13 @@ pub struct ClientBuilder<IL, OL, C, LB> {
     tls_config: Option<volo::net::tls::TlsConnector>,
 }
 
-/// Configuration for [`ClientBuilder`]
-///
-/// This is unstable now and may be changed in the future.
-#[doc(hidden)]
-pub struct BuilderConfig {
-    pub stat_enable: bool,
-    #[cfg(feature = "__tls")]
-    pub disable_tls: bool,
-}
-
-impl Default for BuilderConfig {
-    fn default() -> Self {
-        Self {
-            stat_enable: true,
-            #[cfg(feature = "__tls")]
-            disable_tls: false,
-        }
-    }
-}
-
 impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
     /// Create a new client builder.
     pub fn new() -> Self {
         Self {
             http_config: Default::default(),
-            builder_config: Default::default(),
+            client_config: Default::default(),
+            pool_config: pool::Config::default(),
             connector: Default::default(),
             target: Default::default(),
             timeout: None,
@@ -151,7 +136,8 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
     ) -> ClientBuilder<IL, OL, C, LbConfig<NLB, DISC>> {
         ClientBuilder {
             http_config: self.http_config,
-            builder_config: self.builder_config,
+            client_config: self.client_config,
+            pool_config: self.pool_config,
             connector: self.connector,
             target: self.target,
             timeout: self.timeout,
@@ -173,7 +159,8 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
     pub fn discover<NDISC>(self, discover: NDISC) -> ClientBuilder<IL, OL, C, LbConfig<LB, NDISC>> {
         ClientBuilder {
             http_config: self.http_config,
-            builder_config: self.builder_config,
+            client_config: self.client_config,
+            pool_config: self.pool_config,
             connector: self.connector,
             target: self.target,
             timeout: self.timeout,
@@ -198,7 +185,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     pub fn client_maker<C2>(self, new_mk_client: C2) -> ClientBuilder<IL, OL, C2, LB> {
         ClientBuilder {
             http_config: self.http_config,
-            builder_config: self.builder_config,
+            client_config: self.client_config,
+            pool_config: self.pool_config,
             connector: self.connector,
             target: self.target,
             timeout: self.timeout,
@@ -232,7 +220,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     pub fn layer_inner<Inner>(self, layer: Inner) -> ClientBuilder<Stack<Inner, IL>, OL, C, LB> {
         ClientBuilder {
             http_config: self.http_config,
-            builder_config: self.builder_config,
+            client_config: self.client_config,
+            pool_config: self.pool_config,
             connector: self.connector,
             target: self.target,
             timeout: self.timeout,
@@ -269,7 +258,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ) -> ClientBuilder<Stack<IL, Inner>, OL, C, LB> {
         ClientBuilder {
             http_config: self.http_config,
-            builder_config: self.builder_config,
+            client_config: self.client_config,
+            pool_config: self.pool_config,
             connector: self.connector,
             target: self.target,
             timeout: self.timeout,
@@ -303,7 +293,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     pub fn layer_outer<Outer>(self, layer: Outer) -> ClientBuilder<IL, Stack<Outer, OL>, C, LB> {
         ClientBuilder {
             http_config: self.http_config,
-            builder_config: self.builder_config,
+            client_config: self.client_config,
+            pool_config: self.pool_config,
             connector: self.connector,
             target: self.target,
             timeout: self.timeout,
@@ -340,7 +331,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ) -> ClientBuilder<IL, Stack<OL, Outer>, C, LB> {
         ClientBuilder {
             http_config: self.http_config,
-            builder_config: self.builder_config,
+            client_config: self.client_config,
+            pool_config: self.pool_config,
             connector: self.connector,
             target: self.target,
             timeout: self.timeout,
@@ -362,7 +354,8 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     pub fn mk_load_balance<NLB>(self, mk_load_balance: NLB) -> ClientBuilder<IL, OL, C, NLB> {
         ClientBuilder {
             http_config: self.http_config,
-            builder_config: self.builder_config,
+            client_config: self.client_config,
+            pool_config: self.pool_config,
             connector: self.connector,
             target: self.target,
             timeout: self.timeout,
@@ -489,33 +482,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         &mut self.headers
     }
 
-    /// Get a reference to builder configuration of the client.
-    pub fn builder_config_ref(&self) -> &BuilderConfig {
-        &self.builder_config
-    }
-
-    /// Get a mutable reference to builder configuration of the client.
-    pub fn builder_config_mut(&mut self) -> &mut BuilderConfig {
-        &mut self.builder_config
-    }
-
-    /// This is unstable now and may be changed in the future.
-    #[doc(hidden)]
-    pub fn stat_enable(&mut self, enable: bool) -> &mut Self {
-        self.builder_config.stat_enable = enable;
-        self
-    }
-
-    /// Disable TLS for the client.
-    ///
-    /// Default is false, when TLS related feature is enabled, TLS is enabled by default.
-    #[cfg(feature = "__tls")]
-    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
-    pub fn disable_tls(&mut self, disable: bool) -> &mut Self {
-        self.builder_config.disable_tls = disable;
-        self
-    }
-
     /// Set whether HTTP/1 connections will write header names as title case at
     /// the socket level.
     ///
@@ -557,14 +523,52 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
 
     /// Get configuration of http1 part.
     #[cfg(feature = "http1")]
-    pub fn http1_config(&mut self) -> &mut self::transport::protocol::Http1Config {
+    pub fn http1_config(&mut self) -> &mut self::transport::http1::Config {
         &mut self.http_config.h1
     }
 
     /// Get configuration of http2 part.
     #[cfg(feature = "http2")]
-    pub fn http2_config(&mut self) -> &mut self::transport::protocol::Http2Config {
+    pub fn http2_config(&mut self) -> &mut self::transport::http2::Config {
         &mut self.http_config.h2
+    }
+
+    /// This is unstable now and may be changed in the future.
+    #[doc(hidden)]
+    pub fn stat_enable(&mut self, enable: bool) -> &mut Self {
+        self.client_config.stat_enable = enable;
+        self
+    }
+
+    /// Disable TLS for the client.
+    ///
+    /// Default is false, when TLS related feature is enabled, TLS is enabled by default.
+    #[cfg(feature = "__tls")]
+    #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
+    pub fn disable_tls(&mut self, disable: bool) -> &mut Self {
+        self.client_config.disable_tls = disable;
+        self
+    }
+
+    /// Set idle timeout of connection pool.
+    ///
+    /// If a connection is idle for more than the timeout, the connection will be dropped.
+    ///
+    /// Default is 20 seconds.
+    pub fn set_pool_idle_timeout(&mut self, timeout: Duration) -> &mut Self {
+        self.pool_config.idle_timeout = timeout;
+        self
+    }
+
+    /// Set the maximum number of idle connections per host.
+    ///
+    /// If the number of idle connections on a host exceeds this value, the connection pool will
+    /// refuse to add new idle connections.
+    ///
+    /// Default is 10240.
+    pub fn set_max_idle_per_host(&mut self, num: usize) -> &mut Self {
+        self.pool_config.max_idle_per_host = num;
+        self
     }
 
     /// Set the maximum idle time for a connection.
@@ -654,7 +658,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// [`DnsResolver`]: crate::client::dns::DnsResolver
     pub fn build<ReqBody, RespBody>(mut self) -> Result<C::Target>
     where
-        IL: Layer<ClientTransport>,
+        IL: Layer<ClientTransport<ReqBody>>,
         IL::Service: Send + Sync + 'static,
         LB: MkLbLayer,
         LB::Layer: Layer<IL::Service>,
@@ -695,7 +699,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// See [`ClientBuilder::build`] for more details.
     pub fn build_without_extra_layers<ReqBody, RespBody>(self) -> Result<C::Target>
     where
-        IL: Layer<ClientTransport>,
+        IL: Layer<ClientTransport<ReqBody>>,
         IL::Service: Send + Sync + 'static,
         LB: MkLbLayer,
         LB::Layer: Layer<IL::Service>,
@@ -715,14 +719,10 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     {
         self.status?;
 
-        let transport_config = ClientTransportConfig {
-            stat_enable: self.builder_config.stat_enable,
-            #[cfg(feature = "__tls")]
-            disable_tls: self.builder_config.disable_tls,
-        };
         let transport = ClientTransport::new(
             self.http_config,
-            transport_config,
+            self.client_config,
+            self.pool_config,
             #[cfg(feature = "__tls")]
             self.tls_config,
         );

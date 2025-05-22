@@ -1,12 +1,9 @@
 use http::uri::Scheme;
-use motore::service::Service;
+use motore::service::UnaryService;
 use volo::net::{conn::Conn, Address};
 
 use super::{plain::PlainMakeConnection, protocol::ClientTransportConfig};
-use crate::{
-    context::ClientContext,
-    error::{client::bad_scheme, ClientError},
-};
+use crate::error::{client::bad_scheme, ClientError};
 
 pub struct ConnectorBuilder<'a> {
     mk_conn: HttpMakeConnection,
@@ -70,6 +67,15 @@ fn default_tls_connector() -> volo::net::tls::TlsConnector {
         .unwrap_or_default()
 }
 
+#[derive(Clone, Debug)]
+pub(super) struct PeerInfo {
+    pub scheme: Scheme,
+    pub address: Address,
+    #[cfg(feature = "__tls")]
+    pub name: faststr::FastStr,
+}
+
+#[derive(Clone, Debug)]
 pub enum HttpMakeConnection {
     Plain(PlainMakeConnection),
     #[cfg(feature = "__tls")]
@@ -82,26 +88,22 @@ impl HttpMakeConnection {
     }
 }
 
-impl Service<ClientContext, Address> for HttpMakeConnection {
+impl UnaryService<PeerInfo> for HttpMakeConnection {
     type Response = Conn;
     type Error = ClientError;
 
-    async fn call(
-        &self,
-        cx: &mut ClientContext,
-        req: Address,
-    ) -> Result<Self::Response, Self::Error> {
+    async fn call(&self, req: PeerInfo) -> Result<Self::Response, Self::Error> {
         match self {
             Self::Plain(plain) => {
-                if cx.scheme() != &Scheme::HTTP {
+                if req.scheme != Scheme::HTTP {
                     return Err(bad_scheme());
                 }
-                plain.call(cx, req).await
+                plain.call(req).await
             }
             #[cfg(feature = "__tls")]
             Self::Tls(tls) => {
                 // FIXME: tokio-rustls does not support setting alpn for each connection
-                tls.call(cx, req).await
+                tls.call(req).await
             }
         }
     }

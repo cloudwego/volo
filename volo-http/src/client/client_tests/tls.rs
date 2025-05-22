@@ -8,12 +8,16 @@
 // Due to the above reasons, we only support using HTTP/2 with TLS when `http1`, `http2`, and
 // `tls` features are enabled.
 
+use std::error::Error;
+
 use super::{HttpBinResponse, HTTPBIN_GET_HTTPS};
 use crate::{
     body::BodyConversion,
     client::{dns::DnsResolver, test_helpers::DebugLayer, Client},
+    error::client::BadScheme,
 };
 
+#[cfg(feature = "json")]
 #[tokio::test]
 async fn client_builder_with_https() {
     let mut builder = Client::builder().layer_inner(DebugLayer::default());
@@ -34,6 +38,7 @@ async fn client_builder_with_https() {
     assert_eq!(resp.url, HTTPBIN_GET_HTTPS);
 }
 
+#[cfg(feature = "json")]
 #[tokio::test]
 async fn client_builder_with_address_and_https() {
     let addr = DnsResolver::default()
@@ -66,15 +71,12 @@ async fn client_disable_tls() {
     let mut builder = Client::builder().layer_inner(DebugLayer::default());
     builder.disable_tls(true);
     let client = builder.build().unwrap();
-    assert_eq!(
-        format!(
-            "{}",
-            client
-                .get("https://httpbin.org/get")
-                .send()
-                .await
-                .expect_err("HTTPS with disable_tls should fail")
-        ),
-        format!("{}", bad_scheme()),
-    );
+    assert!(client
+        .get("https://httpbin.org/get")
+        .send()
+        .await
+        .expect_err("HTTPS with disable_tls should fail")
+        .source()
+        .expect("HTTPS with disable_tls should fail")
+        .is::<BadScheme>());
 }

@@ -1,20 +1,14 @@
 use http::uri::Scheme;
-use motore::service::Service;
-use volo::{
-    context::Context,
-    net::{
-        conn::{Conn, ConnStream},
-        tls::{Connector, TlsConnector},
-        Address,
-    },
+use motore::service::UnaryService;
+use volo::net::{
+    conn::{Conn, ConnStream},
+    tls::{Connector, TlsConnector},
 };
 
-use super::plain::PlainMakeConnection;
-use crate::{
-    context::ClientContext,
-    error::{client::request_error, ClientError},
-};
+use super::{connector::PeerInfo, plain::PlainMakeConnection};
+use crate::error::{client::request_error, ClientError};
 
+#[derive(Clone, Debug)]
 pub struct TlsMakeConnection<S = PlainMakeConnection> {
     inner: S,
     tls_connector: TlsConnector,
@@ -29,33 +23,29 @@ impl<S> TlsMakeConnection<S> {
     }
 }
 
-impl<S> Service<ClientContext, Address> for TlsMakeConnection<S>
+impl<S> UnaryService<PeerInfo> for TlsMakeConnection<S>
 where
-    S: Service<ClientContext, Address, Response = Conn, Error = ClientError> + Sync,
+    S: UnaryService<PeerInfo, Response = Conn, Error = ClientError> + Sync,
 {
     type Response = S::Response;
     type Error = S::Error;
 
-    async fn call(
-        &self,
-        cx: &mut ClientContext,
-        req: Address,
-    ) -> Result<Self::Response, Self::Error> {
-        let conn = self.inner.call(cx, req).await?;
+    async fn call(&self, req: PeerInfo) -> Result<Self::Response, Self::Error> {
+        let conn = self.inner.call(req.clone()).await?;
 
-        if cx.scheme() == &Scheme::HTTP {
+        if req.scheme == Scheme::HTTP {
             // It's an HTTP request
             return Ok(conn);
         }
 
-        let target_name = cx.rpc_info().callee().service_name_ref();
+        let target_name = req.name;
         tracing::debug!("[Volo-HTTP] try to make tls handshake, name: {target_name:?}");
 
         let tcp_stream = match conn.stream {
             ConnStream::Tcp(tcp_stream) => tcp_stream,
             _ => unreachable!(),
         };
-        match self.tls_connector.connect(target_name, tcp_stream).await {
+        match self.tls_connector.connect(&target_name, tcp_stream).await {
             Ok(conn) => Ok(conn),
             Err(err) => {
                 tracing::error!("[Volo-HTTP] failed to make tls connection, error: {err}");

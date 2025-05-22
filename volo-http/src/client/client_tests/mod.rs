@@ -1,6 +1,6 @@
 //! Test cases for Client
 
-#![allow(dead_code)]
+#![allow(unused)]
 
 use std::collections::HashMap;
 
