@@ -20,7 +20,7 @@ use http::{
 use metainfo::{MetaInfo, METAINFO};
 use motore::{
     layer::{Identity, Layer, Stack},
-    service::Service,
+    service::{BoxService, Service},
 };
 use paste::paste;
 use volo::{
@@ -35,13 +35,14 @@ use volo::{
 
 use self::{
     layer::{
-        header::{Host, HostService, UserAgent, UserAgentService},
+        header::{Host, UserAgent},
         Timeout,
     },
     loadbalance::{DefaultLB, LbConfig},
     transport::{ClientConfig, ClientTransport, ClientTransportConfig},
 };
 use crate::{
+    body::Body,
     context::ClientContext,
     error::{
         client::{builder_error, Result},
@@ -69,21 +70,6 @@ pub use self::{callopt::CallOpt, request_builder::RequestBuilder, target::Target
 pub mod prelude {
     pub use super::{Client, ClientBuilder};
 }
-
-/// Default inner service of [`Client`]
-pub type ClientMetaService = ClientTransport;
-/// [`Client`] generated service with given `IL`, `OL` and `LB`
-pub type ClientService<IL = Identity, OL = Identity, LB = DefaultLB> = <OL as Layer<
-    <<LB as MkLbLayer>::Layer as Layer<<IL as Layer<ClientMetaService>>::Service>>::Service,
->>::Service;
-/// Default [`Client`] without default [`Layer`]s
-pub type SimpleClient<IL = Identity, OL = Identity> = Client<ClientService<IL, OL>>;
-/// Default [`Layer`]s that [`ClientBuilder::build`] append to outer layers
-pub type DefaultClientOuterService<S> =
-    <Timeout as Layer<HostService<UserAgentService<S>>>>::Service;
-/// Default [`Client`] with default [`Layer`]s
-pub type DefaultClient<IL = Identity, OL = Identity> =
-    Client<DefaultClientOuterService<ClientService<IL, OL>>>;
 
 /// A builder for configuring an HTTP [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB> {
@@ -666,18 +652,25 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// - Transport through network or unix domain socket.
     ///
     /// [`DnsResolver`]: crate::client::dns::DnsResolver
-    pub fn build(mut self) -> Result<C::Target>
+    pub fn build<ReqBody, RespBody>(mut self) -> Result<C::Target>
     where
-        IL: Layer<ClientMetaService>,
+        IL: Layer<ClientTransport>,
         IL::Service: Send + Sync + 'static,
         LB: MkLbLayer,
         LB::Layer: Layer<IL::Service>,
         <LB::Layer as Layer<IL::Service>>::Service: Send + Sync,
         OL: Layer<<LB::Layer as Layer<IL::Service>>::Service>,
-        OL::Service: Send + Sync + 'static,
-        C: MkClient<
-            Client<<Timeout as Layer<HostService<UserAgentService<OL::Service>>>>::Service>,
-        >,
+        OL::Service: Service<
+                ClientContext,
+                Request<ReqBody>,
+                Response = Response<RespBody>,
+                Error = ClientError,
+            > + Send
+            + Sync
+            + 'static,
+        C: MkClient<Client<ReqBody, RespBody>>,
+        ReqBody: Send + 'static,
+        RespBody: Send,
     {
         let timeout_layer = Timeout;
         let host_layer = match self.host.take() {
@@ -700,7 +693,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// default layers,
     ///
     /// See [`ClientBuilder::build`] for more details.
-    pub fn build_without_extra_layers(self) -> Result<C::Target>
+    pub fn build_without_extra_layers<ReqBody, RespBody>(self) -> Result<C::Target>
     where
         IL: Layer<ClientTransport>,
         IL::Service: Send + Sync + 'static,
@@ -708,8 +701,17 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         LB::Layer: Layer<IL::Service>,
         <LB::Layer as Layer<IL::Service>>::Service: Send + Sync,
         OL: Layer<<LB::Layer as Layer<IL::Service>>::Service>,
-        OL::Service: Send + Sync + 'static,
-        C: MkClient<Client<OL::Service>>,
+        OL::Service: Service<
+                ClientContext,
+                Request<ReqBody>,
+                Response = Response<RespBody>,
+                Error = ClientError,
+            > + Send
+            + Sync
+            + 'static,
+        C: MkClient<Client<ReqBody, RespBody>>,
+        ReqBody: Send + 'static,
+        RespBody: Send,
     {
         self.status?;
 
@@ -728,6 +730,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         let service = self
             .outer_layer
             .layer(self.mk_lb.make().layer(self.inner_layer.layer(transport)));
+        let service = BoxService::new(service);
 
         let client_inner = ClientInner {
             service,
@@ -757,8 +760,8 @@ where
     Ok(())
 }
 
-struct ClientInner<S> {
-    service: S,
+struct ClientInner<ReqBody, RespBody> {
+    service: BoxService<ClientContext, Request<ReqBody>, Response<RespBody>, ClientError>,
     target: Target,
     timeout: Option<Duration>,
     default_callee_name: FastStr,
@@ -785,17 +788,17 @@ struct ClientInner<S> {
 /// println!("{resp:?}");
 /// # })
 /// ```
-pub struct Client<S> {
-    inner: Arc<ClientInner<S>>,
+pub struct Client<ReqBody = Body, RespBody = Body> {
+    inner: Arc<ClientInner<ReqBody, RespBody>>,
 }
 
-impl Default for DefaultClient {
+impl Default for Client {
     fn default() -> Self {
         ClientBuilder::default().build().unwrap()
     }
 }
 
-impl<S> Clone for Client<S> {
+impl<ReqBody, RespBody> Clone for Client<ReqBody, RespBody> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -818,14 +821,14 @@ macro_rules! method_requests {
     };
 }
 
-impl Client<()> {
+impl Client {
     /// Create a new client builder.
     pub fn builder() -> ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
         ClientBuilder::new()
     }
 }
 
-impl<S> Client<S> {
+impl<ReqBody, RespBody> Client<ReqBody, RespBody> {
     /// Create a builder for building a request.
     pub fn request_builder(&self) -> RequestBuilder<Self> {
         RequestBuilder::new(self.clone())
@@ -856,18 +859,18 @@ impl<S> Client<S> {
     }
 }
 
-impl<S, B> OneShotService<ClientContext, Request<B>> for Client<S>
+impl<ReqBody, RespBody> OneShotService<ClientContext, Request<ReqBody>>
+    for Client<ReqBody, RespBody>
 where
-    S: Service<ClientContext, Request<B>, Error = ClientError> + Send + Sync,
-    B: Send,
+    ReqBody: Send,
 {
-    type Response = S::Response;
-    type Error = S::Error;
+    type Response = Response<RespBody>;
+    type Error = ClientError;
 
     async fn call(
         self,
         cx: &mut ClientContext,
-        mut req: Request<B>,
+        mut req: Request<ReqBody>,
     ) -> Result<Self::Response, Self::Error> {
         // set target
         self.inner.target.clone().apply(cx)?;
@@ -912,18 +915,17 @@ where
     }
 }
 
-impl<S, B> Service<ClientContext, Request<B>> for Client<S>
+impl<ReqBody, RespBody> Service<ClientContext, Request<ReqBody>> for Client<ReqBody, RespBody>
 where
-    S: Service<ClientContext, Request<B>, Error = ClientError> + Send + Sync,
-    B: Send,
+    ReqBody: Send,
 {
-    type Response = S::Response;
-    type Error = S::Error;
+    type Response = Response<RespBody>;
+    type Error = ClientError;
 
     fn call(
         &self,
         cx: &mut ClientContext,
-        req: Request<B>,
+        req: Request<ReqBody>,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         OneShotService::call(self.clone(), cx, req)
     }
@@ -932,15 +934,15 @@ where
 /// A dummy [`MkClient`] that does not have any functionality
 pub struct DefaultMkClient;
 
-impl<S> MkClient<Client<S>> for DefaultMkClient {
-    type Target = Client<S>;
+impl<C> MkClient<C> for DefaultMkClient {
+    type Target = C;
 
-    fn mk_client(&self, service: Client<S>) -> Self::Target {
+    fn mk_client(&self, service: C) -> Self::Target {
         service
     }
 }
 
-static CLIENT: LazyLock<DefaultClient> = LazyLock::new(Default::default);
+static CLIENT: LazyLock<Client> = LazyLock::new(Default::default);
 
 /// Create a GET request to the specified URI.
 pub async fn get<U>(uri: U) -> Result<Response>
@@ -957,25 +959,18 @@ where
 mod client_tests {
     use std::{
         collections::HashMap,
-        future::Future,
         net::{IpAddr, Ipv4Addr, SocketAddr},
     };
 
     #[cfg(feature = "cookie")]
     use cookie::Cookie;
     use http::{header, status::StatusCode};
-    use motore::{
-        layer::{Identity, Layer, Stack},
-        service::Service,
-    };
     use serde::Deserialize;
 
-    use super::{dns::DnsResolver, get, Client, DefaultClient};
+    use super::{dns::DnsResolver, get, test_helpers::DebugLayer, Client};
     #[cfg(feature = "cookie")]
     use crate::client::cookie::CookieLayer;
-    use crate::{
-        body::BodyConversion, client::SimpleClient, utils::consts::HTTP_DEFAULT_PORT, ClientBuilder,
-    };
+    use crate::{body::BodyConversion, utils::consts::HTTP_DEFAULT_PORT};
 
     #[derive(Deserialize)]
     struct HttpBinResponse {
@@ -992,77 +987,6 @@ mod client_tests {
     const USER_AGENT_KEY: &str = "User-Agent";
     const USER_AGENT_VAL: &str = "volo-http-unit-test";
 
-    #[test]
-    fn client_types_check() {
-        struct TestLayer;
-        struct TestService<S> {
-            inner: S,
-        }
-
-        impl<S> Layer<S> for TestLayer {
-            type Service = TestService<S>;
-
-            fn layer(self, inner: S) -> Self::Service {
-                TestService { inner }
-            }
-        }
-
-        impl<S, Cx, Req> Service<Cx, Req> for TestService<S>
-        where
-            S: Service<Cx, Req>,
-        {
-            type Response = S::Response;
-            type Error = S::Error;
-
-            fn call(
-                &self,
-                cx: &mut Cx,
-                req: Req,
-            ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
-                self.inner.call(cx, req)
-            }
-        }
-
-        let _: SimpleClient = ClientBuilder::new().build_without_extra_layers().unwrap();
-        let _: SimpleClient<TestLayer> = ClientBuilder::new()
-            .layer_inner(TestLayer)
-            .build_without_extra_layers()
-            .unwrap();
-        let _: SimpleClient<Identity, TestLayer> = ClientBuilder::new()
-            .layer_outer(TestLayer)
-            .build_without_extra_layers()
-            .unwrap();
-        let _: SimpleClient<TestLayer, TestLayer> = ClientBuilder::new()
-            .layer_inner(TestLayer)
-            .layer_outer(TestLayer)
-            .build_without_extra_layers()
-            .unwrap();
-
-        let _: DefaultClient = ClientBuilder::new().build().unwrap();
-        let _: DefaultClient<TestLayer> =
-            ClientBuilder::new().layer_inner(TestLayer).build().unwrap();
-        let _: DefaultClient<TestLayer> = ClientBuilder::new()
-            .layer_inner_front(TestLayer)
-            .build()
-            .unwrap();
-        let _: DefaultClient<Identity, TestLayer> =
-            ClientBuilder::new().layer_outer(TestLayer).build().unwrap();
-        let _: DefaultClient<Identity, TestLayer> = ClientBuilder::new()
-            .layer_outer_front(TestLayer)
-            .build()
-            .unwrap();
-        let _: DefaultClient<TestLayer, TestLayer> = ClientBuilder::new()
-            .layer_inner(TestLayer)
-            .layer_outer(TestLayer)
-            .build()
-            .unwrap();
-        let _: DefaultClient<Stack<TestLayer, TestLayer>> = ClientBuilder::new()
-            .layer_inner(TestLayer)
-            .layer_inner(TestLayer)
-            .build()
-            .unwrap();
-    }
-
     #[tokio::test]
     async fn simple_get() {
         let resp = get(HTTPBIN_GET)
@@ -1077,7 +1001,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_with_header() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.header(header::USER_AGENT, USER_AGENT_VAL);
         let client = builder.build().unwrap();
 
@@ -1096,7 +1020,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_with_host() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.host("httpbin.org");
         let client = builder.build().unwrap();
 
@@ -1118,7 +1042,7 @@ mod client_tests {
             .resolve("httpbin.org", HTTP_DEFAULT_PORT)
             .await
             .unwrap();
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.default_host("httpbin.org").address(addr);
         let client = builder.build().unwrap();
 
@@ -1136,7 +1060,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_host_override() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.host("this.domain.must.be.invalid");
         let client = builder.build().unwrap();
 
@@ -1154,7 +1078,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_addr_override() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.default_host("httpbin.org").address(SocketAddr::new(
             IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
             8888,
@@ -1181,7 +1105,7 @@ mod client_tests {
     #[cfg(feature = "__tls")]
     #[tokio::test]
     async fn client_builder_with_https() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder
             .host("httpbin.org")
             .with_scheme(http::uri::Scheme::HTTPS);
@@ -1206,7 +1130,7 @@ mod client_tests {
             .resolve("httpbin.org", crate::utils::consts::HTTPS_DEFAULT_PORT)
             .await
             .unwrap();
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder
             .default_host("httpbin.org")
             .address(addr)
@@ -1227,7 +1151,7 @@ mod client_tests {
 
     #[tokio::test]
     async fn client_builder_with_port() {
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.host("httpbin.org").with_port(443);
         let client = builder.build().unwrap();
 
@@ -1242,7 +1166,7 @@ mod client_tests {
     async fn client_disable_tls() {
         use crate::error::client::bad_scheme;
 
-        let mut builder = Client::builder();
+        let mut builder = Client::builder().layer_inner(DebugLayer::default());
         builder.disable_tls(true);
         let client = builder.build().unwrap();
         assert_eq!(
@@ -1261,7 +1185,9 @@ mod client_tests {
     #[cfg(feature = "cookie")]
     #[tokio::test]
     async fn cookie_store() {
-        let mut builder = Client::builder().layer_inner(CookieLayer::new(Default::default()));
+        let mut builder = Client::builder()
+            .layer_inner(DebugLayer::default())
+            .layer_inner(CookieLayer::new(Default::default()));
 
         builder.host("httpbin.org");
 

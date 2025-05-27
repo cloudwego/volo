@@ -98,10 +98,10 @@ impl CookieLayer {
     /// ```rust
     /// use volo_http::{client::cookie::CookieLayer, Client};
     ///
-    /// let builder = Client::builder();
-    /// let client = builder
+    /// let client: Client = Client::builder()
     ///     .layer_inner(CookieLayer::new(Default::default()))
-    ///     .build();
+    ///     .build()
+    ///     .unwrap();
     /// ```
     pub fn new(cookie_store: cookie_store::CookieStore) -> Self {
         Self {

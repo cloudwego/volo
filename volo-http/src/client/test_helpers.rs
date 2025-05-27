@@ -5,15 +5,16 @@ use std::sync::Arc;
 use faststr::FastStr;
 use http::status::StatusCode;
 use motore::{
-    layer::{Identity, Layer},
+    layer::Layer,
     service::{BoxService, Service},
 };
 use volo::client::MkClient;
 
 use super::{Client, ClientBuilder, ClientInner, Target};
 use crate::{
+    body::{Body, BodyConversion},
     context::client::ClientContext,
-    error::client::{ClientError, Result},
+    error::client::{other_error, ClientError, Result},
     request::Request,
     response::Response,
     utils::test_helpers::mock_address,
@@ -21,9 +22,6 @@ use crate::{
 
 /// Default mock service of [`Client`]
 pub type ClientMockService = MockTransport;
-/// Default [`Client`] without any extra [`Layer`]s
-pub type DefaultMockClient<IL = Identity, OL = Identity> =
-    Client<<OL as Layer<<IL as Layer<ClientMockService>>::Service>>::Service>;
 
 /// Mock transport [`Service`] without any network connection.
 pub enum MockTransport {
@@ -109,19 +107,29 @@ impl Service<ClientContext, Request> for MockTransport {
 
 impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// Build a mock HTTP client with a [`MockTransport`] service.
-    pub fn mock(self, transport: MockTransport) -> Result<C::Target>
+    pub fn mock<ReqBody, RespBody>(self, transport: MockTransport) -> Result<C::Target>
     where
         IL: Layer<ClientMockService>,
         IL::Service: Send + Sync + 'static,
         // remove loadbalance here
         OL: Layer<IL::Service>,
-        OL::Service: Send + Sync + 'static,
-        C: MkClient<Client<OL::Service>>,
+        OL::Service: Service<
+                ClientContext,
+                Request<ReqBody>,
+                Response = Response<RespBody>,
+                Error = ClientError,
+            > + Send
+            + Sync
+            + 'static,
+        C: MkClient<Client<ReqBody, RespBody>>,
+        ReqBody: Send + 'static,
+        RespBody: Send,
     {
         self.status?;
 
         let meta_service = transport;
         let service = self.outer_layer.layer(self.inner_layer.layer(meta_service));
+        let service = BoxService::new(service);
 
         let client_inner = ClientInner {
             service,
@@ -138,59 +146,113 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     }
 }
 
-#[allow(unused)]
-fn client_types_check() {
-    struct TestLayer;
-    struct TestService<S> {
-        inner: S,
+/// A [`Layer`] for dumping request and response.
+///
+/// Note that it will collect request and response as bytes and then dump it, using stream is not
+/// suggested.
+#[derive(Debug, Default)]
+pub enum DebugLayer {
+    /// Dump request and response as [`String`].
+    #[default]
+    DumpString,
+    /// Dump request and response as `[u8]`.
+    DumpBytes,
+}
+
+fn dump_request_parts(parts: &http::request::Parts) {
+    println!("{:?} {:?} {:?}", parts.method, parts.uri, parts.version);
+    for (k, v) in parts.headers.iter() {
+        let Ok(v) = v.to_str() else {
+            continue;
+        };
+        println!("{k}: {v}");
+    }
+}
+
+fn dump_response_parts(parts: &http::response::Parts) {
+    println!("{:?} {}", parts.version, parts.status);
+    for (k, v) in parts.headers.iter() {
+        println!("{k}: {v:?}");
+    }
+}
+
+impl DebugLayer {
+    async fn dump_request(&self, req: Request) -> Result<Request> {
+        let (parts, body) = req.into_parts();
+        let bytes = body.into_bytes().await?;
+        println!(" ==== DebugLayer::dump_request ====");
+        dump_request_parts(&parts);
+        println!();
+        match self {
+            DebugLayer::DumpString => {
+                let s = std::str::from_utf8(bytes.as_ref()).map_err(other_error)?;
+                println!("{s}");
+            }
+            DebugLayer::DumpBytes => {
+                println!("{:?}", bytes.as_ref());
+            }
+        }
+        println!(" ==== DebugLayer::dump_request ====");
+        let body = Body::from(bytes);
+        Ok(Request::from_parts(parts, body))
     }
 
-    impl<S> Layer<S> for TestLayer {
-        type Service = TestService<S>;
+    async fn dump_response(&self, resp: Response) -> Result<Response> {
+        let (parts, body) = resp.into_parts();
+        let bytes = body.into_bytes().await?;
+        println!(" ==== DebugLayer::dump_response ====");
+        dump_response_parts(&parts);
+        println!();
+        match self {
+            DebugLayer::DumpString => {
+                let s = std::str::from_utf8(bytes.as_ref()).map_err(other_error)?;
+                println!("{s}");
+            }
+            DebugLayer::DumpBytes => {
+                println!("{:?}", bytes.as_ref());
+            }
+        }
+        println!(" ==== DebugLayer::dump_response ====");
+        let body = Body::from(bytes);
+        Ok(Response::from_parts(parts, body))
+    }
+}
 
-        fn layer(self, inner: S) -> Self::Service {
-            TestService { inner }
+impl<S> Layer<S> for DebugLayer {
+    type Service = DebugService<S>;
+
+    fn layer(self, inner: S) -> Self::Service {
+        DebugService {
+            inner,
+            config: self,
         }
     }
+}
 
-    impl<S, Cx, Req> Service<Cx, Req> for TestService<S>
-    where
-        S: Service<Cx, Req>,
-    {
-        type Response = S::Response;
-        type Error = S::Error;
+/// [`Service`] generated by [`DebugLayer`].
+///
+/// For more details, see [`DebugLayer`].
+pub struct DebugService<S> {
+    inner: S,
+    config: DebugLayer,
+}
 
-        fn call(
-            &self,
-            cx: &mut Cx,
-            req: Req,
-        ) -> impl std::future::Future<Output = Result<Self::Response, Self::Error>> + Send {
-            self.inner.call(cx, req)
-        }
+impl<S> Service<ClientContext, Request> for DebugService<S>
+where
+    S: Service<ClientContext, Request, Response = Response, Error = ClientError> + Send + Sync,
+{
+    type Response = Response;
+    type Error = ClientError;
+
+    async fn call(
+        &self,
+        cx: &mut ClientContext,
+        req: Request,
+    ) -> Result<Self::Response, Self::Error> {
+        let req = self.config.dump_request(req).await?;
+        let resp = self.inner.call(cx, req).await?;
+        self.config.dump_response(resp).await
     }
-
-    let _: DefaultMockClient = ClientBuilder::new().mock(Default::default()).unwrap();
-    let _: DefaultMockClient<TestLayer> = ClientBuilder::new()
-        .layer_inner(TestLayer)
-        .mock(Default::default())
-        .unwrap();
-    let _: DefaultMockClient<TestLayer> = ClientBuilder::new()
-        .layer_inner_front(TestLayer)
-        .mock(Default::default())
-        .unwrap();
-    let _: DefaultMockClient<Identity, TestLayer> = ClientBuilder::new()
-        .layer_outer(TestLayer)
-        .mock(Default::default())
-        .unwrap();
-    let _: DefaultMockClient<Identity, TestLayer> = ClientBuilder::new()
-        .layer_outer_front(TestLayer)
-        .mock(Default::default())
-        .unwrap();
-    let _: DefaultMockClient<TestLayer, TestLayer> = ClientBuilder::new()
-        .layer_inner(TestLayer)
-        .layer_outer(TestLayer)
-        .mock(Default::default())
-        .unwrap();
 }
 
 mod mock_transport_tests {

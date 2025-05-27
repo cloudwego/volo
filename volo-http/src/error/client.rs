@@ -137,6 +137,7 @@ impl Error for ClientError {
 }
 
 /// Error kind of [`ClientError`]
+#[non_exhaustive]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ErrorKind {
     /// Error occurs when building a client or a request
@@ -152,6 +153,8 @@ pub enum ErrorKind {
     LoadBalance,
     /// Something wrong when processing on [`Body`](crate::body::Body)
     Body,
+    /// Other unrecognizable errors
+    Other,
 }
 
 /// Create a [`ClientError`] with [`ErrorKind::Builder`]
@@ -186,6 +189,22 @@ where
     ClientError::new(ErrorKind::LoadBalance, Some(error))
 }
 
+/// Create a [`ClientError`] with [`ErrorKind::Body`]
+pub fn body_error<E>(error: E) -> ClientError
+where
+    E: Into<BoxError>,
+{
+    ClientError::new(ErrorKind::Body, Some(error))
+}
+
+/// Create a [`ClientError`] with [`ErrorKind::Other`]
+pub fn other_error<E>(error: E) -> ClientError
+where
+    E: Into<BoxError>,
+{
+    ClientError::new(ErrorKind::Other, Some(error))
+}
+
 impl From<BodyConvertError> for ClientError {
     fn from(value: BodyConvertError) -> Self {
         ClientError::new(ErrorKind::Body, Some(BoxError::from(value)))
@@ -200,6 +219,7 @@ impl std::fmt::Display for ErrorKind {
             Self::Request => f.write_str("sending request error"),
             Self::LoadBalance => f.write_str("load balance error"),
             Self::Body => f.write_str("processing body error"),
+            Self::Other => f.write_str("error"),
         }
     }
 }
