@@ -97,23 +97,26 @@ tokio-test.workspace = true
 default = []
 
 default-client = ["client", "json"]
-default-server = ["server", "query", "form", "json", "multipart"]
+default-server = ["server", "http1", "http2", "query", "form", "json", "multipart"]
 
 full = [
     "client", "server", # core
+    "http1", "http2", # protocol
     "query", "form", "json", # serde
     "tls", # https
     "cookie", "multipart", "ws", # exts
 ]
 
 http1 = ["hyper/http1", "hyper-util/http1"]
+http2 = ["hyper/http2", "hyper-util/http2"]
 
 client = [
-    "http1", "hyper/client",
+    "hyper/client",
+    "http1", # to be removed
     "dep:async-broadcast", "dep:chrono", "dep:hickory-resolver",
 ] # client core
 server = [
-    "http1", "hyper-util/server",
+    "hyper-util/server",
     "dep:ipnet", "dep:matchit", "dep:memchr", "dep:scopeguard", "dep:mime_guess",
 ] # server core
 

@@ -47,6 +47,7 @@ pub mod layer;
 pub mod middleware;
 pub mod panic_handler;
 pub mod param;
+pub mod protocol;
 pub mod response;
 pub mod route;
 #[cfg(test)]
@@ -198,54 +199,6 @@ impl<S, L> Server<S, L> {
         &mut self.config
     }
 
-    /// Set whether HTTP/1 connections should support half-closures.
-    ///
-    /// Clients can chose to shutdown their write-side while waiting
-    /// for the server to respond. Setting this to `true` will
-    /// prevent closing the connection immediately if `read`
-    /// detects an EOF in the middle of a request.
-    ///
-    /// Default is `false`.
-    pub fn set_half_close(&mut self, half_close: bool) -> &mut Self {
-        self.server.http1().half_close(half_close);
-        self
-    }
-
-    /// Enables or disables HTTP/1 keep-alive.
-    ///
-    /// Default is true.
-    pub fn set_keep_alive(&mut self, keep_alive: bool) -> &mut Self {
-        self.server.http1().keep_alive(keep_alive);
-        self
-    }
-
-    /// Set whether HTTP/1 connections will write header names as title case at
-    /// the socket level.
-    ///
-    /// Default is false.
-    pub fn set_title_case_headers(&mut self, title_case_headers: bool) -> &mut Self {
-        self.server.http1().title_case_headers(title_case_headers);
-        self
-    }
-
-    /// Set whether to support preserving original header cases.
-    ///
-    /// Currently, this will record the original cases received, and store them
-    /// in a private extension on the `Request`. It will also look for and use
-    /// such an extension in any provided `Response`.
-    ///
-    /// Since the relevant extension is still private, there is no way to
-    /// interact with the original cases. The only effect this can have now is
-    /// to forward the cases in a proxy-like fashion.
-    ///
-    /// Default is false.
-    pub fn set_preserve_header_case(&mut self, preserve_header_case: bool) -> &mut Self {
-        self.server
-            .http1()
-            .preserve_header_case(preserve_header_case);
-        self
-    }
-
     /// Set the maximum number of headers.
     ///
     /// When a request is received, the parser will reserve a buffer to store headers for optimal
@@ -259,9 +212,58 @@ impl<S, L> Server<S, L> {
     /// allocation will occur for each request, and there will be a performance drop of about 5%.
     ///
     /// Default is 100.
+    #[deprecated(
+        since = "0.4.0",
+        note = "`set_max_headers` has been removed into `http1_config`"
+    )]
+    #[cfg(feature = "http1")]
     pub fn set_max_headers(&mut self, max_headers: usize) -> &mut Self {
         self.server.http1().max_headers(max_headers);
         self
+    }
+
+    /// Get configuration for http1 part.
+    #[cfg(feature = "http1")]
+    pub fn http1_config(&mut self) -> self::protocol::Http1Config<'_> {
+        self::protocol::Http1Config {
+            inner: self.server.http1(),
+        }
+    }
+
+    /// Get configuration for http2 part.
+    #[cfg(feature = "http2")]
+    pub fn http2_config(&mut self) -> self::protocol::Http2Config<'_> {
+        self::protocol::Http2Config {
+            inner: self.server.http2(),
+        }
+    }
+
+    /// Make server accept only HTTP/1.
+    #[cfg(feature = "http1")]
+    pub fn http1_only(self) -> Self {
+        Self {
+            service: self.service,
+            layer: self.layer,
+            server: self.server.http1_only(),
+            config: self.config,
+            shutdown_hooks: self.shutdown_hooks,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
+    /// Make server accept only HTTP/2.
+    #[cfg(feature = "http2")]
+    pub fn http2_only(self) -> Self {
+        Self {
+            service: self.service,
+            layer: self.layer,
+            server: self.server.http2_only(),
+            config: self.config,
+            shutdown_hooks: self.shutdown_hooks,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
     }
 
     /// The main entry point for the server.
@@ -437,7 +439,6 @@ async fn serve_conn<S>(
     conn_cnt: Arc<AtomicUsize>,
     exit_notify: Arc<Notify>,
 ) where
-    // S: hyper::service::HttpService<hyper::body::Incoming, ResBody = Body>,
     S: hyper::service::Service<HyperRequest, Response = Response> + Unpin,
     S::Future: Send + 'static,
     S::Error: Error + Send + Sync + 'static,
