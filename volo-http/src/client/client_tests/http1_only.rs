@@ -8,17 +8,26 @@
 // Find a website that support h2c.
 
 use std::{
+    any::TypeId,
     collections::HashMap,
     future::Future,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     time::Duration,
 };
 
+use bytes::Bytes;
 use http::{header, status::StatusCode};
+use http_body_util::Full;
 use motore::service::Service;
 use volo::context::Context;
 
-use super::{HttpBinResponse, HTTPBIN_GET, USER_AGENT_KEY, USER_AGENT_VAL};
+use super::{
+    utils::{
+        AutoBody, AutoBodyLayer, AutoFull, AutoFullLayer, DropBodyLayer, Nothing,
+        RespBodyToFullLayer,
+    },
+    HttpBinResponse, HTTPBIN_GET, HTTPBIN_POST, USER_AGENT_KEY, USER_AGENT_VAL,
+};
 use crate::{
     body::{Body, BodyConversion},
     client::{
@@ -33,6 +42,87 @@ use crate::{
     response::Response,
     utils::consts::HTTP_DEFAULT_PORT,
 };
+
+#[tokio::test]
+async fn client_with_generics() {
+    fn type_of<T: 'static>(_: &T) -> TypeId {
+        TypeId::of::<T>()
+    }
+
+    // Override default `ReqBody`, but the `ReqBody` is still implements `http_body::Body`
+    {
+        let client = Client::builder().build().unwrap();
+        assert!(client
+            .post(HTTPBIN_POST)
+            .body(Full::new(Bytes::new()))
+            .send()
+            .await
+            .is_ok());
+        assert_eq!(TypeId::of::<Client<Full<Bytes>>>(), type_of(&client),);
+    }
+    // Override default `RespBody`, but the `RespBody` is still implements `http_body::Body`
+    {
+        let client = Client::builder()
+            .layer_outer_front(RespBodyToFullLayer)
+            .build()
+            .unwrap();
+        assert!(client.get(HTTPBIN_GET).send().await.is_ok());
+        assert_eq!(TypeId::of::<Client<Body, Full<Bytes>>>(), type_of(&client),);
+    }
+    // Override default `ReqBody` through `Layer`. The `AutoBody` does not implement
+    // `http_body::Body`, but the `AutoBodyLayer` will convert it to `volo_http::body::Body` and
+    // use it.
+    {
+        let client = Client::builder()
+            .layer_outer_front(AutoBodyLayer)
+            .build()
+            .unwrap();
+        assert!(client
+            .post(HTTPBIN_POST)
+            .body(AutoBody)
+            .send()
+            .await
+            .is_ok());
+        assert_eq!(TypeId::of::<Client<AutoBody>>(), type_of(&client),);
+    }
+    // Override default `ReqBody` through `Layer`. The `AutoFull` does not implement
+    // `http_body::Body`, but the `AutoFullLayer` will convert it to `Full<Bytes>` which implements
+    // `http_body::Body` as its `InnerReqBody`.
+    {
+        let client = Client::builder()
+            .layer_outer_front(AutoFullLayer)
+            .build()
+            .unwrap();
+        assert!(client
+            .post(HTTPBIN_POST)
+            .body(AutoFull)
+            .send()
+            .await
+            .is_ok());
+        assert_eq!(TypeId::of::<Client<AutoFull>>(), type_of(&client),);
+    }
+    // Override default `RespBody` through `Layer`. The `RespBody` does not implement
+    // `http_body::Body`, but the `DropBodyLayer` will drop `volo_http::body::Body` and put
+    // `Nothing` to `Response`.
+    {
+        let client = Client::builder()
+            .layer_outer_front(DropBodyLayer)
+            .build()
+            .unwrap();
+        assert!(client.get(HTTPBIN_GET).send().await.is_ok());
+        assert_eq!(TypeId::of::<Client<Body, Nothing>>(), type_of(&client),);
+    }
+    // Combine them
+    {
+        let client = Client::builder()
+            .layer_outer_front(AutoFullLayer)
+            .layer_outer_front(DropBodyLayer)
+            .build()
+            .unwrap();
+        assert!(client.post(HTTPBIN_GET).body(AutoFull).send().await.is_ok());
+        assert_eq!(TypeId::of::<Client<AutoFull, Nothing>>(), type_of(&client),);
+    }
+}
 
 #[cfg(feature = "json")]
 #[tokio::test]

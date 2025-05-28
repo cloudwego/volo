@@ -10,8 +10,10 @@ use serde::Deserialize;
 mod http1_only;
 #[cfg(feature = "__tls")]
 mod tls;
+mod utils;
 
 const HTTPBIN_GET: &str = "http://httpbin.org/get";
+const HTTPBIN_POST: &str = "http://httpbin.org/post";
 #[cfg(feature = "__tls")]
 const HTTPBIN_GET_HTTPS: &str = "https://httpbin.org/get";
 const USER_AGENT_KEY: &str = "User-Agent";

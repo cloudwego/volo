@@ -63,7 +63,7 @@ impl ClientTransportConfig {
     }
 }
 
-pub struct ClientTransport<B> {
+pub struct ClientTransport<B = Body> {
     #[cfg(feature = "http1")]
     h1_client: conn::http1::Builder,
     #[cfg(feature = "http2")]

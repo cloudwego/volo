@@ -656,9 +656,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// - Transport through network or unix domain socket.
     ///
     /// [`DnsResolver`]: crate::client::dns::DnsResolver
-    pub fn build<ReqBody, RespBody>(mut self) -> Result<C::Target>
+    pub fn build<InnerReqBody, OuterReqBody, RespBody>(mut self) -> Result<C::Target>
     where
-        IL: Layer<ClientTransport<ReqBody>>,
+        IL: Layer<ClientTransport<InnerReqBody>>,
         IL::Service: Send + Sync + 'static,
         LB: MkLbLayer,
         LB::Layer: Layer<IL::Service>,
@@ -666,14 +666,15 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         OL: Layer<<LB::Layer as Layer<IL::Service>>::Service>,
         OL::Service: Service<
                 ClientContext,
-                Request<ReqBody>,
+                Request<OuterReqBody>,
                 Response = Response<RespBody>,
                 Error = ClientError,
             > + Send
             + Sync
             + 'static,
-        C: MkClient<Client<ReqBody, RespBody>>,
-        ReqBody: Send + 'static,
+        C: MkClient<Client<OuterReqBody, RespBody>>,
+        InnerReqBody: Send,
+        OuterReqBody: Send + 'static,
         RespBody: Send,
     {
         let timeout_layer = Timeout;
@@ -697,9 +698,11 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     /// default layers,
     ///
     /// See [`ClientBuilder::build`] for more details.
-    pub fn build_without_extra_layers<ReqBody, RespBody>(self) -> Result<C::Target>
+    pub fn build_without_extra_layers<InnerReqBody, OuterReqBody, RespBody>(
+        self,
+    ) -> Result<C::Target>
     where
-        IL: Layer<ClientTransport<ReqBody>>,
+        IL: Layer<ClientTransport<InnerReqBody>>,
         IL::Service: Send + Sync + 'static,
         LB: MkLbLayer,
         LB::Layer: Layer<IL::Service>,
@@ -707,14 +710,15 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         OL: Layer<<LB::Layer as Layer<IL::Service>>::Service>,
         OL::Service: Service<
                 ClientContext,
-                Request<ReqBody>,
+                Request<OuterReqBody>,
                 Response = Response<RespBody>,
                 Error = ClientError,
             > + Send
             + Sync
             + 'static,
-        C: MkClient<Client<ReqBody, RespBody>>,
-        ReqBody: Send + 'static,
+        C: MkClient<Client<OuterReqBody, RespBody>>,
+        InnerReqBody: Send,
+        OuterReqBody: Send + 'static,
         RespBody: Send,
     {
         self.status?;

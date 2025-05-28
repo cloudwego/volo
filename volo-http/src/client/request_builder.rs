@@ -394,10 +394,14 @@ impl<S, B> RequestBuilder<S, B> {
     }
 
     /// Send the request and get the response.
-    pub async fn send(mut self) -> Result<Response>
+    pub async fn send<RespBody>(mut self) -> Result<Response<RespBody>>
     where
-        S: OneShotService<ClientContext, Request<B>, Response = Response, Error = ClientError>
-            + Send
+        S: OneShotService<
+                ClientContext,
+                Request<B>,
+                Response = Response<RespBody>,
+                Error = ClientError,
+            > + Send
             + Sync
             + 'static,
         B: Send + 'static,
