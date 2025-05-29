@@ -13,13 +13,11 @@ use http::{
     uri::Scheme,
 };
 use motore::{layer::Layer, service::Service};
-use volo::{
-    context::{Context, Endpoint},
-    net::Address,
-};
+use volo::{context::Context, net::Address};
 
 use crate::{
     client::{dns::Port, target::is_default_port},
+    context::ClientContext,
     error::client::{builder_error, Result},
     request::Request,
 };
@@ -177,29 +175,29 @@ fn gen_host(
     }
 }
 
-fn gen_host_by_ep(ep: &Endpoint) -> Option<HeaderValue> {
-    let scheme = ep.get::<Scheme>()?;
+fn gen_host_by_cx(cx: &ClientContext) -> Option<HeaderValue> {
+    let scheme = cx.scheme();
+    let ep = cx.rpc_info().callee();
     let name = ep.service_name_ref();
     let addr = ep.address.as_ref();
     let port = ep.get::<Port>().map(Deref::deref).cloned();
     gen_host(scheme, name, addr, port)
 }
 
-impl<Cx, B, S> Service<Cx, Request<B>> for HostService<S>
+impl<B, S> Service<ClientContext, Request<B>> for HostService<S>
 where
-    Cx: Context,
-    S: Service<Cx, Request<B>>,
+    S: Service<ClientContext, Request<B>>,
 {
     type Response = S::Response;
     type Error = S::Error;
 
     fn call(
         &self,
-        cx: &mut Cx,
+        cx: &mut ClientContext,
         mut req: Request<B>,
     ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
         if !req.headers().contains_key(header::HOST) {
-            if let Some(val) = gen_host_by_ep(cx.rpc_info().callee()) {
+            if let Some(val) = gen_host_by_cx(cx) {
                 req.headers_mut().insert(header::HOST, val);
             } else if let Some(val) = &self.val {
                 req.headers_mut().insert(header::HOST, val.clone());

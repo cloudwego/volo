@@ -30,6 +30,12 @@ impl Connector for NativeTlsConnector {
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
             builder.add_root_certificate(cert);
         }
+        let alpn = config
+            .alpn_protocols
+            .iter()
+            .map(AsRef::as_ref)
+            .collect::<Vec<&str>>();
+        builder.request_alpns(&alpn);
         let connector = builder
             .build()
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;

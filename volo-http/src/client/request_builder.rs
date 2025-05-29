@@ -33,6 +33,7 @@ use crate::{
 pub struct RequestBuilder<S, B = Body> {
     inner: S,
     target: Target,
+    version: Option<Version>,
     request: Request<B>,
     status: Result<()>,
 }
@@ -42,6 +43,7 @@ impl<S> RequestBuilder<S> {
         Self {
             inner,
             target: Default::default(),
+            version: None,
             request: Request::default(),
             status: Ok(()),
         }
@@ -244,14 +246,16 @@ impl<S, B> RequestBuilder<S, B> {
     }
 
     /// Set version of the HTTP request.
+    ///
+    /// If it is not set, the request will use HTTP/2 if it is enabled and supported by default.
     pub fn version(mut self, version: Version) -> Self {
-        *self.request.version_mut() = version;
+        self.version = Some(version);
         self
     }
 
     /// Get a reference to version in the request.
-    pub fn version_ref(&self) -> Version {
-        self.request.version()
+    pub fn version_ref(&self) -> Option<Version> {
+        self.version
     }
 
     /// Insert a header into the request header map.
@@ -353,6 +357,7 @@ impl<S, B> RequestBuilder<S, B> {
         RequestBuilder {
             inner: self.inner,
             target: self.target,
+            version: self.version,
             request,
             status: self.status,
         }
@@ -368,189 +373,44 @@ impl<S, B> RequestBuilder<S, B> {
         RequestBuilder {
             inner: WithOptService::new(self.inner, callopt),
             target: self.target,
+            version: self.version,
             request: self.request,
             status: self.status,
         }
     }
 
+    fn set_version(&mut self) {
+        let ver = match self.version {
+            Some(ver) => ver,
+            None => {
+                if cfg!(feature = "http2") {
+                    Version::HTTP_2
+                } else {
+                    Version::HTTP_11
+                }
+            }
+        };
+        *self.request.version_mut() = ver;
+    }
+
     /// Send the request and get the response.
-    pub async fn send(self) -> Result<Response>
+    pub async fn send<RespBody>(mut self) -> Result<Response<RespBody>>
     where
-        S: OneShotService<ClientContext, Request<B>, Response = Response, Error = ClientError>
-            + Send
+        S: OneShotService<
+                ClientContext,
+                Request<B>,
+                Response = Response<RespBody>,
+                Error = ClientError,
+            > + Send
             + Sync
             + 'static,
         B: Send + 'static,
     {
+        self.set_version();
         self.status?;
+
         let mut cx = ClientContext::new();
         self.target.apply(&mut cx)?;
         self.inner.call(&mut cx, self.request).await
-    }
-}
-
-// The `httpbin.org` always responses a json data.
-#[cfg(feature = "json")]
-#[cfg(test)]
-mod request_tests {
-    use std::collections::HashMap;
-
-    use serde::Deserialize;
-
-    use crate::{body::BodyConversion, client::Client};
-
-    #[allow(dead_code)]
-    #[derive(Deserialize)]
-    struct HttpBinResponse {
-        args: HashMap<String, String>,
-        headers: HashMap<String, String>,
-        origin: String,
-        url: String,
-        #[serde(default)]
-        form: HashMap<String, String>,
-        #[serde(default)]
-        json: Option<HashMap<String, String>>,
-    }
-
-    fn test_data() -> HashMap<String, String> {
-        HashMap::from([
-            ("key1".to_string(), "val1".to_string()),
-            ("key2".to_string(), "val2".to_string()),
-        ])
-    }
-
-    #[cfg(feature = "query")]
-    #[tokio::test]
-    async fn set_query() {
-        let data = test_data();
-
-        let client = Client::builder().build().unwrap();
-        let resp = client
-            .get("http://httpbin.org/get")
-            .set_query(&data)
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert_eq!(resp.args, data);
-    }
-
-    #[cfg(feature = "form")]
-    #[tokio::test]
-    async fn set_form() {
-        let data = test_data();
-
-        let client = Client::builder().build().unwrap();
-        let resp = client
-            .post("http://httpbin.org/post")
-            .form(&data)
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert_eq!(resp.form, data);
-    }
-
-    #[tokio::test]
-    async fn set_json() {
-        let data = test_data();
-
-        let client = Client::builder().build().unwrap();
-        let resp = client
-            .post("http://httpbin.org/post")
-            .json(&data)
-            .send()
-            .await
-            .unwrap()
-            .into_json::<HttpBinResponse>()
-            .await
-            .unwrap();
-        assert_eq!(resp.json, Some(data));
-    }
-}
-
-#[cfg(test)]
-mod with_callopt_tests {
-    use std::{future::Future, time::Duration};
-
-    use http::status::StatusCode;
-    use motore::service::Service;
-    use volo::context::Context;
-
-    use crate::{
-        body::{Body, BodyConversion},
-        client::{layer::FailOnStatus, test_helpers::MockTransport, CallOpt, Client},
-        context::client::Config,
-        error::ClientError,
-        response::Response,
-    };
-
-    struct GetTimeoutAsSeconds;
-
-    impl<Cx, Req> Service<Cx, Req> for GetTimeoutAsSeconds
-    where
-        Cx: Context<Config = Config>,
-    {
-        type Response = Response;
-        type Error = ClientError;
-
-        fn call(
-            &self,
-            cx: &mut Cx,
-            _: Req,
-        ) -> impl Future<Output = Result<Self::Response, Self::Error>> + Send {
-            let timeout = cx.rpc_info().config().timeout();
-            let resp = match timeout {
-                Some(timeout) => {
-                    let secs = timeout.as_secs();
-                    Response::new(Body::from(format!("{secs}")))
-                }
-                None => {
-                    let mut resp = Response::new(Body::empty());
-                    *resp.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
-                    resp
-                }
-            };
-            async { Ok(resp) }
-        }
-    }
-
-    #[tokio::test]
-    async fn callopt_test() {
-        let mut builder = Client::builder();
-        builder.set_request_timeout(Duration::from_secs(1));
-        let client = builder
-            .layer_outer_front(FailOnStatus::server_error())
-            .mock(MockTransport::service(GetTimeoutAsSeconds))
-            .unwrap();
-        // default timeout is 1 seconds
-        assert_eq!(
-            client
-                .get("/")
-                .send()
-                .await
-                .unwrap()
-                .into_string()
-                .await
-                .unwrap(),
-            "1"
-        );
-        // callopt set timeout to 5 seconds
-        assert_eq!(
-            client
-                .get("/")
-                .with_callopt(CallOpt::new().with_timeout(Duration::from_secs(5)))
-                .send()
-                .await
-                .unwrap()
-                .into_string()
-                .await
-                .unwrap(),
-            "5"
-        );
     }
 }

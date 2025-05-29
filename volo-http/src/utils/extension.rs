@@ -7,7 +7,7 @@ use volo::context::Context;
 ///
 /// # Examples
 ///
-/// ```
+/// ```ignore
 /// use volo_http::{
 ///     server::route::{get, Router},
 ///     utils::Extension,

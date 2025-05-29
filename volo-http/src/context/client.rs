@@ -3,6 +3,7 @@
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
+use http::uri::Scheme;
 use volo::{
     context::{Reusable, Role, RpcCx, RpcInfo},
     newtype_impl_context,
@@ -20,6 +21,7 @@ impl ClientContext {
         Self(RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Client),
             ClientCxInner {
+                scheme: Scheme::HTTP,
                 stats: ClientStats::default(),
             },
         ))
@@ -39,10 +41,24 @@ impl_deref_and_deref_mut!(ClientContext, RpcCx<ClientCxInner, Config>, 0);
 /// Inner details of [`ClientContext`]
 #[derive(Debug)]
 pub struct ClientCxInner {
+    /// Scheme of the request.
+    scheme: Scheme,
+
     /// Statistics of client
     ///
     /// This is unstable now and may be changed in the future.
     pub stats: ClientStats,
+}
+
+impl ClientCxInner {
+    /// Get [`Scheme`] of current request context.
+    pub fn scheme(&self) -> &Scheme {
+        &self.scheme
+    }
+
+    pub(crate) fn set_scheme(&mut self, scheme: Scheme) {
+        self.scheme = scheme;
+    }
 }
 
 /// Statistics of client

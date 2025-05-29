@@ -6,6 +6,8 @@ pub mod cookie;
 mod extension;
 #[cfg(feature = "json")]
 pub(crate) mod json;
+#[cfg(feature = "client")]
+pub(crate) mod lazy;
 pub(crate) mod macros;
 #[cfg(test)]
 pub mod test_helpers;

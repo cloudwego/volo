@@ -30,10 +30,10 @@ echo_command cargo clippy -p volo-grpc --no-default-features --features native-t
 echo_command cargo clippy -p volo-grpc --no-default-features --features native-tls-vendored -- --deny warnings
 echo_command cargo clippy -p volo-grpc --no-default-features --features grpc-web -- --deny warnings
 echo_command cargo clippy -p volo-http --no-default-features -- --deny warnings
-echo_command cargo clippy -p volo-http --no-default-features --features default-client -- --deny warnings
-echo_command cargo clippy -p volo-http --no-default-features --features default-server -- --deny warnings
-echo_command cargo clippy -p volo-http --no-default-features --features client,server,http1 -- --deny warnings
-echo_command cargo clippy -p volo-http --no-default-features --features client,server,http2 -- --deny warnings
+echo_command cargo clippy -p volo-http --no-default-features --features client,http1,json -- --deny warnings
+echo_command cargo clippy -p volo-http --no-default-features --features client,http2,json -- --deny warnings
+echo_command cargo clippy -p volo-http --no-default-features --features server,http1,query,form,json,multipart,ws -- --deny warnings
+echo_command cargo clippy -p volo-http --no-default-features --features server,http2,query,form,json,multipart,ws -- --deny warnings
 echo_command cargo clippy -p volo-http --no-default-features --features full -- --deny warnings
 echo_command cargo clippy -p volo -- --deny warnings
 echo_command cargo clippy -p volo --no-default-features --features rustls-aws-lc-rs -- --deny warnings
@@ -47,7 +47,8 @@ echo_command cargo clippy -p examples --features tls -- --deny warnings
 # Test
 echo_command cargo test -p volo-thrift
 echo_command cargo test -p volo-grpc --features rustls
-echo_command cargo test -p volo-http --features default-client,default-server
+echo_command cargo test -p volo-http --features client,server,http1,query,form,json,tls,cookie,multipart,ws
+echo_command cargo test -p volo-http --features client,server,http2,query,form,json,tls,cookie,multipart,ws
 echo_command cargo test -p volo-http --features full
 echo_command cargo test -p volo --features rustls
 echo_command cargo test -p volo-build

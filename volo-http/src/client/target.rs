@@ -11,8 +11,8 @@ use faststr::FastStr;
 use http::uri::{Scheme, Uri};
 use volo::{client::Apply, context::Context, net::Address};
 
-use super::dns::Port;
 use crate::{
+    client::dns::Port,
     context::ClientContext,
     error::{
         client::{bad_address, bad_scheme, no_address, Result},
@@ -308,32 +308,37 @@ impl Apply<ClientContext> for Target {
             return Ok(());
         }
 
-        let callee = cx.rpc_info_mut().callee_mut();
-        if !(callee.service_name_ref().is_empty() && callee.address.is_none()) {
-            // Target exists in context
-            return Ok(());
+        {
+            let callee = cx.rpc_info().callee();
+            if !(callee.service_name_ref().is_empty() && callee.address.is_none()) {
+                // Target exists in context
+                return Ok(());
+            }
         }
 
         match self {
             Self::Remote(rt) => {
-                callee.insert(rt.scheme);
+                cx.set_scheme(rt.scheme);
                 match rt.addr {
                     RemoteTargetAddress::Ip(ip) => {
                         let sa = SocketAddr::new(ip, rt.port);
                         tracing::trace!("[Volo-HTTP] Target::apply: set target to {sa}");
-                        callee.set_address(Address::Ip(sa));
+                        cx.rpc_info_mut().callee_mut().set_address(Address::Ip(sa));
                     }
                     RemoteTargetAddress::Name(host) => {
                         let port = rt.port;
                         tracing::trace!("[Volo-HTTP] Target::apply: set target to {host}:{port}");
-                        callee.set_service_name(host);
+                        let callee = cx.rpc_info_mut().callee_mut();
                         callee.insert(Port(port));
+                        callee.set_service_name(host);
                     }
                 }
             }
             #[cfg(target_family = "unix")]
             Self::Local(uds) => {
-                callee.set_address(Address::Unix(uds));
+                cx.rpc_info_mut()
+                    .callee_mut()
+                    .set_address(Address::Unix(uds));
             }
             Self::None => {
                 unreachable!()

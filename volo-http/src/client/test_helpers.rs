@@ -15,7 +15,7 @@ use crate::{
     body::{Body, BodyConversion},
     context::client::ClientContext,
     error::client::{other_error, ClientError, Result},
-    request::Request,
+    request::{Request, RequestPartsExt},
     response::Response,
     utils::test_helpers::mock_address,
 };
@@ -160,6 +160,10 @@ pub enum DebugLayer {
 }
 
 fn dump_request_parts(parts: &http::request::Parts) {
+    if let Some(url) = parts.url() {
+        println!("  == {url} ==");
+    }
+
     println!("{:?} {:?} {:?}", parts.method, parts.uri, parts.version);
     for (k, v) in parts.headers.iter() {
         let Ok(v) = v.to_str() else {

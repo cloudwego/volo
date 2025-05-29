@@ -12,6 +12,25 @@ use crate::body::BodyConvertError;
 /// [`Result`](std::result::Result) with [`ClientError`] as its error by default.
 pub type Result<T, E = ClientError> = std::result::Result<T, E>;
 
+macro_rules! tri {
+    ($result:expr) => {
+        match $result {
+            Ok(val) => val,
+            Err(err) => return Err(err),
+        }
+    };
+    ($result:expr, $($arg:tt)*) => {
+        match $result {
+            Ok(val) => val,
+            Err(err) => {
+                ::tracing::error!($($arg)*);
+                return Err(err);
+            }
+        }
+    };
+}
+pub(crate) use tri;
+
 /// Generic client error
 #[derive(Debug)]
 pub struct ClientError {
@@ -144,6 +163,8 @@ pub enum ErrorKind {
     Builder,
     /// Something wrong with the [`ClientContext`](crate::context::ClientContext)
     Context,
+    /// Failed to connect to target server
+    Connect,
     /// Fails to send a request to target server
     Request,
     /// Something wrong from [`LoadBalance`][LoadBalance] or [`Discover`][Discover]
@@ -163,6 +184,14 @@ where
     E: Into<BoxError>,
 {
     ClientError::new(ErrorKind::Builder, Some(error))
+}
+
+/// Create a [`ClientError`] with [`ErrorKind::Context`]
+pub fn connect_error<E>(error: E) -> ClientError
+where
+    E: Into<BoxError>,
+{
+    ClientError::new(ErrorKind::Connect, Some(error))
 }
 
 /// Create a [`ClientError`] with [`ErrorKind::Context`]
@@ -216,6 +245,7 @@ impl std::fmt::Display for ErrorKind {
         match self {
             Self::Builder => f.write_str("builder error"),
             Self::Context => f.write_str("processing context error"),
+            Self::Connect => f.write_str("connect error"),
             Self::Request => f.write_str("sending request error"),
             Self::LoadBalance => f.write_str("load balance error"),
             Self::Body => f.write_str("processing body error"),
@@ -252,8 +282,11 @@ macro_rules! simple_error {
 
 simple_error!(Builder => NoAddress => "missing target address");
 simple_error!(Builder => BadScheme => "bad scheme");
+#[cfg(not(all(feature = "http1", feature = "http2")))]
+simple_error!(Builder => BadVersion => "bad http protocol version");
 simple_error!(Builder => BadHostName => "bad host name");
 simple_error!(Builder => BadAddress => "bad address");
+simple_error!(Connect => Retry => "retry");
 simple_error!(Request => Timeout => "request timeout");
 simple_error!(LoadBalance => NoAvailableEndpoint => "no available endpoint");
 

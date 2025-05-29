@@ -61,11 +61,17 @@ impl Connector for RustlsConnector {
                 .add(cert)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
         }
-        let client_config = ClientConfig::builder_with_provider(Arc::new(rustls_crypto_provider()))
-            .with_protocol_versions(rustls::DEFAULT_VERSIONS)
-            .expect("something wrong on rustls ClientConfig")
-            .with_root_certificates(certs)
-            .with_no_client_auth();
+        let mut client_config =
+            ClientConfig::builder_with_provider(Arc::new(rustls_crypto_provider()))
+                .with_protocol_versions(rustls::DEFAULT_VERSIONS)
+                .expect("something wrong on rustls ClientConfig")
+                .with_root_certificates(certs)
+                .with_no_client_auth();
+        client_config.alpn_protocols = builder
+            .alpn_protocols
+            .into_iter()
+            .map(String::into_bytes)
+            .collect();
         let connector = TlsConnector::from(Arc::new(client_config));
         Ok(Self(connector))
     }
