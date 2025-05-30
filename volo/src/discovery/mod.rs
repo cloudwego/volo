@@ -165,6 +165,51 @@ impl Discover for StaticDiscover {
     }
 }
 
+/// [`WeightedStaticDiscover`] is a simple implementation of [`Discover`] that returns a static list
+/// of instances with weight.
+#[derive(Clone)]
+pub struct WeightedStaticDiscover {
+    instances: Vec<Arc<Instance>>,
+}
+
+impl WeightedStaticDiscover {
+    /// Creates a new [`StaticDiscover`].
+    pub fn new(instances: Vec<Arc<Instance>>) -> Self {
+        Self { instances }
+    }
+}
+
+impl From<Vec<(SocketAddr, u32)>> for WeightedStaticDiscover {
+    fn from(addrs: Vec<(SocketAddr, u32)>) -> Self {
+        let instances = addrs
+            .into_iter()
+            .map(|addr| {
+                Arc::new(Instance {
+                    address: Address::Ip(addr.0),
+                    weight: addr.1,
+                    tags: Default::default(),
+                })
+            })
+            .collect();
+        Self { instances }
+    }
+}
+
+impl Discover for WeightedStaticDiscover {
+    type Key = ();
+    type Error = Infallible;
+
+    async fn discover<'s>(&'s self, _: &'s Endpoint) -> Result<Vec<Arc<Instance>>, Self::Error> {
+        Ok(self.instances.clone())
+    }
+
+    fn key(&self, _: &Endpoint) -> Self::Key {}
+
+    fn watch(&self, _keys: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {
+        None
+    }
+}
+
 /// [`DummyDiscover`] always returns an empty list.
 ///
 /// Users that don't specify the address directly need to use their own [`Discover`].
@@ -196,7 +241,7 @@ impl From<Infallible> for LoadBalanceError {
 mod tests {
     use std::sync::Arc;
 
-    use super::{Discover, Instance, StaticDiscover};
+    use super::{Discover, Instance, StaticDiscover, WeightedStaticDiscover};
     use crate::{context::Endpoint, net::Address};
 
     #[test]
@@ -216,6 +261,35 @@ mod tests {
             Arc::new(Instance {
                 address: Address::Ip("127.0.0.2:9000".parse().unwrap()),
                 weight: 1,
+                tags: Default::default(),
+            }),
+        ];
+        assert_eq!(resp, expected);
+    }
+
+    #[test]
+    fn test_weighted_static_discover() {
+        let empty = Endpoint::new("".into());
+        let discover = WeightedStaticDiscover::from(vec![
+            ("127.0.0.1:8000".parse().unwrap(), 2),
+            ("127.0.0.2:9000".parse().unwrap(), 3),
+            ("127.0.0.3:9000".parse().unwrap(), 4),
+        ]);
+        let resp = futures::executor::block_on(async { discover.discover(&empty).await }).unwrap();
+        let expected = vec![
+            Arc::new(Instance {
+                address: Address::Ip("127.0.0.1:8000".parse().unwrap()),
+                weight: 2,
+                tags: Default::default(),
+            }),
+            Arc::new(Instance {
+                address: Address::Ip("127.0.0.2:9000".parse().unwrap()),
+                weight: 3,
+                tags: Default::default(),
+            }),
+            Arc::new(Instance {
+                address: Address::Ip("127.0.0.3:9000".parse().unwrap()),
+                weight: 4,
                 tags: Default::default(),
             }),
         ];
