@@ -26,6 +26,7 @@ use volo::{
     FastStr,
 };
 
+use self::layer::timeout::TimeoutLayer;
 use crate::{
     codec::compression::CompressionEncoding,
     context::{ClientContext, Config},
@@ -33,8 +34,6 @@ use crate::{
     transport::ClientTransport,
     Request, Response, Status,
 };
-
-use self::layer::timeout::TimeoutLayer;
 pub mod layer;
 
 /// [`ClientBuilder`] provides a builder-like interface to construct a [`Client`].
@@ -138,7 +137,7 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     pub fn rpc_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.rpc_config.set_rpc_timeout(timeout);
         self
-    }    
+    }
     /// Sets the `SETTINGS_INITIAL_WINDOW_SIZE` option for HTTP2
     /// stream-level flow control.
     ///

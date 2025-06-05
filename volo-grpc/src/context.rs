@@ -102,7 +102,7 @@ impl Config {
     pub fn merge(&mut self, other: Self) {
         if let Some(t) = other.rpc_timeout {
             self.rpc_timeout = Some(t);
-        }        
+        }
         if let Some(t) = other.connect_timeout {
             self.connect_timeout = Some(t);
         }
