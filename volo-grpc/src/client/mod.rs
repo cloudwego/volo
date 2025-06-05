@@ -520,17 +520,12 @@ where
             None => MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config)),
         };
 
-        // let transport = self.outer_layer.layer(BoxCloneService::new(
-        //     TimeoutLayer::new().layer(self.mk_lb.make().layer(self.inner_layer.layer(transport)),
-        // )));
-
-        let inner = self.inner_layer.layer(transport);
-        let lb = self.mk_lb.make().layer(inner);
-        let timeout = TimeoutLayer::new().layer(lb);
-        let boxed = BoxCloneService::new(timeout);
-        let transport = self.outer_layer.layer(boxed);
+        let transport = self.outer_layer.layer(BoxCloneService::new(
+            self.mk_lb.make().layer(self.inner_layer.layer(transport)),
+        ));
 
         let transport = transport.map_err(|err| err.into());
+        let transport = TimeoutLayer::new().layer(transport);
         let transport = BoxCloneService::new(transport);
 
         self.mk_client.mk_client(Client {

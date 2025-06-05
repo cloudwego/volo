@@ -1,8 +1,6 @@
 use std::net::SocketAddr;
 
 use volo_grpc::server::{Server, ServiceBuilder};
-use tokio::time::sleep;
-use std::time::Duration;
 
 pub struct S;
 
@@ -12,7 +10,6 @@ impl volo_gen::proto_gen::helloworld::Greeter for S {
         req: volo_grpc::Request<volo_gen::proto_gen::helloworld::HelloRequest>,
     ) -> Result<volo_grpc::Response<volo_gen::proto_gen::helloworld::HelloReply>, volo_grpc::Status>
     {
-        sleep(Duration::from_secs(5)).await;
         let resp = volo_gen::proto_gen::helloworld::HelloReply {
             message: format!("Hello, {}!", req.get_ref().name).into(),
         };

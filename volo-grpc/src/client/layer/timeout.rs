@@ -64,7 +64,6 @@ use std::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
-    time::Duration,
 };
 
 use motore::{layer::Layer, Service};

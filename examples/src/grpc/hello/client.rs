@@ -2,13 +2,10 @@ use std::{net::SocketAddr, sync::LazyLock};
 
 use pilota::FastStr;
 
-use std::time::Duration;
-
 static CLIENT: LazyLock<volo_gen::proto_gen::helloworld::GreeterClient> = LazyLock::new(|| {
     let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
     volo_gen::proto_gen::helloworld::GreeterClientBuilder::new("hello")
         .address(addr)
-        .rpc_timeout(Some(Duration::from_secs(2)))
         .build()
 });
 
