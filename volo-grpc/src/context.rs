@@ -67,8 +67,11 @@ impl std::ops::DerefMut for ServerContext {
     }
 }
 
+const DEFAULT_RPC_TIMEOUT: Duration = Duration::from_secs(1);
+
 #[derive(Default, Debug, Clone)]
 pub struct Config {
+    pub(crate) rpc_timeout: Option<Duration>,
     /// Amount of time to wait connecting.
     pub(crate) connect_timeout: Option<Duration>,
     /// Amount of time to wait reading.
@@ -82,6 +85,7 @@ pub struct Config {
 
 impl Reusable for Config {
     fn clear(&mut self) {
+        self.rpc_timeout = None;
         self.connect_timeout = None;
         self.read_timeout = None;
         self.write_timeout = None;
@@ -96,6 +100,9 @@ impl Reusable for Config {
 
 impl Config {
     pub fn merge(&mut self, other: Self) {
+        if let Some(t) = other.rpc_timeout {
+            self.rpc_timeout = Some(t);
+        }        
         if let Some(t) = other.connect_timeout {
             self.connect_timeout = Some(t);
         }
@@ -111,5 +118,23 @@ impl Config {
         if let Some(e) = other.send_compressions {
             self.send_compressions = Some(e);
         }
+    }
+
+    #[inline]
+    pub fn rpc_timeout(&self) -> Option<Duration> {
+        self.rpc_timeout
+    }
+
+    /// Sets the rpc timeout.
+    ///
+    /// This can be set both by the client builder and the CallOpt.
+    #[inline]
+    pub fn set_rpc_timeout(&mut self, rpc_timeout: Option<Duration>) {
+        self.rpc_timeout = rpc_timeout;
+    }
+
+    #[inline]
+    pub fn rpc_timeout_or_default(&self) -> Duration {
+        self.rpc_timeout.unwrap_or(DEFAULT_RPC_TIMEOUT)
     }
 }

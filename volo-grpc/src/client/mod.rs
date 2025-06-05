@@ -34,6 +34,9 @@ use crate::{
     Request, Response, Status,
 };
 
+use self::layer::timeout::TimeoutLayer;
+pub mod layer;
+
 /// [`ClientBuilder`] provides a builder-like interface to construct a [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     http2_config: Http2Config,
@@ -127,6 +130,15 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
 }
 
 impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
+    /// Sets the rpc timeout for the client.
+    ///
+    /// The default value is 1 second.
+    ///
+    /// Users can set this to `None` to disable the timeout.
+    pub fn rpc_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.rpc_config.set_rpc_timeout(timeout);
+        self
+    }    
     /// Sets the `SETTINGS_INITIAL_WINDOW_SIZE` option for HTTP2
     /// stream-level flow control.
     ///
@@ -508,9 +520,15 @@ where
             None => MetaService::new(ClientTransport::new(&self.http2_config, &self.rpc_config)),
         };
 
-        let transport = self.outer_layer.layer(BoxCloneService::new(
-            self.mk_lb.make().layer(self.inner_layer.layer(transport)),
-        ));
+        // let transport = self.outer_layer.layer(BoxCloneService::new(
+        //     TimeoutLayer::new().layer(self.mk_lb.make().layer(self.inner_layer.layer(transport)),
+        // )));
+
+        let inner = self.inner_layer.layer(transport);
+        let lb = self.mk_lb.make().layer(inner);
+        let timeout = TimeoutLayer::new().layer(lb);
+        let boxed = BoxCloneService::new(timeout);
+        let transport = self.outer_layer.layer(boxed);
 
         let transport = transport.map_err(|err| err.into());
         let transport = BoxCloneService::new(transport);
