@@ -22,7 +22,7 @@ impl<S> Timeout<S> {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default, Copy)]
 pub struct TimeoutLayer;
 
 impl TimeoutLayer {
