@@ -69,7 +69,7 @@ impl Matcher {
         self.router.at(path).map_err(MatcherError::RouterMatchError)
     }
 
-    pub fn drain(&mut self) -> Drain<String, RouteId> {
+    pub fn drain(&mut self) -> Drain<'_, String, RouteId> {
         self.matches.drain()
     }
 }
