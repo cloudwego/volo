@@ -26,6 +26,7 @@ use volo::{
     FastStr,
 };
 
+use self::layer::timeout::TimeoutLayer;
 use crate::{
     codec::compression::CompressionEncoding,
     context::{ClientContext, Config},
@@ -33,6 +34,7 @@ use crate::{
     transport::ClientTransport,
     Request, Response, Status,
 };
+pub mod layer;
 
 /// [`ClientBuilder`] provides a builder-like interface to construct a [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB, T, U> {
@@ -127,6 +129,15 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
 }
 
 impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
+    /// Sets the rpc timeout for the client.
+    ///
+    /// The default value is 1 second.
+    ///
+    /// Users can set this to `None` to disable the timeout.
+    pub fn rpc_timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.rpc_config.set_rpc_timeout(timeout);
+        self
+    }
     /// Sets the `SETTINGS_INITIAL_WINDOW_SIZE` option for HTTP2
     /// stream-level flow control.
     ///
@@ -513,6 +524,7 @@ where
         ));
 
         let transport = transport.map_err(|err| err.into());
+        let transport = TimeoutLayer::new().layer(transport);
         let transport = BoxCloneService::new(transport);
 
         self.mk_client.mk_client(Client {
