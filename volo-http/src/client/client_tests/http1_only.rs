@@ -26,14 +26,14 @@ use super::{
         AutoBody, AutoBodyLayer, AutoFull, AutoFullLayer, DropBodyLayer, Nothing,
         RespBodyToFullLayer,
     },
-    HttpBinResponse, HTTPBIN_GET, HTTPBIN_POST, USER_AGENT_KEY, USER_AGENT_VAL,
+    HttpBinResponse, HTTPBIN_GET, HTTPBIN_POST,
 };
 use crate::{
     body::{Body, BodyConversion},
     client::{
         dns::DnsResolver,
         get,
-        layer::FailOnStatus,
+        layer::{FailOnStatus, TargetLayer},
         test_helpers::{DebugLayer, MockTransport},
         CallOpt, Client,
     },
@@ -139,122 +139,72 @@ async fn simple_get() {
 
 #[cfg(feature = "json")]
 #[tokio::test]
-async fn client_builder_with_header() {
-    let mut builder = Client::builder().layer_inner(DebugLayer::default());
-    builder.header(header::USER_AGENT, USER_AGENT_VAL);
-    let client = builder.build().unwrap();
-
-    let resp = client
-        .get(HTTPBIN_GET)
-        .send()
-        .await
-        .unwrap()
-        .into_json::<HttpBinResponse>()
-        .await
+async fn client_test() {
+    let client = Client::builder()
+        .layer_inner(DebugLayer::default())
+        .build()
         .unwrap();
-    assert!(resp.args.is_empty());
-    assert_eq!(resp.headers.get(USER_AGENT_KEY).unwrap(), USER_AGENT_VAL);
-    assert_eq!(resp.url, HTTPBIN_GET);
+
+    {
+        let resp = client
+            .get(HTTPBIN_GET)
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
+    {
+        let resp = client
+            .get("/get")
+            .host("httpbin.org")
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
 }
 
 #[cfg(feature = "json")]
 #[tokio::test]
-async fn client_builder_with_host() {
-    let mut builder = Client::builder().layer_inner(DebugLayer::default());
-    builder.host("httpbin.org");
-    let client = builder.build().unwrap();
-
-    let resp = client
-        .get("/get")
-        .send()
-        .await
-        .unwrap()
-        .into_json::<HttpBinResponse>()
-        .await
-        .unwrap();
-    assert!(resp.args.is_empty());
-    assert_eq!(resp.url, HTTPBIN_GET);
-}
-
-#[cfg(feature = "json")]
-#[tokio::test]
-async fn client_builder_with_address() {
-    let addr = DnsResolver::default()
-        .resolve("httpbin.org", HTTP_DEFAULT_PORT)
-        .await
-        .unwrap();
-    let mut builder = Client::builder().layer_inner(DebugLayer::default());
-    builder.default_host("httpbin.org").address(addr);
-    let client = builder.build().unwrap();
-
-    let resp = client
-        .get("/get")
-        .send()
-        .await
-        .unwrap()
-        .into_json::<HttpBinResponse>()
-        .await
-        .unwrap();
-    assert!(resp.args.is_empty());
-    assert_eq!(resp.url, HTTPBIN_GET);
-}
-
-#[cfg(feature = "json")]
-#[tokio::test]
-async fn client_builder_host_override() {
-    let mut builder = Client::builder().layer_inner(DebugLayer::default());
-    builder.host("this.domain.must.be.invalid");
-    let client = builder.build().unwrap();
-
-    let resp = client
-        .get(HTTPBIN_GET)
-        .send()
-        .await
-        .unwrap()
-        .into_json::<HttpBinResponse>()
-        .await
-        .unwrap();
-    assert!(resp.args.is_empty());
-    assert_eq!(resp.url, HTTPBIN_GET);
-}
-
-#[cfg(feature = "json")]
-#[tokio::test]
-async fn client_builder_addr_override() {
-    let mut builder = Client::builder().layer_inner(DebugLayer::default());
-    builder.default_host("httpbin.org").address(SocketAddr::new(
-        IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
-        8888,
-    ));
-    let client = builder.build().unwrap();
-
-    let addr = DnsResolver::default()
-        .resolve("httpbin.org", HTTP_DEFAULT_PORT)
-        .await
+async fn client_target() {
+    let client = Client::builder()
+        .layer_inner(DebugLayer::default())
+        .layer_outer_front(TargetLayer::new_host("httpbin.org"))
+        .build()
         .unwrap();
 
-    let resp = client
-        .get(format!("http://{addr}/get"))
-        .send()
-        .await
-        .unwrap()
-        .into_json::<HttpBinResponse>()
-        .await
-        .unwrap();
-    assert!(resp.args.is_empty());
-    assert_eq!(resp.url, HTTPBIN_GET);
-}
-
-#[tokio::test]
-async fn client_builder_with_port() {
-    let mut builder = Client::builder().layer_inner(DebugLayer::default());
-    builder.host("httpbin.org").with_port(443);
-    let client = builder.build().unwrap();
-
-    let resp = client.get("/get").send().await.unwrap();
-    // Send HTTP request to the HTTPS port (443), `httpbin.org` will response `400 Bad
-    // Request`.
-    assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+    {
+        let resp = client
+            .get(HTTPBIN_GET)
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
+    {
+        let resp = client
+            .get("/get")
+            .send()
+            .await
+            .unwrap()
+            .into_json::<HttpBinResponse>()
+            .await
+            .unwrap();
+        assert!(resp.args.is_empty());
+        assert_eq!(resp.url, HTTPBIN_GET);
+    }
 }
 
 fn test_data() -> HashMap<String, String> {
@@ -269,7 +219,10 @@ fn test_data() -> HashMap<String, String> {
 async fn set_query() {
     let data = test_data();
 
-    let client = Client::builder().build().unwrap();
+    let client = Client::builder()
+        .layer_inner(DebugLayer::default())
+        .build()
+        .unwrap();
     let resp = client
         .get("http://httpbin.org/get")
         .set_query(&data)
@@ -287,7 +240,10 @@ async fn set_query() {
 async fn set_form() {
     let data = test_data();
 
-    let client = Client::builder().build().unwrap();
+    let client = Client::builder()
+        .layer_inner(DebugLayer::default())
+        .build()
+        .unwrap();
     let resp = client
         .post("http://httpbin.org/post")
         .form(&data)
@@ -305,7 +261,10 @@ async fn set_form() {
 async fn set_json() {
     let data = test_data();
 
-    let client = Client::builder().build().unwrap();
+    let client = Client::builder()
+        .layer_inner(DebugLayer::default())
+        .build()
+        .unwrap();
     let resp = client
         .post("http://httpbin.org/post")
         .json(&data)
@@ -386,13 +345,12 @@ async fn callopt_test() {
 #[cfg(all(feature = "cookie", feature = "json"))]
 #[tokio::test]
 async fn cookie_store() {
-    let mut builder = Client::builder()
+    let client = Client::builder()
         .layer_inner(DebugLayer::default())
-        .layer_inner(crate::client::cookie::CookieLayer::new(Default::default()));
-
-    builder.host("httpbin.org");
-
-    let client = builder.build().unwrap();
+        .layer_inner(crate::client::cookie::CookieLayer::new(Default::default()))
+        .layer_outer_front(crate::client::layer::TargetLayer::new_host("httpbin.org"))
+        .build()
+        .unwrap();
 
     // test server add cookie
     let resp = client

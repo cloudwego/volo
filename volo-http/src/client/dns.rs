@@ -91,7 +91,7 @@ impl Default for DnsResolver {
 }
 
 impl Discover for DnsResolver {
-    type Key = FastStr;
+    type Key = (FastStr, u16);
     type Error = LoadBalanceError;
 
     async fn discover<'s>(
@@ -130,7 +130,10 @@ impl Discover for DnsResolver {
     }
 
     fn key(&self, endpoint: &Endpoint) -> Self::Key {
-        endpoint.service_name()
+        (
+            endpoint.service_name(),
+            endpoint.get::<Port>().cloned().unwrap_or_default().0,
+        )
     }
 
     fn watch(&self, _: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {

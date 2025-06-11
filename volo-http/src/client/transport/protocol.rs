@@ -305,7 +305,7 @@ where
 
         let ver = req.version();
         let peer = PeerInfo {
-            scheme: cx.scheme().to_owned(),
+            scheme: cx.target().scheme().cloned().unwrap_or(Scheme::HTTP),
             address,
             #[cfg(feature = "__tls")]
             name: callee.service_name(),
@@ -416,7 +416,7 @@ fn rewrite_uri<B>(cx: &ClientContext, req: &mut Request<B>) {
     if req.version() != Version::HTTP_2 {
         return;
     }
-    let scheme = cx.scheme().to_owned();
+    let scheme = cx.target().scheme().cloned().unwrap_or(Scheme::HTTP);
     let authority = gen_authority(req);
     let mut parts = req.uri().to_owned().into_parts();
     parts.scheme = Some(scheme);

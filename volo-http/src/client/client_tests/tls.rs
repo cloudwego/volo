@@ -13,18 +13,45 @@ use std::error::Error;
 use super::{HttpBinResponse, HTTPBIN_GET_HTTPS};
 use crate::{
     body::BodyConversion,
-    client::{dns::DnsResolver, test_helpers::DebugLayer, Client},
+    client::{dns::DnsResolver, get, layer::TargetLayer, test_helpers::DebugLayer, Client, Target},
     error::client::BadScheme,
 };
 
 #[cfg(feature = "json")]
 #[tokio::test]
+async fn simple_https_request() {
+    let resp = get(HTTPBIN_GET_HTTPS)
+        .await
+        .unwrap()
+        .into_json::<HttpBinResponse>()
+        .await
+        .unwrap();
+    assert!(resp.args.is_empty());
+    assert_eq!(resp.url, HTTPBIN_GET_HTTPS);
+
+    let client = Client::default();
+    let resp = client
+        .get(HTTPBIN_GET_HTTPS)
+        .send()
+        .await
+        .unwrap()
+        .into_json::<HttpBinResponse>()
+        .await
+        .unwrap();
+    assert!(resp.args.is_empty());
+    assert_eq!(resp.url, HTTPBIN_GET_HTTPS);
+}
+
+#[cfg(feature = "json")]
+#[tokio::test]
 async fn client_builder_with_https() {
-    let mut builder = Client::builder().layer_inner(DebugLayer::default());
-    builder
-        .host("httpbin.org")
-        .with_scheme(http::uri::Scheme::HTTPS);
-    let client = builder.build().unwrap();
+    let client = Client::builder()
+        .layer_inner(DebugLayer::default())
+        .layer_outer_front(TargetLayer::new(
+            Target::new_host(Some(http::uri::Scheme::HTTPS), "httpbin.org", None).unwrap(),
+        ))
+        .build()
+        .unwrap();
 
     let resp = client
         .get("/get")
@@ -45,11 +72,12 @@ async fn client_builder_with_address_and_https() {
         .resolve("httpbin.org", crate::utils::consts::HTTPS_DEFAULT_PORT)
         .await
         .unwrap();
-    let mut builder = Client::builder().layer_inner(DebugLayer::default());
-    builder
-        .default_host("httpbin.org")
-        .address(addr)
-        .with_scheme(http::uri::Scheme::HTTPS);
+    let mut target = Target::from(addr);
+    target.set_scheme(http::uri::Scheme::HTTPS);
+    let mut builder = Client::builder()
+        .layer_inner(DebugLayer::default())
+        .layer_outer_front(TargetLayer::new(target).with_service_name("httpbin.org"));
+    builder.header(http::header::HOST, "httpbin.org");
     let client = builder.build().unwrap();
 
     let resp = client

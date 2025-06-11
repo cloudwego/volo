@@ -4,6 +4,7 @@
 
 use std::collections::HashMap;
 
+use http::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
 #[cfg(not(feature = "http2"))]
@@ -16,8 +17,8 @@ const HTTPBIN_GET: &str = "http://httpbin.org/get";
 const HTTPBIN_POST: &str = "http://httpbin.org/post";
 #[cfg(feature = "__tls")]
 const HTTPBIN_GET_HTTPS: &str = "https://httpbin.org/get";
-const USER_AGENT_KEY: &str = "User-Agent";
-const USER_AGENT_VAL: &str = "volo-http-unit-test";
+const LOGID_KEY: HeaderName = HeaderName::from_static("x-log-id");
+const LOGID_VAL: HeaderValue = HeaderValue::from_static("20201231114514");
 
 #[derive(Deserialize)]
 struct HttpBinResponse {

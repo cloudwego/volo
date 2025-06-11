@@ -4,6 +4,7 @@
 
 use std::{
     borrow::Cow,
+    fmt,
     net::{IpAddr, SocketAddr},
 };
 
@@ -11,6 +12,7 @@ use faststr::FastStr;
 use http::uri::{Scheme, Uri};
 use volo::{client::Apply, context::Context, net::Address};
 
+use super::utils::{get_default_port, is_default_port};
 use crate::{
     client::dns::Port,
     context::ClientContext,
@@ -34,24 +36,68 @@ pub enum Target {
     Local(std::os::unix::net::SocketAddr),
 }
 
+impl fmt::Display for Target {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Target::None => f.write_str("none"),
+            Target::Remote(rt) => write!(f, "{rt}"),
+            #[cfg(target_family = "unix")]
+            Target::Local(sa) => {
+                if let Some(path) = sa.as_pathname().and_then(std::path::Path::to_str) {
+                    f.write_str(path)
+                } else {
+                    f.write_str("[unnamed]")
+                }
+            }
+        }
+    }
+}
+
 /// Remote part of [`Target`]
 #[derive(Clone, Debug)]
 pub struct RemoteTarget {
     /// Target scheme
     pub scheme: Scheme,
-    /// The target address
-    pub addr: RemoteTargetAddress,
+    /// Target host descriptor
+    pub host: RemoteHost,
     /// Target port
     pub port: u16,
 }
 
+impl fmt::Display for RemoteTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.scheme.as_str())?;
+        f.write_str("://")?;
+        write!(f, "{}", self.host)?;
+        if !is_default_port(&self.scheme, self.port) {
+            write!(f, ":{}", self.port)?;
+        }
+        Ok(())
+    }
+}
+
 /// Remote address of [`RemoteTarget`]
 #[derive(Clone, Debug)]
-pub enum RemoteTargetAddress {
+pub enum RemoteHost {
     /// Ip address
     Ip(IpAddr),
     /// Service name, usually a domain name
     Name(FastStr),
+}
+
+impl fmt::Display for RemoteHost {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Ip(ip) => {
+                if ip.is_ipv4() {
+                    write!(f, "{ip}")
+                } else {
+                    write!(f, "[{ip}]")
+                }
+            }
+            Self::Name(name) => f.write_str(name),
+        }
+    }
 }
 
 fn check_scheme(scheme: &Scheme) -> Result<()> {
@@ -71,21 +117,6 @@ fn check_scheme(scheme: &Scheme) -> Result<()> {
     Err(bad_scheme())
 }
 
-fn get_default_port(scheme: &Scheme) -> u16 {
-    #[cfg(feature = "__tls")]
-    if scheme == &Scheme::HTTPS {
-        return consts::HTTPS_DEFAULT_PORT;
-    }
-    if scheme == &Scheme::HTTP {
-        return consts::HTTP_DEFAULT_PORT;
-    }
-    unreachable!("[Volo-HTTP] https is not allowed when feature `tls` is not enabled")
-}
-
-pub(super) fn is_default_port(scheme: &Scheme, port: u16) -> bool {
-    get_default_port(scheme) == port
-}
-
 impl Target {
     /// Create a [`Target`] by a scheme, host and port without checking scheme
     ///
@@ -99,7 +130,7 @@ impl Target {
     pub const unsafe fn new_host_unchecked(scheme: Scheme, host: FastStr, port: u16) -> Self {
         Self::Remote(RemoteTarget {
             scheme,
-            addr: RemoteTargetAddress::Name(host),
+            host: RemoteHost::Name(host),
             port,
         })
     }
@@ -116,7 +147,7 @@ impl Target {
     pub const unsafe fn new_addr_unchecked(scheme: Scheme, ip: IpAddr, port: u16) -> Self {
         Self::Remote(RemoteTarget {
             scheme,
-            addr: RemoteTargetAddress::Ip(ip),
+            host: RemoteHost::Ip(ip),
             port,
         })
     }
@@ -171,11 +202,7 @@ impl Target {
 
         // SAFETY: we've checked scheme
         Ok(unsafe {
-            match host
-                .trim_start_matches('[')
-                .trim_end_matches(']')
-                .parse::<IpAddr>()
-            {
+            match host.parse::<IpAddr>() {
                 Ok(ip) => Self::new_addr_unchecked(scheme, ip, port),
                 Err(_) => {
                     Self::new_host_unchecked(scheme, FastStr::from_string(host.to_owned()), port)
@@ -241,7 +268,7 @@ impl Target {
     /// Return the remote [`IpAddr`] if the [`Target`] is an IP address.
     pub fn remote_ip(&self) -> Option<&IpAddr> {
         if let Self::Remote(rt) = &self {
-            if let RemoteTargetAddress::Ip(ip) = &rt.addr {
+            if let RemoteHost::Ip(ip) = &rt.host {
                 return Some(ip);
             }
         }
@@ -251,7 +278,7 @@ impl Target {
     /// Return the remote host name if the [`Target`] is a host name.
     pub fn remote_host(&self) -> Option<&FastStr> {
         if let Self::Remote(rt) = &self {
-            if let RemoteTargetAddress::Name(name) = &rt.addr {
+            if let RemoteHost::Name(name) = &rt.host {
                 return Some(name);
             }
         }
@@ -304,45 +331,37 @@ impl Apply<ClientContext> for Target {
     type Error = ClientError;
 
     fn apply(self, cx: &mut ClientContext) -> Result<(), Self::Error> {
-        if self.is_none() {
-            return Ok(());
-        }
-
-        {
-            let callee = cx.rpc_info().callee();
-            if !(callee.service_name_ref().is_empty() && callee.address.is_none()) {
-                // Target exists in context
-                return Ok(());
-            }
-        }
+        cx.set_target(self.clone());
 
         match self {
             Self::Remote(rt) => {
-                cx.set_scheme(rt.scheme);
-                match rt.addr {
-                    RemoteTargetAddress::Ip(ip) => {
+                match rt.host {
+                    RemoteHost::Ip(ip) => {
                         let sa = SocketAddr::new(ip, rt.port);
                         tracing::trace!("[Volo-HTTP] Target::apply: set target to {sa}");
-                        cx.rpc_info_mut().callee_mut().set_address(Address::Ip(sa));
+                        let callee = cx.rpc_info_mut().callee_mut();
+                        callee.set_service_name(FastStr::from_string(format!("{}", sa.ip())));
+                        callee.set_address(Address::Ip(sa));
                     }
-                    RemoteTargetAddress::Name(host) => {
+                    RemoteHost::Name(host) => {
                         let port = rt.port;
                         tracing::trace!("[Volo-HTTP] Target::apply: set target to {host}:{port}");
                         let callee = cx.rpc_info_mut().callee_mut();
-                        callee.insert(Port(port));
                         callee.set_service_name(host);
+                        // Since Service Discover (DNS) can only access the `callee`, we must
+                        // insert port into `callee` so that Service Discover can return the full
+                        // address (IP with port) for transporting.
+                        callee.insert(Port(port));
                     }
                 }
             }
             #[cfg(target_family = "unix")]
             Self::Local(uds) => {
-                cx.rpc_info_mut()
-                    .callee_mut()
-                    .set_address(Address::Unix(uds));
+                let callee = cx.rpc_info_mut().callee_mut();
+                callee.set_address(Address::Unix(uds));
+                callee.set_service_name(FastStr::from_static_str("unix-domain-socket"));
             }
-            Self::None => {
-                unreachable!()
-            }
+            Self::None => {}
         }
 
         Ok(())
