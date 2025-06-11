@@ -2,13 +2,15 @@ use std::{
     future::Future,
     pin::Pin,
     task::{Context, Poll},
+    time::Duration,
 };
 
+use metainfo::METAINFO;
 use motore::{layer::Layer, Service};
 use pin_project::pin_project;
 use tokio::time::{self, Sleep};
 
-use crate::{context::ClientContext, status::Status};
+use crate::{context::ClientContext, metadata::MetadataValue, status::Status, Request};
 
 /// Timeout middleware that enforces deadlines from ClientContext.
 #[derive(Debug, Clone)]
@@ -39,16 +41,40 @@ impl<S> Layer<S> for TimeoutLayer {
     }
 }
 
-impl<S, Req> Service<ClientContext, Req> for Timeout<S>
+impl<S, T> Service<ClientContext, Request<T>> for Timeout<S>
 where
-    S: Service<ClientContext, Req, Error = Status> + Send + Sync,
-    Req: Send + 'static,
+    S: Service<ClientContext, Request<T>, Error = Status> + Send + Sync,
+    T: Send + 'static,
 {
     type Response = S::Response;
     type Error = Status;
 
-    async fn call(&self, cx: &mut ClientContext, req: Req) -> Result<Self::Response, Self::Error> {
-        let timeout_duration = cx.rpc_info.config().rpc_timeout();
+    async fn call(
+        &self,
+        cx: &mut ClientContext,
+        mut req: Request<T>,
+    ) -> Result<Self::Response, Self::Error> {
+        let config_timeout = cx.rpc_info.config().rpc_timeout();
+
+        let mi_timeout = METAINFO.with(|m| m.borrow().get::<Duration>().cloned());
+
+        // get the shorter timeout
+        let timeout_duration = match (config_timeout, mi_timeout) {
+            (None, None) => None,
+            (None, Some(t)) | (Some(t), None) => Some(t),
+            (Some(t1), Some(t2)) => Some(t1.min(t2)),
+        };
+
+        if let Some(timeout) = timeout_duration {
+            let header_val = duration_to_grpc_timeout(timeout);
+            // Convert to gRPC metadata value and add to outgoing request with header
+            if let Ok(meta_val) = MetadataValue::from_str(&header_val) {
+                req.metadata_mut()
+                    .insert(crate::metadata::GRPC_TIMEOUT_HEADER, meta_val);
+            } else {
+                tracing::warn!("Invalid grpc-timeout value: {}", header_val);
+            }
+        }
 
         let sleep = timeout_duration.map(time::sleep);
         let inner = self.inner.call(cx, req);
@@ -58,6 +84,48 @@ where
             sleep: sleep.map(OptionPin::Some).unwrap_or(OptionPin::None),
         }
         .await
+    }
+}
+
+/// Converts a `std::time::Duration` to a `String` in gRPC timeout format.
+///
+/// The gRPC timeout format specifies a duration with a time unit suffix:
+/// - `"H"` for hours
+/// - `"M"` for minutes
+/// - `"S"` for seconds
+/// - `"m"` for milliseconds
+/// - `"u"` for microseconds
+/// - `"n"` for nanoseconds
+///
+/// This function chooses the largest possible time unit that evenly divides the duration
+/// (e.g., 3600 seconds becomes `"1H"`, 60 seconds becomes `"1M"`, 13 milliseconds becomes `"13m"`).
+///
+/// # Parameters
+/// - `duration`: The `Duration` to convert.
+///
+/// # Returns
+/// A `String` representing the gRPC timeout format.
+fn duration_to_grpc_timeout(duration: Duration) -> String {
+    let secs = duration.as_secs();
+    let nanos = duration.subsec_nanos();
+
+    if nanos == 0 {
+        if secs % 3600 == 0 {
+            format!("{}H", secs / 3600)
+        } else if secs % 60 == 0 {
+            format!("{}M", secs / 60)
+        } else {
+            format!("{}S", secs)
+        }
+    } else if secs == 0 && nanos % 1_000_000 == 0 {
+        format!("{}m", nanos / 1_000_000)
+    } else if secs == 0 && nanos % 1_000 == 0 {
+        format!("{}u", nanos / 1_000)
+    } else if secs == 0 {
+        format!("{}n", nanos)
+    } else {
+        let total_nanos = secs * 1_000_000_000 + nanos as u64;
+        format!("{}n", total_nanos)
     }
 }
 
@@ -89,11 +157,52 @@ where
         }
 
         if let OptionPinProj::Some(sleep) = this.sleep.project() {
-            if sleep.poll(cx).is_ready() {
-                return Poll::Ready(Err(Status::deadline_exceeded("timeout")));
-            }
+            futures_util::ready!(sleep.poll(cx));
+            let err = Status::deadline_exceeded("timeout");
+            return Poll::Ready(Err(err));
         }
 
         Poll::Pending
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+    #[test]
+    fn test_hours() {
+        let converted_duration = duration_to_grpc_timeout(Duration::from_secs(3 * 3600));
+        assert_eq!("3H", converted_duration);
+    }
+
+    #[test]
+    fn test_minutes() {
+        let converted_duration = duration_to_grpc_timeout(Duration::from_secs(60));
+        assert_eq!("1M", converted_duration);
+    }
+
+    #[test]
+    fn test_seconds() {
+        let converted_duration = duration_to_grpc_timeout(Duration::from_secs(42));
+        assert_eq!("42S", converted_duration);
+    }
+
+    #[test]
+    fn test_milliseconds() {
+        let converted_duration = duration_to_grpc_timeout(Duration::from_millis(13));
+        assert_eq!("13m", converted_duration);
+    }
+
+    #[test]
+    fn test_microseconds() {
+        let converted_duration = duration_to_grpc_timeout(Duration::from_micros(2));
+        assert_eq!("2u", converted_duration);
+    }
+
+    #[test]
+    fn test_nanoseconds() {
+        let converted_duration = duration_to_grpc_timeout(Duration::from_nanos(82));
+        assert_eq!("82n", converted_duration);
     }
 }

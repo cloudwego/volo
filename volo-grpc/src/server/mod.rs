@@ -25,6 +25,7 @@ use volo::{
     spawn,
 };
 
+pub mod layer;
 pub use self::router::Router;
 use crate::{body::BoxBody, context::ServerContext, Request, Response, Status};
 

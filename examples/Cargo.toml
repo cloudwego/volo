@@ -89,6 +89,17 @@ path = "src/grpc/grpc-web/server.rs"
 name = "grpc-web-client"
 path = "src/grpc/grpc-web/client.rs"
 
+#grpc-passthrough
+[[bin]]
+name = "grpc-passthrough-client"
+path = "src/grpc/passthrough/client.rs"
+[[bin]]
+name = "grpc-passthrough-service_a"
+path = "src/grpc/passthrough/service_a.rs"
+[[bin]]
+name = "grpc-passthrough-service_b"
+path = "src/grpc/passthrough/service_b.rs"
+
 # http
 [[bin]]
 name = "example-http-server"
