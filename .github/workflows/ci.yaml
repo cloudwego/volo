@@ -85,7 +85,7 @@ jobs:
 
     strategy:
       matrix:
-        rust: [nightly, stable]
+        rust: [stable]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -95,14 +95,14 @@ jobs:
       - name: Run tests
         run: |
           bash scripts/install-linux-dependencies.sh
-          bash scripts/clippy-and-test.sh
+          bash scripts/clippy-and-test.sh --no-test
 
   test-macos:
     runs-on: [self-hosted, macOS]
 
     strategy:
       matrix:
-        rust: [nightly, stable]
+        rust: [stable]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@master
@@ -111,7 +111,7 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          bash scripts/clippy-and-test.sh
+          bash scripts/clippy-and-test.sh --no-test
 
   test-windows:
     runs-on: [self-hosted, Windows]
@@ -127,7 +127,7 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          bash scripts/clippy-and-test.sh
+          bash scripts/clippy-and-test.sh --no-test
 
   test-cli:
     runs-on: [self-hosted, Linux, amd64]

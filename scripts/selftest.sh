@@ -7,10 +7,11 @@ set -o pipefail
 echo_and_run() {
 	echo "$@"
 
-	if [ -n "${DEBUG:-}" ]; then
+	if [ "${GITHUB_ACTIONS:-}" = "true" ] || [ -n "${DEBUG:-}" ]; then
 		# If env `DEBUG` is non-empty, output all
 		"$@"
 	else
+		trap 'echo -e "\e[1;31merror:\e[0m failed to run: $@"' ERR
 		# Disable outputs
 		"$@" > /dev/null 2>&1
 	fi

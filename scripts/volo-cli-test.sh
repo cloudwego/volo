@@ -16,6 +16,7 @@ echo_command() {
 		# output all
 		"$@"
 	else
+		trap 'echo -e "\e[1;31merror:\e[0m failed to run: $@"' ERR
 		# Disable outputs
 		quiet "$@"
 	fi
@@ -36,7 +37,6 @@ init() {
 	export VOLO_DIR="$PWD"
 	echo_command cargo build -p volo-cli
 	export VOLO_CLI="$PWD/target/debug/volo"
-	trap 'echo "Failed to run $LINENO: $BASH_COMMAND (exit code: $?)" && exit 1' ERR
 }
 
 append_volo_dep_item() {
