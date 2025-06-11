@@ -12,13 +12,11 @@ echo_command() {
 		# output all
 		"$@"
 	else
+		trap 'echo -e "\e[1;31merror:\e[0m failed to run: $@"' ERR
 		# Disable outputs
 		"$@" > /dev/null 2>&1
 	fi
 }
-
-# Setup error handler
-trap 'echo "Failed to run $LINENO: $BASH_COMMAND (exit code: $?)" && exit 1' ERR
 
 # Clippy
 echo_command cargo clippy -p volo-thrift --no-default-features -- --deny warnings
@@ -43,6 +41,7 @@ echo_command cargo clippy -p volo-cli -- --deny warnings
 echo_command cargo clippy -p volo-macros -- --deny warnings
 echo_command cargo clippy -p examples -- --deny warnings
 echo_command cargo clippy -p examples --features tls -- --deny warnings
+echo_command cargo clippy --all -- --deny warnings
 
 # Test
 echo_command cargo test -p volo-thrift
@@ -53,3 +52,4 @@ echo_command cargo test -p volo-http --features full
 echo_command cargo test -p volo --features rustls
 echo_command cargo test -p volo-build
 echo_command cargo test -p volo-cli
+echo_command cargo test --all
