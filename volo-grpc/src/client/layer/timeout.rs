@@ -111,21 +111,25 @@ fn duration_to_grpc_timeout(duration: Duration) -> String {
 
     if nanos == 0 {
         if secs % 3600 == 0 {
-            format!("{}H", secs / 3600)
+            let hrs = secs / 3600;
+            format!("{hrs}H")
         } else if secs % 60 == 0 {
-            format!("{}M", secs / 60)
+            let mins = secs / 60;
+            format!("{mins}M")
         } else {
-            format!("{}S", secs)
+            format!("{secs}S")
         }
     } else if secs == 0 && nanos % 1_000_000 == 0 {
-        format!("{}m", nanos / 1_000_000)
+        let millis = nanos / 1_000_000;
+        format!("{millis}m")
     } else if secs == 0 && nanos % 1_000 == 0 {
-        format!("{}u", nanos / 1_000)
+        let micros = nanos / 1_000;
+        format!("{micros}u")
     } else if secs == 0 {
-        format!("{}n", nanos)
+        format!("{nanos}n")
     } else {
         let total_nanos = secs * 1_000_000_000 + nanos as u64;
-        format!("{}n", total_nanos)
+        format!("{total_nanos}n")
     }
 }
 
