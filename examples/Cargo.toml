@@ -89,6 +89,17 @@ path = "src/grpc/grpc-web/server.rs"
 name = "grpc-web-client"
 path = "src/grpc/grpc-web/client.rs"
 
+#grpc-timeout
+[[bin]]
+name = "grpc-timeout-client"
+path = "src/grpc/timeout/client.rs"
+[[bin]]
+name = "grpc-timeout-service_a"
+path = "src/grpc/timeout/service_a.rs"
+[[bin]]
+name = "grpc-timeout-service_b"
+path = "src/grpc/timeout/service_b.rs"
+
 # http
 [[bin]]
 name = "example-http-server"
