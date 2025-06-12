@@ -53,7 +53,6 @@ run_test() {
 	echo_command cargo test -p volo --features rustls
 	echo_command cargo test -p volo-build
 	echo_command cargo test -p volo-cli
-	echo_command cargo test --all
 }
 
 main() {
