@@ -11,6 +11,7 @@ impl volo_gen::proto_gen::helloworld::Greeter for ServiceB {
         req: volo_grpc::Request<volo_gen::proto_gen::helloworld::HelloRequest>,
     ) -> Result<volo_grpc::Response<volo_gen::proto_gen::helloworld::HelloReply>, volo_grpc::Status>
     {
+        // This delay causes the client to time out (comment to avoid timeout)
         sleep(Duration::from_secs(2)).await;
         println!("Service B received: {:?}", req.get_ref().name);
 

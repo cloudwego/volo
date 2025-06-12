@@ -15,6 +15,7 @@ static CLIENT: LazyLock<volo_gen::proto_gen::helloworld::GreeterClient> = LazyLo
 #[volo::main]
 async fn main() {
     let mut mi = MetaInfo::new();
+    // This duration will be overridden as a lower upstream timeout is configured
     mi.insert::<Duration>(Duration::from_secs(5));
 
     METAINFO
