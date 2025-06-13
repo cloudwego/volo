@@ -172,16 +172,31 @@ impl Init {
 
         Ok(())
     }
+
+    fn check_config_files(&self) -> anyhow::Result<()> {
+        let paths = [
+            PathBuf::from(DEFAULT_CONFIG_FILE),
+            PathBuf::from("./volo-gen/").join(DEFAULT_CONFIG_FILE),
+        ];
+
+        for path in paths {
+            if let Ok(metadata) = std::fs::metadata(&path) {
+                if metadata.len() > 0 {
+                    eprintln!(
+                        "{DEFAULT_CONFIG_FILE} already exists, the initialization is not allowed!"
+                    );
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        Ok(())
+    }
 }
 
 impl CliCommand for Init {
     fn run(&self, cx: crate::context::Context) -> anyhow::Result<()> {
-        if std::fs::metadata(DEFAULT_CONFIG_FILE).is_ok()
-            || std::fs::metadata(PathBuf::from("./volo-gen/").join(DEFAULT_CONFIG_FILE)).is_ok()
-        {
-            eprintln!("{DEFAULT_CONFIG_FILE} already exists, the initialization is not allowed!");
-            std::process::exit(1);
-        }
+        self.check_config_files()?;
 
         volo_build::util::with_config(|config| {
             let mut repos = HashMap::new();
