@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs::create_dir_all, path::PathBuf, process::Command};
+use std::{collections::HashMap, fs::create_dir_all, fs::remove_file, path::PathBuf, process::Command};
 
 use clap::{value_parser, Parser};
 use volo_build::{
@@ -172,10 +172,31 @@ impl Init {
 
         Ok(())
     }
+
+    fn clear_empty_config_files(&self) -> anyhow::Result<()> {
+        let paths = [
+            PathBuf::from(DEFAULT_CONFIG_FILE),
+            PathBuf::from("./volo-gen/").join(DEFAULT_CONFIG_FILE),
+        ];
+
+        for path in paths {
+            if let Ok(metadata) = std::fs::metadata(&path) {
+                if metadata.len() == 0 {
+                    remove_file(&path).map(|_| eprintln!("Empty {DEFAULT_CONFIG_FILE} removed"))
+                        .map_err(|err| anyhow::anyhow!("Failed to delete {}: {}", DEFAULT_CONFIG_FILE, err))?;
+                    break;
+                }
+            }
+        }
+
+        Ok(())       
+    }
 }
 
 impl CliCommand for Init {
     fn run(&self, cx: crate::context::Context) -> anyhow::Result<()> {
+        self.clear_empty_config_files()?;
+
         if std::fs::metadata(DEFAULT_CONFIG_FILE).is_ok()
             || std::fs::metadata(PathBuf::from("./volo-gen/").join(DEFAULT_CONFIG_FILE)).is_ok()
         {
