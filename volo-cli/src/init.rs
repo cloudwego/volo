@@ -183,8 +183,7 @@ impl Init {
             if let Ok(metadata) = std::fs::metadata(&path) {
                 if metadata.len() > 0 {
                     eprintln!(
-                        "{} already exists, the initialization is not allowed!",
-                        DEFAULT_CONFIG_FILE
+                        "{DEFAULT_CONFIG_FILE} already exists, the initialization is not allowed!"
                     );
                     std::process::exit(1);
                 }
