@@ -184,29 +184,6 @@ impl<S, B> RequestBuilder<S, B> {
         self
     }
 
-    /// Set full uri for building request.
-    ///
-    /// This function is only used for using http(s) proxy.
-    pub fn full_uri<U>(mut self, uri: U) -> Self
-    where
-        U: TryInto<Uri>,
-        U::Error: Into<BoxError>,
-    {
-        if self.status.is_err() {
-            return self;
-        }
-        let uri = match uri.try_into() {
-            Ok(uri) => uri,
-            Err(err) => {
-                self.status = Err(builder_error(err));
-                return self;
-            }
-        };
-        *self.request.uri_mut() = uri;
-
-        self
-    }
-
     /// Set query for the uri in request from object with [`Serialize`](serde::Serialize).
     #[cfg(feature = "query")]
     pub fn set_query<T>(mut self, query: &T) -> Self

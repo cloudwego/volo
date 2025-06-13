@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use serde::{Deserialize, Serialize};
 use volo_http::{
     body::BodyConversion,
-    client::{get, ClientBuilder},
-    error::BoxError,
+    client::{get, layer::TargetLayer, ClientBuilder},
+    error::{client::Result, BoxError},
 };
 
 #[derive(Deserialize, Serialize, Debug)]
@@ -17,7 +17,7 @@ struct Person {
 #[volo::main]
 async fn main() -> Result<(), BoxError> {
     let subscriber = tracing_subscriber::FmtSubscriber::builder()
-        .with_max_level(tracing::Level::TRACE)
+        .with_max_level(tracing::Level::INFO)
         .finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
@@ -38,12 +38,12 @@ async fn main() -> Result<(), BoxError> {
 
     // create client by builder
     let client = {
-        let mut builder = ClientBuilder::new();
+        let mut builder = ClientBuilder::new().layer_outer_front(TargetLayer::new_address(
+            "127.0.0.1:8080".parse::<SocketAddr>().unwrap(),
+        ));
         builder
             .user_agent("example.http.client")
-            .default_host("example.http.server")
             // set default target address
-            .address("127.0.0.1:8080".parse::<SocketAddr>().unwrap())
             .header("Test", "Test");
         builder.build()?
     };

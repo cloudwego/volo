@@ -3,13 +3,15 @@
 use std::time::Duration;
 
 use chrono::{DateTime, Local};
-use http::uri::Scheme;
 use volo::{
     context::{Reusable, Role, RpcCx, RpcInfo},
     newtype_impl_context,
 };
 
-use crate::utils::macros::{impl_deref_and_deref_mut, stat_impl};
+use crate::{
+    client::Target,
+    utils::macros::{impl_deref_and_deref_mut, stat_impl},
+};
 
 /// RPC context of http client
 #[derive(Debug)]
@@ -21,7 +23,7 @@ impl ClientContext {
         Self(RpcCx::new(
             RpcInfo::<Config>::with_role(Role::Client),
             ClientCxInner {
-                scheme: Scheme::HTTP,
+                target: Target::None,
                 stats: ClientStats::default(),
             },
         ))
@@ -41,8 +43,8 @@ impl_deref_and_deref_mut!(ClientContext, RpcCx<ClientCxInner, Config>, 0);
 /// Inner details of [`ClientContext`]
 #[derive(Debug)]
 pub struct ClientCxInner {
-    /// Scheme of the request.
-    scheme: Scheme,
+    /// Target of the current request
+    target: Target,
 
     /// Statistics of client
     ///
@@ -51,13 +53,13 @@ pub struct ClientCxInner {
 }
 
 impl ClientCxInner {
-    /// Get [`Scheme`] of current request context.
-    pub fn scheme(&self) -> &Scheme {
-        &self.scheme
+    /// Get [`Target`] of current request context.
+    pub fn target(&self) -> &Target {
+        &self.target
     }
 
-    pub(crate) fn set_scheme(&mut self, scheme: Scheme) {
-        self.scheme = scheme;
+    pub(crate) fn set_target(&mut self, target: Target) {
+        self.target = target;
     }
 }
 

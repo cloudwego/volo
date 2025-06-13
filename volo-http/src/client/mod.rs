@@ -3,7 +3,6 @@
 //! See [`Client`] for more details.
 
 use std::{
-    borrow::Cow,
     cell::RefCell,
     error::Error,
     future::Future,
@@ -11,11 +10,10 @@ use std::{
     time::Duration,
 };
 
-use faststr::FastStr;
 use http::{
     header::{HeaderMap, HeaderName, HeaderValue},
     method::Method,
-    uri::{Scheme, Uri},
+    uri::Uri,
 };
 use metainfo::{MetaInfo, METAINFO};
 use motore::{
@@ -24,13 +22,10 @@ use motore::{
 };
 use paste::paste;
 use volo::{
-    client::{Apply, MkClient, OneShotService},
+    client::{MkClient, OneShotService},
     context::Context,
     loadbalance::MkLbLayer,
-    net::{
-        dial::{DefaultMakeTransport, MakeTransport},
-        Address,
-    },
+    net::dial::{DefaultMakeTransport, MakeTransport},
 };
 
 use self::{
@@ -68,6 +63,7 @@ pub mod target;
 #[cfg(test)]
 pub mod test_helpers;
 mod transport;
+mod utils;
 
 pub use self::{callopt::CallOpt, request_builder::RequestBuilder, target::Target};
 
@@ -82,11 +78,9 @@ pub struct ClientBuilder<IL, OL, C, LB> {
     client_config: ClientTransportConfig,
     pool_config: pool::Config,
     connector: DefaultMakeTransport,
-    target: Target,
     timeout: Option<Duration>,
     user_agent: Option<HeaderValue>,
-    host: Option<HeaderValue>,
-    callee_name: FastStr,
+    host_mode: Host,
     headers: HeaderMap,
     inner_layer: IL,
     outer_layer: OL,
@@ -105,11 +99,9 @@ impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
             client_config: Default::default(),
             pool_config: pool::Config::default(),
             connector: Default::default(),
-            target: Default::default(),
             timeout: None,
             user_agent: None,
-            host: None,
-            callee_name: FastStr::empty(),
+            host_mode: Host::Auto,
             headers: Default::default(),
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
@@ -139,11 +131,9 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
             client_config: self.client_config,
             pool_config: self.pool_config,
             connector: self.connector,
-            target: self.target,
             timeout: self.timeout,
             user_agent: self.user_agent,
-            host: self.host,
-            callee_name: self.callee_name,
+            host_mode: self.host_mode,
             headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
@@ -162,11 +152,9 @@ impl<IL, OL, C, LB, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>> {
             client_config: self.client_config,
             pool_config: self.pool_config,
             connector: self.connector,
-            target: self.target,
             timeout: self.timeout,
             user_agent: self.user_agent,
-            host: self.host,
-            callee_name: self.callee_name,
+            host_mode: self.host_mode,
             headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
@@ -188,11 +176,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             client_config: self.client_config,
             pool_config: self.pool_config,
             connector: self.connector,
-            target: self.target,
             timeout: self.timeout,
             user_agent: self.user_agent,
-            host: self.host,
-            callee_name: self.callee_name,
+            host_mode: self.host_mode,
             headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
@@ -223,11 +209,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             client_config: self.client_config,
             pool_config: self.pool_config,
             connector: self.connector,
-            target: self.target,
             timeout: self.timeout,
             user_agent: self.user_agent,
-            host: self.host,
-            callee_name: self.callee_name,
+            host_mode: self.host_mode,
             headers: self.headers,
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
@@ -261,11 +245,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             client_config: self.client_config,
             pool_config: self.pool_config,
             connector: self.connector,
-            target: self.target,
             timeout: self.timeout,
             user_agent: self.user_agent,
-            host: self.host,
-            callee_name: self.callee_name,
+            host_mode: self.host_mode,
             headers: self.headers,
             inner_layer: Stack::new(self.inner_layer, layer),
             outer_layer: self.outer_layer,
@@ -296,11 +278,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             client_config: self.client_config,
             pool_config: self.pool_config,
             connector: self.connector,
-            target: self.target,
             timeout: self.timeout,
             user_agent: self.user_agent,
-            host: self.host,
-            callee_name: self.callee_name,
+            host_mode: self.host_mode,
             headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(layer, self.outer_layer),
@@ -334,11 +314,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             client_config: self.client_config,
             pool_config: self.pool_config,
             connector: self.connector,
-            target: self.target,
             timeout: self.timeout,
             user_agent: self.user_agent,
-            host: self.host,
-            callee_name: self.callee_name,
+            host_mode: self.host_mode,
             headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: Stack::new(self.outer_layer, layer),
@@ -357,11 +335,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             client_config: self.client_config,
             pool_config: self.pool_config,
             connector: self.connector,
-            target: self.target,
             timeout: self.timeout,
             user_agent: self.user_agent,
-            host: self.host,
-            callee_name: self.callee_name,
+            host_mode: self.host_mode,
             headers: self.headers,
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
@@ -371,66 +347,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
-    }
-
-    /// Set default target address of the client.
-    ///
-    /// For using given `Host` in header or using HTTPS, use [`ClientBuilder::default_host`] for
-    /// setting it.
-    ///
-    /// If there is no target specified when building a request, client will use this address.
-    pub fn address<A>(&mut self, address: A) -> &mut Self
-    where
-        A: Into<Address>,
-    {
-        self.target = Target::from(address.into());
-        self
-    }
-
-    /// Set default target host of the client.
-    ///
-    /// If there is no target specified when building a request, client will use this address.
-    ///
-    /// It uses http with port 80 by default.
-    ///
-    /// For setting scheme and port, use [`ClientBuilder::with_scheme`] and
-    /// [`ClientBuilder::with_port`] after specifying host.
-    pub fn host<S>(&mut self, host: S) -> &mut Self
-    where
-        S: Into<Cow<'static, str>>,
-    {
-        let host = host.into();
-        self.target = Target::from_host(host.clone());
-        self.default_host(host);
-        self
-    }
-
-    /// Set port of the default target.
-    ///
-    /// If there is no target specified, the function will do nothing.
-    pub fn with_port(&mut self, port: u16) -> &mut Self {
-        if self.status.is_err() {
-            return self;
-        }
-
-        if let Err(err) = self.target.set_port(port) {
-            self.status = Err(err);
-        }
-
-        self
-    }
-
-    /// Set scheme of default target.
-    pub fn with_scheme(&mut self, scheme: Scheme) -> &mut Self {
-        if self.status.is_err() {
-            return self;
-        }
-
-        if let Err(err) = self.target.set_scheme(scheme) {
-            self.status = Err(err);
-        }
-
-        self
     }
 
     /// Insert a header to the request.
@@ -449,16 +365,6 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
             self.status = Err(err);
         }
         self
-    }
-
-    /// Get a reference of [`Target`].
-    pub fn target_ref(&self) -> &Target {
-        &self.target
-    }
-
-    /// Get a mutable reference of [`Target`].
-    pub fn target_mut(&mut self) -> &mut Target {
-        &mut self.target
     }
 
     /// Set tls config for the client.
@@ -614,23 +520,17 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         self
     }
 
-    /// Set default `Host` for service name and request header.
+    /// Set mode of client setting `Host` in headers.
     ///
-    /// If there is no default `Host`, it will be generated by target hostname and address for each
-    /// request.
-    pub fn default_host<S>(&mut self, host: S) -> &mut Self
-    where
-        S: Into<Cow<'static, str>>,
-    {
-        if self.status.is_err() {
-            return self;
-        }
-        let host = FastStr::from(host.into());
-        match HeaderValue::from_str(&host) {
-            Ok(val) => self.host = Some(val),
-            Err(err) => self.status = Err(builder_error(err)),
-        }
-        self.callee_name = host;
+    /// This mode only works when building client by [`ClientBuilder::build`],
+    /// [`ClientBuilder::build_without_extra_layers`] will ignore this config.
+    ///
+    /// For more configurations, refer to [`Host`].
+    ///
+    /// Default is [`Host::Auto`], it will generate a `Host` by target domain name or address if
+    /// there is no `Host` in request headers.
+    pub fn host_mode(&mut self, mode: Host) -> &mut Self {
+        self.host_mode = mode;
         self
     }
 
@@ -643,9 +543,9 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
     ///   - [`Timeout`]: Apply timeout from [`ClientBuilder::set_request_timeout`] or
     ///     [`CallOpt::with_timeout`]. Note that without this layer, timeout from [`Client`] or
     ///     [`CallOpt`] will not work.
-    ///   - [`Host`]: Insert `Host` to request headers, it takes the given value from
-    ///     [`ClientBuilder::default_host`] or generating by request everytime. If there is already
-    ///     a `Host`, the layer does nothing.
+    ///   - [`Host`]: Insert `Host` to request headers. [`Host::Auto`] will be applied by default,
+    ///     it will insert a `Host` generated from current [`Target`] if there is no `Host` in
+    ///     headers.
     ///   - [`UserAgent`]: Insert `User-Agent` into the request header, it takes the given value
     ///     from [`ClientBuilder::user_agent`] or generates a value based on the current package
     ///     name and version. If `User-Agent` already exists, this layer does nothing.
@@ -678,10 +578,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         RespBody: Send,
     {
         let timeout_layer = Timeout;
-        let host_layer = match self.host.take() {
-            Some(host) => Host::new(host),
-            None => Host::auto(),
-        };
+        let host_layer = self.host_mode.clone();
         let ua_layer = match self.user_agent.take() {
             Some(ua) => UserAgent::new(ua),
             None => UserAgent::auto(),
@@ -737,9 +634,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
 
         let client_inner = ClientInner {
             service,
-            target: self.target,
             timeout: self.timeout,
-            default_callee_name: self.callee_name,
             headers: self.headers,
         };
         let client = Client {
@@ -765,9 +660,7 @@ where
 
 struct ClientInner<ReqBody, RespBody> {
     service: BoxService<ClientContext, Request<ReqBody>, Response<RespBody>, ClientError>,
-    target: Target,
     timeout: Option<Duration>,
-    default_callee_name: FastStr,
     headers: HeaderMap,
 }
 
@@ -855,11 +748,6 @@ impl<ReqBody, RespBody> Client<ReqBody, RespBody> {
     method_requests!(trace);
     method_requests!(connect);
     method_requests!(patch);
-
-    /// Get the default target address of the client.
-    pub fn default_target(&self) -> &Target {
-        &self.inner.target
-    }
 }
 
 impl<ReqBody, RespBody> OneShotService<ClientContext, Request<ReqBody>>
@@ -875,18 +763,10 @@ where
         cx: &mut ClientContext,
         mut req: Request<ReqBody>,
     ) -> Result<Self::Response, Self::Error> {
-        // set target
-        self.inner.target.clone().apply(cx)?;
-
-        // save scheme in request
-        req.extensions_mut().insert(cx.scheme().to_owned());
-
-        // set default callee name
-        {
-            let callee = cx.rpc_info_mut().callee_mut();
-            if callee.service_name_ref().is_empty() {
-                callee.set_service_name(self.inner.default_callee_name.clone());
-            }
+        #[cfg(feature = "__tls")]
+        if cx.target().scheme() == Some(&http::uri::Scheme::HTTPS) {
+            // save scheme in request
+            req.extensions_mut().insert(http::uri::Scheme::HTTPS);
         }
 
         // set timeout
@@ -949,5 +829,5 @@ where
     U: TryInto<Uri>,
     U::Error: Into<BoxError>,
 {
-    CLIENT.clone().get(uri).send().await
+    CLIENT.get(uri).send().await
 }

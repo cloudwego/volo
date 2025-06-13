@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use faststr::FastStr;
 use http::status::StatusCode;
 use motore::{
     layer::Layer,
@@ -10,14 +9,13 @@ use motore::{
 };
 use volo::client::MkClient;
 
-use super::{Client, ClientBuilder, ClientInner, Target};
+use super::{Client, ClientBuilder, ClientInner};
 use crate::{
     body::{Body, BodyConversion},
     context::client::ClientContext,
     error::client::{other_error, ClientError, Result},
     request::{Request, RequestPartsExt},
     response::Response,
-    utils::test_helpers::mock_address,
 };
 
 /// Default mock service of [`Client`]
@@ -133,10 +131,7 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
 
         let client_inner = ClientInner {
             service,
-            // set a default target so that we can create a request without authority
-            target: Target::from(mock_address()),
             timeout: self.timeout,
-            default_callee_name: FastStr::empty(),
             headers: self.headers,
         };
         let client = Client {
