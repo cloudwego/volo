@@ -1,4 +1,9 @@
-use std::{collections::HashMap, fs::create_dir_all, fs::remove_file, path::PathBuf, process::Command};
+use std::{
+    collections::HashMap,
+    fs::{create_dir_all, remove_file},
+    path::PathBuf,
+    process::Command,
+};
 
 use clap::{value_parser, Parser};
 use volo_build::{
@@ -182,14 +187,17 @@ impl Init {
         for path in paths {
             if let Ok(metadata) = std::fs::metadata(&path) {
                 if metadata.len() == 0 {
-                    remove_file(&path).map(|_| eprintln!("Empty {DEFAULT_CONFIG_FILE} removed"))
-                        .map_err(|err| anyhow::anyhow!("Failed to delete {}: {}", DEFAULT_CONFIG_FILE, err))?;
+                    remove_file(&path)
+                        .map(|_| eprintln!("Empty {DEFAULT_CONFIG_FILE} removed"))
+                        .map_err(|err| {
+                            anyhow::anyhow!("Failed to delete {}: {}", DEFAULT_CONFIG_FILE, err)
+                        })?;
                     break;
                 }
             }
         }
 
-        Ok(())       
+        Ok(())
     }
 }
 
