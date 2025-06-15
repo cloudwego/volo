@@ -22,7 +22,7 @@ fn pick_one(
     if instances.is_empty() {
         return None;
     }
-    let weight = rand::rng().random_range(0..sum_of_weight)+1;
+    let weight = rand::rng().random_range(0..sum_of_weight) + 1;
     let index = prefix_sum_of_weights
         .binary_search(&weight)
         .unwrap_or_else(|index| index);
