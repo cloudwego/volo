@@ -22,7 +22,7 @@ fn pick_one(
     if instances.is_empty() {
         return None;
     }
-    let weight = rand::rng().random_range(0..sum_of_weight);
+    let weight = rand::rng().random_range(0..sum_of_weight) + 1;
     let index = prefix_sum_of_weights
         .binary_search(&weight)
         .unwrap_or_else(|index| index);
@@ -184,6 +184,46 @@ mod tests {
         let all = picker.collect::<Vec<_>>();
         assert_eq!(all.len(), 2);
         assert_ne!(all[0], all[1]);
+    }
+
+    #[tokio::test]
+    async fn test_weighted_random_load_balance_same_instance() {
+        let cycle = 1000;
+
+        let empty = Endpoint::new("".into());
+        let mut weighted_instances = Vec::with_capacity(100);
+        let mut total_weight = 0;
+        for i in 0..100 {
+            let addr = format!("127.0.0.{}:8000", i).parse().unwrap();
+            let weight = 1;
+            weighted_instances.push((addr, weight));
+            total_weight += weight;
+        }
+        let discover = WeightedStaticDiscover::from(weighted_instances.clone());
+        let lb = WeightedRandomBalance::with_discover(&discover);
+
+        let mut actual_weights: HashMap<String, u32> = HashMap::new();
+        for _ in 0..(total_weight * cycle) {
+            let mut picker = lb.get_picker(&empty, &discover).await.unwrap();
+            let addr = picker.next().unwrap();
+            let count = actual_weights.entry(addr.to_string()).or_insert(0);
+            *count += 1;
+        }
+        assert_eq!(actual_weights.len(), 100);
+        for instance in weighted_instances.iter() {
+            let addr = instance.0.to_string();
+            let weight = instance.1;
+            let count = *actual_weights.entry(addr.to_string()).or_insert(0);
+
+            let expected_rate = (weight as f64) / (total_weight as f64);
+            let actual_rate = (count as f64) / ((total_weight * cycle) as f64);
+
+            println!(
+                "addr: {}, expected: {}, actual: {}",
+                addr, expected_rate, actual_rate
+            );
+            assert!((expected_rate - actual_rate).abs() < 0.01);
+        }
     }
 
     #[tokio::test]
