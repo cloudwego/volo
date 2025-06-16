@@ -3,6 +3,9 @@
 //! We encourage users to use these traits to implement their own service discovery and
 //! loadbalancer, so that we are able to reuse the same service discovery and loadbalancer
 //! implementation.
+
+pub mod nacos;
+
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
