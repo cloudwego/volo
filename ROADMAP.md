@@ -17,7 +17,7 @@ for us to review.
 
 - [ ] Support `etcd` as a service discovery provider
 - [ ] Support `zookeeper` as a service discovery provider
-- [ ] Support `nacos` as a service discovery provider
+- [x] Support `nacos` as a service discovery provider
 - [ ] Support `polaris` as a service discovery provider
 - [ ] Support `eureka` as a service discovery provider
 - [ ] Support `consul` as a service discovery provider
