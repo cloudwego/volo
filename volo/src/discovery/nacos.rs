@@ -141,7 +141,7 @@ impl Discover for NacosDiscover {
             .nacos_naming_data
             .event_listener
             .sub_svc_map
-            .get(endpoint.service_name.as_str());
+            .get(key.as_str());
         if let Some(inst_list) = inst_list {
             let mut new_instance = Vec::with_capacity(inst_list.len());
             for x in inst_list.iter() {
@@ -160,7 +160,7 @@ impl Discover for NacosDiscover {
             self.current_svc_instance.insert(key, new_instance.clone());
             Ok(new_instance)
         } else {
-            let ee = anyhow!("no instances for {}", endpoint.service_name.to_string()).into();
+            let ee = anyhow!("no instances for {}", key.to_string()).into();
             Err(LoadBalanceError::Discover(ee))
         }
     }
