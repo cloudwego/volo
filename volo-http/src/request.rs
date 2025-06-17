@@ -16,18 +16,6 @@ use crate::body::Body;
 /// [`Body`]: crate::body::Body
 pub type Request<B = Body> = http::request::Request<B>;
 
-/// [`Request`](http::request::Request) with [`Body`] as default body.
-///
-/// [`Body`]: crate::body::Body
-#[cfg(feature = "client")]
-#[deprecated(note = "`ClientRequest` has been renamed to `Request`")]
-pub type ClientRequest<B = Body> = Request<B>;
-
-/// [`Request`](http::request::Request) with [`Body`] as default body.
-#[cfg(feature = "server")]
-#[deprecated(note = "`ServerRequest` has been renamed to `Request`")]
-pub type ServerRequest<B = Body> = Request<B>;
-
 /// HTTP header [`X-Forwarded-For`][mdn].
 ///
 /// [mdn]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/X-Forwarded-For

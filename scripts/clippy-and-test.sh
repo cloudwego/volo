@@ -27,7 +27,7 @@ run_clippy() {
 	echo_command cargo clippy -p volo-grpc --no-default-features --features native-tls -- --deny warnings
 	echo_command cargo clippy -p volo-grpc --no-default-features --features native-tls-vendored -- --deny warnings
 	echo_command cargo clippy -p volo-grpc --no-default-features --features grpc-web -- --deny warnings
-	echo_command cargo clippy -p volo-http --no-default-features -- --deny warnings
+	echo_command cargo clippy -p volo-http -- --deny warnings
 	echo_command cargo clippy -p volo-http --no-default-features --features client,http1,json -- --deny warnings
 	echo_command cargo clippy -p volo-http --no-default-features --features client,http2,json -- --deny warnings
 	echo_command cargo clippy -p volo-http --no-default-features --features server,http1,query,form,json,multipart,ws -- --deny warnings

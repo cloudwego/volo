@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.4.0-rc.3"
+version = "0.4.0-rc.4"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -94,10 +94,10 @@ reqwest = { workspace = true, features = ["multipart"] }
 tokio-test.workspace = true
 
 [features]
-default = []
+default = ["default-client", "default-server"]
 
-default-client = ["client", "http1", "http2", "json"]
-default-server = ["server", "http1", "http2", "query", "form", "json", "multipart"]
+default-client = ["client", "http1", "json"]
+default-server = ["server", "http1", "query", "form", "json", "multipart"]
 
 full = [
     "client", "server", # core

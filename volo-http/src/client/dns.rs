@@ -90,8 +90,27 @@ impl Default for DnsResolver {
     }
 }
 
+/// `Key` used to cache for [`Discover`].
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct DiscoverKey {
+    /// Service name for Service Discover, it's domain name for DNS by default.
+    pub name: FastStr,
+    /// Port for the service name, it's unnecessary for Service Discover, but it's important to
+    /// cache as key.
+    pub port: u16,
+}
+
+impl DiscoverKey {
+    /// Get [`DiscoverKey`] from an [`Endpoint`].
+    pub fn from_endpoint(ep: &Endpoint) -> Self {
+        let name = ep.service_name();
+        let port = ep.get::<Port>().cloned().unwrap_or_default().0;
+        Self { name, port }
+    }
+}
+
 impl Discover for DnsResolver {
-    type Key = (FastStr, u16);
+    type Key = DiscoverKey;
     type Error = LoadBalanceError;
 
     async fn discover<'s>(
@@ -130,10 +149,7 @@ impl Discover for DnsResolver {
     }
 
     fn key(&self, endpoint: &Endpoint) -> Self::Key {
-        (
-            endpoint.service_name(),
-            endpoint.get::<Port>().cloned().unwrap_or_default().0,
-        )
+        DiscoverKey::from_endpoint(endpoint)
     }
 
     fn watch(&self, _: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {

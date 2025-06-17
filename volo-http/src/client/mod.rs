@@ -33,10 +33,10 @@ use self::{
         header::{Host, UserAgent},
         Timeout,
     },
-    loadbalance::{DefaultLB, LbConfig},
+    loadbalance::{DefaultLb, LbConfig},
     transport::{
         pool,
-        protocol::{ClientConfig, ClientTransport, ClientTransportConfig},
+        protocol::{ClientConfig, ClientTransportConfig},
     },
 };
 use crate::{
@@ -65,7 +65,10 @@ pub mod test_helpers;
 mod transport;
 mod utils;
 
-pub use self::{callopt::CallOpt, request_builder::RequestBuilder, target::Target};
+pub use self::{
+    callopt::CallOpt, request_builder::RequestBuilder, target::Target,
+    transport::protocol::ClientTransport,
+};
 
 #[doc(hidden)]
 pub mod prelude {
@@ -91,7 +94,7 @@ pub struct ClientBuilder<IL, OL, C, LB> {
     tls_config: Option<volo::net::tls::TlsConnector>,
 }
 
-impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
+impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLb> {
     /// Create a new client builder.
     pub fn new() -> Self {
         Self {
@@ -114,7 +117,7 @@ impl ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
     }
 }
 
-impl Default for ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
+impl Default for ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLb> {
     fn default() -> Self {
         Self::new()
     }
@@ -719,7 +722,7 @@ macro_rules! method_requests {
 
 impl Client {
     /// Create a new client builder.
-    pub fn builder() -> ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLB> {
+    pub fn builder() -> ClientBuilder<Identity, Identity, DefaultMkClient, DefaultLb> {
         ClientBuilder::new()
     }
 }

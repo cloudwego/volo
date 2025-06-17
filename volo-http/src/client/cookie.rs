@@ -32,13 +32,14 @@ impl<S> CookieService<S> {
     }
 }
 
-impl<S, B> Service<ClientContext, Request<B>> for CookieService<S>
+impl<S, ReqBody, RespBody> Service<ClientContext, Request<ReqBody>> for CookieService<S>
 where
-    S: Service<ClientContext, Request<B>, Response = Response, Error = ClientError>
+    S: Service<ClientContext, Request<ReqBody>, Response = Response<RespBody>, Error = ClientError>
         + Send
         + Sync
         + 'static,
-    B: Send + 'static,
+    ReqBody: Send,
+    RespBody: Send,
 {
     type Response = S::Response;
     type Error = S::Error;
@@ -46,7 +47,7 @@ where
     async fn call(
         &self,
         cx: &mut ClientContext,
-        mut req: Request<B>,
+        mut req: Request<ReqBody>,
     ) -> Result<Self::Response, Self::Error> {
         let url = req.url();
 
