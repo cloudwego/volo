@@ -9,7 +9,7 @@
 //! need load balance).
 
 use std::{fmt::Debug, sync::Arc};
-
+use async_broadcast::RecvError;
 use faststr::FastStr;
 use motore::{layer::Layer, service::Service};
 use volo::{
@@ -136,7 +136,10 @@ where
                     match channel.recv().await {
                         Ok(recv) => lb.rebalance(recv),
                         Err(err) => {
-                            tracing::warn!("[Volo-HTTP] discovering subscription error: {:?}", err)
+                            match err {
+                                RecvError::Closed => break,
+                                _ => tracing::warn!("[Volo-HTTP] discovering subscription error: {:?}", err)
+                            }
                         }
                     }
                 }

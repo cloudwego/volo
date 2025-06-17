@@ -4206,6 +4206,7 @@ name = "volo-grpc"
 version = "0.10.4"
 dependencies = [
  "anyhow",
+ "async-broadcast",
  "async-stream",
  "base64",
  "bytes",

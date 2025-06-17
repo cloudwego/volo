@@ -1,5 +1,5 @@
 use std::{fmt::Debug, sync::Arc};
-
+use async_broadcast::RecvError;
 use motore::Service;
 use tracing::warn;
 
@@ -34,7 +34,12 @@ where
                 loop {
                     match channel.recv().await {
                         Ok(recv) => lb.rebalance(recv),
-                        Err(err) => warn!("[VOLO] discovering subscription error: {:?}", err),
+                        Err(err) => {
+                            match err { 
+                                RecvError::Closed => break,
+                                _ => warn!("[VOLO] discovering subscription error: {:?}", err) 
+                            }
+                        },
                     }
                 }
             });
