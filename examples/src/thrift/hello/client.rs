@@ -13,6 +13,7 @@ static CLIENT: LazyLock<volo_gen::thrift_gen::hello::HelloServiceClient> = LazyL
 async fn main() {
     let req = volo_gen::thrift_gen::hello::HelloRequest {
         name: "volo".into(),
+        _field_mask: None,
     };
     let resp = CLIENT
         .clone()

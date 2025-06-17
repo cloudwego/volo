@@ -124,7 +124,10 @@ url_path = "0.1"
 walkdir = "2"
 
 # Optional dependencies
-rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = [
+  "std",
+  "tls12",
+] }
 rustls-pemfile = "2"
 rustls-pki-types = "1"
 webpki-roots = "0.26"

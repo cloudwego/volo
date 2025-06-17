@@ -107,6 +107,8 @@ where
             .special_namings(config.common_option.special_namings)
             .common_crate_name(config.common_crate_name)
             .split_generated_files(config.common_option.split_generated_files)
+            .with_descriptor(config.common_option.with_descriptor)
+            .with_field_mask(config.common_option.with_field_mask)
             .pilota_builder
             .compile_with_config(idl_services, pilota_build::Output::Workspace(work_dir));
     }
@@ -161,6 +163,16 @@ where
         items: impl IntoIterator<Item = (PathBuf, Vec<impl Into<String>>)>,
     ) -> Self {
         self.pilota_builder = self.pilota_builder.touch(items);
+        self
+    }
+
+    pub fn with_descriptor(mut self, with_descriptor: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.with_descriptor(with_descriptor);
+        self
+    }
+
+    pub fn with_field_mask(mut self, with_field_mask: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.with_field_mask(with_field_mask);
         self
     }
 }

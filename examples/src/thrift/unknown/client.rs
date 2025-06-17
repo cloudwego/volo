@@ -20,6 +20,7 @@ async fn main() {
         map_with_default: Default::default(),
         echo_union: volo_gen::thrift_gen::echo::EchoUnion::A(true),
         echo_enum: Default::default(),
+        _field_mask: None,
     };
     let resp = CLIENT
         .clone()
