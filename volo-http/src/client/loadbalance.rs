@@ -9,6 +9,7 @@
 //! need load balance).
 
 use std::{fmt::Debug, sync::Arc};
+
 use async_broadcast::RecvError;
 use faststr::FastStr;
 use motore::{layer::Layer, service::Service};
