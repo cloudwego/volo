@@ -24,6 +24,10 @@ pub struct CommonOption {
     pub special_namings: Vec<FastStr>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub split_generated_files: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub with_descriptor: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub with_field_mask: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

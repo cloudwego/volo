@@ -11,6 +11,7 @@ impl volo_gen::thrift_gen::echo_unknown::EchoService for S {
             name: format!("{}", req.name).into(),
             echo_union: req.echo_union,
             _unknown_fields: req._unknown_fields,
+            _field_mask: None,
         };
         Ok(resp)
     }

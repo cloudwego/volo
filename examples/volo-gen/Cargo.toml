@@ -15,9 +15,12 @@ anyhow.workspace = true
 tokio = { workspace = true, features = ["full"] }
 
 pilota.workspace = true
+pilota-thrift-fieldmask.workspace = true
+pilota-thrift-reflect.workspace = true
 volo = { path = "../../volo" }
 volo-grpc = { path = "../../volo-grpc" }
 volo-thrift = { path = "../../volo-thrift" }
+
 
 [build-dependencies]
 volo-build = { path = "../../volo-build" }
