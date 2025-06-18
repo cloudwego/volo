@@ -36,7 +36,7 @@ use self::{
     loadbalance::{DefaultLb, LbConfig},
     transport::{
         pool,
-        protocol::{ClientConfig, ClientTransportConfig},
+        protocol::{ClientConfig, ClientTransport, ClientTransportConfig},
     },
 };
 use crate::{
@@ -62,12 +62,12 @@ mod request_builder;
 pub mod target;
 #[cfg(test)]
 pub mod test_helpers;
-mod transport;
+pub mod transport;
 mod utils;
 
 pub use self::{
     callopt::CallOpt, request_builder::RequestBuilder, target::Target,
-    transport::protocol::ClientTransport,
+    transport::protocol,
 };
 
 #[doc(hidden)]

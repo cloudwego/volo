@@ -360,10 +360,11 @@ impl<S, B> RequestBuilder<S, B> {
         let ver = match self.version {
             Some(ver) => ver,
             None => {
-                if cfg!(feature = "http2") {
-                    Version::HTTP_2
-                } else {
+                // Use HTTP/1.1 by default
+                if cfg!(feature = "http1") {
                     Version::HTTP_11
+                } else {
+                    Version::HTTP_2
                 }
             }
         };

@@ -118,7 +118,7 @@ impl Discover for DnsResolver {
         endpoint: &'s Endpoint,
     ) -> Result<Vec<Arc<Instance>>, Self::Error> {
         if endpoint.service_name_ref().is_empty() && endpoint.address().is_none() {
-            tracing::error!("[Volo-HTTP] DnsResolver: no domain name found");
+            tracing::error!("[Volo-HTTP] DnsResolver: no domain name or address found");
             return Err(LoadBalanceError::Discover(Box::new(no_address())));
         }
         if let Some(address) = endpoint.address() {

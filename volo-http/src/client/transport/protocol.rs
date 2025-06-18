@@ -1,3 +1,5 @@
+//! Protocol related implementations
+
 use std::{error::Error, str::FromStr, sync::LazyLock};
 
 use futures::{
@@ -81,7 +83,7 @@ pub struct ClientTransport<B = Body> {
     pool: Pool<PoolKey, HttpConnection<B>>,
 }
 
-pub type PoolKey = (Scheme, Address);
+type PoolKey = (Scheme, Address);
 
 impl<B> ClientTransport<B> {
     pub(crate) fn new(
@@ -335,7 +337,7 @@ where
     }
 }
 
-pub enum HttpConnection<B> {
+enum HttpConnection<B> {
     #[cfg(feature = "http1")]
     H1(conn::http1::SendRequest<B>),
     #[cfg(feature = "http2")]
