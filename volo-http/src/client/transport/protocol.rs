@@ -63,6 +63,14 @@ impl ClientTransportConfig {
     }
 }
 
+/// Transport service of HTTP Client.
+///
+/// This service will connect to the [`Address`] of callee's [`Endpoint`] in [`ClientContext`], then
+/// send a [`Request`] to the destination server, and return a [`Response`] the server response.
+///
+/// [`Endpoint`]: volo::context::Endpoint
+/// [`Request`]: http::request::Request
+/// [`Response`]: http::response::Response
 pub struct ClientTransport<B = Body> {
     #[cfg(feature = "http1")]
     h1_client: conn::http1::Builder,

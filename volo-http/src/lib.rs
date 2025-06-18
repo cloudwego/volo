@@ -31,3 +31,6 @@ pub mod prelude {
 
 #[doc(hidden)]
 pub use self::prelude::*;
+
+#[cfg(not(any(feature = "http1", feature = "http2")))]
+compile_error!("At least one of features \"http1\" and \"http2\" needs to be enabled!");
