@@ -9,6 +9,7 @@ impl volo_gen::thrift_gen::hello::HelloService for S {
     ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::ServerError> {
         let resp = volo_gen::thrift_gen::hello::HelloResponse {
             message: format!("Hello, {}!", req.name).into(),
+            _field_mask: None,
         };
         Ok(resp)
     }
