@@ -6,6 +6,7 @@
 //! For users need to specify some options at call time, they may use [`CallOpt`].
 
 mod callopt;
+pub mod dns;
 mod meta;
 
 use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
