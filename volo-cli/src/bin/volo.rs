@@ -43,10 +43,10 @@ fn main() {
         1 => log::set_max_level(log::LevelFilter::Debug),
         _ => log::set_max_level(log::LevelFilter::Trace),
     }
-    debug!("Command parse result: {:?}", cmd);
+    debug!("Command parse result: {cmd:?}");
     let res = cmd.run();
     if let Err(e) = res.as_ref() {
-        error!("{}", e);
+        error!("{e}");
     }
 
     if res.is_err() {

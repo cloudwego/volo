@@ -3,7 +3,6 @@
 // C:\Windows\System32\drivers\etc\hosts on Windows)
 
 use pilota::FastStr;
-use volo::net::Address;
 use volo_gen::proto_gen::helloworld::{GreeterClient, GreeterClientBuilder};
 use volo_grpc::client::dns::DnsResolver;
 
@@ -17,15 +16,8 @@ async fn main() {
         .await
         .expect("DNS resolution failed");
 
-    let socket_addr = match address {
-        Address::Ip(addr) => addr,
-        _ => panic!("Unexpected address variant"),
-    };
-
     // Build a gRPC client for the Greeter service targeting the resolved socket address
-    let client: GreeterClient = GreeterClientBuilder::new("hello")
-        .address(socket_addr)
-        .build();
+    let client: GreeterClient = GreeterClientBuilder::new("hello").address(address).build();
 
     let req = volo_gen::proto_gen::helloworld::HelloRequest {
         name: FastStr::from_static_str("Volo"),
