@@ -7,7 +7,7 @@ use std::collections::HashMap;
 use http::header::{HeaderName, HeaderValue};
 use serde::Deserialize;
 
-#[cfg(not(feature = "http2"))]
+#[cfg(feature = "http1")]
 mod http1_only;
 #[cfg(feature = "__tls")]
 mod tls;
