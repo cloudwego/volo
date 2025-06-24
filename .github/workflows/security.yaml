@@ -7,6 +7,7 @@ on:
       - '**/Cargo.lock'
 jobs:
   security-audit:
+    permissions: write-all
     runs-on: [self-hosted, Linux, amd64]
     steps:
       - uses: actions/checkout@v4

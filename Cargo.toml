@@ -27,9 +27,9 @@ rust-version = "1.80.0"
 # pilota = "0.11"
 # pilota-build = "0.11"
 # pilota-thrift-parser = "0.11"
-pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/pb_unknown_fields" }
-pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/pb_unknown_fields" }
-pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/pb_unknown_fields" }
+pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
+pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
 
 motore = "0.4"
 metainfo = "0.7"
@@ -160,4 +160,3 @@ overflow-checks = false
 # pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
 # motore = { git = "https://github.com/cloudwego/motore.git", branch = "main" }
 # metainfo = { git = "https://github.com/cloudwego/metainfo.git", branch = "main"}
-linkedbytes = { git = "https://github.com/Ggiggle/linkedbytes.git", branch = "feat/into_iter" }

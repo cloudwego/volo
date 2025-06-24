@@ -174,7 +174,7 @@ impl<T: Message + Default> RecvStream<T> {
                     };
                     return Err(Status::new(Code::Internal, message));
                 }
-                DefaultDecoder::<T>::decode(&mut self.decoder, self.decompress_buf.clone().freeze())
+                DefaultDecoder::<T>::decode(&mut self.decoder, self.decompress_buf.split().freeze())
             } else {
                 DefaultDecoder::<T>::decode(&mut self.decoder, buf.freeze())
             };
@@ -223,7 +223,7 @@ impl<T: Message + Default> Stream for RecvStream<T> {
                     return Poll::Ready(Some(Err(status)));
                 }
                 None => {
-                    if self.buf.has_remaining_mut() {
+                    if self.buf.has_remaining() {
                         debug!("[VOLO] unexpected EOF decoding stream");
                         return Poll::Ready(Some(Err(Status::new(
                             Code::Internal,

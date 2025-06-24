@@ -27,6 +27,7 @@ impl volo_gen::proto_gen::echo::Echo for E {
     {
         let resp = volo_gen::proto_gen::echo::EchoResponse {
             message: req.get_ref().message.to_string().into(),
+            _unknown_fields: Default::default(),
         };
         Ok(volo_grpc::Response::new(resp))
     }
