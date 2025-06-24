@@ -63,11 +63,11 @@ impl DnsResolver {
 impl Default for DnsResolver {
     fn default() -> Self {
         let (conf, mut opts) = hickory_resolver::system_conf::read_system_conf()
-            .expect("[Volo-HTTP] DnsResolver: failed to parse dns config");
+            .expect("[Volo-gRPC] DnsResolver: failed to parse dns config");
         if conf
             .name_servers()
             .first()
-            .expect("[Volo-HTTP] DnsResolver: no nameserver found")
+            .expect("[Volo-gRPC] DnsResolver: no nameserver found")
             .socket_addr
             .is_ipv6()
         {
@@ -105,7 +105,7 @@ impl Discover for DnsResolver {
         endpoint: &'s Endpoint,
     ) -> Result<Vec<Arc<Instance>>, Self::Error> {
         if endpoint.service_name_ref().is_empty() && endpoint.address().is_none() {
-            tracing::error!("[Volo-HTTP] DnsResolver: no domain name found");
+            tracing::error!("[Volo-gRPC] DnsResolver: no domain name found");
             return Err(LoadBalanceError::Discover("missing target address".into()));
         }
         if let Some(address) = endpoint.address() {
@@ -131,7 +131,7 @@ impl Discover for DnsResolver {
             };
             return Ok(vec![Arc::new(instance)]);
         };
-        tracing::error!("[Volo-HTTP] DnsResolver: no address resolved");
+        tracing::error!("[Volo-gRPC] DnsResolver: no address resolved");
         Err(LoadBalanceError::Discover("bad host name".into()))
     }
 

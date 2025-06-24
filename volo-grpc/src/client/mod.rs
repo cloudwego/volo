@@ -21,7 +21,7 @@ use motore::{
 use volo::{
     client::{MkClient, WithOptService},
     context::{Endpoint, Role, RpcInfo},
-    discovery::{Discover, DummyDiscover},
+    discovery::{Discover, DnsResolver},
     loadbalance::{random::WeightedRandomBalance, MkLbLayer},
     net::Address,
     FastStr,
@@ -60,7 +60,7 @@ impl<C, T, U>
         Identity,
         Identity,
         C,
-        LbConfig<WeightedRandomBalance<<DummyDiscover as Discover>::Key>, DummyDiscover>,
+        LbConfig<WeightedRandomBalance<<DnsResolver as Discover>::Key>, DnsResolver>,
         T,
         U,
     >
@@ -76,7 +76,7 @@ impl<C, T, U>
             inner_layer: Identity::new(),
             outer_layer: Identity::new(),
             mk_client: service_client,
-            mk_lb: LbConfig::new(WeightedRandomBalance::new(), DummyDiscover {}),
+            mk_lb: LbConfig::new(WeightedRandomBalance::new(), DnsResolver::default()),
             _marker: PhantomData,
 
             #[cfg(feature = "__tls")]
@@ -540,6 +540,7 @@ where
     }
 }
 
+#[derive(Debug)]
 /// A struct indicating the rpc configuration of the client.
 struct ClientInner {
     callee_name: FastStr,

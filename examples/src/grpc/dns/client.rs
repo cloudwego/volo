@@ -4,20 +4,11 @@
 
 use pilota::FastStr;
 use volo_gen::proto_gen::helloworld::{GreeterClient, GreeterClientBuilder};
-use volo_grpc::client::dns::DnsResolver;
 
 #[volo::main]
 async fn main() {
-    let resolver = DnsResolver::default();
-
-    // Perform DNS resolution for "example.com" on port 80
-    let address = resolver
-        .resolve("example.com", 80)
-        .await
-        .expect("DNS resolution failed");
-
-    // Build a gRPC client for the Greeter service targeting the resolved socket address
-    let client: GreeterClient = GreeterClientBuilder::new("hello").address(address).build();
+    // example.com here can also be replaced with example.com:80
+    let client: GreeterClient = GreeterClientBuilder::new("example.com").build();
 
     let req = volo_gen::proto_gen::helloworld::HelloRequest {
         name: FastStr::from_static_str("Volo"),
