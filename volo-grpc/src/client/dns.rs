@@ -2,7 +2,7 @@
 //!
 //! This module implements [`DnsResolver`] as a [`Discover`] for client.
 
-use std::{net::SocketAddr, ops::Deref, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
 use async_broadcast::Receiver;
 use faststr::FastStr;
@@ -11,30 +11,13 @@ use hickory_resolver::{
     name_server::TokioConnectionProvider,
     Resolver, TokioResolver,
 };
+use http::uri::Port;
 use volo::{
     context::Endpoint,
     discovery::{Change, Discover, Instance},
     loadbalance::error::LoadBalanceError,
     net::Address,
 };
-
-/// The port for `DnsResolver`, and only used for `DnsResolver`.
-///
-/// When resolving domain name, the response is only an IP address without port, but to access the
-/// destination server, the port is needed.
-///
-/// For setting port to `DnsResolver`, you can insert it into `Endpoint` of `callee` in
-/// `ClientContext`, the resolver will apply it.
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Port(pub u16);
-
-impl Deref for Port {
-    type Target = u16;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 /// A service discover implementation for DNS.
 #[derive(Clone)]
@@ -91,7 +74,10 @@ impl DiscoverKey {
     /// Get [`DiscoverKey`] from an [`Endpoint`].
     pub fn from_endpoint(ep: &Endpoint) -> Self {
         let name = ep.service_name();
-        let port = ep.get::<Port>().cloned().unwrap_or_default().0;
+        let port = ep
+            .get::<Port<u16>>()
+            .map(|p| p.as_u16())
+            .unwrap_or_default();
         Self { name, port }
     }
 }
@@ -105,7 +91,7 @@ impl Discover for DnsResolver {
         endpoint: &'s Endpoint,
     ) -> Result<Vec<Arc<Instance>>, Self::Error> {
         if endpoint.service_name_ref().is_empty() && endpoint.address().is_none() {
-            tracing::error!("[Volo-gRPC] DnsResolver: no domain name found");
+            tracing::error!("DnsResolver: no domain name found");
             return Err(LoadBalanceError::Discover("missing target address".into()));
         }
         if let Some(address) = endpoint.address() {
@@ -116,14 +102,27 @@ impl Discover for DnsResolver {
             };
             return Ok(vec![Arc::new(instance)]);
         }
-        let port = match endpoint.get::<Port>() {
-            Some(port) => port.0,
-            None => {
-                unreachable!();
-            }
+
+        let service_name = endpoint.service_name_ref();
+        // Parse service name to get host name and port number (if any)
+        let (host, port_str) = if let Some((host, port_str)) = service_name.rsplit_once(':') {
+            (host, Some(port_str))
+        } else {
+            (service_name, None)
         };
 
-        if let Some(address) = self.resolve(endpoint.service_name_ref(), port).await {
+        // Default to port 80 if port number does not exist
+        let port = match endpoint.get::<Port<u16>>() {
+            Some(port) => port.as_u16(),
+            None => match port_str {
+                Some(port_str) => port_str
+                    .parse::<u16>()
+                    .map_err(|_| LoadBalanceError::Discover("invalid port number".into()))?,
+                None => 80,
+            },
+        };
+
+        if let Some(address) = self.resolve(host, port).await {
             let instance = Instance {
                 address,
                 weight: 10,
@@ -131,7 +130,7 @@ impl Discover for DnsResolver {
             };
             return Ok(vec![Arc::new(instance)]);
         };
-        tracing::error!("[Volo-gRPC] DnsResolver: no address resolved");
+        tracing::error!("DnsResolver: no address resolved");
         Err(LoadBalanceError::Discover("bad host name".into()))
     }
 

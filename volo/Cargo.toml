@@ -29,7 +29,6 @@ motore.workspace = true
 async-broadcast.workspace = true
 dashmap.workspace = true
 faststr.workspace = true
-hickory-resolver.workspace = true
 futures.workspace = true
 libc.workspace = true
 metainfo.workspace = true

@@ -21,13 +21,13 @@ use motore::{
 use volo::{
     client::{MkClient, WithOptService},
     context::{Endpoint, Role, RpcInfo},
-    discovery::{Discover, DnsResolver},
+    discovery::Discover,
     loadbalance::{random::WeightedRandomBalance, MkLbLayer},
     net::Address,
     FastStr,
 };
 
-use self::layer::timeout::TimeoutLayer;
+use self::{dns::DnsResolver, layer::timeout::TimeoutLayer};
 use crate::{
     codec::compression::CompressionEncoding,
     context::{ClientContext, Config},

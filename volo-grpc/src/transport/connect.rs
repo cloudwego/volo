@@ -115,6 +115,7 @@ impl tower::Service<hyper::Uri> for Connector {
                 }
                 _ => unimplemented!(),
             };
+
             Ok(ConnectionWrapper {
                 inner: connector.make_connection(target).await?,
             })

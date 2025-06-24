@@ -4133,7 +4133,6 @@ dependencies = [
  "dashmap",
  "faststr",
  "futures",
- "hickory-resolver",
  "libc",
  "metainfo",
  "motore",
