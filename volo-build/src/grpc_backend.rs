@@ -513,7 +513,7 @@ impl CodegenBackend for VoloGrpcBackend {
                     ::volo::layer::Identity,
                     ::volo::layer::Identity,
                     {mk_client_name},
-                    ::volo_grpc::layer::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<(::volo_grpc::client::dns::DiscoverKey)>, ::volo_grpc::client::dns::DnsResolver>,
+                    ::volo_grpc::layer::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<(::volo::FastStr)>, ::volo_grpc::client::dns::DnsResolver>,
                     {req_enum_name_send},
                     {resp_enum_name_recv},
                 > {{

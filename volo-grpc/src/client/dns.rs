@@ -11,7 +11,6 @@ use hickory_resolver::{
     name_server::TokioConnectionProvider,
     Resolver, TokioResolver,
 };
-use http::uri::Port;
 use volo::{
     context::Endpoint,
     discovery::{Change, Discover, Instance},
@@ -60,30 +59,8 @@ impl Default for DnsResolver {
     }
 }
 
-/// `Key` used to cache for [`Discover`].
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct DiscoverKey {
-    /// Service name for Service Discover, it's domain name for DNS by default.
-    pub name: FastStr,
-    /// Port for the service name, it's unnecessary for Service Discover, but it's important to
-    /// cache as key.
-    pub port: u16,
-}
-
-impl DiscoverKey {
-    /// Get [`DiscoverKey`] from an [`Endpoint`].
-    pub fn from_endpoint(ep: &Endpoint) -> Self {
-        let name = ep.service_name();
-        let port = ep
-            .get::<Port<u16>>()
-            .map(|p| p.as_u16())
-            .unwrap_or_default();
-        Self { name, port }
-    }
-}
-
 impl Discover for DnsResolver {
-    type Key = DiscoverKey;
+    type Key = FastStr;
     type Error = LoadBalanceError;
 
     async fn discover<'s>(
@@ -112,14 +89,11 @@ impl Discover for DnsResolver {
         };
 
         // Default to port 80 if port number does not exist
-        let port = match endpoint.get::<Port<u16>>() {
-            Some(port) => port.as_u16(),
-            None => match port_str {
-                Some(port_str) => port_str
-                    .parse::<u16>()
-                    .map_err(|_| LoadBalanceError::Discover("invalid port number".into()))?,
-                None => 80,
-            },
+        let port = match port_str {
+            Some(port_str) => port_str
+                .parse::<u16>()
+                .map_err(|_| LoadBalanceError::Discover("invalid port number".into()))?,
+            None => 80,
         };
 
         if let Some(address) = self.resolve(host, port).await {
@@ -135,7 +109,7 @@ impl Discover for DnsResolver {
     }
 
     fn key(&self, endpoint: &Endpoint) -> Self::Key {
-        DiscoverKey::from_endpoint(endpoint)
+        endpoint.service_name.clone()
     }
 
     fn watch(&self, _: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {
