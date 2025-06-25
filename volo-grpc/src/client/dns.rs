@@ -93,7 +93,7 @@ impl Discover for DnsResolver {
                 } else {
                     80
                 };
-                
+
                 (ip_part, port)
             } else {
                 return Err(LoadBalanceError::Discover("invalid IPv6 format".into()));
