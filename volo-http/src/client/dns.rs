@@ -2,7 +2,11 @@
 //!
 //! This module implements [`DnsResolver`] as a [`Discover`] for client.
 
-use std::{net::SocketAddr, ops::Deref, sync::Arc};
+use std::{
+    net::{IpAddr, SocketAddr},
+    ops::Deref,
+    sync::Arc,
+};
 
 use async_broadcast::Receiver;
 use faststr::FastStr;
@@ -55,12 +59,11 @@ impl DnsResolver {
         Self { resolver }
     }
 
-    /// Resolve a host to an IP address and then set the port to it for getting an [`Address`].
-    pub async fn resolve(&self, host: &str, port: u16) -> Option<Address> {
+    /// Resolve a host to an IP address.
+    pub async fn resolve(&self, host: &str) -> Option<IpAddr> {
         // Note that the Resolver will try to parse the host as an IP address first, so we don't
         // need to parse it manually.
-        let mut iter = self.resolver.lookup_ip(host).await.ok()?.into_iter();
-        Some(Address::Ip(SocketAddr::new(iter.next()?, port)))
+        self.resolver.lookup_ip(host).await.ok()?.into_iter().next()
     }
 }
 
@@ -117,17 +120,12 @@ impl Discover for DnsResolver {
         &'s self,
         endpoint: &'s Endpoint,
     ) -> Result<Vec<Arc<Instance>>, Self::Error> {
-        if endpoint.service_name_ref().is_empty() && endpoint.address().is_none() {
-            tracing::error!("[Volo-HTTP] DnsResolver: no domain name or address found");
-            return Err(LoadBalanceError::Discover(Box::new(no_address())));
+        if endpoint.address().is_some() {
+            return Ok(Vec::new());
         }
-        if let Some(address) = endpoint.address() {
-            let instance = Instance {
-                address,
-                weight: 10,
-                tags: Default::default(),
-            };
-            return Ok(vec![Arc::new(instance)]);
+        if endpoint.service_name_ref().is_empty() {
+            tracing::error!("[Volo-HTTP] DnsResolver: no domain name found");
+            return Err(LoadBalanceError::Discover(Box::new(no_address())));
         }
         let port = match endpoint.get::<Port>() {
             Some(port) => port.0,
@@ -136,7 +134,8 @@ impl Discover for DnsResolver {
             }
         };
 
-        if let Some(address) = self.resolve(endpoint.service_name_ref(), port).await {
+        if let Some(ip) = self.resolve(endpoint.service_name_ref()).await {
+            let address = Address::Ip(SocketAddr::new(ip, port));
             let instance = Instance {
                 address,
                 weight: 10,
