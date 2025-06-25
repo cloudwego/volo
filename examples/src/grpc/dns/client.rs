@@ -14,7 +14,7 @@ async fn main() {
     // - 127.0.0.1:80
     // - [::1]
     // - [::1]:80
-    let client: GreeterClient = GreeterClientBuilder::new("example.com").build();
+    let client: GreeterClient = GreeterClientBuilder::new("github.").build();
 
     let req = volo_gen::proto_gen::helloworld::HelloRequest {
         name: FastStr::from_static_str("Volo"),

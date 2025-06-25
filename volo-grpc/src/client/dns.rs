@@ -199,6 +199,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_domain() {
+        let resolver = DnsResolver::default();
+        let endpoint = Endpoint {
+            service_name: FastStr::from("github.com"),
+            ..Default::default()
+        };
+        let service_name = endpoint.service_name_ref();
+        let result = parse_host_and_port(service_name).unwrap();
+        assert_eq!(result, ("github.com", 80));
+        let result = resolver.discover(&endpoint).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_domain_with_port() {
+        let resolver = DnsResolver::default();
+        let endpoint = Endpoint {
+            service_name: FastStr::from("github.com:80"),
+            ..Default::default()
+        };
+        let service_name = endpoint.service_name_ref();
+        let result = parse_host_and_port(service_name).unwrap();
+        assert_eq!(result, ("github.com", 80));
+        let result = resolver.discover(&endpoint).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
     async fn test_ipv6_invalid() {
         let resolver = DnsResolver::default();
         let endpoint = Endpoint {
@@ -217,6 +245,20 @@ mod tests {
         let resolver = DnsResolver::default();
         let endpoint = Endpoint {
             service_name: FastStr::from("127.0.1:80"),
+            ..Default::default()
+        };
+        let result = resolver.discover(&endpoint).await;
+        assert!(matches!(
+            result,
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == "bad host name"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_domain_invalid() {
+        let resolver = DnsResolver::default();
+        let endpoint = Endpoint {
+            service_name: FastStr::from("github."),
             ..Default::default()
         };
         let result = resolver.discover(&endpoint).await;
