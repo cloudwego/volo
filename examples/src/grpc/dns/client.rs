@@ -7,7 +7,13 @@ use volo_gen::proto_gen::helloworld::{GreeterClient, GreeterClientBuilder};
 
 #[volo::main]
 async fn main() {
-    // example.com here can also be replaced with example.com:80
+    // The input here can be of the following formats:
+    // - example.com
+    // - example.com:80
+    // - 127.0.0.1
+    // - 127.0.0.1:80
+    // - [::1]
+    // - [::1]:80
     let client: GreeterClient = GreeterClientBuilder::new("example.com").build();
 
     let req = volo_gen::proto_gen::helloworld::HelloRequest {

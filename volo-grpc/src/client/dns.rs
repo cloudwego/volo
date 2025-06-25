@@ -81,19 +81,39 @@ impl Discover for DnsResolver {
         }
 
         let service_name = endpoint.service_name_ref();
-        // Parse service name to get host name and port number (if any)
-        let (host, port_str) = if let Some((host, port_str)) = service_name.rsplit_once(':') {
-            (host, Some(port_str))
+        let (host, port) = if service_name.starts_with('[') {
+            // Parse IPv6 with optional port
+            if let Some(end_bracket) = service_name.find(']') {
+                let ip_part = &service_name[1..end_bracket];
+                let port = if let Some(port_str) = service_name[end_bracket + 1..].strip_prefix(':')
+                {
+                    port_str
+                        .parse::<u16>()
+                        .map_err(|_| LoadBalanceError::Discover("invalid port number".into()))?
+                } else {
+                    80
+                };
+                
+                (ip_part, port)
+            } else {
+                return Err(LoadBalanceError::Discover("invalid IPv6 format".into()));
+            }
         } else {
-            (service_name, None)
-        };
+            // Parse IPv4 or domain with optional port
+            let (host, port_str) = if let Some((host, port_str)) = service_name.rsplit_once(':') {
+                (host, Some(port_str))
+            } else {
+                (service_name, None)
+            };
 
-        // Default to port 80 if port number does not exist
-        let port = match port_str {
-            Some(port_str) => port_str
-                .parse::<u16>()
-                .map_err(|_| LoadBalanceError::Discover("invalid port number".into()))?,
-            None => 80,
+            let port = match port_str {
+                Some(port_str) => port_str
+                    .parse::<u16>()
+                    .map_err(|_| LoadBalanceError::Discover("invalid port number".into()))?,
+                None => 80,
+            };
+
+            (host, port)
         };
 
         if let Some(address) = self.resolve(host, port).await {
