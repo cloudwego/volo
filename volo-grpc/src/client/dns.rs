@@ -18,6 +18,12 @@ use volo::{
     net::Address,
 };
 
+// Error message constants
+pub const ERR_INVALID_PORT: &str = "invalid port number";
+pub const ERR_INVALID_IPV6: &str = "invalid IPv6 format";
+pub const ERR_BAD_HOST: &str = "bad host name";
+pub const ERR_MISSING_ADDR: &str = "missing target address";
+
 /// A service discover implementation for DNS.
 #[derive(Clone)]
 pub struct DnsResolver {
@@ -69,7 +75,7 @@ impl Discover for DnsResolver {
     ) -> Result<Vec<Arc<Instance>>, Self::Error> {
         if endpoint.service_name_ref().is_empty() && endpoint.address().is_none() {
             tracing::error!("DnsResolver: no domain name found");
-            return Err(LoadBalanceError::Discover("missing target address".into()));
+            return Err(LoadBalanceError::Discover(ERR_MISSING_ADDR.into()));
         }
         if let Some(address) = endpoint.address() {
             let instance = Instance {
@@ -92,7 +98,7 @@ impl Discover for DnsResolver {
             return Ok(vec![Arc::new(instance)]);
         };
         tracing::error!("DnsResolver: no address resolved");
-        Err(LoadBalanceError::Discover("bad host name".into()))
+        Err(LoadBalanceError::Discover(ERR_BAD_HOST.into()))
     }
 
     fn key(&self, endpoint: &Endpoint) -> Self::Key {
@@ -112,13 +118,13 @@ fn parse_host_and_port(service_name: &str) -> Result<(&str, u16), LoadBalanceErr
             let port = if let Some(port_str) = rest[end_bracket + 1..].strip_prefix(':') {
                 port_str
                     .parse::<u16>()
-                    .map_err(|_| LoadBalanceError::Discover("invalid port number".into()))?
+                    .map_err(|_| LoadBalanceError::Discover(ERR_INVALID_PORT.into()))?
             } else {
                 80
             };
             return Ok((ip_part, port));
         } else {
-            return Err(LoadBalanceError::Discover("invalid IPv6 format".into()));
+            return Err(LoadBalanceError::Discover(ERR_INVALID_IPV6.into()));
         }
     }
 
@@ -132,7 +138,7 @@ fn parse_host_and_port(service_name: &str) -> Result<(&str, u16), LoadBalanceErr
     let port = match port_str_opt {
         Some(port_str) => port_str
             .parse::<u16>()
-            .map_err(|_| LoadBalanceError::Discover("invalid port number".into()))?,
+            .map_err(|_| LoadBalanceError::Discover(ERR_INVALID_PORT.into()))?,
         None => 80,
     };
 
@@ -236,7 +242,7 @@ mod tests {
         let result = resolver.discover(&endpoint).await;
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "bad host name"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_BAD_HOST
         ));
     }
 
@@ -250,7 +256,7 @@ mod tests {
         let result = resolver.discover(&endpoint).await;
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "bad host name"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_BAD_HOST
         ));
     }
 
@@ -264,7 +270,7 @@ mod tests {
         let result = resolver.discover(&endpoint).await;
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "bad host name"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_BAD_HOST
         ));
     }
 
@@ -274,31 +280,31 @@ mod tests {
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "[::1]:";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "[::1]:70000";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "[::1]:-1";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "[::1";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid IPv6 format"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_IPV6
         ));
     }
 
@@ -308,25 +314,25 @@ mod tests {
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "127.0.0.1:";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "127.0.0.1:70000";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "127.0.0.1:-1";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
     }
 
@@ -336,25 +342,25 @@ mod tests {
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "example.com:";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "example.com:70000";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
         let service_name = "example.com:-1";
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == "invalid port number"
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_PORT
         ));
     }
 }
