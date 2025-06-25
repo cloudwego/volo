@@ -81,13 +81,13 @@ path = "src/thrift/unknown/server.rs"
 name = "unknown-thrift-client"
 path = "src/thrift/unknown/client.rs"
 
-# grpc-web
+#grpc-dns
 [[bin]]
-name = "grpc-web-server"
-path = "src/grpc/grpc-web/server.rs"
+name = "grpc-dns-client"
+path = "src/grpc/dns/client.rs"
 [[bin]]
-name = "grpc-web-client"
-path = "src/grpc/grpc-web/client.rs"
+name = "grpc-dns-server"
+path = "src/grpc/dns/server.rs"
 
 #grpc-timeout
 [[bin]]
@@ -99,6 +99,14 @@ path = "src/grpc/timeout/service_a.rs"
 [[bin]]
 name = "grpc-timeout-service_b"
 path = "src/grpc/timeout/service_b.rs"
+
+# grpc-web
+[[bin]]
+name = "grpc-web-server"
+path = "src/grpc/grpc-web/server.rs"
+[[bin]]
+name = "grpc-web-client"
+path = "src/grpc/grpc-web/client.rs"
 
 # http
 [[bin]]
