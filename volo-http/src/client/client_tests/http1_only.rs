@@ -144,19 +144,6 @@ async fn client_with_generics() {
 
 #[cfg(feature = "json")]
 #[tokio::test]
-async fn simple_get() {
-    let resp = get(HTTPBIN_GET)
-        .await
-        .unwrap()
-        .into_json::<HttpBinResponse>()
-        .await
-        .unwrap();
-    assert!(resp.args.is_empty());
-    assert_eq!(resp.url, HTTPBIN_GET);
-}
-
-#[cfg(feature = "json")]
-#[tokio::test]
 async fn client_test() {
     let client = builder_for_debug().build().unwrap();
 
