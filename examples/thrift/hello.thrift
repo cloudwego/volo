@@ -2,6 +2,7 @@ namespace rs hello
 
 struct HelloRequest {
     1: required string name,
+    2: string hello,
 }
 
 struct HelloResponse {

@@ -20,6 +20,7 @@ async fn main() {
     let futs = |i| async move {
         let req = volo_gen::thrift_gen::hello::HelloRequest {
             name: format!("volo{i}").into(),
+            hello: Some("world".into()),
             _field_mask: None,
         };
         let resp = CLIENT

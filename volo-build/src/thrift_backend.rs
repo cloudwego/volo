@@ -848,7 +848,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
     fn codegen_register_mod_file_descriptor(
         &self,
         stream: &mut String,
-        mods: &Vec<(Arc<[Symbol]>, Arc<PathBuf>)>,
+        mods: &[(Arc<[Symbol]>, Arc<PathBuf>)],
     ) {
         self.inner
             .codegen_register_mod_file_descriptor(stream, mods)
