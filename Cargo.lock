@@ -2363,7 +2363,8 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.12.0"
-source = "git+https://github.com/cloudwego/pilota.git?branch=main#227041ad4c0a5eca5b08bd6573968c41e274a3b1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3c83c849a88fc9d71b69e47b3185ad78f9608794e2532168047b33ae7f44adfe"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2384,7 +2385,8 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.12.0"
-source = "git+https://github.com/cloudwego/pilota.git?branch=main#227041ad4c0a5eca5b08bd6573968c41e274a3b1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e0f2a39e7367fa99922afb84a2112a03805921b989ec7050ede42fa4c127f0bf"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2421,7 +2423,8 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-fieldmask"
 version = "0.1.0"
-source = "git+https://github.com/cloudwego/pilota.git?branch=main#227041ad4c0a5eca5b08bd6573968c41e274a3b1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bab6afa3c4bb2a930a1ed8e03367ada0933753bd004c7c7d53bde21790c30e3f"
 dependencies = [
  "ahash",
  "faststr",
@@ -2435,7 +2438,8 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.12.0"
-source = "git+https://github.com/cloudwego/pilota.git?branch=main#227041ad4c0a5eca5b08bd6573968c41e274a3b1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d69a4bf3b2058dae0712ccb8b412ff06cf9dbca017e32743370de8e39b10205"
 dependencies = [
  "bytes",
  "faststr",
@@ -2445,7 +2449,8 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-reflect"
 version = "0.1.0"
-source = "git+https://github.com/cloudwego/pilota.git?branch=main#227041ad4c0a5eca5b08bd6573968c41e274a3b1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfd7265747b3aad84071203baee7bfb0cf2057bf8b7b08088560f8817cc900d8"
 dependencies = [
  "ahash",
  "bytes",

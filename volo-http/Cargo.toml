@@ -57,14 +57,14 @@ url.workspace = true
 # =====optional=====
 
 # server optional
-ipnet = { workspace = true, optional = true }      # client ip
-matchit = { workspace = true, optional = true }    # route matching
-memchr = { workspace = true, optional = true }     # sse
+ipnet = { workspace = true, optional = true } # client ip
+matchit = { workspace = true, optional = true } # route matching
+memchr = { workspace = true, optional = true } # sse
 scopeguard = { workspace = true, optional = true } # defer
 
 # client optional
-async-broadcast = { workspace = true, optional = true }  # service discover
-chrono = { workspace = true, optional = true }           # stat
+async-broadcast = { workspace = true, optional = true } # service discover
+chrono = { workspace = true, optional = true } # stat
 hickory-resolver = { workspace = true, optional = true } # dns resolver
 mime_guess = { workspace = true, optional = true }
 
@@ -102,17 +102,11 @@ default-client = ["client", "http1", "json"]
 default-server = ["server", "http1", "query", "form", "json", "multipart"]
 
 full = [
-    "client",
-    "server",    # core
-    "http1",
-    "http2",     # protocol
-    "query",
-    "form",
-    "json",      # serde
-    "tls",       # https
-    "cookie",
-    "multipart",
-    "ws",        # exts
+    "client", "server", # core
+    "http1", "http2", # protocol
+    "query", "form", "json", # serde
+    "tls", # https
+    "cookie", "multipart", "ws", # exts
 ]
 
 http1 = ["hyper/http1", "hyper-util/http1"]
@@ -120,20 +114,14 @@ http2 = ["hyper/http2", "hyper-util/http2"]
 
 client = [
     "hyper/client",
-    "dep:async-broadcast",
-    "dep:chrono",
-    "dep:hickory-resolver",
+    "dep:async-broadcast", "dep:chrono", "dep:hickory-resolver",
 ] # client core
 server = [
     "hyper-util/server",
-    "dep:ipnet",
-    "dep:matchit",
-    "dep:memchr",
-    "dep:scopeguard",
-    "dep:mime_guess",
+    "dep:ipnet", "dep:matchit", "dep:memchr", "dep:scopeguard", "dep:mime_guess",
 ] # server core
 
-__serde = ["dep:serde"]                           # a private feature for enabling `serde` by `serde_xxx`
+__serde = ["dep:serde"] # a private feature for enabling `serde` by `serde_xxx`
 query = ["__serde", "dep:serde_urlencoded"]
 form = ["__serde", "dep:serde_urlencoded"]
 json = ["__serde", "dep:sonic-rs"]
