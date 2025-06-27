@@ -7,8 +7,10 @@ impl volo_gen::thrift_gen::hello::HelloService for S {
         &self,
         req: volo_gen::thrift_gen::hello::HelloRequest,
     ) -> Result<volo_gen::thrift_gen::hello::HelloResponse, volo_thrift::ServerError> {
+        println!("req: {req:?}");
         let resp = volo_gen::thrift_gen::hello::HelloResponse {
             message: format!("Hello, {}!", req.name).into(),
+            _field_mask: None,
         };
         Ok(resp)
     }

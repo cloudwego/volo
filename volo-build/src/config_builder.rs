@@ -156,6 +156,28 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.dedup(dedup_list)),
         }
     }
+
+    pub fn with_descriptor(self, with_descriptor: bool) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.with_descriptor(with_descriptor))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(inner.with_descriptor(with_descriptor))
+            }
+        }
+    }
+
+    pub fn with_field_mask(self, with_field_mask: bool) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.with_field_mask(with_field_mask))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(inner.with_field_mask(with_field_mask))
+            }
+        }
+    }
 }
 
 impl ConfigBuilder {
@@ -205,6 +227,8 @@ impl ConfigBuilder {
                     .special_namings(entry.common_option.special_namings)
                     .split_generated_files(entry.common_option.split_generated_files)
                     .dedup(entry.common_option.dedups)
+                    .with_descriptor(entry.common_option.with_descriptor)
+                    .with_field_mask(entry.common_option.with_field_mask)
                     .write()?;
 
                 Ok(())

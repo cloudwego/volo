@@ -807,6 +807,8 @@ dependencies = [
  "metainfo",
  "motore",
  "pilota",
+ "pilota-thrift-fieldmask",
+ "pilota-thrift-reflect",
  "serde",
  "tokio",
  "tokio-stream",
@@ -4164,7 +4166,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "volo"
-version = "0.10.7"
+version = "0.11.0"
 dependencies = [
  "async-broadcast",
  "dashmap",
@@ -4195,7 +4197,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.10.19"
+version = "0.11.0"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4225,7 +4227,7 @@ dependencies = [
 
 [[package]]
 name = "volo-cli"
-version = "0.10.5"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4252,6 +4254,8 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "pilota",
+ "pilota-thrift-fieldmask",
+ "pilota-thrift-reflect",
  "tokio",
  "volo",
  "volo-build",
@@ -4261,7 +4265,7 @@ dependencies = [
 
 [[package]]
 name = "volo-grpc"
-version = "0.10.4"
+version = "0.11.0"
 dependencies = [
  "anyhow",
  "async-broadcast",
@@ -4360,7 +4364,7 @@ version = "0.10.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.10.8"
+version = "0.11.0"
 dependencies = [
  "ahash",
  "anyhow",

@@ -156,6 +156,16 @@ where
         self
     }
 
+    pub fn with_descriptor(mut self, with_descriptor: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.with_descriptor(with_descriptor);
+        self
+    }
+
+    pub fn with_field_mask(mut self, with_field_mask: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.with_field_mask(with_field_mask);
+        self
+    }
+
     pub fn write(self) -> anyhow::Result<()> {
         let out_dir = self.get_out_dir()?;
 

@@ -1,4 +1,7 @@
-use std::path::Path;
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use itertools::Itertools;
 use pilota_build::{
@@ -837,6 +840,18 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
     fn codegen_newtype_impl(&self, def_id: DefId, stream: &mut String, t: &rir::NewType) {
         self.inner.codegen_newtype_impl(def_id, stream, t)
+    }
+
+    fn codegen_file_descriptor(&self, stream: &mut String, f: &rir::File, has_direct: bool) {
+        self.inner.codegen_file_descriptor(stream, f, has_direct)
+    }
+    fn codegen_register_mod_file_descriptor(
+        &self,
+        stream: &mut String,
+        mods: &[(Arc<[Symbol]>, Arc<PathBuf>)],
+    ) {
+        self.inner
+            .codegen_register_mod_file_descriptor(stream, mods)
     }
 
     fn cx(&self) -> &Context {

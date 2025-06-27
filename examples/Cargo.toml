@@ -147,6 +147,8 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 pilota.workspace = true
+pilota-thrift-fieldmask.workspace = true
+pilota-thrift-reflect.workspace = true
 volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc", features = ["grpc-web"] }
 volo-thrift = { path = "../volo-thrift", features = ["multiplex"] }

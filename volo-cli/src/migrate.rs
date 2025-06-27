@@ -50,6 +50,8 @@ impl CliCommand for Migrate {
                             dedups: Vec::new(),
                             special_namings: Vec::new(),
                             split_generated_files: false,
+                            with_descriptor: false,
+                            with_field_mask: false,
                         },
                     };
 

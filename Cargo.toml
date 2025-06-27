@@ -27,6 +27,8 @@ rust-version = "1.80.0"
 pilota = "0.12"
 pilota-build = "0.12"
 pilota-thrift-parser = "0.12"
+pilota-thrift-reflect = "0.1"
+pilota-thrift-fieldmask = "0.1"
 motore = "0.4"
 metainfo = "0.7"
 
