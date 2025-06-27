@@ -9,6 +9,8 @@ entries:
           path: ../proto/echo.proto
           includes:
             - ../proto
+        codegen_option:
+          keep_unknown_fields: true
       - idl:
           source: local
           path: ../proto/streaming.proto

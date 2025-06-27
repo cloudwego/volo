@@ -1,4 +1,4 @@
-use bytes::{Buf, BufMut, Bytes, BytesMut};
+use bytes::{Buf, BufMut, Bytes};
 use http::{
     header::{self, ACCEPT, CONTENT_TYPE},
     Method, Request, StatusCode, Uri,
@@ -6,7 +6,7 @@ use http::{
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper_util::rt::TokioExecutor;
-use pilota::{prost::Message, FastStr};
+use pilota::{pb::Message, FastStr, LinkedBytes};
 use volo_gen::proto_gen::helloworld::{HelloReply, HelloRequest};
 use volo_http::body::BodyConversion;
 
@@ -60,7 +60,7 @@ fn encode_body() -> Bytes {
         name: FastStr::from_static_str("Volo"),
     };
 
-    let mut buf = BytesMut::with_capacity(1024);
+    let mut buf = LinkedBytes::with_capacity(1024);
     buf.reserve(5);
     unsafe {
         buf.advance_mut(5);
@@ -68,14 +68,14 @@ fn encode_body() -> Bytes {
 
     input.encode(&mut buf).unwrap();
 
-    let len = buf.len() - 5;
+    let len = buf.bytes().len() - 5;
     {
-        let mut buf = &mut buf[..5];
+        let mut buf = &mut buf.bytes_mut()[..5];
         buf.put_u8(0);
         buf.put_u32(len as u32);
     }
 
-    buf.split_to(len + 5).freeze()
+    buf.bytes_mut().split_to(len + 5).freeze()
 }
 
 async fn decode_body(body: Incoming) -> (HelloReply, Bytes) {
@@ -83,7 +83,7 @@ async fn decode_body(body: Incoming) -> (HelloReply, Bytes) {
 
     body.advance(1);
     let len = body.get_u32();
-    let msg = HelloReply::decode(&mut body.split_to(len as usize)).expect("decode");
+    let msg = HelloReply::decode(body.split_to(len as usize)).expect("decode");
     body.advance(5);
 
     (msg, body)

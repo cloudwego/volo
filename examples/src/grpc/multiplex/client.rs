@@ -30,6 +30,7 @@ async fn main() {
 
     let req = volo_gen::proto_gen::echo::EchoRequest {
         message: FastStr::from_static_str("Volo"),
+        _unknown_fields: Default::default(),
     };
     let resp = ECHO_CLIENT.echo(req).await;
     match resp {

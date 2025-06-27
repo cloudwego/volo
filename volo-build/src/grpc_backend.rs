@@ -17,14 +17,14 @@ impl pilota_build::MakeBackend for MkGrpcBackend {
 
     fn make_backend(self, context: Context) -> Self::Target {
         VoloGrpcBackend {
-            inner: pilota_build::ProtobufBackend::new(context),
+            inner: pilota_build::codegen::pb::ProtobufBackend::new(context),
         }
     }
 }
 
 #[derive(Clone)]
 pub struct VoloGrpcBackend {
-    inner: pilota_build::ProtobufBackend,
+    inner: pilota_build::codegen::pb::ProtobufBackend,
 }
 
 impl VoloGrpcBackend {

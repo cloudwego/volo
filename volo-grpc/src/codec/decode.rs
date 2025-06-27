@@ -10,7 +10,7 @@ use futures::{future, Stream};
 use futures_util::ready;
 use http::StatusCode;
 use http_body::Body;
-use pilota::prost::Message;
+use pilota::pb::Message;
 use tracing::{debug, trace};
 
 use super::{DefaultDecoder, BUFFER_SIZE, PREFIX_LEN};
@@ -174,9 +174,9 @@ impl<T: Message + Default> RecvStream<T> {
                     };
                     return Err(Status::new(Code::Internal, message));
                 }
-                DefaultDecoder::<T>::decode(&mut self.decoder, &mut self.decompress_buf)
+                DefaultDecoder::<T>::decode(&mut self.decoder, self.decompress_buf.split().freeze())
             } else {
-                DefaultDecoder::<T>::decode(&mut self.decoder, &mut buf)
+                DefaultDecoder::<T>::decode(&mut self.decoder, buf.freeze())
             };
 
             return match decode_result {

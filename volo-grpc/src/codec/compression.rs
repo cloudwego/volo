@@ -6,6 +6,7 @@ use bytes::{Buf, BufMut, BytesMut};
 use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 pub use flate2::Compression as Level;
 use http::HeaderValue;
+use pilota::LinkedBytes;
 
 use super::BUFFER_SIZE;
 use crate::Status;
@@ -194,27 +195,27 @@ impl CompressionEncoding {
 /// Compress `len` bytes from `src_buf` into `dest_buf`.
 pub(crate) fn compress(
     encoding: CompressionEncoding,
-    src_buf: &mut BytesMut,
-    dest_buf: &mut BytesMut,
+    src_buf: &mut LinkedBytes,
+    dest_buf: &mut LinkedBytes,
 ) -> Result<(), io::Error> {
-    let len = src_buf.len();
+    let len = src_buf.bytes().len();
     let capacity = ((len / BUFFER_SIZE) + 1) * BUFFER_SIZE;
 
     dest_buf.reserve(capacity);
 
     match encoding {
         CompressionEncoding::Gzip(Some(config)) => {
-            let mut gz_encoder = GzEncoder::new(&src_buf[0..len], config.level);
+            let mut gz_encoder = GzEncoder::new(&src_buf.bytes()[0..len], config.level);
             io::copy(&mut gz_encoder, &mut dest_buf.writer())?;
         }
         CompressionEncoding::Zlib(Some(config)) => {
-            let mut zlib_encoder = ZlibEncoder::new(&src_buf[0..len], config.level);
+            let mut zlib_encoder = ZlibEncoder::new(&src_buf.bytes()[0..len], config.level);
             io::copy(&mut zlib_encoder, &mut dest_buf.writer())?;
         }
         _ => {}
     };
 
-    src_buf.advance(len);
+    src_buf.bytes_mut().advance(len);
     Ok(())
 }
 
@@ -250,6 +251,7 @@ pub(crate) fn decompress(
 #[cfg(test)]
 mod tests {
     use bytes::{BufMut, BytesMut};
+    use pilota::LinkedBytes;
 
     use crate::codec::{
         compression::{compress, decompress, CompressionEncoding, GzipConfig, Level, ZlibConfig},
@@ -258,9 +260,9 @@ mod tests {
 
     #[test]
     fn test_consistency_for_compression() {
-        let mut src = BytesMut::with_capacity(BUFFER_SIZE);
-        let mut compress_buf = BytesMut::new();
-        let mut de_data = BytesMut::with_capacity(BUFFER_SIZE);
+        let mut src = LinkedBytes::with_capacity(BUFFER_SIZE);
+        let mut compress_buf = LinkedBytes::new();
+        let mut de_data = LinkedBytes::with_capacity(BUFFER_SIZE);
         let test_data = &b"test compression"[..];
         src.put(test_data);
 
@@ -275,10 +277,15 @@ mod tests {
         ];
 
         for encoding in encodings {
-            compress_buf.clear();
+            compress_buf.reset();
             compress(encoding, &mut src, &mut compress_buf).expect("compress failed:");
-            decompress(encoding, &mut compress_buf, &mut de_data).expect("decompress failed:");
-            assert_eq!(test_data, de_data);
+            decompress(
+                encoding,
+                &mut compress_buf.bytes_mut(),
+                &mut de_data.bytes_mut(),
+            )
+            .expect("decompress failed:");
+            assert_eq!(test_data, de_data.bytes());
         }
     }
 }

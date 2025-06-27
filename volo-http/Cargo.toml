@@ -22,6 +22,7 @@ maintenance = { status = "actively-developed" }
 volo = { version = "0.10", path = "../volo" }
 
 ahash.workspace = true
+async-stream.workspace = true
 bytes.workspace = true
 faststr.workspace = true
 futures.workspace = true
@@ -32,6 +33,7 @@ http-body-util.workspace = true
 hyper.workspace = true
 hyper-util = { workspace = true, features = ["tokio"] }
 itoa.workspace = true
+linkedbytes.workspace = true
 metainfo.workspace = true
 mime.workspace = true
 motore.workspace = true

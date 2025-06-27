@@ -344,9 +344,9 @@ dependencies = [
 
 [[package]]
 name = "bumpalo"
-version = "3.18.1"
+version = "3.19.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "793db76d6187cd04dff33004d8e6c9cc4e05cd330500379d2394209271b4aeee"
+checksum = "46c5e41b57b8bba42a04676d81cb89e9ee8e859a1a66f80a5a72e1cb76b34d43"
 
 [[package]]
 name = "bytes"
@@ -1117,7 +1117,7 @@ dependencies = [
  "futures-core",
  "futures-sink",
  "http",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "slab",
  "tokio",
  "tokio-util",
@@ -1517,9 +1517,9 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "2.9.0"
+version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cea70ddb795996207ad57735b50c5982d8844f38ba9ee5f1aedcfb708a2aa11e"
+checksum = "fe4cd85333e22411419a0bcae1297d25e58c9443848b11dc6a86fefe8c78a661"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.4",
@@ -1684,9 +1684,9 @@ dependencies = [
 
 [[package]]
 name = "libredox"
-version = "0.1.3"
+version = "0.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c0ff37bd590ca25063e35af745c343cb7a0271906fb7b37e4813e8f79f00268d"
+checksum = "1580801010e535496706ba011c15f8532df6b42297d2e471fec38ceadd8c0638"
 dependencies = [
  "bitflags 2.9.1",
  "libc",
@@ -1712,9 +1712,9 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linkedbytes"
-version = "0.1.8"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "487640b2e3f554987c1345fc71c3eda34d6d750fba63a39147205ccc93f920cd"
+checksum = "e7d2cd8c37639994bcad465d62b55f35ce994c96ce9b6c604b821d57df1a40ee"
 dependencies = [
  "bytes",
  "faststr",
@@ -2315,7 +2315,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
 dependencies = [
  "fixedbitset",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
 ]
 
 [[package]]
@@ -2362,9 +2362,9 @@ dependencies = [
 
 [[package]]
 name = "pilota"
-version = "0.11.10"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "520e32b295867834617b8a352b6fd4837e578f328f4e48813db4904ebc0d70b2"
+checksum = "3c83c849a88fc9d71b69e47b3185ad78f9608794e2532168047b33ae7f44adfe"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2384,25 +2384,30 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.11.32"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1ef13a6d82e9c56036a4edaabf9dc57d0eec2585a27df2e54c9cd382c78dae5"
+checksum = "e0f2a39e7367fa99922afb84a2112a03805921b989ec7050ede42fa4c127f0bf"
 dependencies = [
  "ahash",
  "anyhow",
  "dashmap",
  "faststr",
  "heck 0.5.0",
+ "hex",
  "itertools 0.13.0",
  "normpath",
  "paste",
  "petgraph",
  "phf",
+ "pilota",
+ "pilota-thrift-fieldmask",
  "pilota-thrift-parser",
+ "pilota-thrift-reflect",
  "proc-macro2",
  "protobuf-parse2",
  "protobuf2",
  "quote",
+ "rand 0.8.5",
  "rayon",
  "rustc-hash 1.1.0",
  "salsa",
@@ -2416,12 +2421,44 @@ dependencies = [
 ]
 
 [[package]]
-name = "pilota-thrift-parser"
-version = "0.11.8"
+name = "pilota-thrift-fieldmask"
+version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e41d7ced027a571cb65c517ca457b124e4ec89df216990a623638c98880e0a0"
+checksum = "bab6afa3c4bb2a930a1ed8e03367ada0933753bd004c7c7d53bde21790c30e3f"
 dependencies = [
+ "ahash",
+ "faststr",
  "nom 7.1.3",
+ "pilota",
+ "pilota-thrift-parser",
+ "pilota-thrift-reflect",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "pilota-thrift-parser"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2d69a4bf3b2058dae0712ccb8b412ff06cf9dbca017e32743370de8e39b10205"
+dependencies = [
+ "bytes",
+ "faststr",
+ "nom 7.1.3",
+]
+
+[[package]]
+name = "pilota-thrift-reflect"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bfd7265747b3aad84071203baee7bfb0cf2057bf8b7b08088560f8817cc900d8"
+dependencies = [
+ "ahash",
+ "bytes",
+ "dashmap",
+ "faststr",
+ "pilota",
+ "pilota-thrift-parser",
+ "thiserror 1.0.69",
 ]
 
 [[package]]
@@ -2995,7 +3032,7 @@ checksum = "1e147371c75553e1e2fcdb483944a8540b8438c31426279553b9a8182a9b7b65"
 dependencies = [
  "bytes",
  "hashbrown 0.15.4",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "munge",
  "ptr_meta",
  "rancor",
@@ -3287,7 +3324,7 @@ version = "0.9.34+deprecated"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
 dependencies = [
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "itoa",
  "ryu",
  "serde",
@@ -3787,7 +3824,7 @@ version = "0.22.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "41fe8c660ae4257887cf66394862d21dbca4a6ddd26f04a3560410406a2f819a"
 dependencies = [
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -3867,7 +3904,7 @@ checksum = "d039ad9159c98b70ecfd540b2573b97f7f52c3e8d9f8ad57a24b916a536975f9"
 dependencies = [
  "futures-core",
  "futures-util",
- "indexmap 2.9.0",
+ "indexmap 2.10.0",
  "pin-project-lite",
  "slab",
  "sync_wrapper",
@@ -4287,6 +4324,7 @@ dependencies = [
  "ipnet",
  "itoa",
  "libc",
+ "linkedbytes",
  "matchit",
  "memchr",
  "metainfo",
