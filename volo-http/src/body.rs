@@ -3,6 +3,7 @@
 //! See [`Body`] for more details.
 
 use std::{
+    convert::Infallible,
     error::Error,
     fmt,
     future::Future,
@@ -334,42 +335,71 @@ impl From<String> for Body {
     }
 }
 
+struct LinkedBytesBody<I> {
+    inner: I,
+}
+
+impl<I> http_body::Body for LinkedBytesBody<I>
+where
+    I: Iterator<Item = Node> + Unpin,
+{
+    type Data = Bytes;
+    type Error = Infallible;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        _: &mut Context<'_>,
+    ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
+        let this = self.get_mut();
+        let Some(node) = this.inner.next() else {
+            return Poll::Ready(None);
+        };
+        let bytes = match node {
+            Node::Bytes(bytes) => bytes,
+            Node::BytesMut(bytesmut) => bytesmut.freeze(),
+            Node::FastStr(faststr) => faststr.into_bytes(),
+        };
+        Poll::Ready(Some(Ok(Frame::data(bytes))))
+    }
+
+    fn is_end_stream(&self) -> bool {
+        false
+    }
+
+    fn size_hint(&self) -> SizeHint {
+        let (lower, upper) = self.inner.size_hint();
+        let mut size_hint = SizeHint::new();
+        size_hint.set_lower(lower as u64);
+        if let Some(upper) = upper {
+            size_hint.set_upper(upper as u64);
+        }
+        size_hint
+    }
+}
+
 impl From<LinkedBytes> for Body {
     fn from(value: LinkedBytes) -> Self {
-        let stream = async_stream::stream! {
-            for node in value.into_iter_list() {
-                match node {
-                    Node::Bytes(bytes) => {
-                        yield Ok(Frame::data(bytes));
-                    }
-                    Node::BytesMut(bytes) => {
-                        yield Ok(Frame::data(bytes.freeze()));
-                    }
-                    Node::FastStr(faststr) => {
-                        yield Ok(Frame::data(faststr.into_bytes()));
-                    }
-                }
-            }
-        };
-        Self {
-            repr: BodyRepr::Stream(StreamBody::new(Box::pin(stream))),
-        }
+        Body::from_body(LinkedBytesBody {
+            inner: value.into_iter_list(),
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use bytes::Bytes;
+    use faststr::FastStr;
+    use linkedbytes::LinkedBytes;
+
+    use super::Body;
+    use crate::body::BodyConversion;
 
     #[tokio::test]
     async fn test_from_linked_bytes() {
         let mut bytes = LinkedBytes::new();
-        bytes.insert(Bytes::from_static(b"Hello,"));
-        bytes.insert_faststr(FastStr::new(" world!"));
+        bytes.insert(Bytes::from_static(b"Hello, "));
+        bytes.insert_faststr(FastStr::new("world!"));
         let body = Body::from(bytes);
-        assert_eq!(
-            body.into_bytes().await.unwrap(),
-            Bytes::from_static(b"Hello, world!")
-        );
+        assert_eq!(body.into_string().await.unwrap(), "Hello, world!");
     }
 }
