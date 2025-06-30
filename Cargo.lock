@@ -1714,9 +1714,9 @@ checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "linkedbytes"
-version = "0.1.9"
+version = "0.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7d2cd8c37639994bcad465d62b55f35ce994c96ce9b6c604b821d57df1a40ee"
+checksum = "c663657632044d71a150755f0527ec22d7eb21b67e173bfce20597387284260a"
 dependencies = [
  "bytes",
  "faststr",
@@ -3413,9 +3413,9 @@ dependencies = [
 
 [[package]]
 name = "sonic-rs"
-version = "0.5.1"
+version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93070f7e7c0d7ec7d08406b1b407234af30420320fd854f304029e3c6db4a899"
+checksum = "7be54789747a46a8b1eb7b2c9cb0879cd7559a5f71bfff950868369f6868b9ad"
 dependencies = [
  "ahash",
  "bumpalo",
@@ -4197,7 +4197,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "ahash",
  "anyhow",

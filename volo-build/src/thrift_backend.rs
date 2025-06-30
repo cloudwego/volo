@@ -512,6 +512,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             }).join("");
 
             let mut resp_type_str = format!("{resp_type}");
+            if let Some(RustWrapperArc(true)) = self.cx().tags(m.ret.tags_id).as_ref().and_then(|tags| tags.get::<RustWrapperArc>()) {
+                resp_type_str = format!("::std::sync::Arc<{resp_type_str}>");
+            }
             let mut resp_str = "::std::result::Result::Ok(resp)";
             if !convert_exceptions.is_empty() {
                 resp_type_str = format!("::volo_thrift::MaybeException<{resp_type_str}, {exception}>");
