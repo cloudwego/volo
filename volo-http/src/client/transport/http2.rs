@@ -1,8 +1,11 @@
+//! HTTP/2 related utilities
+
 use std::time::Duration;
 
 use hyper::client::conn::http2::Builder;
 use hyper_util::rt::TokioExecutor;
 
+/// Configurations of HTTP1 Client.
 pub struct Config {
     keep_alive_interval: Option<Duration>,
     keep_alive_timeout: Duration,
@@ -59,7 +62,7 @@ impl Config {
     }
 }
 
-pub fn client(config: &Config) -> Builder<TokioExecutor> {
+pub(crate) fn client(config: &Config) -> Builder<TokioExecutor> {
     let mut builder = Builder::new(TokioExecutor::new());
     builder
         .keep_alive_interval(config.keep_alive_interval)
