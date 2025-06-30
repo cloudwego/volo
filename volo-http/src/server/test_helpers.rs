@@ -122,14 +122,14 @@ where
     }
 }
 
-impl<S, L> Server<S, L> {
+impl<S, L, SP> Server<S, L, SP> {
     /// Consume the current server and generate a test server.
     ///
     /// This should be used for unit test only.
     pub fn into_test_server<B>(self) -> TestServer<L::Service, B>
     where
-        L: Layer<S>,
         S: Service<ServerContext, Request<B>>,
+        L: Layer<S>,
     {
         TestServer {
             inner: self.layer.layer(self.service),

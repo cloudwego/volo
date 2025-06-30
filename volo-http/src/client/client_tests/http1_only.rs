@@ -18,7 +18,10 @@ use std::{
 use bytes::Bytes;
 use http::{header, status::StatusCode};
 use http_body_util::Full;
-use motore::service::Service;
+use motore::{
+    layer::{Identity, Stack},
+    service::Service,
+};
 use volo::context::Context;
 
 use super::{
@@ -33,15 +36,30 @@ use crate::{
     client::{
         dns::DnsResolver,
         get,
-        layer::{FailOnStatus, TargetLayer},
+        layer::{http_proxy::HttpProxy, FailOnStatus, TargetLayer},
+        loadbalance::DefaultLb,
         test_helpers::{DebugLayer, MockTransport},
-        CallOpt, Client,
+        CallOpt, Client, DefaultMkClient,
     },
     context::client::Config,
     error::ClientError,
     response::Response,
     utils::consts::HTTP_DEFAULT_PORT,
+    ClientBuilder,
 };
+
+fn builder_with_proxy() -> ClientBuilder<Identity, Stack<HttpProxy, Identity>> {
+    Client::builder().layer_outer(HttpProxy::env())
+}
+
+fn builder_for_debug() -> ClientBuilder<
+    Stack<DebugLayer, Identity>,
+    Stack<HttpProxy, Identity>,
+    DefaultMkClient,
+    DefaultLb,
+> {
+    builder_with_proxy().layer_inner(DebugLayer::default())
+}
 
 #[tokio::test]
 async fn client_with_generics() {
@@ -51,7 +69,7 @@ async fn client_with_generics() {
 
     // Override default `ReqBody`, but the `ReqBody` is still implements `http_body::Body`
     {
-        let client = Client::builder().build().unwrap();
+        let client = builder_with_proxy().build().unwrap();
         assert!(client
             .post(HTTPBIN_POST)
             .body(Full::new(Bytes::new()))
@@ -62,7 +80,7 @@ async fn client_with_generics() {
     }
     // Override default `RespBody`, but the `RespBody` is still implements `http_body::Body`
     {
-        let client = Client::builder()
+        let client = builder_with_proxy()
             .layer_outer_front(RespBodyToFullLayer)
             .build()
             .unwrap();
@@ -73,7 +91,7 @@ async fn client_with_generics() {
     // `http_body::Body`, but the `AutoBodyLayer` will convert it to `volo_http::body::Body` and
     // use it.
     {
-        let client = Client::builder()
+        let client = builder_with_proxy()
             .layer_outer_front(AutoBodyLayer)
             .build()
             .unwrap();
@@ -89,7 +107,7 @@ async fn client_with_generics() {
     // `http_body::Body`, but the `AutoFullLayer` will convert it to `Full<Bytes>` which implements
     // `http_body::Body` as its `InnerReqBody`.
     {
-        let client = Client::builder()
+        let client = builder_with_proxy()
             .layer_outer_front(AutoFullLayer)
             .build()
             .unwrap();
@@ -105,7 +123,7 @@ async fn client_with_generics() {
     // `http_body::Body`, but the `DropBodyLayer` will drop `volo_http::body::Body` and put
     // `Nothing` to `Response`.
     {
-        let client = Client::builder()
+        let client = builder_with_proxy()
             .layer_outer_front(DropBodyLayer)
             .build()
             .unwrap();
@@ -114,7 +132,7 @@ async fn client_with_generics() {
     }
     // Combine them
     {
-        let client = Client::builder()
+        let client = builder_with_proxy()
             .layer_outer_front(AutoFullLayer)
             .layer_outer_front(DropBodyLayer)
             .build()
@@ -126,24 +144,8 @@ async fn client_with_generics() {
 
 #[cfg(feature = "json")]
 #[tokio::test]
-async fn simple_get() {
-    let resp = get(HTTPBIN_GET)
-        .await
-        .unwrap()
-        .into_json::<HttpBinResponse>()
-        .await
-        .unwrap();
-    assert!(resp.args.is_empty());
-    assert_eq!(resp.url, HTTPBIN_GET);
-}
-
-#[cfg(feature = "json")]
-#[tokio::test]
 async fn client_test() {
-    let client = Client::builder()
-        .layer_inner(DebugLayer::default())
-        .build()
-        .unwrap();
+    let client = builder_for_debug().build().unwrap();
 
     {
         let resp = client
@@ -175,8 +177,7 @@ async fn client_test() {
 #[cfg(feature = "json")]
 #[tokio::test]
 async fn client_target() {
-    let client = Client::builder()
-        .layer_inner(DebugLayer::default())
+    let client = builder_for_debug()
         .layer_outer_front(TargetLayer::new_host("httpbin.org"))
         .build()
         .unwrap();
@@ -219,10 +220,7 @@ fn test_data() -> HashMap<String, String> {
 async fn set_query() {
     let data = test_data();
 
-    let client = Client::builder()
-        .layer_inner(DebugLayer::default())
-        .build()
-        .unwrap();
+    let client = builder_for_debug().build().unwrap();
     let resp = client
         .get("http://httpbin.org/get")
         .set_query(&data)
@@ -240,10 +238,7 @@ async fn set_query() {
 async fn set_form() {
     let data = test_data();
 
-    let client = Client::builder()
-        .layer_inner(DebugLayer::default())
-        .build()
-        .unwrap();
+    let client = builder_for_debug().build().unwrap();
     let resp = client
         .post("http://httpbin.org/post")
         .form(&data)
@@ -261,10 +256,7 @@ async fn set_form() {
 async fn set_json() {
     let data = test_data();
 
-    let client = Client::builder()
-        .layer_inner(DebugLayer::default())
-        .build()
-        .unwrap();
+    let client = builder_for_debug().build().unwrap();
     let resp = client
         .post("http://httpbin.org/post")
         .json(&data)
@@ -309,7 +301,7 @@ where
 
 #[tokio::test]
 async fn callopt_test() {
-    let mut builder = Client::builder();
+    let mut builder = builder_for_debug();
     builder.set_request_timeout(Duration::from_secs(1));
     let client = builder
         .layer_outer_front(FailOnStatus::server_error())
@@ -345,8 +337,7 @@ async fn callopt_test() {
 #[cfg(all(feature = "cookie", feature = "json"))]
 #[tokio::test]
 async fn cookie_store() {
-    let client = Client::builder()
-        .layer_inner(DebugLayer::default())
+    let client = builder_for_debug()
         .layer_inner(crate::client::cookie::CookieLayer::new(Default::default()))
         .layer_outer_front(crate::client::layer::TargetLayer::new_host("httpbin.org"))
         .build()

@@ -68,11 +68,11 @@ async fn client_builder_with_https() {
 #[cfg(feature = "json")]
 #[tokio::test]
 async fn client_builder_with_address_and_https() {
-    let addr = DnsResolver::default()
-        .resolve("httpbin.org", crate::utils::consts::HTTPS_DEFAULT_PORT)
-        .await
-        .unwrap();
-    let mut target = Target::from(addr);
+    let ip = DnsResolver::default().resolve("httpbin.org").await.unwrap();
+    let mut target = Target::from(volo::net::Address::Ip(std::net::SocketAddr::new(
+        ip,
+        crate::utils::consts::HTTPS_DEFAULT_PORT,
+    )));
     target.set_scheme(http::uri::Scheme::HTTPS);
     let mut builder = Client::builder()
         .layer_inner(DebugLayer::default())

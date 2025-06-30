@@ -36,7 +36,7 @@ use self::{
     loadbalance::{DefaultLb, LbConfig},
     transport::{
         pool,
-        protocol::{ClientConfig, ClientTransportConfig},
+        protocol::{ClientConfig, ClientTransport, ClientTransportConfig},
     },
 };
 use crate::{
@@ -62,12 +62,11 @@ mod request_builder;
 pub mod target;
 #[cfg(test)]
 pub mod test_helpers;
-mod transport;
+pub mod transport;
 mod utils;
 
 pub use self::{
-    callopt::CallOpt, request_builder::RequestBuilder, target::Target,
-    transport::protocol::ClientTransport,
+    callopt::CallOpt, request_builder::RequestBuilder, target::Target, transport::protocol,
 };
 
 #[doc(hidden)]
@@ -76,7 +75,7 @@ pub mod prelude {
 }
 
 /// A builder for configuring an HTTP [`Client`].
-pub struct ClientBuilder<IL, OL, C, LB> {
+pub struct ClientBuilder<IL = Identity, OL = Identity, C = DefaultMkClient, LB = DefaultLb> {
     http_config: ClientConfig,
     client_config: ClientTransportConfig,
     pool_config: pool::Config,

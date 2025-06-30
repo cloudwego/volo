@@ -4,6 +4,8 @@
 
 mod fail_on_status;
 pub mod header;
+#[cfg(feature = "http1")]
+pub mod http_proxy;
 mod timeout;
 mod utils;
 

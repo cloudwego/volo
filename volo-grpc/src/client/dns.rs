@@ -2,7 +2,10 @@
 //!
 //! This module implements [`DnsResolver`] as a [`Discover`] for client.
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 
 use async_broadcast::Receiver;
 use faststr::FastStr;
@@ -20,7 +23,6 @@ use volo::{
 
 // Error message constants
 pub const ERR_INVALID_PORT: &str = "invalid port number";
-pub const ERR_INVALID_IPV6: &str = "invalid IPv6 format";
 pub const ERR_BAD_HOST: &str = "bad host name";
 pub const ERR_MISSING_ADDR: &str = "missing target address";
 
@@ -41,10 +43,9 @@ impl DnsResolver {
         Self { resolver }
     }
 
-    /// Resolve a host to an IP address and then set the port to it for getting an [`Address`].
-    pub async fn resolve(&self, host: &str, port: u16) -> Option<Address> {
-        let mut iter = self.resolver.lookup_ip(host).await.ok()?.into_iter();
-        Some(Address::Ip(SocketAddr::new(iter.next()?, port)))
+    /// Resolve a host to an IP address.
+    pub async fn resolve(&self, host: &str) -> Option<IpAddr> {
+        self.resolver.lookup_ip(host).await.ok()?.into_iter().next()
     }
 }
 
@@ -73,23 +74,18 @@ impl Discover for DnsResolver {
         &'s self,
         endpoint: &'s Endpoint,
     ) -> Result<Vec<Arc<Instance>>, Self::Error> {
-        if endpoint.service_name_ref().is_empty() && endpoint.address().is_none() {
+        if endpoint.address().is_some() {
+            return Ok(Vec::new());
+        }
+        if endpoint.service_name_ref().is_empty() {
             tracing::error!("DnsResolver: no domain name found");
             return Err(LoadBalanceError::Discover(ERR_MISSING_ADDR.into()));
         }
-        if let Some(address) = endpoint.address() {
-            let instance = Instance {
-                address,
-                weight: 10,
-                tags: Default::default(),
-            };
-            return Ok(vec![Arc::new(instance)]);
-        }
-
         let service_name = endpoint.service_name_ref();
         let (host, port) = parse_host_and_port(service_name)?;
 
-        if let Some(address) = self.resolve(host, port).await {
+        if let Some(ip) = self.resolve(host).await {
+            let address = Address::Ip(SocketAddr::new(ip, port));
             let instance = Instance {
                 address,
                 weight: 10,
@@ -102,7 +98,7 @@ impl Discover for DnsResolver {
     }
 
     fn key(&self, endpoint: &Endpoint) -> Self::Key {
-        endpoint.service_name.clone()
+        endpoint.service_name()
     }
 
     fn watch(&self, _: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {
@@ -124,7 +120,7 @@ fn parse_host_and_port(service_name: &str) -> Result<(&str, u16), LoadBalanceErr
             };
             return Ok((ip_part, port));
         } else {
-            return Err(LoadBalanceError::Discover(ERR_INVALID_IPV6.into()));
+            return Err(LoadBalanceError::Discover(ERR_BAD_HOST.into()));
         }
     }
 
@@ -304,7 +300,7 @@ mod tests {
         let result = parse_host_and_port(service_name);
         assert!(matches!(
             result,
-            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_INVALID_IPV6
+            Err(LoadBalanceError::Discover(e)) if e.to_string() == ERR_BAD_HOST
         ));
     }
 

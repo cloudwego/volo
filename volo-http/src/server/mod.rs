@@ -34,6 +34,7 @@ use volo::{
     net::{conn::Conn, incoming::Incoming, Address, MakeIncoming},
 };
 
+use self::span_provider::{DefaultProvider, SpanProvider};
 use crate::{
     body::Body,
     context::{server::Config, ServerContext},
@@ -50,6 +51,7 @@ pub mod param;
 pub mod protocol;
 pub mod response;
 pub mod route;
+pub mod span_provider;
 #[cfg(test)]
 pub mod test_helpers;
 pub mod utils;
@@ -92,17 +94,18 @@ pub mod prelude {
 /// Server::new(app).run(addr).await.unwrap();
 /// # })
 /// ```
-pub struct Server<S, L> {
+pub struct Server<S, L, SP> {
     service: S,
     layer: L,
     server: auto::Builder<TokioExecutor>,
     config: Config,
     shutdown_hooks: Vec<Box<dyn FnOnce() -> BoxFuture<'static, ()> + Send>>,
+    span_provider: SP,
     #[cfg(feature = "__tls")]
     tls_config: Option<ServerTlsConfig>,
 }
 
-impl<S> Server<S, Identity> {
+impl<S> Server<S, Identity, DefaultProvider> {
     /// Create a new server.
     pub fn new(service: S) -> Self {
         Self {
@@ -111,13 +114,14 @@ impl<S> Server<S, Identity> {
             server: auto::Builder::new(TokioExecutor::new()),
             config: Config::default(),
             shutdown_hooks: Vec::new(),
+            span_provider: DefaultProvider,
             #[cfg(feature = "__tls")]
             tls_config: None,
         }
     }
 }
 
-impl<S, L> Server<S, L> {
+impl<S, L, SP> Server<S, L, SP> {
     /// Enable TLS with the specified configuration.
     ///
     /// If not set, the server will not use TLS.
@@ -141,9 +145,9 @@ impl<S, L> Server<S, L> {
         self
     }
 
-    /// Adds a new inner layer to the server.
+    /// Add a new inner layer to the server.
     ///
-    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    /// The layer's [`Service`] should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -152,21 +156,22 @@ impl<S, L> Server<S, L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer(baz)`, we will get: foo -> bar -> baz.
-    pub fn layer<Inner>(self, layer: Inner) -> Server<S, Stack<Inner, L>> {
+    pub fn layer<Inner>(self, layer: Inner) -> Server<S, Stack<Inner, L>, SP> {
         Server {
             service: self.service,
             layer: Stack::new(layer, self.layer),
             server: self.server,
             config: self.config,
             shutdown_hooks: self.shutdown_hooks,
+            span_provider: self.span_provider,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
 
-    /// Adds a new front layer to the server.
+    /// Add a new front layer to the server.
     ///
-    /// The layer's `Service` should be `Send + Sync + Clone + 'static`.
+    /// The layer's [`Service`] should be `Send + Sync + Clone + 'static`.
     ///
     /// # Order
     ///
@@ -175,13 +180,33 @@ impl<S, L> Server<S, L> {
     /// The current order is: foo -> bar (the request will come to foo first, and then bar).
     ///
     /// After we call `.layer_front(baz)`, we will get: baz -> foo -> bar.
-    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>> {
+    pub fn layer_front<Front>(self, layer: Front) -> Server<S, Stack<L, Front>, SP> {
         Server {
             service: self.service,
             layer: Stack::new(self.layer, layer),
             server: self.server,
             config: self.config,
             shutdown_hooks: self.shutdown_hooks,
+            span_provider: self.span_provider,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
+    /// Set a [`SpanProvider`] to the server.
+    ///
+    /// Server will enter the [`Span`] that created by [`SpanProvider::on_serve`] when starting to
+    /// serve a request, and call [`SpanProvider::leave_serve`] when leaving the serve function.
+    ///
+    /// [`Span`]: tracing::Span
+    pub fn span_provider<P>(self, span_provider: P) -> Server<S, L, P> {
+        Server {
+            service: self.service,
+            layer: self.layer,
+            server: self.server,
+            config: self.config,
+            shutdown_hooks: self.shutdown_hooks,
+            span_provider,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -247,6 +272,7 @@ impl<S, L> Server<S, L> {
             server: self.server.http1_only(),
             config: self.config,
             shutdown_hooks: self.shutdown_hooks,
+            span_provider: self.span_provider,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -261,20 +287,22 @@ impl<S, L> Server<S, L> {
             server: self.server.http2_only(),
             config: self.config,
             shutdown_hooks: self.shutdown_hooks,
+            span_provider: self.span_provider,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
     }
 
     /// The main entry point for the server.
-    pub async fn run<MI, B, E>(self, mk_incoming: MI) -> Result<(), BoxError>
+    pub async fn run<MI, B>(self, mk_incoming: MI) -> Result<(), BoxError>
     where
-        S: Service<ServerContext, Request<B>, Error = E> + Send + Sync + 'static,
+        S: Service<ServerContext, Request<B>> + Send + Sync + 'static,
         S::Response: IntoResponse,
-        E: IntoResponse,
+        S::Error: IntoResponse,
         L: Layer<S> + Send + Sync + 'static,
         L::Service: Service<ServerContext, Request, Error = Infallible> + Send + Sync + 'static,
         <L::Service as Service<ServerContext, Request>>::Response: IntoResponse,
+        SP: SpanProvider + Clone + Send + Sync + Unpin + 'static,
         MI: MakeIncoming,
     {
         let server = Arc::new(self.server);
@@ -297,6 +325,7 @@ impl<S, L> Server<S, L> {
             exit_flag.clone(),
             conn_cnt.clone(),
             exit_notify.clone(),
+            self.span_provider,
             #[cfg(feature = "__tls")]
             self.tls_config,
         ));
@@ -363,7 +392,7 @@ impl<S, L> Server<S, L> {
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn serve<I, S, E>(
+async fn serve<I, S, SP>(
     server: Arc<auto::Builder<TokioExecutor>>,
     mut incoming: I,
     service: S,
@@ -371,12 +400,14 @@ async fn serve<I, S, E>(
     exit_flag: Arc<RwLock<bool>>,
     conn_cnt: Arc<AtomicUsize>,
     exit_notify: Arc<Notify>,
+    span_provider: SP,
     #[cfg(feature = "__tls")] tls_config: Option<ServerTlsConfig>,
 ) where
     I: Incoming,
-    S: Service<ServerContext, Request, Error = E> + Clone + Unpin + Send + Sync + 'static,
+    S: Service<ServerContext, Request> + Clone + Unpin + Send + Sync + 'static,
     S::Response: IntoResponse,
-    E: IntoResponse,
+    S::Error: IntoResponse,
+    SP: SpanProvider + Clone + Send + Sync + Unpin + 'static,
 {
     loop {
         if *exit_flag.read() {
@@ -420,6 +451,7 @@ async fn serve<I, S, E>(
             inner: service.clone(),
             peer,
             config: config.clone(),
+            span_provider: span_provider.clone(),
         };
 
         tokio::spawn(serve_conn(
@@ -474,19 +506,21 @@ async fn serve_conn<S>(
 }
 
 #[derive(Clone)]
-struct HyperService<S> {
+struct HyperService<S, SP> {
     inner: S,
     peer: Address,
     config: Config,
+    span_provider: SP,
 }
 
 type HyperRequest = http::request::Request<hyper::body::Incoming>;
 
-impl<S, E> hyper::service::Service<HyperRequest> for HyperService<S>
+impl<S, SP> hyper::service::Service<HyperRequest> for HyperService<S, SP>
 where
-    S: Service<ServerContext, Request, Error = E> + Clone + Send + Sync + 'static,
+    S: Service<ServerContext, Request> + Clone + Send + Sync + 'static,
     S::Response: IntoResponse,
-    E: IntoResponse,
+    S::Error: IntoResponse,
+    SP: SpanProvider + Clone + Send + Sync + 'static,
 {
     type Response = Response;
     type Error = Infallible;
@@ -498,11 +532,15 @@ where
             METAINFO.scope(RefCell::new(MetaInfo::default()), async move {
                 let mut cx = ServerContext::new(service.peer);
                 cx.rpc_info_mut().set_config(service.config);
-                Ok(service
+                let span = service.span_provider.on_serve(&cx);
+                let _enter = span.enter();
+                let resp = service
                     .inner
                     .call(&mut cx, req.map(Body::from_incoming))
                     .await
-                    .into_response())
+                    .into_response();
+                service.span_provider.leave_serve(&cx);
+                Ok(resp)
             }),
         )
     }

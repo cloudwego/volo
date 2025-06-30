@@ -1,3 +1,5 @@
+//! HTTP transport related utilities
+
 mod connector;
 #[cfg(feature = "http1")]
 pub(crate) mod http1;
