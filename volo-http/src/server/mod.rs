@@ -94,7 +94,7 @@ pub mod prelude {
 /// Server::new(app).run(addr).await.unwrap();
 /// # })
 /// ```
-pub struct Server<S, L, SP> {
+pub struct Server<S, L = Identity, SP = DefaultProvider> {
     service: S,
     layer: L,
     server: auto::Builder<TokioExecutor>,

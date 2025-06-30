@@ -4307,7 +4307,7 @@ dependencies = [
 
 [[package]]
 name = "volo-http"
-version = "0.4.0-rc.5"
+version = "0.4.0"
 dependencies = [
  "ahash",
  "async-broadcast",

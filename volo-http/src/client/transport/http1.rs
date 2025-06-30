@@ -1,5 +1,8 @@
+//! HTTP/1 related utilities
+
 use hyper::client::conn::http1::Builder;
 
+/// Configurations of HTTP1 Client.
 pub struct Config {
     title_case_headers: bool,
     ignore_invalid_headers_in_responses: bool,
@@ -60,7 +63,7 @@ impl Config {
     }
 }
 
-pub fn client(config: &Config) -> Builder {
+pub(crate) fn client(config: &Config) -> Builder {
     let mut builder = Builder::new();
     builder
         .title_case_headers(config.title_case_headers)
