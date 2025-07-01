@@ -750,4 +750,8 @@ impl CodegenBackend for VoloGrpcBackend {
     fn cx(&self) -> &Context {
         self.inner.cx()
     }
+
+    fn codegen_pilota_buf_trait(&self, stream: &mut String) {
+        self.inner.codegen_pilota_buf_trait(stream)
+    }
 }
