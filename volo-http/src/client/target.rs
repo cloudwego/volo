@@ -17,7 +17,7 @@ use crate::{
     client::dns::Port,
     context::ClientContext,
     error::{
-        client::{bad_address, bad_scheme, no_address, Result},
+        client::{bad_scheme, no_address, port_unavailable, scheme_unavailable, Result},
         ClientError,
     },
     utils::consts,
@@ -105,7 +105,7 @@ fn check_scheme(scheme: &Scheme) -> Result<()> {
         #[cfg(not(feature = "__tls"))]
         {
             tracing::error!("[Volo-HTTP] https is not allowed when feature `tls` is not enabled");
-            return Err(bad_scheme());
+            return Err(bad_scheme(scheme.clone()));
         }
         #[cfg(feature = "__tls")]
         return Ok(());
@@ -114,7 +114,7 @@ fn check_scheme(scheme: &Scheme) -> Result<()> {
         return Ok(());
     }
     tracing::error!("[Volo-HTTP] scheme '{scheme}' is unsupported");
-    Err(bad_scheme())
+    Err(bad_scheme(scheme.clone()))
 }
 
 impl Target {
@@ -220,7 +220,7 @@ impl Target {
             Some(rt) => rt,
             None => {
                 tracing::warn!("[Volo-HTTP] set scheme to an empty target or uds is invalid");
-                return Err(bad_address());
+                return Err(scheme_unavailable());
             }
         };
         check_scheme(&scheme)?;
@@ -237,7 +237,7 @@ impl Target {
             Some(rt) => rt,
             None => {
                 tracing::warn!("[Volo-HTTP] set port to an empty target or uds is invalid");
-                return Err(bad_address());
+                return Err(port_unavailable());
             }
         };
         rt.port = port;
@@ -344,6 +344,7 @@ impl Apply<ClientContext> for Target {
                         callee.set_address(Address::Ip(sa));
                     }
                     RemoteHost::Name(host) => {
+                        println!("Target::apply, host = {host}");
                         let port = rt.port;
                         tracing::trace!("[Volo-HTTP] Target::apply: set target to {host}:{port}");
                         let callee = cx.rpc_info_mut().callee_mut();

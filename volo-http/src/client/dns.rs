@@ -4,7 +4,7 @@
 
 use std::{
     net::{IpAddr, SocketAddr},
-    ops::Deref,
+    ops::{Deref, Index},
     sync::Arc,
 };
 
@@ -61,6 +61,14 @@ impl DnsResolver {
 
     /// Resolve a host to an IP address.
     pub async fn resolve(&self, host: &str) -> Option<IpAddr> {
+        let host = {
+            let bytes = host.as_bytes();
+            match (bytes.first(), bytes.last()) {
+                (Some(b'['), Some(b']')) => host.index(1..host.len() - 1),
+                _ => host,
+            }
+        };
+
         // Note that the Resolver will try to parse the host as an IP address first, so we don't
         // need to parse it manually.
         self.resolver.lookup_ip(host).await.ok()?.into_iter().next()
@@ -144,7 +152,9 @@ impl Discover for DnsResolver {
             return Ok(vec![Arc::new(instance)]);
         };
         tracing::error!("[Volo-HTTP] DnsResolver: no address resolved");
-        Err(LoadBalanceError::Discover(Box::new(bad_host_name())))
+        Err(LoadBalanceError::Discover(Box::new(bad_host_name(
+            endpoint.service_name(),
+        ))))
     }
 
     fn key(&self, endpoint: &Endpoint) -> Self::Key {
@@ -153,5 +163,33 @@ impl Discover for DnsResolver {
 
     fn watch(&self, _: Option<&[Self::Key]>) -> Option<Receiver<Change<Self::Key>>> {
         None
+    }
+}
+
+#[cfg(test)]
+mod dns_tests {
+    use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
+
+    use crate::client::dns::DnsResolver;
+
+    #[tokio::test]
+    async fn static_resolve() {
+        let resolver = DnsResolver::default();
+
+        assert_eq!(
+            resolver.resolve("127.0.0.1").await,
+            Some(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))),
+        );
+        assert_eq!(
+            resolver.resolve("::1").await,
+            Some(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))),
+        );
+        assert_eq!(
+            resolver.resolve("[::1]").await,
+            Some(IpAddr::V6(Ipv6Addr::new(0, 0, 0, 0, 0, 0, 0, 1))),
+        );
+        assert_eq!(resolver.resolve("[::1").await, None);
+        assert_eq!(resolver.resolve("::1]").await, None);
+        assert_eq!(resolver.resolve("[::1]:8080").await, None);
     }
 }
