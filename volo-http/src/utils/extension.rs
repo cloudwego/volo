@@ -70,14 +70,14 @@ where
 
 #[cfg(feature = "server")]
 mod server {
-    use http::{request::Parts, StatusCode};
+    use http::{StatusCode, request::Parts};
     use volo::context::Context;
 
     use super::Extension;
     use crate::{
         context::ServerContext,
         response::Response,
-        server::{extract::FromContext, IntoResponse},
+        server::{IntoResponse, extract::FromContext},
     };
 
     impl<T> FromContext for Extension<T>

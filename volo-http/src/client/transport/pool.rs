@@ -10,7 +10,7 @@ use std::{
     ops::{Deref, DerefMut},
     pin::Pin,
     sync::{Arc, Weak},
-    task::{ready, Context, Poll},
+    task::{Context, Poll, ready},
     time::Duration,
 };
 
@@ -921,7 +921,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_pool_checkout_task_unparked() {
-        use futures_util::{future::join, FutureExt};
+        use futures_util::{FutureExt, future::join};
 
         let pool = pool_no_timer();
         let key = host_key("foo");

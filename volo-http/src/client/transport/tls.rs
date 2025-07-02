@@ -6,7 +6,7 @@ use volo::net::{
 };
 
 use super::{connector::PeerInfo, plain::PlainMakeConnection};
-use crate::error::{client::request_error, ClientError};
+use crate::error::{ClientError, client::request_error};
 
 #[derive(Clone, Debug)]
 pub struct TlsMakeConnection<S = PlainMakeConnection> {

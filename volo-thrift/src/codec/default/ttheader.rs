@@ -12,17 +12,17 @@ use linkedbytes::LinkedBytes;
 use metainfo::{Backward, Forward};
 use num_enum::TryFromPrimitive;
 use pilota::thrift::{
-    new_protocol_exception, ProtocolException, ProtocolExceptionKind, ThriftException,
+    ProtocolException, ProtocolExceptionKind, ThriftException, new_protocol_exception,
 };
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncReadExt};
 use tracing::{trace, warn};
-use volo::{context::Role, util::buf_reader::BufReader, FastStr};
+use volo::{FastStr, context::Role, util::buf_reader::BufReader};
 
 use super::MakeZeroCopyCodec;
 use crate::{
+    BizError, EntryMessage, ThriftMessage,
     codec::default::{ZeroCopyDecoder, ZeroCopyEncoder},
     context::ThriftContext,
-    BizError, EntryMessage, ThriftMessage,
 };
 
 /// [`MakeTTHeaderCodec`] implements [`MakeZeroCopyCodec`] to create [`TTHeaderEncoder`] and

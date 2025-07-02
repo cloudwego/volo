@@ -1,9 +1,9 @@
 use std::{hash::Hash, sync::Arc};
 
-use dashmap::{mapref::entry::Entry, DashMap};
+use dashmap::{DashMap, mapref::entry::Entry};
 use rand::Rng;
 
-use super::{error::LoadBalanceError, LoadBalance};
+use super::{LoadBalance, error::LoadBalanceError};
 use crate::{
     context::Endpoint,
     discovery::{Change, Discover, Instance},
@@ -164,7 +164,7 @@ where
 mod tests {
     use std::collections::HashMap;
 
-    use rand::{rng, RngCore};
+    use rand::{RngCore, rng};
 
     use super::{LoadBalance, WeightedRandomBalance};
     use crate::{
@@ -194,7 +194,7 @@ mod tests {
         let mut weighted_instances = Vec::with_capacity(100);
         let mut total_weight = 0;
         for i in 0..100 {
-            let addr = format!("127.0.0.{}:8000", i).parse().unwrap();
+            let addr = format!("127.0.0.{i}:8000").parse().unwrap();
             let weight = 1;
             weighted_instances.push((addr, weight));
             total_weight += weight;
@@ -218,10 +218,7 @@ mod tests {
             let expected_rate = (weight as f64) / (total_weight as f64);
             let actual_rate = (count as f64) / ((total_weight * cycle) as f64);
 
-            println!(
-                "addr: {}, expected: {}, actual: {}",
-                addr, expected_rate, actual_rate
-            );
+            println!("addr: {addr}, expected: {expected_rate}, actual: {actual_rate}");
             assert!((expected_rate - actual_rate).abs() < 0.01);
         }
     }
@@ -234,7 +231,7 @@ mod tests {
         let mut weighted_instances = Vec::with_capacity(100);
         let mut total_weight = 0;
         for i in 0..100 {
-            let addr = format!("127.0.0.{}:8000", i).parse().unwrap();
+            let addr = format!("127.0.0.{i}:8000").parse().unwrap();
             let weight = rng().next_u32() % 100 + 1;
             weighted_instances.push((addr, weight));
             total_weight += weight;
@@ -257,10 +254,7 @@ mod tests {
             let expected_rate = (weight as f64) / (total_weight as f64);
             let actual_rate = (count as f64) / ((total_weight * cycle) as f64);
 
-            println!(
-                "addr: {}, expected: {}, actual: {}",
-                addr, expected_rate, actual_rate
-            );
+            println!("addr: {addr}, expected: {expected_rate}, actual: {actual_rate}");
             assert!((expected_rate - actual_rate).abs() < 0.01);
         }
     }

@@ -5,7 +5,7 @@ use motore::Service;
 use tracing::warn;
 
 use super::error::{LoadBalanceError, Retryable};
-use crate::{context::Context, discovery::Discover, loadbalance::LoadBalance, Layer};
+use crate::{Layer, context::Context, discovery::Discover, loadbalance::LoadBalance};
 
 #[derive(Clone)]
 pub struct LoadBalanceService<D, LB, S> {

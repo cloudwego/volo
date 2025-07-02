@@ -13,7 +13,7 @@ use super::{Client, ClientBuilder, ClientInner};
 use crate::{
     body::{Body, BodyConversion},
     context::client::ClientContext,
-    error::client::{other_error, ClientError, Result},
+    error::client::{ClientError, Result, other_error},
     request::{Request, RequestPartsExt},
     response::Response,
 };
@@ -258,7 +258,7 @@ mod mock_transport_tests {
     use http::status::StatusCode;
 
     use super::MockTransport;
-    use crate::{body::BodyConversion, ClientBuilder};
+    use crate::{ClientBuilder, body::BodyConversion};
 
     #[tokio::test]
     async fn empty_response_test() {

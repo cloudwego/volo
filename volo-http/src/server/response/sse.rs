@@ -11,7 +11,7 @@ use std::{
 
 use bytes::{BufMut, Bytes, BytesMut};
 use futures::Stream;
-use http::{header, HeaderValue};
+use http::{HeaderValue, header};
 use http_body::Frame;
 use paste::paste;
 use pin_project::pin_project;
@@ -437,14 +437,14 @@ mod sse_tests {
     use ahash::AHashMap;
     use async_stream::stream;
     use faststr::FastStr;
-    use futures::{stream, Stream, StreamExt};
+    use futures::{Stream, StreamExt, stream};
     use http::{header, method::Method};
     use http_body_util::BodyExt;
 
-    use super::{memchr_split, Event, KeepAlive, Sse};
+    use super::{Event, KeepAlive, Sse, memchr_split};
     use crate::{
         body::Body,
-        server::route::{any, MethodRouter},
+        server::route::{MethodRouter, any},
     };
 
     impl Event {

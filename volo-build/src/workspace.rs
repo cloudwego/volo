@@ -5,7 +5,7 @@ use volo::FastStr;
 
 use crate::{
     model::WorkspaceConfig,
-    util::{download_repos_to_target, get_idl_build_path_and_includes, ServiceBuilder},
+    util::{ServiceBuilder, download_repos_to_target, get_idl_build_path_and_includes},
 };
 
 pub struct Builder<MkB, P> {
@@ -44,7 +44,7 @@ where
     MkB::Target: Send,
     P: pilota_build::parser::Parser,
 {
-    pub fn gen(mut self) {
+    pub fn r#gen(mut self) {
         let work_dir = std::env::current_dir().unwrap();
         let config = match std::fs::read(work_dir.join("volo.workspace.yml")) {
             Ok(config) => config,

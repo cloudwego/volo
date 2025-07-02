@@ -6,10 +6,10 @@ use std::{
 
 use pin_project::pin_project;
 #[cfg(target_family = "unix")]
-use tokio::net::{unix, UnixStream};
+use tokio::net::{UnixStream, unix};
 use tokio::{
     io::{AsyncRead, AsyncWrite, ReadBuf},
-    net::{tcp, TcpStream},
+    net::{TcpStream, tcp},
 };
 
 use super::Address;

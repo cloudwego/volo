@@ -1,10 +1,10 @@
 use itertools::Itertools;
 use pilota_build::{
+    CodegenBackend, Context, DefId, IdentName, Symbol,
     db::RirDatabase,
     rir,
     rir::Method,
     tags::protobuf::{ClientStreaming, ServerStreaming},
-    CodegenBackend, Context, DefId, IdentName, Symbol,
 };
 use volo::FastStr;
 

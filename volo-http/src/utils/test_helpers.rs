@@ -6,7 +6,7 @@ use http::{method::Method, request::Request};
 use volo::net::Address;
 
 #[cfg(all(feature = "client", feature = "server"))]
-pub use self::convert_service::{client_cx_to_server_cx, ConvertService};
+pub use self::convert_service::{ConvertService, client_cx_to_server_cx};
 
 /// Create a simple address, the address is `127.0.0.1:8000`.
 pub fn mock_address() -> Address {
@@ -37,8 +37,8 @@ mod convert_service {
 
     use super::mock_address;
     use crate::{
-        context::{server::ServerCxInner, ClientContext, ServerContext},
-        error::{client::request_error, BoxError, ClientError},
+        context::{ClientContext, ServerContext, server::ServerCxInner},
+        error::{BoxError, ClientError, client::request_error},
         request::Request,
         response::Response,
     };
@@ -127,8 +127,8 @@ mod helper_tests {
 
     use crate::{
         body::BodyConversion,
-        client::{test_helpers::MockTransport, ClientBuilder},
-        server::route::{get, Router},
+        client::{ClientBuilder, test_helpers::MockTransport},
+        server::route::{Router, get},
     };
 
     const HELLO_WORLD: &str = "Hello, World";

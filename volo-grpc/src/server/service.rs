@@ -7,7 +7,8 @@ use motore::{
 
 use super::NamedService;
 use crate::{
-    body::{boxed, Body, BoxBody},
+    Request, Response, Status,
+    body::{Body, BoxBody, boxed},
     codec::{
         compression::{CompressionEncoding, ENCODING_HEADER},
         decode::Kind,
@@ -15,7 +16,6 @@ use crate::{
     context::{Config, ServerContext},
     message::{RecvEntryMessage, SendEntryMessage},
     metadata::MetadataValue,
-    Request, Response, Status,
 };
 
 #[derive(Clone)]

@@ -1,8 +1,8 @@
 pub mod perf;
 pub mod runner;
 
-mod gen {
+mod r#gen {
     include!(concat!(env!("OUT_DIR"), "/benchmark.rs"));
 }
 
-pub use gen::*;
+pub use r#gen::*;

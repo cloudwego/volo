@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::LazyLock, time::Duration};
 
-use metainfo::{MetaInfo, METAINFO};
+use metainfo::{METAINFO, MetaInfo};
 use pilota::FastStr;
 
 static CLIENT: LazyLock<volo_gen::proto_gen::helloworld::GreeterClient> = LazyLock::new(|| {

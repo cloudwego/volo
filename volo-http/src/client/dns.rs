@@ -11,9 +11,9 @@ use std::{
 use async_broadcast::Receiver;
 use faststr::FastStr;
 use hickory_resolver::{
+    Resolver, TokioResolver,
     config::{LookupIpStrategy, ResolverConfig, ResolverOpts},
     name_server::TokioConnectionProvider,
-    Resolver, TokioResolver,
 };
 use volo::{
     context::Endpoint,

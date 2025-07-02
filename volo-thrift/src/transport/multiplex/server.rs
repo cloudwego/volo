@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    sync::{atomic::Ordering, Arc},
+    sync::{Arc, atomic::Ordering},
 };
 
 use metainfo::MetaInfo;
@@ -11,11 +11,11 @@ use tracing::*;
 use volo::{context::Context, net::Address, volo_unreachable};
 
 use crate::{
+    DummyMessage, EntryMessage, ServerError, ThriftMessage,
     codec::{Decoder, Encoder},
     context::{ServerContext, ThriftContext as _},
     protocol::TMessageType,
-    server_error_to_application_exception, thrift_exception_to_application_exception, DummyMessage,
-    EntryMessage, ServerError, ThriftMessage,
+    server_error_to_application_exception, thrift_exception_to_application_exception,
 };
 
 const CHANNEL_SIZE: usize = 1024;

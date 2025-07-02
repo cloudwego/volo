@@ -4,7 +4,7 @@
 //!
 //! See [`CookieLayer`] for more details.
 
-use motore::{layer::Layer, Service};
+use motore::{Service, layer::Layer};
 use tokio::sync::RwLock;
 
 use crate::{
@@ -97,7 +97,7 @@ impl CookieLayer {
     /// # Example
     ///
     /// ```rust
-    /// use volo_http::{client::cookie::CookieLayer, Client};
+    /// use volo_http::{Client, client::cookie::CookieLayer};
     ///
     /// let client: Client = Client::builder()
     ///     .layer_inner(CookieLayer::new(Default::default()))

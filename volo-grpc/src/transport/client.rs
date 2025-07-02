@@ -2,26 +2,26 @@ use std::{io, marker::PhantomData};
 
 use bytes::Bytes;
 use http::{
-    header::{CONTENT_TYPE, TE},
     HeaderValue,
+    header::{CONTENT_TYPE, TE},
 };
 use http_body::Frame;
 use http_body_util::StreamBody;
 use hyper_util::rt::{TokioExecutor, TokioTimer};
 use motore::Service;
-use tower::{util::ServiceExt, Service as TowerService};
+use tower::{Service as TowerService, util::ServiceExt};
 use volo::net::Address;
 
 use super::connect::Connector;
 use crate::{
+    Code, Request, Response, Status,
     body::boxed,
     client::Http2Config,
     codec::{
-        compression::{CompressionEncoding, ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
+        compression::{ACCEPT_ENCODING_HEADER, CompressionEncoding, ENCODING_HEADER},
         decode::Kind,
     },
     context::{ClientContext, Config},
-    Code, Request, Response, Status,
 };
 
 /// A simple wrapper of [`hyper_util::client::legacy::Client`] that implements [`Service`]

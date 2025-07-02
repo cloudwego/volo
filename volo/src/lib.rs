@@ -4,7 +4,7 @@
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 #![cfg_attr(docsrs, feature(doc_cfg, doc_auto_cfg))]
 
-pub use motore::{layer, layer::Layer, service, Service};
+pub use motore::{Service, layer, layer::Layer, service};
 pub use tokio::main;
 
 pub mod catch_panic;

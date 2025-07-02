@@ -320,25 +320,31 @@ mod client_error_tests {
     use std::error::Error;
 
     use crate::error::client::{
-        bad_host_name, bad_scheme, no_address, no_available_endpoint, timeout, BadHostName,
-        BadScheme, NoAddress, NoAvailableEndpoint, Timeout,
+        BadHostName, BadScheme, NoAddress, NoAvailableEndpoint, Timeout, bad_host_name, bad_scheme,
+        no_address, no_available_endpoint, timeout,
     };
 
     #[test]
     fn types_downcast() {
         assert!(no_address().source().unwrap().is::<NoAddress>());
-        assert!(bad_scheme(::http::uri::Scheme::HTTP)
-            .source()
-            .unwrap()
-            .is::<BadScheme>());
-        assert!(bad_host_name(::faststr::FastStr::from_static_str("foo"))
-            .source()
-            .unwrap()
-            .is::<BadHostName>());
+        assert!(
+            bad_scheme(::http::uri::Scheme::HTTP)
+                .source()
+                .unwrap()
+                .is::<BadScheme>()
+        );
+        assert!(
+            bad_host_name(::faststr::FastStr::from_static_str("foo"))
+                .source()
+                .unwrap()
+                .is::<BadHostName>()
+        );
         assert!(timeout().source().unwrap().is::<Timeout>());
-        assert!(no_available_endpoint()
-            .source()
-            .unwrap()
-            .is::<NoAvailableEndpoint>());
+        assert!(
+            no_available_endpoint()
+                .source()
+                .unwrap()
+                .is::<NoAvailableEndpoint>()
+        );
     }
 }

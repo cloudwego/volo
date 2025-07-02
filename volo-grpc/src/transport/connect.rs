@@ -16,9 +16,9 @@ use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 use volo::net::tls::{ClientTlsConfig, TlsMakeTransport};
 use volo::net::{
+    Address,
     conn::Conn,
     dial::{Config, DefaultMakeTransport, MakeTransport},
-    Address,
 };
 
 #[derive(Clone, Debug)]

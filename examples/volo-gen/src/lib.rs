@@ -1,6 +1,6 @@
-mod gen {
+mod r#gen {
     include!(concat!(env!("OUT_DIR"), "/thrift_gen.rs"));
     include!(concat!(env!("OUT_DIR"), "/proto_gen.rs"));
 }
 
-pub use gen::*;
+pub use r#gen::*;

@@ -1,16 +1,16 @@
 use bytes::Bytes;
 use linkedbytes::LinkedBytes;
 use pilota::thrift::{
-    binary::TBinaryProtocol,
-    compact::{TCompactInputProtocol, TCompactOutputProtocol},
     ProtocolException, ProtocolExceptionKind, TAsyncBinaryProtocol, TAsyncCompactProtocol,
     TLengthProtocol, ThriftException,
+    binary::TBinaryProtocol,
+    compact::{TCompactInputProtocol, TCompactOutputProtocol},
 };
 use tokio::io::AsyncRead;
 use volo::util::buf_reader::BufReader;
 
 use super::{MakeZeroCopyCodec, ZeroCopyDecoder, ZeroCopyEncoder};
-use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
+use crate::{EntryMessage, ThriftMessage, context::ThriftContext};
 
 /// [`MakeThriftCodec`] implements [`MakeZeroCopyCodec`] to create [`ThriftCodec`].
 #[derive(Debug, Clone, Copy)]

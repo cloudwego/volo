@@ -10,10 +10,10 @@
 
 use std::error::Error;
 
-use super::{HttpBinResponse, HTTPBIN_GET_HTTPS};
+use super::{HTTPBIN_GET_HTTPS, HttpBinResponse};
 use crate::{
     body::BodyConversion,
-    client::{dns::DnsResolver, get, layer::TargetLayer, test_helpers::DebugLayer, Client, Target},
+    client::{Client, Target, dns::DnsResolver, get, layer::TargetLayer, test_helpers::DebugLayer},
     error::client::BadScheme,
 };
 
@@ -99,12 +99,14 @@ async fn client_disable_tls() {
     let mut builder = Client::builder().layer_inner(DebugLayer::default());
     builder.disable_tls(true);
     let client = builder.build().unwrap();
-    assert!(client
-        .get("https://httpbin.org/get")
-        .send()
-        .await
-        .expect_err("HTTPS with disable_tls should fail")
-        .source()
-        .expect("HTTPS with disable_tls should fail")
-        .is::<BadScheme>());
+    assert!(
+        client
+            .get("https://httpbin.org/get")
+            .send()
+            .await
+            .expect_err("HTTPS with disable_tls should fail")
+            .source()
+            .expect("HTTPS with disable_tls should fail")
+            .is::<BadScheme>()
+    );
 }

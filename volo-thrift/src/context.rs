@@ -8,7 +8,7 @@ use volo::{
     newtype_impl_context,
 };
 
-use crate::{client::CallOpt, protocol::TMessageType, BizError};
+use crate::{BizError, client::CallOpt, protocol::TMessageType};
 
 macro_rules! stat_impl {
     ($t: ident) => {

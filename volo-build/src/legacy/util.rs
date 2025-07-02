@@ -1,5 +1,5 @@
 use std::{
-    fs::{create_dir_all, File, OpenOptions},
+    fs::{File, OpenOptions, create_dir_all},
     path::{Path, PathBuf},
     sync::LazyLock,
 };
@@ -64,7 +64,7 @@ pub fn ensure_file(filename: &Path) -> std::io::Result<File> {
 mod tests {
     use std::fs;
 
-    use tempfile::{tempdir, NamedTempFile};
+    use tempfile::{NamedTempFile, tempdir};
 
     use super::*;
 

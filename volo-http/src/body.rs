@@ -15,7 +15,7 @@ use bytes::Bytes;
 use faststr::FastStr;
 use futures_util::stream::Stream;
 use http_body::{Frame, SizeHint};
-use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
+use http_body_util::{BodyExt, Full, StreamBody, combinators::BoxBody};
 use hyper::body::Incoming;
 use linkedbytes::{LinkedBytes, Node};
 use pin_project::pin_project;
@@ -204,7 +204,7 @@ where
         async {
             let vec = self.into_vec().await?;
 
-            Ok(String::from_utf8_unchecked(vec))
+            Ok(unsafe { String::from_utf8_unchecked(vec) })
         }
     }
 
@@ -232,7 +232,7 @@ where
         async {
             let bytes = self.into_bytes().await?;
 
-            Ok(FastStr::from_bytes_unchecked(bytes))
+            Ok(unsafe { FastStr::from_bytes_unchecked(bytes) })
         }
     }
 

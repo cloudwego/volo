@@ -7,12 +7,12 @@ use tokio::net::UnixStream;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::{TcpSocket, TcpStream},
-    time::{timeout, Duration},
+    time::{Duration, timeout},
 };
 
 use super::{
-    conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
     Address,
+    conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
 };
 
 /// [`MakeTransport`] creates an [`AsyncRead`] and an [`AsyncWrite`] for the given [`Address`].

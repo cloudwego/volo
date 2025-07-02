@@ -5,12 +5,12 @@ use std::{borrow::Cow, error::Error, fmt, sync::Arc};
 use base64::Engine;
 use bytes::Bytes;
 use http::header::{HeaderMap, HeaderValue};
-use percent_encoding::{percent_decode, percent_encode, AsciiSet, CONTROLS};
+use percent_encoding::{AsciiSet, CONTROLS, percent_decode, percent_encode};
 use tower::BoxError;
 use tracing::{debug, trace, warn};
 use volo::loadbalance::error::{LoadBalanceError, Retryable};
 
-use crate::{body::BoxBody, metadata::MetadataMap, BASE64_ENGINE};
+use crate::{BASE64_ENGINE, body::BoxBody, metadata::MetadataMap};
 
 const ENCODING_SET: &AsciiSet = &CONTROLS
     .add(b' ')

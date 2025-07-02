@@ -10,10 +10,10 @@ use std::{convert::Infallible, error::Error, fmt, ops::Deref, str::FromStr};
 use ahash::AHashMap;
 use bytes::{BufMut, BytesMut};
 use faststr::FastStr;
-use http::{request::Parts, StatusCode};
+use http::{StatusCode, request::Parts};
 use matchit::Params;
 
-use super::{extract::FromContext, IntoResponse};
+use super::{IntoResponse, extract::FromContext};
 use crate::{
     context::ServerContext, error::BoxError, response::Response, utils::macros::all_the_tuples,
 };
@@ -25,7 +25,7 @@ use crate::{
 /// ```
 /// use volo_http::server::{
 ///     param::PathParamsVec,
-///     route::{get, Router},
+///     route::{Router, get},
 /// };
 ///
 /// async fn params(params: PathParamsVec) -> String {
@@ -100,7 +100,7 @@ impl FromContext for PathParamsVec {
 /// ```
 /// use volo_http::server::{
 ///     param::PathParamsMap,
-///     route::{get, Router},
+///     route::{Router, get},
 /// };
 ///
 /// async fn params(params: PathParamsMap) -> String {
@@ -198,7 +198,7 @@ impl_from_path_param!(FastStr);
 /// ```
 /// use volo_http::server::{
 ///     param::PathParams,
-///     route::{get, Router},
+///     route::{Router, get},
 /// };
 ///
 /// async fn params(PathParams((uid, tid)): PathParams<(usize, usize)>) -> String {

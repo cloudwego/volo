@@ -5,7 +5,7 @@
 use std::{convert::Infallible, ops::Deref};
 
 use cookie::Cookie;
-use http::{header, request::Parts, HeaderMap};
+use http::{HeaderMap, header, request::Parts};
 
 use crate::context::ServerContext;
 #[cfg(feature = "server")]

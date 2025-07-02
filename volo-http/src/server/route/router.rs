@@ -10,19 +10,19 @@
 use std::{collections::HashMap, convert::Infallible};
 
 use http::status::StatusCode;
-use motore::{layer::Layer, service::Service, ServiceExt};
+use motore::{ServiceExt, layer::Layer, service::Service};
 
 use super::{
-    method_router::MethodRouter,
-    utils::{Matcher, RouteId, StripPrefixLayer, NEST_CATCH_PARAM},
     Fallback, Route,
+    method_router::MethodRouter,
+    utils::{Matcher, NEST_CATCH_PARAM, RouteId, StripPrefixLayer},
 };
 use crate::{
     body::Body,
     context::ServerContext,
     request::Request,
     response::Response,
-    server::{handler::Handler, IntoResponse},
+    server::{IntoResponse, handler::Handler},
 };
 
 /// The router for routing path to [`Service`]s or handlers.
@@ -72,7 +72,7 @@ where
     /// ## Normal path
     ///
     /// ```
-    /// use volo_http::server::route::{get, Router};
+    /// use volo_http::server::route::{Router, get};
     ///
     /// async fn index() -> &'static str {
     ///     "Hello, World"
@@ -91,7 +91,7 @@ where
     /// use volo::FastStr;
     /// use volo_http::server::{
     ///     param::PathParamsMap,
-    ///     route::{get, Router},
+    ///     route::{Router, get},
     /// };
     ///
     /// async fn param(map: PathParamsMap) -> FastStr {
@@ -107,7 +107,7 @@ where
     /// use volo::FastStr;
     /// use volo_http::server::{
     ///     param::PathParams,
-    ///     route::{get, Router},
+    ///     route::{Router, get},
     /// };
     ///
     /// async fn param(PathParams(id): PathParams<String>) -> String {
@@ -123,7 +123,7 @@ where
     /// use volo::FastStr;
     /// use volo_http::server::{
     ///     param::PathParams,
-    ///     route::{get, Router},
+    ///     route::{Router, get},
     /// };
     ///
     /// async fn param(PathParams((user, post)): PathParams<(usize, usize)>) -> String {
@@ -141,7 +141,7 @@ where
     /// ```
     /// use volo_http::server::{
     ///     param::PathParams,
-    ///     route::{get, Router},
+    ///     route::{Router, get},
     /// };
     ///
     /// async fn index() -> &'static str {
@@ -187,7 +187,7 @@ where
     /// ```
     /// use volo_http::server::{
     ///     param::PathParams,
-    ///     route::{get, Router},
+    ///     route::{Router, get},
     /// };
     ///
     /// async fn hello_world() -> &'static str {
@@ -312,7 +312,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use volo_http::server::route::{get, Router};
+    /// use volo_http::server::route::{Router, get};
     ///
     /// async fn index() -> &'static str {
     ///     "Hello, World"
@@ -496,7 +496,7 @@ mod router_tests {
     use crate::{
         body::{Body, BodyConversion},
         server::{
-            param::PathParamsVec, route::method_router::any, test_helpers::TestServer, Server,
+            Server, param::PathParamsVec, route::method_router::any, test_helpers::TestServer,
         },
     };
 
@@ -808,8 +808,10 @@ mod router_tests {
                 .unwrap(),
             "",
         );
-        assert!(get_res(&server, "/nest-1/nest-2/nest-3/query")
-            .await
-            .is_err());
+        assert!(
+            get_res(&server, "/nest-1/nest-2/nest-3/query")
+                .await
+                .is_err()
+        );
     }
 }

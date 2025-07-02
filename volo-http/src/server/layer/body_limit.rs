@@ -1,6 +1,6 @@
 use http::StatusCode;
 use http_body::Body;
-use motore::{layer::Layer, Service};
+use motore::{Service, layer::Layer};
 
 use crate::{context::ServerContext, request::Request, response::Response, server::IntoResponse};
 
@@ -79,12 +79,12 @@ where
 #[cfg(test)]
 mod tests {
     use http::{Method, StatusCode};
-    use motore::{layer::Layer, Service};
+    use motore::{Service, layer::Layer};
 
     use crate::{
         server::{
             layer::BodyLimitLayer,
-            route::{any, Route},
+            route::{Route, any},
             test_helpers::empty_cx,
         },
         utils::test_helpers::simple_req,

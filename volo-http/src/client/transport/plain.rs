@@ -1,10 +1,10 @@
 use std::error::Error;
 
 use motore::{make::MakeConnection, service::UnaryService};
-use volo::net::{dial::DefaultMakeTransport, Address};
+use volo::net::{Address, dial::DefaultMakeTransport};
 
 use super::connector::PeerInfo;
-use crate::error::{client::request_error, ClientError};
+use crate::error::{ClientError, client::request_error};
 
 #[derive(Clone, Debug)]
 pub struct PlainMakeConnection<MkC = DefaultMakeTransport> {

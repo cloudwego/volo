@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use motore::{layer::Layer, Service};
+use motore::{Service, layer::Layer};
 
 use crate::{context::ServerContext, request::Request, response::Response, server::IntoResponse};
 
@@ -29,7 +29,7 @@ impl<H> TimeoutLayer<H> {
     ///     context::ServerContext,
     ///     server::{
     ///         layer::TimeoutLayer,
-    ///         route::{get, Router},
+    ///         route::{Router, get},
     ///     },
     /// };
     ///
@@ -120,13 +120,13 @@ where
 #[cfg(test)]
 mod timeout_tests {
     use http::{Method, StatusCode};
-    use motore::{layer::Layer, Service};
+    use motore::{Service, layer::Layer};
 
     use crate::{
         body::BodyConversion,
         context::ServerContext,
         server::{
-            route::{get, Route},
+            route::{Route, get},
             test_helpers::empty_cx,
         },
         utils::test_helpers::simple_req,

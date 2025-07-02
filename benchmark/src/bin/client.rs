@@ -4,8 +4,8 @@ use benchmark::{
     benchmark::echo::{EchoServerClientBuilder, Request},
     perf::Recoder,
     runner::{
-        processor::{process_response, BEGIN_ACTION, ECHO_ACTION, END_ACTION, SLEEP_ACTION},
         Runner,
+        processor::{BEGIN_ACTION, ECHO_ACTION, END_ACTION, SLEEP_ACTION, process_response},
     },
 };
 use clap::Parser;

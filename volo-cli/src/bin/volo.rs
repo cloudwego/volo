@@ -1,13 +1,13 @@
 use clap::Parser;
 use colored::*;
 use log::{debug, error};
-use update_informer::{registry, Check};
+use update_informer::{Check, registry};
 use volo_cli::model;
 
 fn main() {
     // set default log level if not set
     if std::env::var("RUST_LOG").is_err() {
-        std::env::set_var("RUST_LOG", "WARN");
+        unsafe { std::env::set_var("RUST_LOG", "WARN") };
     }
     pretty_env_logger::init();
 

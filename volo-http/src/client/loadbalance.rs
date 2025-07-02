@@ -15,15 +15,15 @@ use motore::{layer::Layer, service::Service};
 use volo::{
     context::Context,
     discovery::Discover,
-    loadbalance::{random::WeightedRandomBalance, LoadBalance, MkLbLayer},
+    loadbalance::{LoadBalance, MkLbLayer, random::WeightedRandomBalance},
 };
 
 use super::dns::{DiscoverKey, DnsResolver};
 use crate::{
     context::ClientContext,
     error::{
-        client::{lb_error, no_available_endpoint},
         ClientError,
+        client::{lb_error, no_available_endpoint},
     },
     request::Request,
 };

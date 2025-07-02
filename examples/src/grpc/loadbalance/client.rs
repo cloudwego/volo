@@ -5,13 +5,13 @@ use std::{
     sync::LazyLock,
 };
 
-use metainfo::{MetaInfo, METAINFO};
+use metainfo::{METAINFO, MetaInfo};
 use pilota::FastStr;
 use volo::{
     discovery::StaticDiscover,
     loadbalance::{
-        consistent_hash::{ConsistentHashBalance, ConsistentHashOption},
         RequestHash,
+        consistent_hash::{ConsistentHashBalance, ConsistentHashOption},
     },
 };
 

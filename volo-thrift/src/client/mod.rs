@@ -8,7 +8,7 @@
 use std::{
     cell::RefCell,
     marker::PhantomData,
-    sync::{atomic::AtomicI32, Arc},
+    sync::{Arc, atomic::AtomicI32},
 };
 
 use motore::{
@@ -18,25 +18,25 @@ use motore::{
 use pilota::thrift::TMessageType;
 use tokio::time::Duration;
 use volo::{
+    FastStr,
     client::WithOptService,
     context::{Context, Endpoint, Role, RpcInfo},
     discovery::{Discover, DummyDiscover},
-    loadbalance::{random::WeightedRandomBalance, LbConfig, MkLbLayer},
+    loadbalance::{LbConfig, MkLbLayer, random::WeightedRandomBalance},
     net::{
-        dial::{DefaultMakeTransport, MakeTransport},
         Address,
+        dial::{DefaultMakeTransport, MakeTransport},
     },
-    FastStr,
 };
 
 use crate::{
-    codec::{
-        default::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec},
-        DefaultMakeCodec, MakeCodec,
-    },
-    context::{ClientContext, Config, CLIENT_CONTEXT_CACHE},
-    transport::{pingpong, pool},
     ClientError, EntryMessage, ThriftMessage,
+    codec::{
+        DefaultMakeCodec, MakeCodec,
+        default::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec},
+    },
+    context::{CLIENT_CONTEXT_CACHE, ClientContext, Config},
+    transport::{pingpong, pool},
 };
 
 mod callopt;
@@ -549,15 +549,15 @@ where
 impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB>
 where
     C: volo::client::MkClient<
-        Client<
-            BoxCloneService<
-                ClientContext,
-                Req,
-                Option<Resp>,
-                <OL::Service as Service<ClientContext, Req>>::Error,
+            Client<
+                BoxCloneService<
+                    ClientContext,
+                    Req,
+                    Option<Resp>,
+                    <OL::Service as Service<ClientContext, Req>>::Error,
+                >,
             >,
         >,
-    >,
     LB: MkLbLayer,
     LB::Layer: Layer<IL::Service>,
     <LB::Layer as Layer<IL::Service>>::Service: Service<ClientContext, Req, Response = Option<Resp>, Error = ClientError>

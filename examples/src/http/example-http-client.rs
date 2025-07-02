@@ -3,8 +3,8 @@ use std::net::SocketAddr;
 use serde::{Deserialize, Serialize};
 use volo_http::{
     body::BodyConversion,
-    client::{get, layer::TargetLayer, ClientBuilder},
-    error::{client::Result, BoxError},
+    client::{ClientBuilder, get, layer::TargetLayer},
+    error::{BoxError, client::Result},
 };
 
 #[derive(Deserialize, Serialize, Debug)]

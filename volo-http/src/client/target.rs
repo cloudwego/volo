@@ -17,8 +17,8 @@ use crate::{
     client::dns::Port,
     context::ClientContext,
     error::{
-        client::{bad_scheme, no_address, port_unavailable, scheme_unavailable, Result},
         ClientError,
+        client::{Result, bad_scheme, no_address, port_unavailable, scheme_unavailable},
     },
     utils::consts,
 };

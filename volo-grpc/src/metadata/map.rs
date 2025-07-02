@@ -590,11 +590,12 @@ impl MetadataMap {
     /// map.append_bin("host-bin", MetadataValue::from_bytes(b"world"));
     /// assert!(map.get_all("host-bin").iter().next().is_none());
     /// assert!(map.get_all("host-bin".to_string()).iter().next().is_none());
-    /// assert!(map
-    ///     .get_all(&("host-bin".to_string()))
-    ///     .iter()
-    ///     .next()
-    ///     .is_none());
+    /// assert!(
+    ///     map.get_all(&("host-bin".to_string()))
+    ///         .iter()
+    ///         .next()
+    ///         .is_none()
+    /// );
     ///
     /// // Attempting to read an invalid key string fails by not
     /// // finding anything.
@@ -637,25 +638,28 @@ impl MetadataMap {
     /// map.append("host", "world".parse().unwrap());
     /// assert!(map.get_all_bin("host").iter().next().is_none());
     /// assert!(map.get_all_bin("host".to_string()).iter().next().is_none());
-    /// assert!(map
-    ///     .get_all_bin(&("host".to_string()))
-    ///     .iter()
-    ///     .next()
-    ///     .is_none());
+    /// assert!(
+    ///     map.get_all_bin(&("host".to_string()))
+    ///         .iter()
+    ///         .next()
+    ///         .is_none()
+    /// );
     ///
     /// // Attempting to read an invalid key string fails by not
     /// // finding anything.
     /// assert!(map.get_all_bin("host{}-bin").iter().next().is_none());
-    /// assert!(map
-    ///     .get_all_bin("host{}-bin".to_string())
-    ///     .iter()
-    ///     .next()
-    ///     .is_none());
-    /// assert!(map
-    ///     .get_all_bin(&("host{}-bin".to_string()))
-    ///     .iter()
-    ///     .next()
-    ///     .is_none());
+    /// assert!(
+    ///     map.get_all_bin("host{}-bin".to_string())
+    ///         .iter()
+    ///         .next()
+    ///         .is_none()
+    /// );
+    /// assert!(
+    ///     map.get_all_bin(&("host{}-bin".to_string()))
+    ///         .iter()
+    ///         .next()
+    ///         .is_none()
+    /// );
     /// ```
     pub fn get_all_bin<K>(&self, key: K) -> GetAll<'_, Binary>
     where
@@ -1023,9 +1027,10 @@ impl MetadataMap {
     /// ```
     /// # use volo_grpc::metadata::*;
     /// let mut map = MetadataMap::new();
-    /// assert!(map
-    ///     .insert_bin("trace-proto-bin", MetadataValue::from_bytes(b"world"))
-    ///     .is_none());
+    /// assert!(
+    ///     map.insert_bin("trace-proto-bin", MetadataValue::from_bytes(b"world"))
+    ///         .is_none()
+    /// );
     /// assert!(!map.is_empty());
     ///
     /// let mut prev = map
@@ -1118,9 +1123,10 @@ impl MetadataMap {
     /// ```
     /// # use volo_grpc::metadata::*;
     /// let mut map = MetadataMap::new();
-    /// assert!(map
-    ///     .insert_bin("trace-proto-bin", MetadataValue::from_bytes(b"world"))
-    ///     .is_none());
+    /// assert!(
+    ///     map.insert_bin("trace-proto-bin", MetadataValue::from_bytes(b"world"))
+    ///         .is_none()
+    /// );
     /// assert!(!map.is_empty());
     ///
     /// map.append_bin("trace-proto-bin", MetadataValue::from_bytes(b"earth"));
@@ -2032,7 +2038,7 @@ mod into_metadata_key {
     // without breaking any external crate.
     pub trait Sealed<VE: ValueEncoding> {
         fn insert(self, map: &mut MetadataMap, val: MetadataValue<VE>)
-            -> Option<MetadataValue<VE>>;
+        -> Option<MetadataValue<VE>>;
 
         fn append(self, map: &mut MetadataMap, val: MetadataValue<VE>) -> bool;
     }
@@ -2130,7 +2136,7 @@ mod as_metadata_key {
         fn get_all(self, map: &MetadataMap) -> Option<GetAll<'_, HeaderValue>>;
 
         fn entry(self, map: &mut MetadataMap)
-            -> Result<Entry<'_, HeaderValue>, InvalidMetadataKey>;
+        -> Result<Entry<'_, HeaderValue>, InvalidMetadataKey>;
 
         fn remove(self, map: &mut MetadataMap) -> Option<MetadataValue<VE>>;
     }

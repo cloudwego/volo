@@ -12,7 +12,7 @@
 //! use volo_http::{
 //!     response::Response,
 //!     server::{
-//!         route::{get, Router},
+//!         route::{Router, get},
 //!         utils::ws::{Message, WebSocket, WebSocketUpgrade},
 //!     },
 //! };
@@ -66,7 +66,7 @@ use crate::{
     body::Body,
     context::ServerContext,
     response::Response,
-    server::{extract::FromContext, IntoResponse},
+    server::{IntoResponse, extract::FromContext},
 };
 
 const HEADERVALUE_UPGRADE: HeaderValue = HeaderValue::from_static("upgrade");
@@ -229,7 +229,7 @@ impl<F> WebSocketUpgrade<F> {
     /// use volo_http::{
     ///     response::Response,
     ///     server::{
-    ///         route::{get, Router},
+    ///         route::{Router, get},
     ///         utils::ws::{WebSocket, WebSocketUpgrade},
     ///     },
     /// };
@@ -269,7 +269,7 @@ impl<F> WebSocketUpgrade<F> {
     /// use volo_http::{
     ///     response::Response,
     ///     server::{
-    ///         route::{get, Router},
+    ///         route::{Router, get},
     ///         utils::ws::{WebSocket, WebSocketUpgrade},
     ///     },
     /// };
@@ -578,7 +578,7 @@ mod websocket_tests {
     use volo::net::Address;
 
     use super::*;
-    use crate::{request::Request, server::test_helpers, Server};
+    use crate::{Server, request::Request, server::test_helpers};
 
     fn simple_parts() -> Parts {
         let req = Request::builder()

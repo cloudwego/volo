@@ -3,8 +3,8 @@
 use std::io;
 
 use bytes::{Buf, BufMut, BytesMut};
-use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 pub use flate2::Compression as Level;
+use flate2::bufread::{GzDecoder, GzEncoder, ZlibDecoder, ZlibEncoder};
 use http::HeaderValue;
 use pilota::LinkedBytes;
 
@@ -250,12 +250,12 @@ pub(crate) fn decompress(
 
 #[cfg(test)]
 mod tests {
-    use bytes::{BufMut, BytesMut};
+    use bytes::BufMut;
     use pilota::LinkedBytes;
 
     use crate::codec::{
-        compression::{compress, decompress, CompressionEncoding, GzipConfig, Level, ZlibConfig},
         BUFFER_SIZE,
+        compression::{CompressionEncoding, GzipConfig, Level, ZlibConfig, compress, decompress},
     };
 
     #[test]
@@ -279,12 +279,8 @@ mod tests {
         for encoding in encodings {
             compress_buf.reset();
             compress(encoding, &mut src, &mut compress_buf).expect("compress failed:");
-            decompress(
-                encoding,
-                &mut compress_buf.bytes_mut(),
-                &mut de_data.bytes_mut(),
-            )
-            .expect("decompress failed:");
+            decompress(encoding, compress_buf.bytes_mut(), de_data.bytes_mut())
+                .expect("decompress failed:");
             assert_eq!(test_data, de_data.bytes());
         }
     }

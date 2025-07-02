@@ -1,11 +1,11 @@
 use std::net::SocketAddr;
 
 use tokio::sync::mpsc;
-use tokio_stream::{wrappers::ReceiverStream, StreamExt};
+use tokio_stream::{StreamExt, wrappers::ReceiverStream};
 use volo_gen::proto_gen::streaming::{StreamingRequest, StreamingResponse};
 use volo_grpc::{
-    server::{Server, ServiceBuilder},
     BoxStream, RecvStream, Request, Response, Status,
+    server::{Server, ServiceBuilder},
 };
 
 pub struct S;

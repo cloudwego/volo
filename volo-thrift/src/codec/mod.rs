@@ -3,7 +3,7 @@ use std::future::Future;
 use pilota::thrift::ThriftException;
 use tokio::io::{AsyncRead, AsyncWrite};
 
-use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
+use crate::{EntryMessage, ThriftMessage, context::ThriftContext};
 
 pub mod default;
 

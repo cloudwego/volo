@@ -6,7 +6,7 @@ use std::{
 };
 
 use http::{HeaderMap, HeaderValue};
-use motore::{layer::Layer, Service};
+use motore::{Service, layer::Layer};
 use pin_project::pin_project;
 use tokio::time::Sleep;
 

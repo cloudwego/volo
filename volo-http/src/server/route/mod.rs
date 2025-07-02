@@ -11,9 +11,9 @@
 use std::{convert::Infallible, future::Future, marker::PhantomData};
 
 use http::status::StatusCode;
-use motore::{layer::Layer, service::Service, ServiceExt};
+use motore::{ServiceExt, layer::Layer, service::Service};
 
-use super::{handler::Handler, IntoResponse};
+use super::{IntoResponse, handler::Handler};
 use crate::{body::Body, context::ServerContext, request::Request, response::Response};
 
 pub mod method_router;

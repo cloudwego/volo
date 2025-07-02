@@ -1,9 +1,8 @@
 use std::{fmt::Display, io};
 
 pub use pilota::thrift::{
-    new_application_exception, new_protocol_exception, ApplicationException,
-    ApplicationExceptionKind, ProtocolException, ProtocolExceptionKind, ThriftException,
-    TransportException,
+    ApplicationException, ApplicationExceptionKind, ProtocolException, ProtocolExceptionKind,
+    ThriftException, TransportException, new_application_exception, new_protocol_exception,
 };
 use pilota::{AHashMap, FastStr};
 use volo::loadbalance::error::{LoadBalanceError, Retryable};

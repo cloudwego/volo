@@ -7,7 +7,7 @@
 //!
 //! ```
 //! use volo_http::server::{
-//!     route::{get, Router},
+//!     route::{Router, get},
 //!     utils::ServeDir,
 //! };
 //!
@@ -128,7 +128,7 @@ pub fn guess_mime(path: &Path) -> HeaderValue {
 
 #[cfg(test)]
 mod serve_dir_tests {
-    use http::{method::Method, StatusCode};
+    use http::{StatusCode, method::Method};
 
     use super::ServeDir;
     use crate::{
@@ -143,17 +143,21 @@ mod serve_dir_tests {
             Router::new().nest_service("/static/", ServeDir::new("."));
         let server = Server::new(router).into_test_server();
         // volo/volo-http/Cargo.toml
-        assert!(server
-            .call_route(Method::GET, "/static/Cargo.toml", None)
-            .await
-            .status()
-            .is_success());
+        assert!(
+            server
+                .call_route(Method::GET, "/static/Cargo.toml", None)
+                .await
+                .status()
+                .is_success()
+        );
         // volo/volo-http/src/lib.rs
-        assert!(server
-            .call_route(Method::GET, "/static/src/lib.rs", None)
-            .await
-            .status()
-            .is_success());
+        assert!(
+            server
+                .call_route(Method::GET, "/static/src/lib.rs", None)
+                .await
+                .status()
+                .is_success()
+        );
         // volo/volo-http/Cargo.lock, this file does not exist
         assert_eq!(
             server

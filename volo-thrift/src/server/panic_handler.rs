@@ -1,7 +1,7 @@
 use pilota::thrift::{ApplicationException, ApplicationExceptionKind};
 use volo::catch_panic;
 
-use crate::{context::ServerContext, ServerError};
+use crate::{ServerError, context::ServerContext};
 
 /// This handler logs the panic info and returns an `InternalServerError` to the client.
 #[inline(never)]

@@ -1,15 +1,15 @@
 use bytes::{BufMut, Bytes};
 use futures::{Stream, StreamExt};
 use http_body::Frame;
-use pilota::{pb::Message, LinkedBytes};
+use pilota::{LinkedBytes, pb::Message};
 
 use super::{DefaultEncoder, PREFIX_LEN};
 use crate::{
-    codec::{
-        compression::{compress, CompressionEncoding},
-        Encoder, BUFFER_SIZE,
-    },
     BoxStream, Status,
+    codec::{
+        BUFFER_SIZE, Encoder,
+        compression::{CompressionEncoding, compress},
+    },
 };
 
 pub fn encode<T, S>(
