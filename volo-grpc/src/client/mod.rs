@@ -14,26 +14,26 @@ use std::{cell::RefCell, marker::PhantomData, sync::Arc, time::Duration};
 pub use callopt::CallOpt;
 pub use meta::MetaService;
 use motore::{
+    ServiceExt,
     layer::{Identity, Layer, Stack},
     service::{BoxCloneService, Service},
-    ServiceExt,
 };
 use volo::{
+    FastStr,
     client::{MkClient, WithOptService},
     context::{Endpoint, Role, RpcInfo},
     discovery::Discover,
-    loadbalance::{random::WeightedRandomBalance, MkLbLayer},
+    loadbalance::{MkLbLayer, random::WeightedRandomBalance},
     net::Address,
-    FastStr,
 };
 
 use self::{dns::DnsResolver, layer::timeout::TimeoutLayer};
 use crate::{
+    Request, Response, Status,
     codec::compression::CompressionEncoding,
     context::{ClientContext, Config},
     layer::loadbalance::LbConfig,
     transport::ClientTransport,
-    Request, Response, Status,
 };
 pub mod layer;
 

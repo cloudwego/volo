@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    sync::{atomic::Ordering, Arc},
+    sync::{Arc, atomic::Ordering},
 };
 
 use metainfo::MetaInfo;
@@ -11,12 +11,12 @@ use tracing::*;
 use volo::{net::Address, volo_unreachable};
 
 use crate::{
+    DummyMessage, EntryMessage, ServerError, ThriftMessage,
     codec::{Decoder, Encoder},
-    context::{ServerContext, ThriftContext, SERVER_CONTEXT_CACHE},
+    context::{SERVER_CONTEXT_CACHE, ServerContext, ThriftContext},
     protocol::TMessageType,
     server_error_to_application_exception, thrift_exception_to_application_exception,
     tracing::SpanProvider,
-    DummyMessage, EntryMessage, ServerError, ThriftMessage,
 };
 
 #[allow(clippy::too_many_arguments)]

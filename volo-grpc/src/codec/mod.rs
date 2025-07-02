@@ -10,9 +10,9 @@ pub mod encode;
 use std::{io, marker::PhantomData, mem::size_of};
 
 use bytes::Bytes;
-use pilota::{pb::Message, LinkedBytes};
+use pilota::{LinkedBytes, pb::Message};
 
-use crate::{status::Code::Internal, Status};
+use crate::{Status, status::Code::Internal};
 
 const PREFIX_LEN: usize = size_of::<u32>() + size_of::<u8>();
 const BUFFER_SIZE: usize = 8 * 1024;

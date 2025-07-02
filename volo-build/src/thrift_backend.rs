@@ -5,11 +5,11 @@ use std::{
 
 use itertools::Itertools;
 use pilota_build::{
+    CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
     codegen::thrift::DecodeHelper,
     db::RirDatabase,
     rir::{self, Method},
     tags::RustWrapperArc,
-    CodegenBackend, Context, DefId, IdentName, Symbol, ThriftBackend,
 };
 use quote::format_ident;
 use volo::FastStr;

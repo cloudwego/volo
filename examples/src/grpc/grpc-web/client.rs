@@ -1,12 +1,12 @@
 use bytes::{Buf, BufMut, Bytes};
 use http::{
-    header::{self, ACCEPT, CONTENT_TYPE},
     Method, Request, StatusCode, Uri,
+    header::{self, ACCEPT, CONTENT_TYPE},
 };
 use http_body_util::{BodyExt, Full};
 use hyper::body::Incoming;
 use hyper_util::rt::TokioExecutor;
-use pilota::{pb::Message, FastStr, LinkedBytes};
+use pilota::{FastStr, LinkedBytes, pb::Message};
 use volo_gen::proto_gen::helloworld::{HelloReply, HelloRequest};
 use volo_http::body::BodyConversion;
 

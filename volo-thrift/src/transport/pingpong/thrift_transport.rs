@@ -1,14 +1,14 @@
-use std::sync::{atomic::AtomicUsize, LazyLock};
+use std::sync::{LazyLock, atomic::AtomicUsize};
 
 use pilota::thrift::{ApplicationException, ApplicationExceptionKind};
 use pin_project::pin_project;
 use tokio::io::{AsyncRead, AsyncWrite};
 
 use crate::{
+    ClientError, EntryMessage, ThriftMessage,
     codec::{Decoder, Encoder, MakeCodec},
     context::{ClientContext, ThriftContext},
     transport::pool::Poolable,
-    ClientError, EntryMessage, ThriftMessage,
 };
 
 static TRANSPORT_ID_COUNTER: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));

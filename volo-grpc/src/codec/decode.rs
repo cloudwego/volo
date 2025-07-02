@@ -6,23 +6,23 @@ use std::{
 };
 
 use bytes::{Buf, BufMut, BytesMut};
-use futures::{future, Stream};
+use futures::{Stream, future};
 use futures_util::ready;
 use http::StatusCode;
 use http_body::Body;
 use pilota::pb::Message;
 use tracing::{debug, trace};
 
-use super::{DefaultDecoder, BUFFER_SIZE, PREFIX_LEN};
+use super::{BUFFER_SIZE, DefaultDecoder, PREFIX_LEN};
 use crate::{
+    Status,
     body::BoxBody,
     codec::{
-        compression::{decompress, CompressionEncoding},
         Decoder,
+        compression::{CompressionEncoding, decompress},
     },
     metadata::MetadataMap,
     status::Code,
-    Status,
 };
 
 /// Streaming Received Request and Received Response.

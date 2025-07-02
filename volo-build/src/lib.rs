@@ -10,7 +10,7 @@ use std::{
 
 use anyhow::anyhow;
 use itertools::Itertools;
-use pilota_build::{parser::Parser, IdlService};
+use pilota_build::{IdlService, parser::Parser};
 
 pub mod config_builder;
 pub mod grpc_backend;
@@ -22,7 +22,7 @@ pub mod workspace;
 
 pub use config_builder::ConfigBuilder;
 pub use pilota_build::{
-    parser, plugin, rir, BoxClonePlugin, ClonePlugin, Context, DefId, MakeBackend, Plugin,
+    BoxClonePlugin, ClonePlugin, Context, DefId, MakeBackend, Plugin, parser, plugin, rir,
 };
 
 pub struct Builder<MkB, P> {

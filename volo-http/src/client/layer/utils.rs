@@ -8,7 +8,7 @@ use volo::{client::Apply, context::Context, net::Address};
 use crate::{
     client::Target,
     context::ClientContext,
-    error::{client::Result, ClientError},
+    error::{ClientError, client::Result},
     request::Request,
 };
 

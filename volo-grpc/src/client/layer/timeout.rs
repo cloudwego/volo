@@ -6,11 +6,11 @@ use std::{
 };
 
 use metainfo::METAINFO;
-use motore::{layer::Layer, Service};
+use motore::{Service, layer::Layer};
 use pin_project::pin_project;
 use tokio::time::{self, Sleep};
 
-use crate::{context::ClientContext, metadata::MetadataValue, status::Status, Request};
+use crate::{Request, context::ClientContext, metadata::MetadataValue, status::Status};
 
 /// Timeout middleware that enforces deadlines from ClientContext.
 #[derive(Debug, Clone)]

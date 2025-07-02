@@ -3,8 +3,8 @@
 use std::{error::Error, str::FromStr, sync::LazyLock};
 
 use futures::{
-    future::{self, Either},
     FutureExt, TryFutureExt,
+    future::{self, Either},
 };
 use http::{
     header,
@@ -24,8 +24,8 @@ use crate::{
     body::Body,
     context::ClientContext,
     error::{
-        client::{connect_error, no_address, request_error, retry, tri, Result},
         BoxError, ClientError,
+        client::{Result, connect_error, no_address, request_error, retry, tri},
     },
     request::Request,
     response::Response,

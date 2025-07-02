@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::PathBuf};
 
-use clap::{value_parser, Parser};
+use clap::{Parser, value_parser};
 use volo_build::{
     model::{Entry, GitSource, Idl, Service, Source},
     util::{check_and_get_repo_name, create_git_service, detect_protocol},

@@ -10,9 +10,9 @@ use std::{net::SocketAddr, time::Duration};
 
 use volo::net::tls::ServerTlsConfig;
 use volo_http::server::{
-    layer::TimeoutLayer,
-    route::{get, Router},
     Server,
+    layer::TimeoutLayer,
+    route::{Router, get},
 };
 
 async fn index() -> &'static str {

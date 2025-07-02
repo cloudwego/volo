@@ -4,7 +4,7 @@ use hyper::body::Incoming;
 use volo::net::Address;
 
 use crate::{
-    body::{boxed, BoxBody},
+    body::{BoxBody, boxed},
     metadata::HEADER_TRANS_REMOTE_ADDR,
 };
 

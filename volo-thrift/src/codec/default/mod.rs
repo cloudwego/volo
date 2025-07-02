@@ -38,7 +38,7 @@ use volo::{net::ready::AsyncReady, util::buf_reader::BufReader};
 
 use self::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec};
 use super::{Decoder, Encoder, MakeCodec};
-use crate::{context::ThriftContext, EntryMessage, ThriftMessage};
+use crate::{EntryMessage, ThriftMessage, context::ThriftContext};
 
 pub mod framed;
 pub mod thrift;
@@ -133,8 +133,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncReady + Unpin + Send + Sync + 'sta
         let (real_size, malloc_size) = self.encoder.size(cx, &msg)?;
         trace!(
             "[VOLO] codec encode message real size: {}, malloc size: {}",
-            real_size,
-            malloc_size
+            real_size, malloc_size
         );
         cx.stats_mut().set_write_size(real_size);
 

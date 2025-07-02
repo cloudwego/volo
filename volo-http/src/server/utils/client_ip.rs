@@ -8,7 +8,7 @@ use std::{
 
 use http::{HeaderMap, HeaderName};
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
-use motore::{layer::Layer, Service};
+use motore::{Service, layer::Layer};
 use volo::{context::Context, net::Address};
 
 use crate::{context::ServerContext, request::Request};
@@ -159,9 +159,9 @@ impl ClientIpConfig {
 /// ///
 /// use volo_http::server::utils::client_ip::ClientIp;
 /// use volo_http::server::{
-///     route::{get, Router},
-///     utils::client_ip::{ClientIpConfig, ClientIpLayer},
 ///     Server,
+///     route::{Router, get},
+///     utils::client_ip::{ClientIpConfig, ClientIpLayer},
 /// };
 ///
 /// async fn handler(ClientIp(client_ip): ClientIp) -> String {
@@ -180,9 +180,9 @@ impl ClientIpConfig {
 /// use volo_http::{
 ///     context::ServerContext,
 ///     server::{
-///         route::{get, Router},
-///         utils::client_ip::{ClientIp, ClientIpConfig, ClientIpLayer},
 ///         Server,
+///         route::{Router, get},
+///         utils::client_ip::{ClientIp, ClientIpConfig, ClientIpLayer},
 ///     },
 /// };
 ///
@@ -279,14 +279,14 @@ mod client_ip_tests {
     use std::{net::SocketAddr, str::FromStr};
 
     use http::{HeaderValue, Method};
-    use motore::{layer::Layer, Service};
+    use motore::{Service, layer::Layer};
     use volo::net::Address;
 
     use crate::{
         body::BodyConversion,
         context::ServerContext,
         server::{
-            route::{get, Route},
+            route::{Route, get},
             utils::client_ip::{ClientIp, ClientIpConfig, ClientIpLayer},
         },
         utils::test_helpers::simple_req,

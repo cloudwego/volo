@@ -8,12 +8,12 @@
 //! ```rust
 //! use http::StatusCode;
 //! use volo_http::{
+//!     Router,
 //!     response::Response,
 //!     server::{
 //!         route::post,
 //!         utils::multipart::{Multipart, MultipartRejectionError},
 //!     },
-//!     Router,
 //! };
 //!
 //! async fn upload(mut multipart: Multipart) -> Result<StatusCode, MultipartRejectionError> {
@@ -34,13 +34,13 @@
 
 use std::{error::Error, fmt};
 
-use http::{request::Parts, StatusCode};
+use http::{StatusCode, request::Parts};
 use http_body_util::BodyExt;
 use multer::Field;
 
 use crate::{
     context::ServerContext,
-    server::{extract::FromRequest, IntoResponse},
+    server::{IntoResponse, extract::FromRequest},
 };
 
 /// Extract a type from `multipart/form-data` HTTP requests.
@@ -79,12 +79,12 @@ use crate::{
 /// ```rust
 /// use http::StatusCode;
 /// use volo_http::{
+///     Router,
 ///     server::{
 ///         layer::BodyLimitLayer,
 ///         route::post,
 ///         utils::multipart::{Multipart, MultipartRejectionError},
 ///     },
-///     Router,
 /// };
 ///
 /// async fn upload_handler(
@@ -216,15 +216,14 @@ mod multipart_tests {
     use volo::net::Address;
 
     use crate::{
+        Server,
         context::ServerContext,
         request::Request,
         response::Response,
         server::{
-            test_helpers,
+            IntoResponse, test_helpers,
             utils::multipart::{Multipart, MultipartRejectionError},
-            IntoResponse,
         },
-        Server,
     };
 
     fn _test_compile() {

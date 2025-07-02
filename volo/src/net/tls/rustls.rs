@@ -1,9 +1,9 @@
 use std::{io, io::Result, path::Path, sync::Arc};
 
-use rustls::{pki_types::ServerName, RootCertStore, ServerConfig};
+use rustls::{RootCertStore, ServerConfig, pki_types::ServerName};
 use rustls_pki_types::PrivateKeyDer;
 use tokio::net::TcpStream;
-use tokio_rustls::{rustls::ClientConfig, TlsAcceptor, TlsConnector};
+use tokio_rustls::{TlsAcceptor, TlsConnector, rustls::ClientConfig};
 
 use super::{Acceptor, Connector, TlsConnectorBuilder};
 use crate::net::conn::{Conn, ConnStream};

@@ -6,7 +6,7 @@ use url::Url;
 use volo::context::Context;
 
 use crate::{
-    error::{client::request_error, ClientError},
+    error::{ClientError, client::request_error},
     request::RequestPartsExt,
     response::Response,
 };
@@ -158,8 +158,8 @@ mod fail_on_status_tests {
 
     use super::FailOnStatus;
     use crate::{
-        body::Body, client::test_helpers::MockTransport, context::ClientContext,
-        error::ClientError, request::Request, response::Response, ClientBuilder,
+        ClientBuilder, body::Body, client::test_helpers::MockTransport, context::ClientContext,
+        error::ClientError, request::Request, response::Response,
     };
 
     struct ReturnStatus;

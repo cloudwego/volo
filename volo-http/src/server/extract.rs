@@ -21,7 +21,7 @@ use volo::{context::Context, net::Address};
 use super::IntoResponse;
 use crate::{
     context::ServerContext,
-    error::server::{body_collection_error, ExtractBodyError},
+    error::server::{ExtractBodyError, body_collection_error},
     request::{Request, RequestPartsExt},
     server::utils::client_ip::ClientIp,
     utils::macros::impl_deref_and_deref_mut,
@@ -104,7 +104,7 @@ pub struct Form<T>(pub T);
 /// use serde::Deserialize;
 /// use volo_http::server::{
 ///     extract::Json,
-///     route::{post, Router},
+///     route::{Router, post},
 /// };
 ///
 /// #[derive(Debug, Deserialize)]
@@ -126,7 +126,7 @@ pub struct Form<T>(pub T);
 /// use serde::Serialize;
 /// use volo_http::server::{
 ///     extract::Json,
-///     route::{get, Router},
+///     route::{Router, get},
 /// };
 ///
 /// #[derive(Debug, Serialize)]
@@ -165,7 +165,7 @@ impl MaybeInvalid<String> {
     /// It is up to the caller to guarantee that the value really is valid. Using this when the
     /// content is invalid causes immediate undefined behavior.
     pub unsafe fn assume_valid(self) -> String {
-        String::from_utf8_unchecked(self.0)
+        unsafe { String::from_utf8_unchecked(self.0) }
     }
 }
 
@@ -177,7 +177,7 @@ impl MaybeInvalid<FastStr> {
     /// It is up to the caller to guarantee that the value really is valid. Using this when the
     /// content is invalid causes immediate undefined behavior.
     pub unsafe fn assume_valid(self) -> FastStr {
-        FastStr::from_vec_u8_unchecked(self.0)
+        unsafe { FastStr::from_vec_u8_unchecked(self.0) }
     }
 }
 

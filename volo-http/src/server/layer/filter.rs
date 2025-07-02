@@ -1,12 +1,12 @@
 use std::marker::PhantomData;
 
-use motore::{layer::Layer, Service};
+use motore::{Service, layer::Layer};
 
 use crate::{
     context::ServerContext,
     request::Request,
     response::Response,
-    server::{handler::HandlerWithoutRequest, IntoResponse},
+    server::{IntoResponse, handler::HandlerWithoutRequest},
 };
 
 /// [`Layer`] for filtering requests
@@ -35,7 +35,7 @@ impl<H, R, T> FilterLayer<H, R, T> {
     /// use http::{method::Method, status::StatusCode};
     /// use volo_http::server::{
     ///     layer::FilterLayer,
-    ///     route::{get, Router},
+    ///     route::{Router, get},
     /// };
     ///
     /// async fn reject_post(method: Method) -> Result<(), StatusCode> {
@@ -131,12 +131,12 @@ where
 #[cfg(test)]
 mod filter_tests {
     use http::{Method, StatusCode};
-    use motore::{layer::Layer, Service};
+    use motore::{Service, layer::Layer};
 
     use crate::{
         body::BodyConversion,
         server::{
-            route::{any, Route},
+            route::{Route, any},
             test_helpers::empty_cx,
         },
         utils::test_helpers::simple_req,

@@ -7,8 +7,8 @@ use std::{
     convert::Infallible,
     error::Error,
     sync::{
-        atomic::{AtomicUsize, Ordering},
         Arc,
+        atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
 };
@@ -18,11 +18,11 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto,
 };
-use metainfo::{MetaInfo, METAINFO};
+use metainfo::{METAINFO, MetaInfo};
 use motore::{
+    BoxError,
     layer::{Identity, Layer, Stack},
     service::Service,
-    BoxError,
 };
 use parking_lot::RwLock;
 use scopeguard::defer;
@@ -31,13 +31,13 @@ use tokio::sync::Notify;
 use volo::net::{conn::ConnStream, tls::Acceptor, tls::ServerTlsConfig};
 use volo::{
     context::Context,
-    net::{conn::Conn, incoming::Incoming, Address, MakeIncoming},
+    net::{Address, MakeIncoming, conn::Conn, incoming::Incoming},
 };
 
 use self::span_provider::{DefaultProvider, SpanProvider};
 use crate::{
     body::Body,
-    context::{server::Config, ServerContext},
+    context::{ServerContext, server::Config},
     request::Request,
     response::Response,
 };
@@ -66,7 +66,7 @@ pub mod prelude {
     #[cfg(feature = "__tls")]
     pub use volo::net::tls::ServerTlsConfig;
 
-    pub use super::{param::PathParams, route::Router, Server};
+    pub use super::{Server, param::PathParams, route::Router};
 }
 
 /// High level HTTP server.
@@ -78,8 +78,8 @@ pub mod prelude {
 ///
 /// use volo::net::Address;
 /// use volo_http::server::{
-///     route::{get, Router},
 ///     Server,
+///     route::{Router, get},
 /// };
 ///
 /// async fn index() -> &'static str {

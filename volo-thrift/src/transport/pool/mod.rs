@@ -27,7 +27,7 @@ use pin_project::pin_project;
 use started::Started as _;
 use tokio::{
     sync::oneshot,
-    time::{interval, Duration, Instant, Interval},
+    time::{Duration, Instant, Interval, interval},
 };
 use volo::Unwrap;
 

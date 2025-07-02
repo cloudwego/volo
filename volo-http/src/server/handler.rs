@@ -10,9 +10,9 @@ use http::request::Parts;
 use motore::service::Service;
 
 use super::{
+    IntoResponse,
     extract::{FromContext, FromRequest},
     middleware::Next,
-    IntoResponse,
 };
 use crate::{
     context::ServerContext,

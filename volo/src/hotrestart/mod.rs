@@ -6,8 +6,8 @@ use std::{
     os::fd::{AsRawFd, RawFd},
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicI32, Ordering},
         Arc, LazyLock, Mutex as StdMutex, OnceLock,
+        atomic::{AtomicI32, Ordering},
     },
     time::Duration,
 };
@@ -17,7 +17,7 @@ use nix::{
     sys::{
         signal,
         socket::{
-            recvmsg, sendmsg, ControlMessage, ControlMessageOwned, MsgFlags, RecvMsg, UnixAddr,
+            ControlMessage, ControlMessageOwned, MsgFlags, RecvMsg, UnixAddr, recvmsg, sendmsg,
         },
     },
     unistd::getpid,

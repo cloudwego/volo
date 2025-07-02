@@ -6,9 +6,9 @@ use http::method::Method;
 use motore::{layer::Layer, service::Service};
 
 use super::{
+    IntoResponse,
     handler::{Handler, HandlerService},
     route::method_router::MethodRouter,
-    IntoResponse,
 };
 use crate::{
     body::Body, context::ServerContext, request::Request, response::Response, server::Server,

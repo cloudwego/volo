@@ -15,7 +15,7 @@ use http::{
     method::Method,
     uri::Uri,
 };
-use metainfo::{MetaInfo, METAINFO};
+use metainfo::{METAINFO, MetaInfo};
 use motore::{
     layer::{Identity, Layer, Stack},
     service::{BoxService, Service},
@@ -30,8 +30,8 @@ use volo::{
 
 use self::{
     layer::{
-        header::{Host, UserAgent},
         Timeout,
+        header::{Host, UserAgent},
     },
     loadbalance::{DefaultLb, LbConfig},
     transport::{
@@ -43,8 +43,8 @@ use crate::{
     body::Body,
     context::ClientContext,
     error::{
-        client::{builder_error, Result},
         BoxError, ClientError,
+        client::{Result, builder_error},
     },
     request::Request,
     response::Response,

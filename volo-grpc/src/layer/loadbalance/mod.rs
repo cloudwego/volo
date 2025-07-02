@@ -4,10 +4,10 @@ use async_broadcast::RecvError;
 use motore::Service;
 use tracing::warn;
 use volo::{
+    Layer,
     context::Context,
     discovery::Discover,
-    loadbalance::{error::LoadBalanceError, LoadBalance, MkLbLayer},
-    Layer,
+    loadbalance::{LoadBalance, MkLbLayer, error::LoadBalanceError},
 };
 
 use crate::Request;

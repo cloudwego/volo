@@ -5,7 +5,7 @@
 mod jar;
 mod store;
 
-pub use cookie::{time::Duration, Cookie};
+pub use cookie::{Cookie, time::Duration};
 pub use jar::CookieJar;
 #[cfg(feature = "client")]
 pub(crate) use store::CookieStore;

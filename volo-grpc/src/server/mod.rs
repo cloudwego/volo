@@ -13,9 +13,9 @@ use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use incoming::IncomingService;
 pub use meta::MetaService;
 use motore::{
+    BoxError,
     layer::{Identity, Layer, Stack},
     service::Service,
-    BoxError,
 };
 pub use service::ServiceBuilder;
 #[cfg(feature = "__tls")]
@@ -27,7 +27,7 @@ use volo::{
 
 pub mod layer;
 pub use self::router::Router;
-use crate::{body::BoxBody, context::ServerContext, Request, Response, Status};
+use crate::{Request, Response, Status, body::BoxBody, context::ServerContext};
 
 /// A trait to provide a static reference to the service's
 /// name. This is used for routing service's within the router.

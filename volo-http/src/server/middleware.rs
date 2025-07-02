@@ -5,9 +5,9 @@ use std::{convert::Infallible, marker::PhantomData, sync::Arc};
 use motore::{layer::Layer, service::Service};
 
 use super::{
+    IntoResponse,
     handler::{MiddlewareHandlerFromFn, MiddlewareHandlerMapResponse},
     route::Route,
-    IntoResponse,
 };
 use crate::{body::Body, context::ServerContext, request::Request, response::Response};
 
@@ -50,9 +50,9 @@ where
 ///     request::Request,
 ///     response::Response,
 ///     server::{
-///         middleware::{from_fn, Next},
+///         middleware::{Next, from_fn},
 ///         response::IntoResponse,
-///         route::{get, Router},
+///         route::{Router, get},
 ///     },
 /// };
 ///
@@ -83,9 +83,9 @@ where
 ///     request::Request,
 ///     response::Response,
 ///     server::{
-///         middleware::{from_fn, Next},
+///         middleware::{Next, from_fn},
 ///         response::IntoResponse,
-///         route::{get, Router},
+///         route::{Router, get},
 ///     },
 /// };
 ///
@@ -132,9 +132,9 @@ where
 ///     request::Request,
 ///     response::Response,
 ///     server::{
-///         middleware::{from_fn, Next},
+///         middleware::{Next, from_fn},
 ///         response::IntoResponse,
-///         route::{get, get_service, Router},
+///         route::{Router, get, get_service},
 ///     },
 /// };
 ///
@@ -275,7 +275,7 @@ where
 ///     response::Response,
 ///     server::{
 ///         middleware::map_response,
-///         route::{get, Router},
+///         route::{Router, get},
 ///     },
 /// };
 ///

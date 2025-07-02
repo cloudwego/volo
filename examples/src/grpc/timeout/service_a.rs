@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::LazyLock, time::Duration};
 
 use pilota::FastStr;
 use tokio::time::sleep;
-use volo_grpc::server::{layer::timeout::TimeoutLayer, Server, ServiceBuilder};
+use volo_grpc::server::{Server, ServiceBuilder, layer::timeout::TimeoutLayer};
 
 static B_CLIENT: LazyLock<volo_gen::proto_gen::helloworld::GreeterClient> = LazyLock::new(|| {
     // Service B

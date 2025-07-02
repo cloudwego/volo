@@ -1,12 +1,12 @@
 use std::{collections::HashMap, fs::create_dir_all, path::PathBuf, process::Command};
 
-use clap::{value_parser, Parser};
+use clap::{Parser, value_parser};
 use volo_build::{
     config_builder::InitBuilder,
-    model::{Entry, DEFAULT_FILENAME},
+    model::{DEFAULT_FILENAME, Entry},
     util::{
-        create_git_service, detect_protocol, git_repo_init, init_git_repo, init_local_service,
-        modify_local_init_service_path_relative_to_yml, DEFAULT_CONFIG_FILE,
+        DEFAULT_CONFIG_FILE, create_git_service, detect_protocol, git_repo_init, init_git_repo,
+        init_local_service, modify_local_init_service_path_relative_to_yml,
     },
 };
 

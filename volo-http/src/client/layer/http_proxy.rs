@@ -13,9 +13,9 @@ use motore::{layer::Layer, service::Service};
 use volo::{client::Apply, context::Context};
 
 use crate::{
-    client::{target::RemoteHost, utils::is_default_port, Target},
+    client::{Target, target::RemoteHost, utils::is_default_port},
     context::ClientContext,
-    error::{client::request_error, ClientError},
+    error::{ClientError, client::request_error},
     request::Request,
 };
 

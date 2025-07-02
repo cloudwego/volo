@@ -5,7 +5,7 @@ use std::{
 };
 
 use bytes::Bytes;
-use futures::{ready, TryStreamExt};
+use futures::{TryStreamExt, ready};
 use http_body::{Body as HttpBody, Frame};
 use http_body_util::BodyExt;
 use pin_project::pin_project;

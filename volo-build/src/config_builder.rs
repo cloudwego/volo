@@ -7,8 +7,8 @@ use volo::FastStr;
 use crate::{
     model::{self, Entry},
     util::{
-        download_repos_to_target, get_service_builders_from_services, open_config_file,
-        read_config_from_file, ServiceBuilder, DEFAULT_CONFIG_FILE, DEFAULT_DIR,
+        DEFAULT_CONFIG_FILE, DEFAULT_DIR, ServiceBuilder, download_repos_to_target,
+        get_service_builders_from_services, open_config_file, read_config_from_file,
     },
 };
 

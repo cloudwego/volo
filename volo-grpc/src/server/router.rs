@@ -9,7 +9,7 @@ use rustc_hash::FxHashMap;
 use volo::Unwrap;
 
 use super::NamedService;
-use crate::{body::BoxBody, context::ServerContext, Request, Response, Status};
+use crate::{Request, Response, Status, body::BoxBody, context::ServerContext};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 struct RouteId(u32);

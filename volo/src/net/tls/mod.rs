@@ -6,18 +6,18 @@ use std::{
     time::Duration,
 };
 
-use motore::{make::MakeConnection, UnaryService};
+use motore::{UnaryService, make::MakeConnection};
 use tokio::net::TcpStream;
 #[cfg(target_family = "unix")]
 use tokio::net::UnixStream;
 
 use super::{
     conn::ConnStream,
-    dial::{make_tcp_connection, Config, MakeTransport},
+    dial::{Config, MakeTransport, make_tcp_connection},
 };
 use crate::net::{
-    conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
     Address,
+    conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
 };
 
 #[cfg(feature = "native-tls")]

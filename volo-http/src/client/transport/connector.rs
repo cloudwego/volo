@@ -1,9 +1,9 @@
 use http::uri::Scheme;
 use motore::service::UnaryService;
-use volo::net::{conn::Conn, Address};
+use volo::net::{Address, conn::Conn};
 
 use super::{plain::PlainMakeConnection, protocol::ClientTransportConfig};
-use crate::error::{client::bad_scheme, ClientError};
+use crate::error::{ClientError, client::bad_scheme};
 
 pub struct ConnectorBuilder<'a> {
     mk_conn: HttpMakeConnection,

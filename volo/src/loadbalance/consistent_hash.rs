@@ -1,8 +1,8 @@
 use std::{cmp::min, collections::HashSet, hash::Hash, sync::Arc};
 
-use dashmap::{mapref::entry::Entry, DashMap};
+use dashmap::{DashMap, mapref::entry::Entry};
 
-use super::{error::LoadBalanceError, LoadBalance, RequestHash};
+use super::{LoadBalance, RequestHash, error::LoadBalanceError};
 use crate::{
     context::Endpoint,
     discovery::{Change, Discover, Instance},
@@ -301,7 +301,7 @@ mod tests {
     };
 
     use futures::Future;
-    use metainfo::{MetaInfo, METAINFO};
+    use metainfo::{METAINFO, MetaInfo};
     use rand::Rng;
 
     use super::{ConsistentHashBalance, ConsistentHashOption, LoadBalance};

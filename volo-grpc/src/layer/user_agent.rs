@@ -1,4 +1,4 @@
-use http::{header::USER_AGENT, HeaderValue, Request};
+use http::{HeaderValue, Request, header::USER_AGENT};
 use motore::Service;
 
 const VOLO_USER_AGENT: &str = "volo-user-agent";

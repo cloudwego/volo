@@ -2,9 +2,10 @@ use std::{io, marker::PhantomData};
 
 use motore::service::{Service, UnaryService};
 use pilota::thrift::TransportException;
-use volo::net::{dial::MakeTransport, Address};
+use volo::net::{Address, dial::MakeTransport};
 
 use crate::{
+    EntryMessage, ThriftMessage,
     codec::MakeCodec,
     context::ClientContext,
     protocol::TMessageType,
@@ -12,7 +13,6 @@ use crate::{
         pingpong::thrift_transport::ThriftTransport,
         pool::{Config, PooledMakeTransport, Ver},
     },
-    EntryMessage, ThriftMessage,
 };
 
 #[derive(Clone)]

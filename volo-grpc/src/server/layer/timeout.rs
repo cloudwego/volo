@@ -7,11 +7,11 @@ use std::{
 
 use http::{HeaderMap, HeaderValue};
 use metainfo::METAINFO;
-use motore::{layer::Layer, Service};
+use motore::{Service, layer::Layer};
 use pin_project::pin_project;
 use tokio::time::{self, Sleep};
 
-use crate::{context::ServerContext, status::Status, Request};
+use crate::{Request, context::ServerContext, status::Status};
 
 #[derive(Debug, Clone)]
 pub struct Timeout<S> {
@@ -230,7 +230,7 @@ mod tests_insert_and_parse {
         use std::time::Duration;
 
         use http::HeaderValue;
-        use metainfo::{MetaInfo, METAINFO};
+        use metainfo::{METAINFO, MetaInfo};
 
         let mi = MetaInfo::new();
 

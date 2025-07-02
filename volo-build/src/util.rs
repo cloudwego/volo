@@ -7,9 +7,9 @@ use std::{
     sync::LazyLock,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use mockall_double::double;
-use pilota_build::{middle::context::Mode, Symbol};
+use pilota_build::{Symbol, middle::context::Mode};
 use serde::de::Error;
 use volo::FastStr;
 
@@ -649,7 +649,7 @@ pub(crate) fn get_base_dir(mode: &Mode, def_id: Option<&usize>, path: &[Symbol])
 mod tests {
     use std::fs;
 
-    use tempfile::{tempdir, NamedTempFile};
+    use tempfile::{NamedTempFile, tempdir};
 
     use super::*;
 

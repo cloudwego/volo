@@ -12,9 +12,9 @@ use http::header::{self, HeaderName, HeaderValue};
 use motore::{layer::Layer, service::Service};
 
 use crate::{
-    client::{target::RemoteHost, utils::is_default_port, Target},
+    client::{Target, target::RemoteHost, utils::is_default_port},
     context::ClientContext,
-    error::client::{builder_error, Result},
+    error::client::{Result, builder_error},
     request::Request,
 };
 
@@ -281,9 +281,9 @@ mod layer_header_tests {
     use http::uri::Scheme;
 
     use crate::client::{
+        Target,
         layer::header::gen_host,
         target::{RemoteHost, RemoteTarget},
-        Target,
     };
 
     const IPV4: IpAddr = IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1));

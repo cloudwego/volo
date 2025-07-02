@@ -16,13 +16,13 @@ use volo::{
     net::Address,
 };
 
-use super::{insert_header, target::Target, CallOpt};
+use super::{CallOpt, insert_header, target::Target};
 use crate::{
     body::Body,
     context::ClientContext,
     error::{
-        client::{builder_error, Result},
         BoxError, ClientError,
+        client::{Result, builder_error},
     },
     request::Request,
     response::Response,

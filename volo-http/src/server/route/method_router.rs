@@ -16,7 +16,7 @@
 use std::convert::Infallible;
 
 use http::{method::Method, status::StatusCode};
-use motore::{layer::Layer, service::Service, ServiceExt};
+use motore::{ServiceExt, layer::Layer, service::Service};
 use paste::paste;
 
 use super::{Fallback, Route};
@@ -25,7 +25,7 @@ use crate::{
     context::ServerContext,
     request::Request,
     response::Response,
-    server::{handler::Handler, IntoResponse},
+    server::{IntoResponse, handler::Handler},
 };
 
 /// A method router that handle the request and dispatch it by its method.
@@ -42,7 +42,7 @@ use crate::{
 /// use volo_http::{
 ///     context::ServerContext,
 ///     request::Request,
-///     server::route::{any, get, post_service, MethodRouter, Router},
+///     server::route::{MethodRouter, Router, any, get, post_service},
 /// };
 ///
 /// async fn index() -> &'static str {
@@ -385,7 +385,7 @@ where
 mod method_router_tests {
     use http::{method::Method, status::StatusCode};
 
-    use super::{any, get, head, options, MethodRouter};
+    use super::{MethodRouter, any, get, head, options};
     use crate::body::Body;
 
     async fn always_ok() {}

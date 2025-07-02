@@ -25,27 +25,27 @@ use motore::{
 use volo::context::Context;
 
 use super::{
+    HTTPBIN_GET, HTTPBIN_POST, HttpBinResponse,
     utils::{
         AutoBody, AutoBodyLayer, AutoFull, AutoFullLayer, DropBodyLayer, Nothing,
         RespBodyToFullLayer,
     },
-    HttpBinResponse, HTTPBIN_GET, HTTPBIN_POST,
 };
 use crate::{
+    ClientBuilder,
     body::{Body, BodyConversion},
     client::{
+        CallOpt, Client, DefaultMkClient,
         dns::DnsResolver,
         get,
-        layer::{http_proxy::HttpProxy, FailOnStatus, TargetLayer},
+        layer::{FailOnStatus, TargetLayer, http_proxy::HttpProxy},
         loadbalance::DefaultLb,
         test_helpers::{DebugLayer, MockTransport},
-        CallOpt, Client, DefaultMkClient,
     },
     context::client::Config,
     error::ClientError,
     response::Response,
     utils::consts::HTTP_DEFAULT_PORT,
-    ClientBuilder,
 };
 
 fn builder_with_proxy() -> ClientBuilder<Identity, Stack<HttpProxy, Identity>> {
@@ -70,12 +70,14 @@ async fn client_with_generics() {
     // Override default `ReqBody`, but the `ReqBody` is still implements `http_body::Body`
     {
         let client = builder_with_proxy().build().unwrap();
-        assert!(client
-            .post(HTTPBIN_POST)
-            .body(Full::new(Bytes::new()))
-            .send()
-            .await
-            .is_ok());
+        assert!(
+            client
+                .post(HTTPBIN_POST)
+                .body(Full::new(Bytes::new()))
+                .send()
+                .await
+                .is_ok()
+        );
         assert_eq!(TypeId::of::<Client<Full<Bytes>>>(), type_of(&client),);
     }
     // Override default `RespBody`, but the `RespBody` is still implements `http_body::Body`
@@ -95,12 +97,14 @@ async fn client_with_generics() {
             .layer_outer_front(AutoBodyLayer)
             .build()
             .unwrap();
-        assert!(client
-            .post(HTTPBIN_POST)
-            .body(AutoBody)
-            .send()
-            .await
-            .is_ok());
+        assert!(
+            client
+                .post(HTTPBIN_POST)
+                .body(AutoBody)
+                .send()
+                .await
+                .is_ok()
+        );
         assert_eq!(TypeId::of::<Client<AutoBody>>(), type_of(&client),);
     }
     // Override default `ReqBody` through `Layer`. The `AutoFull` does not implement
@@ -111,12 +115,14 @@ async fn client_with_generics() {
             .layer_outer_front(AutoFullLayer)
             .build()
             .unwrap();
-        assert!(client
-            .post(HTTPBIN_POST)
-            .body(AutoFull)
-            .send()
-            .await
-            .is_ok());
+        assert!(
+            client
+                .post(HTTPBIN_POST)
+                .body(AutoFull)
+                .send()
+                .await
+                .is_ok()
+        );
         assert_eq!(TypeId::of::<Client<AutoFull>>(), type_of(&client),);
     }
     // Override default `RespBody` through `Layer`. The `RespBody` does not implement

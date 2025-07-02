@@ -1,9 +1,9 @@
 use std::task::{Context, Poll};
 
-use futures::{future::BoxFuture, FutureExt};
+use futures::{FutureExt, future::BoxFuture};
 use http_body_util::BodyExt as _;
 
-use crate::{body::BoxBody, BoxError};
+use crate::{BoxError, body::BoxBody};
 
 #[derive(Debug, Default, Clone)]
 pub struct GrpcWebLayer {

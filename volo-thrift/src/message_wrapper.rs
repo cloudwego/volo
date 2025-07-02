@@ -2,11 +2,11 @@ use pilota::thrift::{ApplicationException, Message, TAsyncInputProtocol, ThriftE
 use volo::FastStr;
 
 use crate::{
+    EntryMessage,
     context::{ClientContext, ServerContext, ThriftContext},
     protocol::{
         TInputProtocol, TLengthProtocol, TMessageIdentifier, TMessageType, TOutputProtocol,
     },
-    EntryMessage,
 };
 
 #[derive(Debug)]

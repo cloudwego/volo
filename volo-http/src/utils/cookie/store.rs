@@ -2,7 +2,7 @@ use std::ops::{Deref, DerefMut};
 
 use bytes::Bytes;
 use cookie::Cookie;
-use http::{header, HeaderMap, HeaderValue};
+use http::{HeaderMap, HeaderValue, header};
 
 #[derive(Default)]
 pub struct CookieStore {

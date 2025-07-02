@@ -1,8 +1,8 @@
 use std::{
     cell::RefCell,
     sync::{
-        atomic::{AtomicBool, AtomicUsize},
         Arc, LazyLock,
+        atomic::{AtomicBool, AtomicUsize},
     },
 };
 
@@ -11,7 +11,7 @@ use pilota::thrift::{ApplicationException, ApplicationExceptionKind};
 use pin_project::pin_project;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
-    sync::{oneshot, Mutex},
+    sync::{Mutex, oneshot},
 };
 use volo::{
     context::{Role, RpcInfo},
@@ -19,10 +19,10 @@ use volo::{
 };
 
 use crate::{
+    ClientError, EntryMessage, ThriftMessage,
     codec::{Decoder, Encoder, MakeCodec},
     context::{ClientContext, ThriftContext},
     transport::pool::{Poolable, Reservation},
-    ClientError, EntryMessage, ThriftMessage,
 };
 
 static TRANSPORT_ID_COUNTER: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));

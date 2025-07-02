@@ -1,9 +1,10 @@
 use std::{io, marker::PhantomData};
 
 use motore::service::{Service, UnaryService};
-use volo::net::{dial::MakeTransport, Address};
+use volo::net::{Address, dial::MakeTransport};
 
 use crate::{
+    ClientError, EntryMessage, ThriftMessage,
     codec::MakeCodec,
     context::ClientContext,
     protocol::TMessageType,
@@ -11,7 +12,6 @@ use crate::{
         multiplex::thrift_transport::ThriftTransport,
         pool::{Config, PooledMakeTransport, Ver},
     },
-    ClientError, EntryMessage, ThriftMessage,
 };
 
 pub struct MakeClientTransport<MkT, MkC, Resp>

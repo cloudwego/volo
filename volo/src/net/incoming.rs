@@ -12,9 +12,9 @@ use tokio::net::TcpListener;
 use tokio::net::UnixListener;
 #[cfg(target_family = "unix")]
 use tokio_stream::wrappers::UnixListenerStream;
-use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
+use tokio_stream::{StreamExt, wrappers::TcpListenerStream};
 
-use super::{conn::Conn, Address};
+use super::{Address, conn::Conn};
 
 #[pin_project(project = IncomingProj)]
 #[derive(Debug)]
@@ -215,11 +215,7 @@ mod unix_helper {
         };
 
         let max = (1 << size) - 1;
-        if n > max {
-            max
-        } else {
-            n
-        }
+        if n > max { max } else { n }
     }
 
     #[cfg(target_os = "linux")]

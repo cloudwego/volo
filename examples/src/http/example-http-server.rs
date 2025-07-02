@@ -4,32 +4,32 @@ use async_stream::stream;
 use bytes::Bytes;
 use faststr::FastStr;
 use futures::Stream;
-use http::{header, Method, StatusCode, Uri};
+use http::{Method, StatusCode, Uri, header};
 use http_body::Frame;
 use serde::{Deserialize, Serialize};
 use tokio_stream::StreamExt;
 use volo::{catch_panic, service::service_fn};
 use volo_http::{
+    Address,
     body::{Body, BodyConversion},
     context::ServerContext,
     request::Request,
     response::Response,
     server::{
+        IntoResponse, Redirect, Server,
         extract::{Form, FullUri, Json, MaybeInvalid, Query},
         layer::{FilterLayer, TimeoutLayer},
         middleware::{self, Next},
         panic_handler::{always_internal_error, fixed_payload},
         param::PathParams,
         response::sse::{Event, Sse},
-        route::{get, get_service, post, Router},
+        route::{Router, get, get_service, post},
         utils::ServeDir,
-        IntoResponse, Redirect, Server,
     },
     utils::{
-        cookie::{self, CookieJar},
         Extension,
+        cookie::{self, CookieJar},
     },
-    Address,
 };
 
 async fn hello() -> &'static str {

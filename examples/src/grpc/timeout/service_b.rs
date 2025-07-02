@@ -1,7 +1,7 @@
 use std::{net::SocketAddr, time::Duration};
 
 use tokio::time::sleep;
-use volo_grpc::server::{layer::timeout::TimeoutLayer, Server, ServiceBuilder};
+use volo_grpc::server::{Server, ServiceBuilder, layer::timeout::TimeoutLayer};
 
 pub struct ServiceB;
 

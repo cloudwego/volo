@@ -13,15 +13,15 @@ members = [
   "benchmark",
   "tests/code-generation",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 authors = ["Volo Team <volo@cloudwego.io>"]
-edition = "2021"
+edition = "2024"
 homepage = "https://www.cloudwego.io/docs/volo/"
 repository = "https://github.com/cloudwego/volo"
 license = "MIT OR Apache-2.0"
-rust-version = "1.80.0"
+rust-version = "1.85.0"
 
 [workspace.dependencies]
 pilota = "0.12"
