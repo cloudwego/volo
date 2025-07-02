@@ -96,7 +96,7 @@ impl UnaryService<PeerInfo> for HttpMakeConnection {
         match self {
             Self::Plain(plain) => {
                 if req.scheme != Scheme::HTTP {
-                    return Err(bad_scheme());
+                    return Err(bad_scheme(req.scheme));
                 }
                 plain.call(req).await
             }

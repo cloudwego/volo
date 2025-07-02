@@ -278,14 +278,39 @@ macro_rules! simple_error {
             }
         }
     };
+
+    ($(#[$attr:meta])* $kind:ident => $name:ident($inner:ty) => $msg:literal) => {
+        paste! {
+            #[doc = $kind " error \"" $msg "\""]
+            $(#[$attr])*
+            #[derive(Debug, PartialEq, Eq)]
+            pub struct $name($inner);
+
+            $(#[$attr])*
+            impl ::std::fmt::Display for $name {
+                fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+                    write!(f, concat!($msg, ": {}"), self.0)
+                }
+            }
+
+            $(#[$attr])*
+            impl ::std::error::Error for $name {}
+
+            $(#[$attr])*
+            pub(crate) fn [<$name:snake>](inner: $inner) -> ClientError {
+                ClientError::new(ErrorKind::$kind, Some($name(inner)))
+            }
+        }
+    };
 }
 
 simple_error!(Builder => NoAddress => "missing target address");
-simple_error!(Builder => BadScheme => "bad scheme");
+simple_error!(Builder => BadScheme(::http::uri::Scheme) => "bad scheme");
 #[cfg(not(all(feature = "http1", feature = "http2")))]
 simple_error!(Builder => BadVersion => "bad http protocol version");
-simple_error!(Builder => BadHostName => "bad host name");
-simple_error!(Builder => BadAddress => "bad address");
+simple_error!(Builder => BadHostName(::faststr::FastStr) => "bad host name");
+simple_error!(Builder => SchemeUnavailable => "scheme is unavailable in current target");
+simple_error!(Builder => PortUnavailable => "port is unavailable in current target");
 simple_error!(Connect => Retry => "retry");
 simple_error!(Request => Timeout => "request timeout");
 simple_error!(LoadBalance => NoAvailableEndpoint => "no available endpoint");
@@ -302,8 +327,14 @@ mod client_error_tests {
     #[test]
     fn types_downcast() {
         assert!(no_address().source().unwrap().is::<NoAddress>());
-        assert!(bad_scheme().source().unwrap().is::<BadScheme>());
-        assert!(bad_host_name().source().unwrap().is::<BadHostName>());
+        assert!(bad_scheme(::http::uri::Scheme::HTTP)
+            .source()
+            .unwrap()
+            .is::<BadScheme>());
+        assert!(bad_host_name(::faststr::FastStr::from_static_str("foo"))
+            .source()
+            .unwrap()
+            .is::<BadHostName>());
         assert!(timeout().source().unwrap().is::<Timeout>());
         assert!(no_available_endpoint()
             .source()
