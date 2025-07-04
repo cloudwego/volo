@@ -5,7 +5,7 @@ use paste::paste;
 pub use volo::context::*;
 use volo::newtype_impl_context;
 
-use crate::{Status, codec::compression::CompressionEncoding};
+use crate::codec::compression::CompressionEncoding;
 
 macro_rules! stat_impl {
     ($t: ident) => {
@@ -40,8 +40,6 @@ pub struct CommonStats {
     encode_end_at: Option<DateTime<Local>>,
     write_start_at: Option<DateTime<Local>>,
     write_end_at: Option<DateTime<Local>>,
-
-    status: Option<Status>,
 }
 
 impl CommonStats {
@@ -57,12 +55,6 @@ impl CommonStats {
     #[inline]
     pub fn reset(&mut self) {
         *self = Self { ..Self::default() }
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    pub fn status(&self) -> &Option<Status> {
-        &self.status
     }
 }
 
@@ -180,6 +172,37 @@ impl std::ops::DerefMut for ServerContext {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+pub trait GrpcContext: volo::context::Context<Config = Config> + Send + 'static {
+    #[doc(hidden)]
+    fn stats(&self) -> &CommonStats;
+    #[doc(hidden)]
+    fn stats_mut(&mut self) -> &mut CommonStats;
+}
+
+impl GrpcContext for ClientContext {
+    #[inline]
+    fn stats(&self) -> &CommonStats {
+        &self.common_stats
+    }
+
+    #[inline]
+    fn stats_mut(&mut self) -> &mut CommonStats {
+        &mut self.common_stats
+    }
+}
+
+impl GrpcContext for ServerContext {
+    #[inline]
+    fn stats(&self) -> &CommonStats {
+        &self.common_stats
+    }
+
+    #[inline]
+    fn stats_mut(&mut self) -> &mut CommonStats {
+        &mut self.common_stats
     }
 }
 
