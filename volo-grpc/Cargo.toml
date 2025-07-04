@@ -32,6 +32,7 @@ anyhow.workspace = true
 async-stream.workspace = true
 base64.workspace = true
 bytes.workspace = true
+chrono.workspace = true
 rustc-hash.workspace = true
 faststr.workspace = true
 futures-util.workspace = true
@@ -53,6 +54,7 @@ hyper-util = { workspace = true, features = [
     "http2",
 ] }
 matchit.workspace = true
+paste.workspace = true
 percent-encoding.workspace = true
 pin-project.workspace = true
 tokio = { workspace = true, features = ["time", "rt", "net", "sync", "signal"] }

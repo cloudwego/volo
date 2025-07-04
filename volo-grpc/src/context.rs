@@ -1,11 +1,110 @@
 use std::time::Duration;
 
+use chrono::{DateTime, Local};
+use paste::paste;
 pub use volo::context::*;
 use volo::newtype_impl_context;
 
-use crate::codec::compression::CompressionEncoding;
+use crate::{Status, codec::compression::CompressionEncoding};
 
-pub struct ClientCxInner;
+macro_rules! stat_impl {
+    ($t: ident) => {
+        paste! {
+            #[inline]
+            pub fn $t(&self) -> Option<DateTime<Local>> {
+                self.$t
+            }
+
+            #[doc(hidden)]
+            #[inline]
+            pub fn [<set_$t>](&mut self, t: DateTime<Local>) {
+                self.$t = Some(t)
+            }
+
+            #[inline]
+            pub fn [<record_ $t>](&mut self) {
+                self.$t = Some(Local::now())
+            }
+        }
+    };
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct CommonStats {
+    read_start_at: Option<DateTime<Local>>,
+    read_end_at: Option<DateTime<Local>>,
+
+    decode_start_at: Option<DateTime<Local>>,
+    decode_end_at: Option<DateTime<Local>>,
+    encode_start_at: Option<DateTime<Local>>,
+    encode_end_at: Option<DateTime<Local>>,
+    write_start_at: Option<DateTime<Local>>,
+    write_end_at: Option<DateTime<Local>>,
+
+    status: Option<Status>,
+}
+
+impl CommonStats {
+    stat_impl!(read_start_at);
+    stat_impl!(read_end_at);
+    stat_impl!(decode_start_at);
+    stat_impl!(decode_end_at);
+    stat_impl!(encode_start_at);
+    stat_impl!(encode_end_at);
+    stat_impl!(write_start_at);
+    stat_impl!(write_end_at);
+
+    #[inline]
+    pub fn reset(&mut self) {
+        *self = Self { ..Self::default() }
+    }
+
+    #[doc(hidden)]
+    #[inline]
+    pub fn status(&self) -> &Option<Status> {
+        &self.status
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ClientStats {
+    make_transport_start_at: Option<DateTime<Local>>,
+    make_transport_end_at: Option<DateTime<Local>>,
+}
+
+impl ClientStats {
+    stat_impl!(make_transport_start_at);
+    stat_impl!(make_transport_end_at);
+
+    #[inline]
+    pub fn reset(&mut self) {
+        self.make_transport_start_at = None;
+        self.make_transport_end_at = None;
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ServerStats {
+    process_start_at: Option<DateTime<Local>>,
+    process_end_at: Option<DateTime<Local>>,
+}
+
+impl ServerStats {
+    stat_impl!(process_start_at);
+    stat_impl!(process_end_at);
+
+    #[inline]
+    pub fn reset(&mut self) {
+        self.process_start_at = None;
+        self.process_end_at = None;
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ClientCxInner {
+    pub stats: ClientStats,
+    pub common_stats: CommonStats,
+}
 
 /// A context for client to pass information such as `RpcInfo` and `Config` between middleware
 /// during the rpc call lifecycle.
@@ -15,31 +114,43 @@ newtype_impl_context!(ClientContext, Config, 0);
 
 impl ClientContext {
     pub fn new(ri: RpcInfo<Config>) -> Self {
-        Self(RpcCx::new(ri, ClientCxInner))
+        Self(RpcCx::new(
+            ri,
+            ClientCxInner {
+                stats: ClientStats::default(),
+                common_stats: CommonStats::default(),
+            },
+        ))
     }
 }
 
 impl Default for ClientContext {
     fn default() -> Self {
-        Self(RpcCx::new(RpcInfo::with_role(Role::Client), ClientCxInner))
+        Self::new(RpcInfo::with_role(Role::Client))
     }
 }
 
 impl std::ops::Deref for ClientContext {
     type Target = RpcCx<ClientCxInner, Config>;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl std::ops::DerefMut for ClientContext {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
 }
 
-pub struct ServerCxInner;
+#[derive(Debug, Clone, Default)]
+pub struct ServerCxInner {
+    pub stats: ServerStats,
+    pub common_stats: CommonStats,
+}
 
 /// A context for server to pass information such as `RpcInfo` and `Config` between middleware
 /// during the rpc call lifecycle.
@@ -49,19 +160,24 @@ newtype_impl_context!(ServerContext, Config, 0);
 
 impl Default for ServerContext {
     fn default() -> Self {
-        Self(RpcCx::new(RpcInfo::with_role(Role::Server), ServerCxInner))
+        Self(RpcCx::new(
+            RpcInfo::with_role(Role::Server),
+            Default::default(),
+        ))
     }
 }
 
 impl std::ops::Deref for ServerContext {
     type Target = RpcCx<ServerCxInner, Config>;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.0
     }
 }
 
 impl std::ops::DerefMut for ServerContext {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
     }
