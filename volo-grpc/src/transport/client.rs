@@ -128,8 +128,8 @@ where
         })?;
 
         let (metadata, extensions, message) = volo_req.into_parts();
-        let path = cx.rpc_info.method().to_string();
-        let rpc_config = cx.rpc_info.config().clone();
+        let path = cx.rpc_info.method();
+        let rpc_config = cx.rpc_info.config();
         let accept_compressions = &rpc_config.accept_compressions;
 
         // select the compression algorithm with the highest priority by user's config
@@ -143,7 +143,7 @@ where
         let mut req = http::Request::builder()
             .version(http::Version::HTTP_2)
             .method(http::Method::POST)
-            .uri(build_uri(target.clone(), &path))
+            .uri(build_uri(target.clone(), path))
             .extension(extensions)
             .body(body)
             .map_err(|err| Status::from_error(err.into()))?;
@@ -188,6 +188,8 @@ where
                 return Err(status);
             }
         }
+        let path = cx.rpc_info.method();
+        let rpc_config = cx.rpc_info.config();
 
         let accept_compression =
             CompressionEncoding::from_encoding_header(headers, &rpc_config.accept_compressions)?;
@@ -195,7 +197,7 @@ where
         let (parts, body) = resp.into_parts();
 
         let body = U::from_body(
-            Some(&path),
+            Some(path),
             boxed(body),
             Kind::Response(status_code),
             accept_compression,
