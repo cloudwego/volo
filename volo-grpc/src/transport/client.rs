@@ -168,6 +168,7 @@ where
                 }
             }
         }
+        cx.stats.record_make_transport_start_at();
 
         let resp = http_client
             .ready()
@@ -177,6 +178,8 @@ where
             .await
             .map_err(|err| Status::from_error(err.into()))?;
 
+        cx.stats.record_make_transport_end_at();
+
         let status_code = resp.status();
         let headers = resp.headers();
 
@@ -185,6 +188,8 @@ where
                 return Err(status);
             }
         }
+        let path = cx.rpc_info.method();
+        let rpc_config = cx.rpc_info.config();
 
         let accept_compression =
             CompressionEncoding::from_encoding_header(headers, &rpc_config.accept_compressions)?;

@@ -4263,13 +4263,14 @@ dependencies = [
 
 [[package]]
 name = "volo-grpc"
-version = "0.11.0"
+version = "0.11.1"
 dependencies = [
  "anyhow",
  "async-broadcast",
  "async-stream",
  "base64",
  "bytes",
+ "chrono",
  "faststr",
  "flate2",
  "futures",
@@ -4286,6 +4287,7 @@ dependencies = [
  "matchit",
  "metainfo",
  "motore",
+ "paste",
  "percent-encoding",
  "pilota",
  "pin-project",
