@@ -74,6 +74,7 @@ tracing.workspace = true
 
 tokio-rustls = { workspace = true, optional = true }
 tokio-native-tls = { workspace = true, optional = true }
+zstd = "0.13.3"
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
