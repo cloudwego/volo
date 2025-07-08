@@ -1,6 +1,6 @@
 //! Test utilities for client of Volo-HTTP.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use http::status::StatusCode;
 use motore::{
@@ -251,6 +251,119 @@ where
         let req = self.config.dump_request(req).await?;
         let resp = self.inner.call(cx, req).await?;
         self.config.dump_response(resp).await
+    }
+}
+
+/// [`Layer`] that will retry when the previous call to inner [`Service`] returned an error status
+/// code.
+///
+/// Note that this layer will collect request and clone it for retry, so it should not be used with
+/// a [`Service`] that uses stream.
+pub struct RetryOnStatus {
+    client_error: bool,
+    server_error: bool,
+    max_retry: usize,
+    sleep_time: Duration,
+}
+
+impl RetryOnStatus {
+    const DEFAULT_MAX_RETRY: usize = 5;
+    const DEFAULT_SLEEP_TIME: Duration = Duration::from_secs(1);
+
+    /// Create a [`RetryOnStatus`] layer that retry for both client error and server error status
+    /// code (4XX and 5XX).
+    pub fn all() -> Self {
+        Self {
+            client_error: true,
+            server_error: true,
+            max_retry: Self::DEFAULT_MAX_RETRY,
+            sleep_time: Self::DEFAULT_SLEEP_TIME,
+        }
+    }
+
+    /// Create a [`RetryOnStatus`] layer that retry for client error status code (4XX).
+    pub fn client_error() -> Self {
+        Self {
+            client_error: true,
+            server_error: true,
+            max_retry: Self::DEFAULT_MAX_RETRY,
+            sleep_time: Self::DEFAULT_SLEEP_TIME,
+        }
+    }
+
+    /// Create a [`RetryOnStatus`] layer that retry for server error status code (5XX).
+    pub fn server_error() -> Self {
+        Self {
+            client_error: true,
+            server_error: true,
+            max_retry: Self::DEFAULT_MAX_RETRY,
+            sleep_time: Self::DEFAULT_SLEEP_TIME,
+        }
+    }
+
+    /// Set num of max retry times for current layer.
+    ///
+    /// Default is 5.
+    pub fn with_max_retry(mut self, max_retry: usize) -> Self {
+        self.max_retry = max_retry;
+        self
+    }
+
+    /// Set sleep time between retries.
+    ///
+    /// Default is 1s.
+    pub fn with_sleep_time(mut self, sleep_time: Duration) -> Self {
+        self.sleep_time = sleep_time;
+        self
+    }
+}
+
+impl<S> Layer<S> for RetryOnStatus {
+    type Service = RetryOnStatusService<S>;
+
+    fn layer(self, inner: S) -> Self::Service {
+        RetryOnStatusService {
+            inner,
+            config: self,
+        }
+    }
+}
+
+/// [`RetryOnStatus`] generated [`Service`], refer to [`RetryOnStatus`] for more details.
+pub struct RetryOnStatusService<S> {
+    inner: S,
+    config: RetryOnStatus,
+}
+
+impl<S> Service<ClientContext, Request> for RetryOnStatusService<S>
+where
+    S: Service<ClientContext, Request, Response = Response, Error = ClientError> + Send + Sync,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+
+    async fn call(
+        &self,
+        cx: &mut ClientContext,
+        req: Request,
+    ) -> Result<Self::Response, Self::Error> {
+        let (parts, body) = req.into_parts();
+        let bytes_body = body.into_bytes().await?;
+        let mut retry = 0;
+        loop {
+            let req = Request::from_parts(parts.clone(), Body::from(bytes_body.clone()));
+            let resp = self.inner.call(cx, req).await?;
+            if (retry < self.config.max_retry)
+                && ((resp.status().is_client_error() && self.config.client_error)
+                    || (resp.status().is_server_error() && self.config.server_error))
+            {
+                retry += 1;
+                tokio::time::sleep(self.config.sleep_time).await;
+                println!("retry on \"{}\" for {retry} time(s)", parts.uri);
+            } else {
+                return Ok(resp);
+            }
+        }
     }
 }
 
