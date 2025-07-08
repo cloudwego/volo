@@ -30,35 +30,6 @@ macro_rules! stat_impl {
 }
 
 #[derive(Debug, Default, Clone)]
-pub struct CommonStats {
-    read_start_at: Option<DateTime<Local>>,
-    read_end_at: Option<DateTime<Local>>,
-
-    decode_start_at: Option<DateTime<Local>>,
-    decode_end_at: Option<DateTime<Local>>,
-    encode_start_at: Option<DateTime<Local>>,
-    encode_end_at: Option<DateTime<Local>>,
-    write_start_at: Option<DateTime<Local>>,
-    write_end_at: Option<DateTime<Local>>,
-}
-
-impl CommonStats {
-    stat_impl!(read_start_at);
-    stat_impl!(read_end_at);
-    stat_impl!(decode_start_at);
-    stat_impl!(decode_end_at);
-    stat_impl!(encode_start_at);
-    stat_impl!(encode_end_at);
-    stat_impl!(write_start_at);
-    stat_impl!(write_end_at);
-
-    #[inline]
-    pub fn reset(&mut self) {
-        *self = Self { ..Self::default() }
-    }
-}
-
-#[derive(Debug, Default, Clone)]
 pub struct ClientStats {
     make_transport_start_at: Option<DateTime<Local>>,
     make_transport_end_at: Option<DateTime<Local>>,
@@ -95,7 +66,6 @@ impl ServerStats {
 #[derive(Debug, Clone, Default)]
 pub struct ClientCxInner {
     pub stats: ClientStats,
-    pub common_stats: CommonStats,
 }
 
 /// A context for client to pass information such as `RpcInfo` and `Config` between middleware
@@ -110,7 +80,6 @@ impl ClientContext {
             ri,
             ClientCxInner {
                 stats: ClientStats::default(),
-                common_stats: CommonStats::default(),
             },
         ))
     }
@@ -141,7 +110,6 @@ impl std::ops::DerefMut for ClientContext {
 #[derive(Debug, Clone, Default)]
 pub struct ServerCxInner {
     pub stats: ServerStats,
-    pub common_stats: CommonStats,
 }
 
 /// A context for server to pass information such as `RpcInfo` and `Config` between middleware
@@ -172,37 +140,6 @@ impl std::ops::DerefMut for ServerContext {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
-    }
-}
-
-pub trait GrpcContext: volo::context::Context<Config = Config> + Send + 'static {
-    #[doc(hidden)]
-    fn stats(&self) -> &CommonStats;
-    #[doc(hidden)]
-    fn stats_mut(&mut self) -> &mut CommonStats;
-}
-
-impl GrpcContext for ClientContext {
-    #[inline]
-    fn stats(&self) -> &CommonStats {
-        &self.common_stats
-    }
-
-    #[inline]
-    fn stats_mut(&mut self) -> &mut CommonStats {
-        &mut self.common_stats
-    }
-}
-
-impl GrpcContext for ServerContext {
-    #[inline]
-    fn stats(&self) -> &CommonStats {
-        &self.common_stats
-    }
-
-    #[inline]
-    fn stats_mut(&mut self) -> &mut CommonStats {
-        &mut self.common_stats
     }
 }
 

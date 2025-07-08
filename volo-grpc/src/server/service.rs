@@ -146,7 +146,11 @@ where
 
         let volo_req = Request::from_parts(metadata, extensions, message);
 
+        cx.stats.record_process_start_at();
+
         let volo_resp = self.inner.call(cx, volo_req).await.map_err(Into::into)?;
+
+        cx.stats.record_process_end_at();
 
         let mut resp =
             volo_resp.map(|message| boxed(Body::new(message.into_body(send_compression))));
