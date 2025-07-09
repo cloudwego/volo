@@ -246,12 +246,10 @@ pub(crate) fn compress(
         }
         CompressionEncoding::Zstd(Some(config)) => {
             let level = config.level.level();
-            // map flate2 level(0-9) to zstd level(1-22).
             let zstd_level = if level == 0 {
                 zstd::DEFAULT_COMPRESSION_LEVEL
             } else {
-                // scale [1, 9] to [1, 22]
-                1 + (level as i32 - 1) * 21 / 8
+                level as i32
             };
             let mut zstd_encoder = zstd::Encoder::new(dest_buf.writer(), zstd_level)?;
             io::copy(&mut &src_buf.bytes()[0..len], &mut zstd_encoder)?;
