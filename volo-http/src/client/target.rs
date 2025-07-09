@@ -344,7 +344,6 @@ impl Apply<ClientContext> for Target {
                         callee.set_address(Address::Ip(sa));
                     }
                     RemoteHost::Name(host) => {
-                        println!("Target::apply, host = {host}");
                         let port = rt.port;
                         tracing::trace!("[Volo-HTTP] Target::apply: set target to {host}:{port}");
                         let callee = cx.rpc_info_mut().callee_mut();
