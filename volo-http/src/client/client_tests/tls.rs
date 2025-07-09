@@ -10,26 +10,32 @@
 
 use std::error::Error;
 
+use motore::layer::{Identity, Stack};
+
 use super::{HTTPBIN_GET_HTTPS, HttpBinResponse};
 use crate::{
+    ClientBuilder,
     body::BodyConversion,
-    client::{Client, Target, dns::DnsResolver, get, layer::TargetLayer, test_helpers::DebugLayer},
+    client::{
+        Client, Target,
+        dns::DnsResolver,
+        layer::TargetLayer,
+        test_helpers::{DebugLayer, RetryOnStatus},
+    },
     error::client::BadScheme,
 };
+
+fn builder_for_debug() -> ClientBuilder<Stack<Stack<RetryOnStatus, Identity>, DebugLayer>, Identity>
+{
+    Client::builder()
+        .layer_inner(RetryOnStatus::server_error())
+        .layer_inner_front(DebugLayer::default())
+}
 
 #[cfg(feature = "json")]
 #[tokio::test]
 async fn simple_https_request() {
-    let resp = get(HTTPBIN_GET_HTTPS)
-        .await
-        .unwrap()
-        .into_json::<HttpBinResponse>()
-        .await
-        .unwrap();
-    assert!(resp.args.is_empty());
-    assert_eq!(resp.url, HTTPBIN_GET_HTTPS);
-
-    let client = Client::default();
+    let client = builder_for_debug().build().unwrap();
     let resp = client
         .get(HTTPBIN_GET_HTTPS)
         .send()
@@ -45,8 +51,7 @@ async fn simple_https_request() {
 #[cfg(feature = "json")]
 #[tokio::test]
 async fn client_builder_with_https() {
-    let client = Client::builder()
-        .layer_inner(DebugLayer::default())
+    let client = builder_for_debug()
         .layer_outer_front(TargetLayer::new(
             Target::new_host(Some(http::uri::Scheme::HTTPS), "httpbin.org", None).unwrap(),
         ))
@@ -74,8 +79,7 @@ async fn client_builder_with_address_and_https() {
         crate::utils::consts::HTTPS_DEFAULT_PORT,
     )));
     target.set_scheme(http::uri::Scheme::HTTPS);
-    let mut builder = Client::builder()
-        .layer_inner(DebugLayer::default())
+    let mut builder = builder_for_debug()
         .layer_outer_front(TargetLayer::new(target).with_service_name("httpbin.org"));
     builder.header(http::header::HOST, "httpbin.org");
     let client = builder.build().unwrap();
@@ -96,7 +100,7 @@ async fn client_builder_with_address_and_https() {
 async fn client_disable_tls() {
     use crate::error::client::bad_scheme;
 
-    let mut builder = Client::builder().layer_inner(DebugLayer::default());
+    let mut builder = builder_for_debug();
     builder.disable_tls(true);
     let client = builder.build().unwrap();
     assert!(
