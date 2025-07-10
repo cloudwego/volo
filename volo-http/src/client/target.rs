@@ -327,6 +327,15 @@ impl From<Address> for Target {
     }
 }
 
+fn ipv6_strip_brackets(src: FastStr) -> FastStr {
+    let bytes = src.as_bytes();
+    match (bytes.first(), bytes.last()) {
+        // SAFETY: the range must be valid because its first and last characters must be ascii char
+        (Some(b'['), Some(b']')) => unsafe { src.index(1, src.len() - 1) },
+        _ => src,
+    }
+}
+
 impl Apply<ClientContext> for Target {
     type Error = ClientError;
 
@@ -347,7 +356,7 @@ impl Apply<ClientContext> for Target {
                         let port = rt.port;
                         tracing::trace!("[Volo-HTTP] Target::apply: set target to {host}:{port}");
                         let callee = cx.rpc_info_mut().callee_mut();
-                        callee.set_service_name(host);
+                        callee.set_service_name(ipv6_strip_brackets(host));
                         // Since Service Discover (DNS) can only access the `callee`, we must
                         // insert port into `callee` so that Service Discover can return the full
                         // address (IP with port) for transporting.
@@ -365,5 +374,40 @@ impl Apply<ClientContext> for Target {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod target_tests {
+    use faststr::FastStr;
+
+    use super::ipv6_strip_brackets;
+
+    #[test]
+    fn ipv6_strip_test() {
+        {
+            let s = FastStr::from_static_str("foo");
+            assert_eq!(ipv6_strip_brackets(s.clone()), s);
+        }
+        {
+            let s = FastStr::from_static_str("127.0.0.1");
+            assert_eq!(ipv6_strip_brackets(s.clone()), s);
+        }
+        {
+            let s = FastStr::from_static_str("[[[");
+            assert_eq!(ipv6_strip_brackets(s.clone()), s);
+        }
+        {
+            let s = FastStr::from_static_str("]]]");
+            assert_eq!(ipv6_strip_brackets(s.clone()), s);
+        }
+        {
+            let s = FastStr::from_static_str("(::1)");
+            assert_eq!(ipv6_strip_brackets(s.clone()), s);
+        }
+        {
+            let s = FastStr::from_static_str("[::1]");
+            assert_eq!(ipv6_strip_brackets(s), "::1");
+        }
     }
 }
