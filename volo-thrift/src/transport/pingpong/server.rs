@@ -17,6 +17,7 @@ use crate::{
     protocol::TMessageType,
     server_error_to_application_exception, thrift_exception_to_application_exception,
     tracing::SpanProvider,
+    transport::server_should_log,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -108,19 +109,13 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                 .instrument(span_provider.on_encode(tracing_cx))
                                 .await
                                 {
-                                    if let ThriftException::Transport(te) = &e {
-                                        if volo::util::server_remote_error::is_remote_closed_error(te.io_error())
-                                            && !volo::util::server_remote_error::remote_closed_error_log_enabled()
-                                        {
-                                            stat_tracer.iter().for_each(|f| f(&cx));
-                                            return Err(());
-                                        }
+                                    if server_should_log(&e) {
+                                        error!(
+                                            "[VOLO] server send response error: {:?}, cx: {:?}, \
+                                             peer_addr: {:?}",
+                                            e, cx, peer_addr
+                                        );
                                     }
-                                    error!(
-                                        "[VOLO] server send response error: {:?}, cx: {:?}, \
-                                         peer_addr: {:?}",
-                                        e, cx, peer_addr
-                                    );
                                     stat_tracer.iter().for_each(|f| f(&cx));
                                     return Err(());
                                 }
@@ -141,11 +136,13 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                             return Err(());
                         }
                         Err(e) => {
-                            error!(
-                                "[VOLO] pingpong server decode error: {:?}, cx: {:?}, peer_addr: \
-                                 {:?}",
-                                e, cx, peer_addr
-                            );
+                            if server_should_log(&e) {
+                                error!(
+                                    "[VOLO] pingpong server decode error: {:?}, cx: {:?}, \
+                                     peer_addr: {:?}",
+                                    e, cx, peer_addr
+                                );
+                            }
                             cx.msg_type = Some(TMessageType::Exception);
                             cx.set_conn_reset_by_ttheader(true);
                             if !matches!(e, ThriftException::Transport(_)) {
@@ -156,11 +153,13 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                     ),
                                 );
                                 if let Err(e) = encoder.encode(&mut cx, msg).await {
-                                    error!(
-                                        "[VOLO] server send error error: {:?}, cx: {:?}, \
-                                         peer_addr: {:?}",
-                                        e, cx, peer_addr
-                                    );
+                                    if server_should_log(&e) {
+                                        error!(
+                                            "[VOLO] server send error error: {:?}, cx: {:?}, \
+                                             peer_addr: {:?}",
+                                            e, cx, peer_addr
+                                        );
+                                    }
                                 }
                             }
                             stat_tracer.iter().for_each(|f| f(&cx));
