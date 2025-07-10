@@ -138,18 +138,6 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self.pilota_builder = self.pilota_builder.dedup(dedup_list);
         self
     }
-}
-
-impl<MkB, P> Builder<MkB, P>
-where
-    MkB: MakeBackend + Send,
-    MkB::Target: Send,
-    P: Parser,
-{
-    pub fn include_dirs(mut self, include_dirs: Vec<PathBuf>) -> Self {
-        self.pilota_builder = self.pilota_builder.include_dirs(include_dirs);
-        self
-    }
 
     pub fn common_crate_name(mut self, name: FastStr) -> Self {
         self.pilota_builder = self.pilota_builder.common_crate_name(name);
@@ -163,6 +151,18 @@ where
 
     pub fn with_field_mask(mut self, with_field_mask: bool) -> Self {
         self.pilota_builder = self.pilota_builder.with_field_mask(with_field_mask);
+        self
+    }
+}
+
+impl<MkB, P> Builder<MkB, P>
+where
+    MkB: MakeBackend + Send,
+    MkB::Target: Send,
+    P: Parser,
+{
+    pub fn include_dirs(mut self, include_dirs: Vec<PathBuf>) -> Self {
+        self.pilota_builder = self.pilota_builder.include_dirs(include_dirs);
         self
     }
 
