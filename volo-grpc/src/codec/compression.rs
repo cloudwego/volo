@@ -21,6 +21,7 @@ pub enum CompressionEncoding {
     Identity,
     Gzip(Option<GzipConfig>),
     Zlib(Option<ZlibConfig>),
+    Zstd(Option<ZstdConfig>),
 }
 
 impl PartialEq for CompressionEncoding {
@@ -29,6 +30,7 @@ impl PartialEq for CompressionEncoding {
             (self, other),
             (Self::Gzip(_), Self::Gzip(_))
                 | (Self::Zlib(_), Self::Zlib(_))
+                | (Self::Zstd(_), Self::Zstd(_))
                 | (Self::Identity, Self::Identity)
         )
     }
@@ -60,6 +62,19 @@ impl Default for ZlibConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct ZstdConfig {
+    pub level: Level,
+}
+
+impl Default for ZstdConfig {
+    fn default() -> Self {
+        Self {
+            level: DEFAULT_LEVEL,
+        }
+    }
+}
+
 /// compose multiple compression encodings to a [HeaderValue]
 pub fn compose_encodings(encodings: &[CompressionEncoding]) -> HeaderValue {
     let encodings = encodings
@@ -68,6 +83,7 @@ pub fn compose_encodings(encodings: &[CompressionEncoding]) -> HeaderValue {
             // TODO: gzip-6 @https://grpc.github.io/grpc/core/md_doc_compression.html#autotoc_md59
             CompressionEncoding::Gzip(_) => "gzip",
             CompressionEncoding::Zlib(_) => "zlib",
+            CompressionEncoding::Zstd(_) => "zstd",
             CompressionEncoding::Identity => "identity",
         })
         .collect::<Vec<&'static str>>();
@@ -86,6 +102,7 @@ impl CompressionEncoding {
         match self {
             CompressionEncoding::Gzip(_) => HeaderValue::from_static("gzip"),
             CompressionEncoding::Zlib(_) => HeaderValue::from_static("zlib"),
+            CompressionEncoding::Zstd(_) => HeaderValue::from_static("zstd"),
             CompressionEncoding::Identity => HeaderValue::from_static("identity"),
         }
     }
@@ -130,6 +147,13 @@ impl CompressionEncoding {
                             None
                         }
                     }),
+                    "zstd" => available_encodings.iter().find_map(|item| {
+                        if item.is_zstd_enabled() {
+                            Some(*item)
+                        } else {
+                            None
+                        }
+                    }),
                     _ => None,
                 })
         } else {
@@ -153,6 +177,7 @@ impl CompressionEncoding {
             match header_value.to_str()? {
                 "gzip" if is_enabled(Self::Gzip(None), encodings) => Ok(Some(Self::Gzip(None))),
                 "zlib" if is_enabled(Self::Zlib(None), encodings) => Ok(Some(Self::Zlib(None))),
+                "zstd" if is_enabled(Self::Zstd(None), encodings) => Ok(Some(Self::Zstd(None))),
                 "identity" => Ok(None),
                 other => {
                     let status = Status::unimplemented(format!(
@@ -172,6 +197,7 @@ impl CompressionEncoding {
         match self {
             CompressionEncoding::Gzip(Some(config)) => config.level,
             CompressionEncoding::Zlib(Some(config)) => config.level,
+            CompressionEncoding::Zstd(Some(config)) => config.level,
             _ => DEFAULT_LEVEL,
         }
     }
@@ -184,10 +210,16 @@ impl CompressionEncoding {
         matches!(self, CompressionEncoding::Zlib(_))
     }
 
+    const fn is_zstd_enabled(&self) -> bool {
+        matches!(self, CompressionEncoding::Zstd(_))
+    }
+
     const fn is_enabled(&self) -> bool {
         matches!(
             self,
-            CompressionEncoding::Gzip(_) | CompressionEncoding::Zlib(_)
+            CompressionEncoding::Gzip(_)
+                | CompressionEncoding::Zlib(_)
+                | CompressionEncoding::Zstd(_)
         )
     }
 }
@@ -211,6 +243,17 @@ pub(crate) fn compress(
         CompressionEncoding::Zlib(Some(config)) => {
             let mut zlib_encoder = ZlibEncoder::new(&src_buf.bytes()[0..len], config.level);
             io::copy(&mut zlib_encoder, &mut dest_buf.writer())?;
+        }
+        CompressionEncoding::Zstd(Some(config)) => {
+            let level = config.level.level();
+            let zstd_level = if level == 0 {
+                zstd::DEFAULT_COMPRESSION_LEVEL
+            } else {
+                level as i32
+            };
+            let mut zstd_encoder = zstd::Encoder::new(dest_buf.writer(), zstd_level)?;
+            io::copy(&mut &src_buf.bytes()[0..len], &mut zstd_encoder)?;
+            zstd_encoder.finish()?;
         }
         _ => {}
     };
@@ -241,6 +284,10 @@ pub(crate) fn decompress(
             let mut zlib_decoder = ZlibDecoder::new(&src_buf[0..len]);
             io::copy(&mut zlib_decoder, &mut dest_buf.writer())?;
         }
+        CompressionEncoding::Zstd(_) => {
+            let mut zstd_decoder = zstd::Decoder::new(&src_buf[0..len])?;
+            io::copy(&mut zstd_decoder, &mut dest_buf.writer())?;
+        }
         _ => {}
     };
 
@@ -255,7 +302,9 @@ mod tests {
 
     use crate::codec::{
         BUFFER_SIZE,
-        compression::{CompressionEncoding, GzipConfig, Level, ZlibConfig, compress, decompress},
+        compression::{
+            CompressionEncoding, GzipConfig, Level, ZlibConfig, ZstdConfig, compress, decompress,
+        },
     };
 
     #[test]
@@ -272,6 +321,9 @@ mod tests {
             })),
             CompressionEncoding::Zlib(Some(ZlibConfig {
                 level: Level::fast(),
+            })),
+            CompressionEncoding::Zstd(Some(ZstdConfig {
+                level: Level::new(3),
             })),
             CompressionEncoding::Identity,
         ];
