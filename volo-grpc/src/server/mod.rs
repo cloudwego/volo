@@ -27,7 +27,12 @@ use volo::{
 
 pub mod layer;
 pub use self::router::Router;
-use crate::{Request, Response, Status, body::BoxBody, context::ServerContext};
+use crate::{
+    Request, Response, Status,
+    body::BoxBody,
+    context::ServerContext,
+    tracing::{DefaultProvider, SpanProvider},
+};
 
 /// A trait to provide a static reference to the service's
 /// name. This is used for routing service's within the router.
@@ -40,23 +45,24 @@ pub trait NamedService {
 
 /// A server for a gRPC service.
 #[derive(Clone)]
-pub struct Server<IL, OL> {
+pub struct Server<IL, OL, SP> {
     inner_layer: IL,
     outer_layer: OL,
     http2_config: Http2Config,
     router: Router,
+    span_provider: SP,
 
     #[cfg(feature = "__tls")]
     tls_config: Option<ServerTlsConfig>,
 }
 
-impl Default for Server<Identity, tower::layer::util::Identity> {
+impl Default for Server<Identity, tower::layer::util::Identity, DefaultProvider> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl Server<Identity, tower::layer::util::Identity> {
+impl Server<Identity, tower::layer::util::Identity, DefaultProvider> {
     /// Creates a new [`Server`].
     pub fn new() -> Self {
         Self {
@@ -64,6 +70,7 @@ impl Server<Identity, tower::layer::util::Identity> {
             outer_layer: tower::layer::util::Identity::new(),
             http2_config: Http2Config::default(),
             router: Router::new(),
+            span_provider: DefaultProvider {},
 
             #[cfg(feature = "__tls")]
             tls_config: None,
@@ -71,7 +78,7 @@ impl Server<Identity, tower::layer::util::Identity> {
     }
 }
 
-impl<IL, OL> Server<IL, OL> {
+impl<IL, OL, SP> Server<IL, OL, SP> {
     #[cfg(feature = "__tls")]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     /// Sets the TLS configuration for the server.
@@ -198,12 +205,13 @@ impl<IL, OL> Server<IL, OL> {
     ///
     /// The overall order for layers is: transport -> IncomingService -> outer -> MetaService ->
     /// \[inner\].
-    pub fn layer<Inner>(self, layer: Inner) -> Server<Stack<Inner, IL>, OL> {
+    pub fn layer<Inner>(self, layer: Inner) -> Server<Stack<Inner, IL>, OL, SP> {
         Server {
             inner_layer: Stack::new(layer, self.inner_layer),
             outer_layer: self.outer_layer,
             http2_config: self.http2_config,
             router: self.router,
+            span_provider: self.span_provider,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -223,12 +231,13 @@ impl<IL, OL> Server<IL, OL> {
     ///
     /// The overall order for layers is: transport -> IncomingService -> outer -> MetaService ->
     /// \[inner\].
-    pub fn layer_front<Front>(self, layer: Front) -> Server<Stack<IL, Front>, OL> {
+    pub fn layer_front<Front>(self, layer: Front) -> Server<Stack<IL, Front>, OL, SP> {
         Server {
             inner_layer: Stack::new(self.inner_layer, layer),
             outer_layer: self.outer_layer,
             http2_config: self.http2_config,
             router: self.router,
+            span_provider: self.span_provider,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -251,12 +260,13 @@ impl<IL, OL> Server<IL, OL> {
     pub fn layer_tower<Outer>(
         self,
         layer: Outer,
-    ) -> Server<IL, tower::layer::util::Stack<Outer, OL>> {
+    ) -> Server<IL, tower::layer::util::Stack<Outer, OL>, SP> {
         Server {
             inner_layer: self.inner_layer,
             outer_layer: tower::layer::util::Stack::new(layer, self.outer_layer),
             http2_config: self.http2_config,
             router: self.router,
+            span_provider: self.span_provider,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -277,6 +287,20 @@ impl<IL, OL> Server<IL, OL> {
             outer_layer: self.outer_layer,
             http2_config: self.http2_config,
             router: self.router.add_service(s),
+            span_provider: self.span_provider,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
+    /// Set a [`SpanProvider`] to the server.
+    pub fn span_provider<P: SpanProvider>(self, provider: P) -> Server<IL, OL, P> {
+        Server {
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
+            http2_config: self.http2_config,
+            router: self.router,
+            span_provider: provider,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -308,6 +332,7 @@ impl<IL, OL> Server<IL, OL> {
         <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Future: Send + 'static,
         <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Error:
             Into<Status> + Send + Sync + std::error::Error,
+        SP: SpanProvider,
     {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
@@ -435,13 +460,14 @@ impl<IL, OL> Server<IL, OL> {
         <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Future: Send + 'static,
         <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Error:
             Into<Status> + Send + Sync + std::error::Error,
+        SP: SpanProvider,
     {
         self.run_with_shutdown(incoming, tokio::signal::ctrl_c())
             .await
     }
 }
 
-impl<IL, OL> fmt::Debug for Server<IL, OL> {
+impl<IL, OL, SP> fmt::Debug for Server<IL, OL, SP> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Server")
             .field("http2_config", &self.http2_config)
