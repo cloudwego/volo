@@ -391,7 +391,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
                     tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
                     let peer_addr = conn.info.peer_addr.clone();
 
-                    let service = IncomingService::new(service.clone(), peer_addr.clone());
+                    let service = IncomingService::new(service.clone(), peer_addr);
 
                     // init server
                     let mut server = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
