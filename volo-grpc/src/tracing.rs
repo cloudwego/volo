@@ -22,7 +22,7 @@ pub trait SpanProvider: 'static + Send + Sync + Clone {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Copy)]
 pub struct DefaultProvider;
 
 impl SpanProvider for DefaultProvider {}

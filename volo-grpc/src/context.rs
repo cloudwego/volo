@@ -3,7 +3,7 @@ use std::time::Duration;
 use chrono::{DateTime, Local};
 use paste::paste;
 pub use volo::context::*;
-use volo::newtype_impl_context;
+use volo::{net::Address, newtype_impl_context};
 
 use crate::codec::compression::CompressionEncoding;
 
@@ -117,6 +117,17 @@ pub struct ServerCxInner {
 pub struct ServerContext(pub(crate) RpcCx<ServerCxInner, Config>);
 
 newtype_impl_context!(ServerContext, Config, 0);
+
+impl ServerContext {
+    pub fn new(peer: Address) -> Self {
+        let mut cx = RpcCx::new(
+            RpcInfo::<Config>::with_role(Role::Server),
+            ServerCxInner::default(),
+        );
+        cx.rpc_info_mut().caller_mut().set_address(peer);
+        Self(cx)
+    }
+}
 
 impl Default for ServerContext {
     fn default() -> Self {
