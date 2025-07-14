@@ -37,7 +37,6 @@ rustc-hash.workspace = true
 faststr.workspace = true
 futures-util.workspace = true
 futures.workspace = true
-flate2.workspace = true
 h2.workspace = true
 hex.workspace = true
 hickory-resolver.workspace = true
@@ -61,6 +60,7 @@ tokio = { workspace = true, features = ["time", "rt", "net", "sync", "signal"] }
 tokio-stream.workspace = true
 tokio-util = { workspace = true, features = ["codec", "compat"] }
 tonic = { workspace = true, optional = true }
+flate2 = { workspace = true, optional = true }
 tonic-web = { workspace = true, optional = true }
 tower = { workspace = true, features = [
   "buffer",
@@ -80,8 +80,11 @@ zstd = { workspace = true, optional = true }
 tracing-subscriber.workspace = true
 
 [features]
-default = []
-zstd = ["dep:zstd"]
+default = ["gzip", "zlib"]
+gzip = ["compress"]
+zlib = ["compress"]
+zstd = ["dep:zstd", "compress"]
+compress = ["dep:flate2"]
 
 __tls = []
 rustls = ["__tls", "dep:tokio-rustls", "volo/rustls"]

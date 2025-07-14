@@ -127,11 +127,17 @@ where
         req: Request<BoxBody>,
     ) -> Result<Self::Response, Self::Error> {
         let (metadata, extensions, body) = req.into_parts();
+        #[cfg(not(feature = "compress"))]
+        let send_compression = None;
+        #[cfg(feature = "compress")]
         let send_compression = CompressionEncoding::from_accept_encoding_header(
             metadata.headers(),
             &self.rpc_config.send_compressions,
         );
 
+        #[cfg(not(feature = "compress"))]
+        let recv_compression = None;
+        #[cfg(feature = "compress")]
         let recv_compression = CompressionEncoding::from_encoding_header(
             metadata.headers(),
             &self.rpc_config.accept_compressions,
