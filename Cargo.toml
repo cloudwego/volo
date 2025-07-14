@@ -123,6 +123,7 @@ update-informer = "1"
 url = "2"
 url_path = "0.1"
 walkdir = "2"
+zstd = "0.13.3"
 
 # Optional dependencies
 rustls = { version = "0.23", default-features = false, features = ["std", "tls12"] }

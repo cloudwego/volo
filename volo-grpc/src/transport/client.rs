@@ -18,7 +18,7 @@ use crate::{
     body::boxed,
     client::Http2Config,
     codec::{
-        compression::{ACCEPT_ENCODING_HEADER, CompressionEncoding, ENCODING_HEADER},
+        compression::{ACCEPT_ENCODING_HEADER, ENCODING_HEADER},
         decode::Kind,
     },
     context::{ClientContext, Config},
@@ -115,6 +115,7 @@ where
 
     type Error = Status;
 
+    #[cfg_attr(not(feature = "compress"), allow(unused_variables))]
     async fn call(
         &self,
         cx: &mut ClientContext,
@@ -191,8 +192,14 @@ where
         let path = cx.rpc_info.method();
         let rpc_config = cx.rpc_info.config();
 
+        #[cfg(not(feature = "compress"))]
+        let accept_compression = None;
+        #[cfg(feature = "compress")]
         let accept_compression =
-            CompressionEncoding::from_encoding_header(headers, &rpc_config.accept_compressions)?;
+            crate::codec::compression::CompressionEncoding::from_encoding_header(
+                headers,
+                &rpc_config.accept_compressions,
+            )?;
 
         let (parts, body) = resp.into_parts();
 
