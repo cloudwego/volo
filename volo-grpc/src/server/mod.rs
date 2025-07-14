@@ -7,12 +7,11 @@ mod meta;
 mod router;
 mod service;
 
-use std::{cell::RefCell, fmt, io, time::Duration};
+use std::{fmt, io, time::Duration};
 
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use incoming::IncomingService;
 pub use meta::MetaService;
-use metainfo::{METAINFO, MetaInfo};
 use motore::{
     BoxError,
     layer::{Identity, Layer, Stack},
@@ -325,7 +324,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             + Sync
             + 'static,
         <IL::Service as Service<ServerContext, Request<BoxBody>>>::Error: Into<Status>,
-        OL: tower::Layer<MetaService<IL::Service>>,
+        OL: tower::Layer<MetaService<IL::Service, SP>>,
         OL::Service: tower::Service<hyper::Request<BoxBody>, Response = hyper::Response<BoxBody>>
             + Clone
             + Send
@@ -338,9 +337,10 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
 
-        let service = self
-            .outer_layer
-            .layer(MetaService::new(self.inner_layer.layer(self.router)));
+        let service = self.outer_layer.layer(MetaService::new(
+            self.inner_layer.layer(self.router),
+            self.span_provider,
+        ));
 
         tokio::pin!(signal);
         let (tx, rx) = tokio::sync::watch::channel(());
@@ -417,15 +417,9 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
                             TokioIo::new(conn),
                             hyper::service::service_fn(move |req| {
                                 let mut service = service.clone();
-                                let address = peer_addr.clone();
-                                METAINFO.scope(RefCell::new(MetaInfo::default()), async move {
-                                    let cx = ServerContext::new(address.unwrap());
-                                    let span = self.span_provider.on_serve(&cx);
-                                    let _enter = span.enter();
-                                    let resp = tower::Service::call(&mut service, req).await;
-                                    self.span_provider.leave_serve(&cx);
-                                    resp
-                                })
+                                async move {
+                                    tower::Service::call(&mut service, req).await
+                                }
                             })
                         ));
                         loop {
@@ -459,7 +453,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             + Sync
             + 'static,
         <IL::Service as Service<ServerContext, Request<BoxBody>>>::Error: Into<Status>,
-        OL: tower::Layer<MetaService<IL::Service>>,
+        OL: tower::Layer<MetaService<IL::Service, SP>>,
         OL::Service: tower::Service<hyper::Request<BoxBody>, Response = hyper::Response<BoxBody>>
             + Clone
             + Send
