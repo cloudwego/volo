@@ -47,11 +47,11 @@ http-body-util.workspace = true
 hyper = { workspace = true, features = ["client", "server", "http2"] }
 hyper-timeout.workspace = true
 hyper-util = { workspace = true, features = [
-    "tokio",
-    "client",
-    "client-legacy",
-    "server",
-    "http2",
+  "tokio",
+  "client",
+  "client-legacy",
+  "server",
+  "http2",
 ] }
 matchit.workspace = true
 paste.workspace = true
@@ -63,23 +63,25 @@ tokio-util = { workspace = true, features = ["codec", "compat"] }
 tonic = { workspace = true, optional = true }
 tonic-web = { workspace = true, optional = true }
 tower = { workspace = true, features = [
-    "buffer",
-    "limit",
-    "make",
-    "util",
-    "discover",
-    "balance",
+  "buffer",
+  "limit",
+  "make",
+  "util",
+  "discover",
+  "balance",
 ] }
 tracing.workspace = true
 
 tokio-rustls = { workspace = true, optional = true }
 tokio-native-tls = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
 
 [features]
 default = []
+zstd = ["dep:zstd"]
 
 __tls = []
 rustls = ["__tls", "dep:tokio-rustls", "volo/rustls"]
