@@ -124,7 +124,7 @@ where
                         Ok::<(), Status>(())
                     });
                     status_to_http!(status);
-                    
+
                     let span = span_provider.on_serve(&cx);
                     let _enter = span.enter();
                     let volo_resp = match inner.call(&mut cx, volo_req).await {
