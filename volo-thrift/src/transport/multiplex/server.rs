@@ -16,6 +16,7 @@ use crate::{
     context::{ServerContext, ThriftContext as _},
     protocol::TMessageType,
     server_error_to_application_exception, thrift_exception_to_application_exception,
+    transport::server_should_log,
 };
 
 const CHANNEL_SIZE: usize = 1024;
@@ -62,19 +63,14 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                             .await
                                         {
                                             stat_tracer.iter().for_each(|f| f(&cx));
-                                            if let ThriftException::Transport(te) = &e {
-                                                if volo::util::server_remote_error::is_remote_closed_error(te.io_error())
-                                                    && !volo::util::server_remote_error::remote_closed_error_log_enabled()
-                                                {
-                                                    return;
-                                                }
+                                            if server_should_log(&e) {
+                                                // log it
+                                                error!(
+                                                    "[VOLO] server send response error: {:?}, cx: \
+                                                    {:?}, peer_addr: {:?}",
+                                                    e, cx, peer_addr
+                                                );
                                             }
-                                            // log it
-                                            error!(
-                                                "[VOLO] server send response error: {:?}, cx: \
-                                                 {:?}, peer_addr: {:?}",
-                                                e, cx, peer_addr
-                                            );
                                             return;
                                         }
                                         stat_tracer.iter().for_each(|f| f(&cx));
@@ -102,19 +98,14 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                             .await
                                         {
                                             stat_tracer.iter().for_each(|f| f(&cx));
-                                            if let ThriftException::Transport(te) = &e {
-                                                if volo::util::server_remote_error::is_remote_closed_error(te.io_error())
-                                                    && !volo::util::server_remote_error::remote_closed_error_log_enabled()
-                                                {
-                                                    return;
-                                                }
+                                            if server_should_log(&e) {
+                                                // log it
+                                                error!(
+                                                    "[VOLO] server send error error: {:?}, cx: {:?}, \
+                                                    peer_addr: {:?}",
+                                                    e, cx, peer_addr
+                                                );
                                             }
-                                            // log it
-                                            error!(
-                                                "[VOLO] server send error error: {:?}, cx: {:?}, \
-                                                 peer_addr: {:?}",
-                                                e, cx, peer_addr
-                                            );
                                             return;
                                         }
                                         stat_tracer.iter().for_each(|f| f(&cx));
@@ -179,10 +170,12 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 return;
                             }
                             Err(e) => {
-                                error!(
-                                    "[VOLO] multiplex server decode error {:?}, peer_addr: {:?}",
-                                    e, peer_addr
-                                );
+                                if server_should_log(&e) {
+                                    error!(
+                                        "[VOLO] multiplex server decode error {:?}, peer_addr: {:?}",
+                                        e, peer_addr
+                                    );
+                                }
                                 cx.msg_type = Some(TMessageType::Exception);
                                 if !matches!(e, ThriftException::Transport(_)) {
                                     let msg = ThriftMessage::mk_server_resp(
