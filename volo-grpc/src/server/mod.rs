@@ -332,7 +332,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
         <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Future: Send + 'static,
         <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Error:
             Into<Status> + Send + Sync + std::error::Error,
-        SP: SpanProvider + Copy,
+        SP: SpanProvider,
     {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
@@ -461,7 +461,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
         <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Future: Send + 'static,
         <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Error:
             Into<Status> + Send + Sync + std::error::Error,
-        SP: SpanProvider + Copy,
+        SP: SpanProvider,
     {
         self.run_with_shutdown(incoming, tokio::signal::ctrl_c())
             .await

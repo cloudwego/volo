@@ -124,13 +124,16 @@ where
                         Ok::<(), Status>(())
                     });
                     status_to_http!(status);
-
+                    
+                    let span = span_provider.on_serve(&cx);
+                    let _enter = span.enter();
                     let volo_resp = match inner.call(&mut cx, volo_req).await {
                         Ok(resp) => resp,
                         Err(err) => {
                             return Ok(err.into().to_http());
                         }
                     };
+                    span_provider.leave_serve(&cx);
 
                     let (mut metadata, extensions, message) = volo_resp.into_parts();
 
@@ -150,8 +153,6 @@ where
                     });
                     status_to_http!(status);
 
-                    let span = span_provider.on_serve(&cx);
-                    let _enter = span.enter();
                     let mut resp = hyper::Response::new(message);
                     *resp.headers_mut() = metadata.into_headers();
                     *resp.extensions_mut() = extensions;
@@ -159,7 +160,6 @@ where
                         http::header::CONTENT_TYPE,
                         http::header::HeaderValue::from_static("application/grpc"),
                     );
-                    span_provider.leave_serve(&cx);
                     Ok(resp)
                 })
                 .await
