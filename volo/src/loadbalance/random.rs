@@ -123,7 +123,7 @@ where
 impl<K> Default for WeightedRandomBalance<K>
 where
     K: Hash + PartialEq + Eq + Send + Sync + 'static,
-  {
+{
     fn default() -> Self {
         Self::new()
     }
