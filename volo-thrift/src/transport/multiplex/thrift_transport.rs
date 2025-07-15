@@ -22,7 +22,10 @@ use crate::{
     ClientError, EntryMessage, ThriftMessage,
     codec::{Decoder, Encoder, MakeCodec},
     context::{ClientContext, ThriftContext},
-    transport::pool::{Poolable, Reservation},
+    transport::{
+        pool::{Poolable, Reservation},
+        should_log,
+    },
 };
 
 static TRANSPORT_ID_COUNTER: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
@@ -304,12 +307,14 @@ where
         target: Address,
     ) -> Result<Option<ThriftMessage<T>>, ClientError> {
         let thrift_msg = self.decoder.decode(cx).await.map_err(|e| {
-            tracing::error!(
-                "[VOLO] transport[{}] decode error: {}, target: {}",
-                self.id,
-                e,
-                target
-            );
+            if should_log(&e) {
+                tracing::error!(
+                    "[VOLO] transport[{}] decode error: {}, target: {}",
+                    self.id,
+                    e,
+                    target
+                );
+            }
             e
         })?;
 
@@ -348,7 +353,9 @@ where
     ) -> Result<(), ClientError> {
         self.encoder.encode(cx, msg).await.map_err(|mut e| {
             e.append_msg(&format!(", rpcinfo: {:?}", cx.rpc_info()));
-            tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
+            if should_log(&e) {
+                tracing::error!("[VOLO] transport[{}] encode error: {:?}", self.id, e);
+            }
             e
         })?;
 
