@@ -16,7 +16,7 @@ use crate::{
     context::{ServerContext, ThriftContext as _},
     protocol::TMessageType,
     server_error_to_application_exception, thrift_exception_to_application_exception,
-    transport::server_should_log,
+    transport::should_log,
 };
 
 const CHANNEL_SIZE: usize = 1024;
@@ -63,7 +63,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                             .await
                                         {
                                             stat_tracer.iter().for_each(|f| f(&cx));
-                                            if server_should_log(&e) {
+                                            if should_log(&e) {
                                                 // log it
                                                 error!(
                                                     "[VOLO] server send response error: {:?}, cx: \
@@ -98,7 +98,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                             .await
                                         {
                                             stat_tracer.iter().for_each(|f| f(&cx));
-                                            if server_should_log(&e) {
+                                            if should_log(&e) {
                                                 // log it
                                                 error!(
                                                     "[VOLO] server send error error: {:?}, cx: {:?}, \
@@ -170,7 +170,7 @@ pub async fn serve<Svc, Req, Resp, E, D>(
                                 return;
                             }
                             Err(e) => {
-                                if server_should_log(&e) {
+                                if should_log(&e) {
                                     error!(
                                         "[VOLO] multiplex server decode error {:?}, peer_addr: {:?}",
                                         e, peer_addr

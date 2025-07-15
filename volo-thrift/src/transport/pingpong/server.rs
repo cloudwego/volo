@@ -17,7 +17,7 @@ use crate::{
     protocol::TMessageType,
     server_error_to_application_exception, thrift_exception_to_application_exception,
     tracing::SpanProvider,
-    transport::server_should_log,
+    transport::should_log,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -109,7 +109,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                 .instrument(span_provider.on_encode(tracing_cx))
                                 .await
                                 {
-                                    if server_should_log(&e) {
+                                    if should_log(&e) {
                                         error!(
                                             "[VOLO] server send response error: {:?}, cx: {:?}, \
                                              peer_addr: {:?}",
@@ -136,7 +136,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                             return Err(());
                         }
                         Err(e) => {
-                            if server_should_log(&e) {
+                            if should_log(&e) {
                                 error!(
                                     "[VOLO] pingpong server decode error: {:?}, cx: {:?}, \
                                      peer_addr: {:?}",
@@ -153,7 +153,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                     ),
                                 );
                                 if let Err(e) = encoder.encode(&mut cx, msg).await {
-                                    if server_should_log(&e) {
+                                    if should_log(&e) {
                                         error!(
                                             "[VOLO] server send error error: {:?}, cx: {:?}, \
                                              peer_addr: {:?}",
