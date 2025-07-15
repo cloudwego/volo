@@ -11,6 +11,7 @@ use crate::{
     metadata::{
         DESTINATION_SERVICE, HEADER_TRANS_REMOTE_ADDR, KeyAndValueRef, MetadataKey, SOURCE_SERVICE,
     },
+    tracing::SpanProvider,
 };
 
 macro_rules! status_to_http {
@@ -23,17 +24,21 @@ macro_rules! status_to_http {
 }
 
 #[derive(Clone, Debug)]
-pub struct MetaService<S> {
+pub struct MetaService<S, SP> {
     inner: S,
+    span_provider: SP,
 }
 
-impl<S> MetaService<S> {
-    pub fn new(inner: S) -> Self {
-        MetaService { inner }
+impl<S, SP> MetaService<S, SP> {
+    pub fn new(inner: S, span_provider: SP) -> Self {
+        MetaService {
+            inner,
+            span_provider,
+        }
     }
 }
 
-impl<S> tower::Service<hyper::Request<BoxBody>> for MetaService<S>
+impl<S, SP> tower::Service<hyper::Request<BoxBody>> for MetaService<S, SP>
 where
     S: Service<ServerContext, Request<BoxBody>, Response = Response<BoxBody>>
         + Clone
@@ -41,6 +46,7 @@ where
         + Sync
         + 'static,
     S::Error: Into<Status>,
+    SP: SpanProvider,
 {
     type Response = hyper::Response<BoxBody>;
 
@@ -54,6 +60,7 @@ where
 
     fn call(&mut self, req: hyper::Request<BoxBody>) -> Self::Future {
         let inner = self.inner.clone();
+        let span_provider = self.span_provider.clone();
         async move {
             let mut cx = ServerContext::default();
 
@@ -118,12 +125,16 @@ where
                     });
                     status_to_http!(status);
 
+                    let span = span_provider.on_serve(&cx);
+                    let _enter = span.enter();
                     let volo_resp = match inner.call(&mut cx, volo_req).await {
                         Ok(resp) => resp,
                         Err(err) => {
+                            span_provider.leave_serve(&cx);
                             return Ok(err.into().to_http());
                         }
                     };
+                    span_provider.leave_serve(&cx);
 
                     let (mut metadata, extensions, message) = volo_resp.into_parts();
 
@@ -150,7 +161,6 @@ where
                         http::header::CONTENT_TYPE,
                         http::header::HeaderValue::from_static("application/grpc"),
                     );
-
                     Ok(resp)
                 })
                 .await
