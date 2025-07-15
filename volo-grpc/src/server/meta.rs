@@ -130,6 +130,7 @@ where
                     let volo_resp = match inner.call(&mut cx, volo_req).await {
                         Ok(resp) => resp,
                         Err(err) => {
+                            span_provider.leave_serve(&cx);
                             return Ok(err.into().to_http());
                         }
                     };
