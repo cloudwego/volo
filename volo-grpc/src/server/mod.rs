@@ -45,7 +45,7 @@ pub trait NamedService {
 
 /// A server for a gRPC service.
 #[derive(Clone)]
-pub struct Server<IL, OL, SP> {
+pub struct Server<IL = Identity, OL = tower::layer::util::Identity, SP = DefaultProvider> {
     inner_layer: IL,
     outer_layer: OL,
     http2_config: Http2Config,
@@ -70,7 +70,7 @@ impl Server<Identity, tower::layer::util::Identity, DefaultProvider> {
             outer_layer: tower::layer::util::Identity::new(),
             http2_config: Http2Config::default(),
             router: Router::new(),
-            span_provider: DefaultProvider {},
+            span_provider: DefaultProvider,
 
             #[cfg(feature = "__tls")]
             tls_config: None,

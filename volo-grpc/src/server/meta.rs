@@ -11,7 +11,7 @@ use crate::{
     metadata::{
         DESTINATION_SERVICE, HEADER_TRANS_REMOTE_ADDR, KeyAndValueRef, MetadataKey, SOURCE_SERVICE,
     },
-    tracing::SpanProvider,
+    tracing::{DefaultProvider, SpanProvider},
 };
 
 macro_rules! status_to_http {
@@ -24,7 +24,7 @@ macro_rules! status_to_http {
 }
 
 #[derive(Clone, Debug)]
-pub struct MetaService<S, SP> {
+pub struct MetaService<S, SP = DefaultProvider> {
     inner: S,
     span_provider: SP,
 }
