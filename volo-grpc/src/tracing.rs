@@ -8,15 +8,6 @@ pub trait SpanProvider: 'static + Send + Sync + Clone {
         Span::none()
     }
 
-    fn on_encode(&self, context: &ServerContext) -> Span {
-        let _ = context;
-        Span::none()
-    }
-
-    fn leave_encode(&self, context: &ServerContext) {
-        let _ = context;
-    }
-
     fn leave_serve(&self, context: &ServerContext) {
         let _ = context;
     }
