@@ -120,6 +120,15 @@ where
     }
 }
 
+impl<K> Default for WeightedRandomBalance<K>
+where
+    K: Hash + PartialEq + Eq + Send + Sync + 'static,
+  {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<D> LoadBalance<D> for WeightedRandomBalance<D::Key>
 where
     D: Discover,
