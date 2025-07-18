@@ -18,6 +18,7 @@ use motore::{
     service::Service,
 };
 pub use service::ServiceBuilder;
+use tower::util::BoxCloneService;
 #[cfg(feature = "__tls")]
 use volo::net::tls::{Acceptor, ServerTlsConfig};
 use volo::{
@@ -324,7 +325,13 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             + Sync
             + 'static,
         <IL::Service as Service<ServerContext, Request<BoxBody>>>::Error: Into<Status>,
-        OL: tower::Layer<MetaService<IL::Service, SP>>,
+        OL: tower::Layer<
+                tower::util::BoxCloneService<
+                    hyper::Request<BoxBody>,
+                    hyper::Response<BoxBody>,
+                    Status,
+                >,
+            >,
         OL::Service: tower::Service<hyper::Request<BoxBody>, Response = hyper::Response<BoxBody>>
             + Clone
             + Send
@@ -337,10 +344,12 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
 
-        let service = self.outer_layer.layer(MetaService::new(
-            self.inner_layer.layer(self.router),
-            self.span_provider,
-        ));
+        let service = self
+            .outer_layer
+            .layer(BoxCloneService::new(MetaService::new(
+                self.inner_layer.layer(self.router),
+                self.span_provider,
+            )));
 
         tokio::pin!(signal);
         let (tx, rx) = tokio::sync::watch::channel(());
@@ -453,7 +462,13 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             + Sync
             + 'static,
         <IL::Service as Service<ServerContext, Request<BoxBody>>>::Error: Into<Status>,
-        OL: tower::Layer<MetaService<IL::Service, SP>>,
+        OL: tower::Layer<
+                tower::util::BoxCloneService<
+                    hyper::Request<BoxBody>,
+                    hyper::Response<BoxBody>,
+                    Status,
+                >,
+            >,
         OL::Service: tower::Service<hyper::Request<BoxBody>, Response = hyper::Response<BoxBody>>
             + Clone
             + Send
