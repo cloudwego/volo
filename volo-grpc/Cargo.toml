@@ -17,6 +17,7 @@ keywords = ["async", "rpc", "grpc", "protobuf"]
 
 [package.metadata.docs.rs]
 rustdoc-args = ["--cfg", "docsrs"] # for conditional intra-doc links
+all-features = true
 
 [badges]
 maintenance = { status = "actively-developed" }
