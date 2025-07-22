@@ -1,9 +1,9 @@
 use tracing::Span;
 
-use crate::context::ServerContext;
+use crate::{context::ServerContext, metadata::MetadataMap};
 
 pub trait SpanProvider: 'static + Send + Sync + Clone {
-    fn on_serve(&self, context: &ServerContext) -> Span {
+    fn on_serve(&self, context: &ServerContext, _metadata: &mut MetadataMap) -> Span {
         let _ = context;
         Span::none()
     }
