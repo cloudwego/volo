@@ -3,6 +3,7 @@
 [![Crates.io](https://img.shields.io/crates/v/volo)](https://crates.io/crates/volo)
 [![Documentation](https://docs.rs/volo/badge.svg)](https://docs.rs/volo)
 [![Website](https://img.shields.io/website?up_message=cloudwego&url=https%3A%2F%2Fwww.cloudwego.io%2F)](https://www.cloudwego.io/)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/cloudwego/volo)
 [![License](https://img.shields.io/crates/l/volo)](#license)
 [![Build Status][actions-badge]][actions-url]
 
