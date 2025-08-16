@@ -262,19 +262,19 @@ where
         }
         let request_hash = request_hash.unwrap();
         let key = discover.key(endpoint);
-        let weighted_list = match self.router.entry(key) {
-            Entry::Occupied(e) => e.get().clone(),
-            Entry::Vacant(e) => {
-                let instances = Arc::new(
-                    self.build_weighted_instances(
-                        discover
-                            .discover(endpoint)
-                            .await
-                            .map_err(|err| err.into())?,
-                    ),
-                );
-                e.insert(instances).value().clone()
-            }
+        let weighted_list = if let Some(instances) = self.router.get(&key) {
+            instances.clone()
+        } else {
+            let instances = Arc::new(
+                self.build_weighted_instances(
+                    discover
+                        .discover(endpoint)
+                        .await
+                        .map_err(|err| err.into())?,
+                ),
+            );
+            self.router.insert(key, Arc::clone(&instances));
+            instances
         };
         Ok(InstancePicker {
             shared_instances: weighted_list,
