@@ -141,17 +141,17 @@ where
         discover: &'future D,
     ) -> Result<Self::InstanceIter, LoadBalanceError> {
         let key = discover.key(endpoint);
-        let weighted_list = match self.router.entry(key) {
-            Entry::Occupied(e) => e.get().clone(),
-            Entry::Vacant(e) => {
-                let instances = Arc::new(WeightedInstances::from(
-                    discover
-                        .discover(endpoint)
-                        .await
-                        .map_err(|err| err.into())?,
-                ));
-                e.insert(instances).value().clone()
-            }
+        let weighted_list = if let Some(instances) = self.router.get(&key) {
+            instances.clone()
+        } else {
+            let instances = Arc::new(WeightedInstances::from(
+                discover
+                    .discover(endpoint)
+                    .await
+                    .map_err(|err| err.into())?,
+            ));
+            self.router.insert(key, Arc::clone(&instances));
+            instances
         };
         let sum_of_weights = weighted_list.sum_of_weights;
         Ok(InstancePicker {
