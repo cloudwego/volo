@@ -23,7 +23,7 @@ macro_rules! tri {
         match $result {
             Ok(val) => val,
             Err(err) => {
-                ::tracing::error!($($arg)*);
+                ::tracing::info!($($arg)*);
                 return Err(err);
             }
         }

@@ -1,7 +1,11 @@
 use motore::{layer::Layer, service::Service};
 use volo::context::Context;
 
-use crate::{context::client::Config, error::ClientError};
+use crate::{
+    context::client::Config,
+    error::ClientError,
+    request::{Request, RequestPartsExt},
+};
 
 /// [`Layer`] for applying timeout from [`Config`].
 ///
@@ -29,31 +33,34 @@ pub struct TimeoutService<S> {
     inner: S,
 }
 
-impl<Cx, Req, S> Service<Cx, Req> for TimeoutService<S>
+impl<Cx, B, S> Service<Cx, Request<B>> for TimeoutService<S>
 where
     Cx: Context<Config = Config> + Send,
-    Req: Send,
-    S: Service<Cx, Req, Error = ClientError> + Send + Sync,
+    B: Send,
+    S: Service<Cx, Request<B>, Error = ClientError> + Send + Sync,
 {
     type Response = S::Response;
     type Error = S::Error;
 
-    async fn call(&self, cx: &mut Cx, req: Req) -> Result<Self::Response, Self::Error> {
+    async fn call(&self, cx: &mut Cx, req: Request<B>) -> Result<Self::Response, Self::Error> {
         let timeout = cx.rpc_info().config().timeout().cloned();
-        let fut = self.inner.call(cx, req);
 
         if let Some(duration) = timeout {
+            let url = req.url();
+            let fut = self.inner.call(cx, req);
             let sleep = tokio::time::sleep(duration);
 
             tokio::select! {
                 res = fut => res,
                 _ = sleep => {
-                    tracing::error!("[Volo-HTTP] request timeout");
+                    if let Some(url) = url {
+                        tracing::warn!("[Volo-HTTP] request timeout on `{url}`");
+                    }
                     Err(crate::error::client::timeout().with_endpoint(cx.rpc_info().callee()))
                 }
             }
         } else {
-            fut.await
+            self.inner.call(cx, req).await
         }
     }
 }

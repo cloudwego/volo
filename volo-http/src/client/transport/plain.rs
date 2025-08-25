@@ -39,7 +39,7 @@ where
         match self.mk_conn.make_connection(req.address.clone()).await {
             Ok(conn) => Ok(conn),
             Err(err) => {
-                tracing::error!("[Volo-HTTP] failed to make connection, error: {err}");
+                tracing::warn!("[Volo-HTTP] failed to make connection, error: {err}");
                 Err(request_error(err).with_address(req.address))
             }
         }

@@ -1,4 +1,7 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use clap::{Parser, value_parser};
 use volo_build::{
@@ -84,7 +87,7 @@ impl CliCommand for Add {
             // iter the entries to find the entry
             for (entry_name, entry) in config.entries.iter_mut() {
                 if entry_name != &cx.entry_name {
-                    if entry.filename == PathBuf::from(&self.filename) {
+                    if entry.filename == Path::new(&self.filename) {
                         eprintln!(
                             "The specified filename '{}' already exists in entry '{}'!",
                             self.filename, entry_name
@@ -107,7 +110,7 @@ impl CliCommand for Add {
                     std::process::exit(1);
                 }
 
-                if entry.filename != PathBuf::from(&self.filename) {
+                if entry.filename != Path::new(&self.filename) {
                     eprintln!(
                         "The specified filename '{}' doesn't match the current filename '{}' in \
                          the entry '{}'!",
