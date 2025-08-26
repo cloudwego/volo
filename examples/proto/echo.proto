@@ -2,6 +2,8 @@ syntax = "proto3";
 
 package echo;
 
+import "pilota.proto";
+
 message EchoRequest {
     string message = 1;
 }
@@ -11,5 +13,6 @@ message EchoResponse {
 }
 
 service Echo {
+    option (pilota.rust_wrapper_arc_all) = true;
     rpc Echo(EchoRequest) returns (EchoResponse) {}
 }

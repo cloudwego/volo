@@ -845,9 +845,17 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         self.inner.codegen_newtype_impl(def_id, stream, t)
     }
 
-    fn codegen_file_descriptor(&self, stream: &mut String, f: &rir::File, has_direct: bool) {
-        self.inner.codegen_file_descriptor(stream, f, has_direct)
+    fn codegen_file_descriptor_at_mod(
+        &self,
+        stream: &mut String,
+        f: &rir::File,
+        mod_path: &[FastStr],
+        has_direct: bool,
+    ) {
+        self.inner
+            .codegen_file_descriptor_at_mod(stream, f, mod_path, has_direct)
     }
+
     fn codegen_register_mod_file_descriptor(
         &self,
         stream: &mut String,

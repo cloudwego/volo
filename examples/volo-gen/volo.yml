@@ -3,6 +3,7 @@ entries:
   proto:
     filename: proto_gen.rs
     protocol: protobuf
+    with_descriptor: true
     services:
       - idl:
           source: local
