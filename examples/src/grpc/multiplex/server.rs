@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use volo_grpc::server::{Server, ServiceBuilder};
 
@@ -22,14 +22,14 @@ pub struct E;
 impl volo_gen::proto_gen::echo::Echo for E {
     async fn echo(
         &self,
-        req: volo_grpc::Request<volo_gen::proto_gen::echo::EchoRequest>,
-    ) -> Result<volo_grpc::Response<volo_gen::proto_gen::echo::EchoResponse>, volo_grpc::Status>
+        req: volo_grpc::Request<Arc<volo_gen::proto_gen::echo::EchoRequest>>,
+    ) -> Result<volo_grpc::Response<Arc<volo_gen::proto_gen::echo::EchoResponse>>, volo_grpc::Status>
     {
         let resp = volo_gen::proto_gen::echo::EchoResponse {
             message: req.get_ref().message.to_string().into(),
             _unknown_fields: Default::default(),
         };
-        Ok(volo_grpc::Response::new(resp))
+        Ok(volo_grpc::Response::new(Arc::new(resp)))
     }
 }
 

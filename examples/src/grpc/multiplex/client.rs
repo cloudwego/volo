@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, sync::LazyLock};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, LazyLock},
+};
 
 use pilota::FastStr;
 
@@ -32,7 +35,7 @@ async fn main() {
         message: FastStr::from_static_str("Volo"),
         _unknown_fields: Default::default(),
     };
-    let resp = ECHO_CLIENT.echo(req).await;
+    let resp = ECHO_CLIENT.echo(Arc::new(req)).await;
     match resp {
         Ok(info) => println!("ECHO: {info:?}"),
         Err(e) => eprintln!("ECHO: {e:?}"),

@@ -1,10 +1,14 @@
+use std::sync::Arc;
+
 use itertools::Itertools;
 use pilota_build::{
     CodegenBackend, Context, DefId, IdentName, Symbol,
     db::RirDatabase,
-    rir,
-    rir::Method,
-    tags::protobuf::{ClientStreaming, ServerStreaming},
+    rir::{self, Method},
+    tags::{
+        RustWrapperArc,
+        protobuf::{ClientStreaming, ServerStreaming},
+    },
 };
 use volo::FastStr;
 
@@ -28,18 +32,29 @@ pub struct VoloGrpcBackend {
 }
 
 impl VoloGrpcBackend {
+    fn is_wrapper_arc(&self, tags_id: pilota_build::TagId) -> bool {
+        self.cx()
+            .tags(tags_id)
+            .as_ref()
+            .and_then(|tags| tags.get::<RustWrapperArc>())
+            .is_some_and(|wrapper| wrapper.0)
+    }
     fn trait_input_ty(
         &self,
         ty: pilota_build::ty::Ty,
         streaming: bool,
         global_path: bool,
     ) -> FastStr {
-        let ty = self.cx().codegen_item_ty(ty.kind);
-        let ty_str = if global_path {
-            format!("{}", ty.global_path("volo_gen"))
+        let arg_ty = self.cx().codegen_item_ty(ty.kind);
+        let mut ty_str = if global_path {
+            format!("{}", arg_ty.global_path("volo_gen"))
         } else {
-            format!("{ty}")
+            format!("{arg_ty}")
         };
+
+        if self.is_wrapper_arc(ty.tags_id) {
+            ty_str = format!("::std::sync::Arc<{ty_str}>");
+        }
 
         if streaming {
             format!("::volo_grpc::Request<::volo_grpc::RecvStream<{ty_str}>>").into()
@@ -55,11 +70,15 @@ impl VoloGrpcBackend {
         global_path: bool,
     ) -> FastStr {
         let ret_ty = self.cx().codegen_item_ty(ty.kind);
-        let ret_ty_str = if global_path {
+        let mut ret_ty_str = if global_path {
             format!("{}", ret_ty.global_path("volo_gen"))
         } else {
             format!("{ret_ty}")
         };
+
+        if self.is_wrapper_arc(ty.tags_id) {
+            ret_ty_str = format!("::std::sync::Arc<{ret_ty_str}>");
+        }
 
         if streaming {
             format!(
@@ -98,17 +117,24 @@ impl VoloGrpcBackend {
     }
 
     fn client_input_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> FastStr {
-        let ty = self.cx().codegen_item_ty(ty.kind);
+        let mut gen_ty = self.cx().codegen_item_ty(ty.kind);
+        if self.is_wrapper_arc(ty.tags_id) {
+            gen_ty = self.modify_ty_to_arc(gen_ty);
+        }
 
         if streaming {
-            format!("impl ::volo_grpc::IntoStreamingRequest<Message = {ty}>").into()
+            format!("impl ::volo_grpc::IntoStreamingRequest<Message = {gen_ty}>").into()
         } else {
-            format!("impl ::volo_grpc::IntoRequest<{ty}>").into()
+            format!("impl ::volo_grpc::IntoRequest<{gen_ty}>").into()
         }
     }
 
     fn client_output_ty(&self, ty: pilota_build::ty::Ty, streaming: bool) -> FastStr {
-        let ret_ty = self.cx().codegen_item_ty(ty.kind);
+        let mut ret_ty: pilota_build::ty::CodegenTy = self.cx().codegen_item_ty(ty.kind);
+
+        if self.is_wrapper_arc(ty.tags_id) {
+            ret_ty = self.modify_ty_to_arc(ret_ty);
+        }
 
         if streaming {
             format!(
@@ -233,6 +259,10 @@ impl VoloGrpcBackend {
             .into()
         }
     }
+
+    fn modify_ty_to_arc(&self, ty: pilota_build::ty::CodegenTy) -> pilota_build::ty::CodegenTy {
+        pilota_build::middle::ty::CodegenTy::Arc(Arc::new(ty))
+    }
 }
 
 impl CodegenBackend for VoloGrpcBackend {
@@ -323,12 +353,25 @@ impl CodegenBackend for VoloGrpcBackend {
         let req_tys = s
             .methods
             .iter()
-            .map(|method| self.cx().codegen_item_ty(method.args[0].ty.kind.clone()))
+            .map(|method| {
+                let mut ty = self.cx().codegen_item_ty(method.args[0].ty.kind.clone());
+                if self.is_wrapper_arc(method.args[0].ty.tags_id) {
+                    ty = self.modify_ty_to_arc(ty);
+                }
+                ty
+            })
             .collect::<Vec<_>>();
+
         let resp_tys = s
             .methods
             .iter()
-            .map(|method| self.cx().codegen_item_ty(method.ret.kind.clone()))
+            .map(|method| {
+                let mut ty = self.cx().codegen_item_ty(method.ret.kind.clone());
+                if self.is_wrapper_arc(method.ret.tags_id) {
+                    ty = self.modify_ty_to_arc(ty);
+                }
+                ty
+            })
             .collect::<Vec<_>>();
 
         let mut client_methods = Vec::new();
@@ -753,5 +796,20 @@ impl CodegenBackend for VoloGrpcBackend {
 
     fn codegen_pilota_buf_trait(&self, stream: &mut String) {
         self.inner.codegen_pilota_buf_trait(stream)
+    }
+
+    fn codegen_file_descriptor_at_mod(
+        &self,
+        stream: &mut String,
+        f: &rir::File,
+        mod_path: &[FastStr],
+        has_direct: bool,
+    ) {
+        self.inner
+            .codegen_file_descriptor_at_mod(stream, f, mod_path, has_direct)
+    }
+
+    fn codegen_exts(&self, stream: &mut String, extensions: &[rir::Extension]) {
+        self.inner.codegen_exts(stream, extensions)
     }
 }
