@@ -27,6 +27,7 @@ use motore::{
 use parking_lot::RwLock;
 use scopeguard::defer;
 use tokio::sync::Notify;
+use tracing::Instrument;
 #[cfg(feature = "__tls")]
 use volo::net::{conn::ConnStream, tls::Acceptor, tls::ServerTlsConfig};
 use volo::{
@@ -533,10 +534,10 @@ where
                 let mut cx = ServerContext::new(service.peer);
                 cx.rpc_info_mut().set_config(service.config);
                 let span = service.span_provider.on_serve(&cx);
-                let _enter = span.enter();
                 let resp = service
                     .inner
                     .call(&mut cx, req.map(Body::from_incoming))
+                    .instrument(span)
                     .await
                     .into_response();
                 service.span_provider.leave_serve(&cx);
