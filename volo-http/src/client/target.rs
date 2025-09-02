@@ -347,14 +347,12 @@ impl Apply<ClientContext> for Target {
                 match rt.host {
                     RemoteHost::Ip(ip) => {
                         let sa = SocketAddr::new(ip, rt.port);
-                        tracing::trace!("[Volo-HTTP] Target::apply: set target to {sa}");
                         let callee = cx.rpc_info_mut().callee_mut();
                         callee.set_service_name(FastStr::from_string(format!("{}", sa.ip())));
                         callee.set_address(Address::Ip(sa));
                     }
                     RemoteHost::Name(host) => {
                         let port = rt.port;
-                        tracing::trace!("[Volo-HTTP] Target::apply: set target to {host}:{port}");
                         let callee = cx.rpc_info_mut().callee_mut();
                         callee.set_service_name(ipv6_strip_brackets(host));
                         // Since Service Discover (DNS) can only access the `callee`, we must

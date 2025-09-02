@@ -48,7 +48,7 @@ where
         match self.tls_connector.connect(&target_name, tcp_stream).await {
             Ok(conn) => Ok(conn),
             Err(err) => {
-                tracing::error!("[Volo-HTTP] failed to make tls connection, error: {err}");
+                tracing::warn!("[Volo-HTTP] failed to make tls connection, error: {err}");
                 Err(request_error(err))
             }
         }

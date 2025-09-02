@@ -2,6 +2,7 @@ use std::{cell::RefCell, net::SocketAddr, str::FromStr, sync::Arc, task::Poll};
 
 use futures::{FutureExt, future::BoxFuture};
 use metainfo::{Backward, Forward};
+use tracing::Instrument;
 use volo::{FastStr, Service, context::Context};
 
 use crate::{
@@ -125,8 +126,7 @@ where
                     });
                     status_to_http!(status);
                     let span = span_provider.on_serve(&cx, metadata);
-                    let _enter = span.enter();
-                    let volo_resp = match inner.call(&mut cx, volo_req).await {
+                    let volo_resp = match inner.call(&mut cx, volo_req).instrument(span).await {
                         Ok(resp) => resp,
                         Err(err) => {
                             span_provider.leave_serve(&cx);

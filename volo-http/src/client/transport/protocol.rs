@@ -227,7 +227,7 @@ where
     let conn = match connector.make_connection(peer).await {
         Ok(conn) => conn,
         Err(err) => {
-            tracing::error!("failed to make connection: {err}");
+            tracing::warn!("[Volo-HTTP] failed to make connection: {err}");
             return Err(err);
         }
     };

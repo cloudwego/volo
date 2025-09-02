@@ -427,15 +427,13 @@ where
             .to_bytes();
 
         if let Some(cap) = get_header_value(&parts.headers, header::CONTENT_LENGTH) {
-            if let Ok(cap) = cap.parse::<usize>() {
-                if bytes.len() != cap {
-                    tracing::warn!(
-                        "[Volo-HTTP] The length of body ({}) does not match the Content-Length \
-                         ({})",
-                        bytes.len(),
-                        cap,
-                    );
-                }
+            if let Ok(cap) = cap.parse::<usize>()
+                && bytes.len() != cap
+            {
+                tracing::warn!(
+                    "[Volo-HTTP] The length of body ({}) does not match the Content-Length ({cap})",
+                    bytes.len(),
+                );
             }
         }
 

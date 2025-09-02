@@ -130,22 +130,22 @@ where
             service,
         };
 
-        if let Some(mut channel) = service.discover.watch(None) {
-            tokio::spawn(async move {
-                loop {
-                    match channel.recv().await {
-                        Ok(recv) => lb.rebalance(recv),
-                        Err(err) => match err {
-                            RecvError::Closed => break,
-                            _ => tracing::warn!(
-                                "[Volo-HTTP] discovering subscription error: {:?}",
-                                err
-                            ),
-                        },
-                    }
+        let Some(mut channel) = service.discover.watch(None) else {
+            return service;
+        };
+
+        tokio::spawn(async move {
+            loop {
+                match channel.recv().await {
+                    Ok(recv) => lb.rebalance(recv),
+                    Err(err) => match err {
+                        RecvError::Closed => break,
+                        _ => tracing::warn!("[Volo-HTTP] discovering subscription error: {err}"),
+                    },
                 }
-            });
-        }
+            }
+        });
+
         service
     }
 }
