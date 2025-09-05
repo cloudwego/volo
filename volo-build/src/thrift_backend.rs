@@ -819,6 +819,16 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     .inner
                     .codegen_item_ty(a.ty.kind.clone())
                     .global_path("volo_gen");
+                let ty = if let Some(RustWrapperArc(true)) = self
+                    .cx()
+                    .tags(a.tags_id)
+                    .as_ref()
+                    .and_then(|tags| tags.get::<RustWrapperArc>())
+                {
+                    format!("::std::sync::Arc<{ty}>")
+                } else {
+                    ty.to_string()
+                };
                 let ident = self.cx().rust_name(a.def_id).0.field_ident(); // use the _{rust-style fieldname} without keyword escaping
                 format!("_{ident}: {ty}")
             })
