@@ -809,7 +809,17 @@ impl CodegenBackend for VoloGrpcBackend {
             .codegen_file_descriptor_at_mod(stream, f, mod_path, has_direct)
     }
 
-    fn codegen_exts(&self, stream: &mut String, extensions: &[rir::Extension]) {
-        self.inner.codegen_exts(stream, extensions)
+    fn codegen_exts(
+        &self,
+        stream: &mut String,
+        suffix: &str,
+        cur_pkg: &[Symbol],
+        extensions: &[rir::Extension],
+    ) {
+        self.inner.codegen_exts(stream, suffix, cur_pkg, extensions)
+    }
+
+    fn codegen_impl_enum_message(&self, name: &str) -> String {
+        self.inner.codegen_impl_enum_message(name)
     }
 }

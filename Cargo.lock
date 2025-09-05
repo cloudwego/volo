@@ -415,9 +415,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.5.46"
+version = "4.5.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c5e4fcf9c21d2e544ca1ee9d8552de13019a42aa7dbf32747fa7aaf1df76e57"
+checksum = "7eac00902d9d136acd712710d71823fb8ac8004ca445a89e73a41d45aa712931"
 dependencies = [
  "clap_builder",
  "clap_derive",
@@ -425,9 +425,9 @@ dependencies = [
 
 [[package]]
 name = "clap_builder"
-version = "4.5.46"
+version = "4.5.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fecb53a0e6fcfb055f686001bc2e2592fa527efaf38dbe81a6a9563562e57d41"
+checksum = "2ad9bbf750e73b5884fb8a211a9424a1906c1e156724260fdae972f31d70e1d6"
 dependencies = [
  "anstream",
  "anstyle",
@@ -438,9 +438,9 @@ dependencies = [
 
 [[package]]
 name = "clap_derive"
-version = "4.5.45"
+version = "4.5.47"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14cb31bb0a7d536caef2639baa7fad459e15c3144efefa6dbd1c84562c4739f6"
+checksum = "bbfd7eae0b0f1a6e63d4b13c9c478de77c2eb546fba158ad50b4203dc24b9f9c"
 dependencies = [
  "heck",
  "proc-macro2",
@@ -1781,9 +1781,9 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.27"
+version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13dc2df351e3202783a1fe0d44375f7295ffb4049267b0f3018346dc122a1d94"
+checksum = "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432"
 
 [[package]]
 name = "loom"
@@ -2361,9 +2361,8 @@ dependencies = [
 
 [[package]]
 name = "pilota"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e235d8bd36b9c1846bd9f944faee3060d53519abe555b5b64155e87886b3fe2"
+version = "0.12.3"
+source = "git+https://github.com/cloudwego/pilota.git?branch=fix%2Fcustom_options#0c4b7a9f5181f03ffb9eedbb03ba5d526abdd30b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2384,9 +2383,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.12.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2b11e0e6013cd06488ef0e48a6d334b3ba4ffa9fc09692e897a68898f8cb5cc"
+version = "0.12.15"
+source = "git+https://github.com/cloudwego/pilota.git?branch=fix%2Fcustom_options#0c4b7a9f5181f03ffb9eedbb03ba5d526abdd30b"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2422,9 +2420,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-thrift-fieldmask"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6308306be67d4bff638618873a70918bbf1383c1bff13acc530795ded89cdacc"
+version = "0.1.2"
+source = "git+https://github.com/cloudwego/pilota.git?branch=fix%2Fcustom_options#0c4b7a9f5181f03ffb9eedbb03ba5d526abdd30b"
 dependencies = [
  "ahash",
  "faststr",
@@ -2432,14 +2429,14 @@ dependencies = [
  "pilota",
  "pilota-thrift-parser",
  "pilota-thrift-reflect",
+ "serde",
  "thiserror 2.0.16",
 ]
 
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d5ff6b8520c31228693bf3fb2157d6f0ebe7a0198404f492e95f25861249a6b7"
+source = "git+https://github.com/cloudwego/pilota.git?branch=fix%2Fcustom_options#0c4b7a9f5181f03ffb9eedbb03ba5d526abdd30b"
 dependencies = [
  "bytes",
  "faststr",
@@ -2449,8 +2446,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-reflect"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bfd7265747b3aad84071203baee7bfb0cf2057bf8b7b08088560f8817cc900d8"
+source = "git+https://github.com/cloudwego/pilota.git?branch=fix%2Fcustom_options#0c4b7a9f5181f03ffb9eedbb03ba5d526abdd30b"
 dependencies = [
  "ahash",
  "bytes",
@@ -2458,7 +2454,7 @@ dependencies = [
  "faststr",
  "pilota",
  "pilota-thrift-parser",
- "thiserror 1.0.69",
+ "thiserror 2.0.16",
 ]
 
 [[package]]
@@ -3649,9 +3645,9 @@ dependencies = [
 
 [[package]]
 name = "time"
-version = "0.3.42"
+version = "0.3.43"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8ca967379f9d8eb8058d86ed467d81d03e81acd45757e4ca341c24affbe8e8e3"
+checksum = "83bde6f1ec10e72d583d91623c939f623002284ef622b87de38cfd546cbf2031"
 dependencies = [
  "deranged",
  "num-conv",
@@ -3663,15 +3659,15 @@ dependencies = [
 
 [[package]]
 name = "time-core"
-version = "0.1.5"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9108bb380861b07264b950ded55a44a14a4adc68b9f5efd85aafc3aa4d40a68"
+checksum = "40868e7c1d2f0b8d73e4a8c7f0ff63af4f6d19be117e90bd73eb1d62cf831c6b"
 
 [[package]]
 name = "time-macros"
-version = "0.2.23"
+version = "0.2.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7182799245a7264ce590b349d90338f1c1affad93d2639aed5f8f69c090b334c"
+checksum = "30cfb0125f12d9c277f35663a0a33f8c30190f4e4574868a330595412d34ebf3"
 dependencies = [
  "num-conv",
  "time-core",
@@ -4226,7 +4222,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.11.4"
+version = "0.11.5"
 dependencies = [
  "ahash",
  "anyhow",
