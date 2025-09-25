@@ -47,6 +47,12 @@ path = "src/grpc/compression/client.rs"
 [[bin]]
 name = "multiplex-grpc-server"
 path = "src/grpc/multiplex/server.rs"
+
+# load balance example
+[[bin]]
+name = "loadbalance-example"
+path = "src/loadbalance_example.rs"
+
 [[bin]]
 name = "multiplex-grpc-client"
 path = "src/grpc/multiplex/client.rs"
@@ -145,11 +151,11 @@ tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-
+volo = { path = "../volo" }
+async-broadcast.workspace = true
 pilota.workspace = true
 pilota-thrift-fieldmask.workspace = true
 pilota-thrift-reflect.workspace = true
-volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc", features = ["grpc-web"] }
 volo-thrift = { path = "../volo-thrift", features = ["multiplex"] }
 volo-http = { path = "../volo-http", features = [

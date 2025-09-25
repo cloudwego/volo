@@ -1,6 +1,7 @@
 use std::{hash::Hash, sync::Arc};
 
 use dashmap::{DashMap, mapref::entry::Entry};
+use futures::future::BoxFuture;
 use rand::Rng;
 
 use super::{LoadBalance, error::LoadBalanceError};
@@ -133,32 +134,33 @@ impl<D> LoadBalance<D> for WeightedRandomBalance<D::Key>
 where
     D: Discover,
 {
-    type InstanceIter = InstancePicker;
-
-    async fn get_picker<'future>(
+    fn get_picker<'future>(
         &'future self,
         endpoint: &'future Endpoint,
         discover: &'future D,
-    ) -> Result<Self::InstanceIter, LoadBalanceError> {
-        let key = discover.key(endpoint);
-        let weighted_list = if let Some(instances) = self.router.get(&key) {
-            instances.clone()
-        } else {
-            let instances = Arc::new(WeightedInstances::from(
-                discover
-                    .discover(endpoint)
-                    .await
-                    .map_err(|err| err.into())?,
-            ));
-            self.router.insert(key, Arc::clone(&instances));
-            instances
-        };
-        let sum_of_weights = weighted_list.sum_of_weights;
-        Ok(InstancePicker {
-            last_offset: None,
-            iter_times: 0,
-            shared_instances: weighted_list,
-            sum_of_weights,
+    ) -> BoxFuture<'future, Result<Box<dyn Iterator<Item = Address> + Send>, LoadBalanceError>>
+    {
+        Box::pin(async move {
+            let key = discover.key(endpoint);
+            let weighted_list = if let Some(instances) = self.router.get(&key) {
+                instances.clone()
+            } else {
+                let instances = Arc::new(WeightedInstances::from(
+                    discover
+                        .discover(endpoint)
+                        .await
+                        .map_err(|err| err.into())?,
+                ));
+                self.router.insert(key, Arc::clone(&instances));
+                instances
+            };
+            let sum_of_weights = weighted_list.sum_of_weights;
+            Ok(Box::new(InstancePicker {
+                last_offset: None,
+                iter_times: 0,
+                shared_instances: weighted_list,
+                sum_of_weights,
+            }) as Box<dyn Iterator<Item = Address> + Send>)
         })
     }
 
