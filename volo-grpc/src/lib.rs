@@ -22,10 +22,9 @@ pub mod tracing;
 pub mod transport;
 
 pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
-pub type BoxStream<'l, T> = std::pin::Pin<Box<dyn futures::Stream<Item = T> + Send + Sync + 'l>>;
-
 pub use client::Client;
 pub use codec::decode::RecvStream;
+pub use futures::stream::BoxStream;
 pub use message::{RecvEntryMessage, SendEntryMessage};
 pub use request::{IntoRequest, IntoStreamingRequest, Request};
 pub use response::Response;
