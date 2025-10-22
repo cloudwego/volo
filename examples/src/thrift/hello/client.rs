@@ -11,7 +11,9 @@ static CLIENT: LazyLock<volo_gen::thrift_gen::hello::HelloServiceClient> = LazyL
 
 #[volo::main]
 async fn main() {
-    let desc = volo_gen::thrift_gen::hello::HelloRequest::get_descriptor().type_descriptor();
+    let desc = volo_gen::thrift_gen::hello::HelloRequest::get_descriptor()
+        .unwrap()
+        .type_descriptor();
     println!("{desc:?}");
 
     let fm = pilota_thrift_fieldmask::FieldMaskBuilder::new(&desc, &["$.hello"])

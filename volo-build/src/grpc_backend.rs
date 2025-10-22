@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use itertools::Itertools;
 use pilota_build::{
@@ -799,8 +799,21 @@ impl CodegenBackend for VoloGrpcBackend {
         self.inner.cx()
     }
 
-    fn codegen_pilota_buf_trait(&self, stream: &mut String) {
-        self.inner.codegen_pilota_buf_trait(stream)
+    fn codegen_file_descriptor(&self, stream: &mut String, f: &rir::File, has_direct: bool) {
+        self.inner.codegen_file_descriptor(stream, f, has_direct)
+    }
+
+    fn codegen_register_mod_file_descriptor(
+        &self,
+        stream: &mut String,
+        mods: &[(ModPath, Arc<PathBuf>)],
+    ) {
+        self.inner
+            .codegen_register_mod_file_descriptor(stream, mods)
+    }
+
+    fn codegen_pilota_trait(&self, stream: &mut String) {
+        self.inner.codegen_pilota_trait(stream)
     }
 
     fn codegen_file_descriptor_at_mod(

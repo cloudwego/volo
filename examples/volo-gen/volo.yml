@@ -4,6 +4,7 @@ entries:
     filename: proto_gen.rs
     protocol: protobuf
     with_descriptor: true
+    touch_all: true
     services:
       - idl:
           source: local
@@ -20,6 +21,11 @@ entries:
       - idl:
           source: local
           path: ../proto/helloworld.proto
+          includes:
+            - ../proto
+      - idl:
+          source: local
+          path: ../proto/nested.proto
           includes:
             - ../proto
   thrift:
