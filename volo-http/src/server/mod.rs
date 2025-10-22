@@ -29,7 +29,7 @@ use scopeguard::defer;
 use tokio::sync::Notify;
 use tracing::Instrument;
 #[cfg(feature = "__tls")]
-use volo::net::{conn::ConnStream, tls::Acceptor, tls::ServerTlsConfig};
+use volo::net::{conn::ConnStream, tls::ServerTlsConfig};
 use volo::{
     context::Context,
     net::{Address, MakeIncoming, conn::Conn, incoming::Incoming},

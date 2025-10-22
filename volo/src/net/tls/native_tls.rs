@@ -1,11 +1,10 @@
-use std::{io, io::Result, path::Path, sync::Arc};
+use std::{io, sync::Arc};
 
 use native_tls::{Certificate, Identity};
 use tokio::net::TcpStream;
 use tokio_native_tls::{TlsAcceptor, TlsConnector};
 
-use super::{Acceptor, Conn, Connector, TlsConnectorBuilder};
-use crate::net::conn::ConnStream;
+use super::{Acceptor, Connector, TlsConnectorBuilder};
 
 /// A wrapper for [`tokio_native_tls::TlsConnector`]
 #[derive(Clone)]
@@ -22,7 +21,7 @@ impl Default for NativeTlsConnector {
 }
 
 impl Connector for NativeTlsConnector {
-    fn build(config: TlsConnectorBuilder) -> Result<Self> {
+    fn build(config: TlsConnectorBuilder) -> io::Result<Self> {
         let mut builder = native_tls::TlsConnector::builder();
         builder.disable_built_in_roots(!config.default_root_certs);
         for pem in config.pems {
@@ -42,18 +41,21 @@ impl Connector for NativeTlsConnector {
         Ok(Self(Arc::new(TlsConnector::from(connector))))
     }
 
-    async fn connect(&self, server_name: &str, tcp_stream: TcpStream) -> Result<Conn> {
+    async fn connect(
+        &self,
+        server_name: &str,
+        tcp_stream: TcpStream,
+    ) -> io::Result<super::TlsStream> {
         tracing::trace!("NativeTlsConnector::connect({server_name})");
-        self.0
-            .connect(server_name, tcp_stream)
-            .await
-            .map(Conn::from)
-            .map_err(|e| io::Error::new(io::ErrorKind::ConnectionRefused, e))
+        match self.0.connect(server_name, tcp_stream).await {
+            Ok(stream) => Ok(Into::into(stream)),
+            Err(e) => Err(io::Error::new(io::ErrorKind::ConnectionRefused, e)),
+        }
     }
 }
 
 impl Acceptor for NativeTlsAcceptor {
-    fn from_pem(cert: Vec<u8>, key: Vec<u8>) -> Result<Self> {
+    fn from_pem(cert: Vec<u8>, key: Vec<u8>) -> io::Result<Self> {
         let identity = Identity::from_pkcs8(&cert, &key)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?;
         Ok(Self(Arc::new(
@@ -64,19 +66,12 @@ impl Acceptor for NativeTlsAcceptor {
         )))
     }
 
-    fn from_pem_file(cert_path: impl AsRef<Path>, key_path: impl AsRef<Path>) -> Result<Self> {
-        let cert = std::fs::read(cert_path.as_ref())?;
-        let key = std::fs::read(key_path.as_ref())?;
-        Self::from_pem(cert, key)
-    }
-
-    async fn accept(&self, tcp_stream: TcpStream) -> Result<ConnStream> {
+    async fn accept(&self, tcp_stream: TcpStream) -> io::Result<super::TlsStream> {
         tracing::trace!("NativeTlsAcceptor::accept");
-        self.0
-            .accept(tcp_stream)
-            .await
-            .map(ConnStream::from)
-            .map_err(io::Error::other)
+        match self.0.accept(tcp_stream).await {
+            Ok(stream) => Ok(Into::into(stream)),
+            Err(e) => Err(io::Error::new(io::ErrorKind::ConnectionRefused, e)),
+        }
     }
 }
 
