@@ -43,6 +43,14 @@ path = "src/grpc/compression/server.rs"
 name = "compression-grpc-client"
 path = "src/grpc/compression/client.rs"
 
+#descriptor
+[[bin]]
+name = "descriptor-grpc-server"
+path = "src/grpc/descriptor/server.rs"
+[[bin]]
+name = "descriptor-grpc-client"
+path = "src/grpc/descriptor/client.rs"
+
 # multiplex
 [[bin]]
 name = "multiplex-grpc-server"
