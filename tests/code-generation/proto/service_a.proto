@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+package service_a;
+
+message FullRequest {
+  string request_id = 1;
+  string user_id = 2;
+  string field_a = 3;
+  string field_b = 4;
+  string field_c = 5;
+  int64 timestamp = 6;
+
+  message nested {
+    string nested_field = 1;
+  }
+
+  oneof nested_oneof {
+    string nested_oneof_field = 7;
+    string nested_oneof_field_2 = 8;
+  }
+}
+
+message FullResponse {
+  string request_id = 1;
+  string result = 2;
+  string response_a = 3;
+  string response_b = 4;
+  string response_c = 5;
+}
+
+service ServiceA {
+  rpc ProcessA(FullRequest) returns (FullResponse);
+}

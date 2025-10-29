@@ -1,0 +1,23 @@
+// Service B - 调用链中间节点
+// A -> B -> C 的调用链中，B 是中间节点
+// B 只知道部分字段，需要透传 field_c 给 C
+syntax = "proto3";
+
+package service_b;
+
+message PartialRequest {
+  string request_id = 1;
+  string user_id = 2;
+  string field_b = 4;
+  int64 timestamp = 6;
+}
+
+message PartialResponse {
+  string request_id = 1;
+  string result = 2;
+  string response_b = 4;
+}
+
+service ServiceB {
+  rpc ProcessB(PartialRequest) returns (PartialResponse);
+}

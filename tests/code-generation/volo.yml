@@ -1,21 +1,44 @@
 # Please refer to https://www.cloudwego.io/docs/volo/guide/config/ for the configuration file format.
 entries:
-  proto:
-    filename: proto_gen.rs
+  # Protobuf entries for testing
+  proto_service_a:
+    filename: proto_service_a_gen.rs
     protocol: protobuf
     split_generated_files: true
-    repos:
-      protobuf:
-        url: https://github.com/protocolbuffers/protobuf.git
-        ref: HEAD
-        lock: cb93f9aa6e81329e368f09ded42d17c3f26442f2
+    touch_all: true
+    with_descriptor: true
     services:
       - idl:
-          source: git
-          repo: protobuf
-          path: examples/addressbook.proto
+          source: local
+          path: proto/service_a.proto
           includes:
-            - examples
+            - proto
+  
+  proto_service_b:
+    filename: proto_service_b_gen.rs
+    protocol: protobuf
+    with_descriptor: true
+    split_generated_files: true
+    services:
+      - idl:
+          source: local
+          path: proto/service_b.proto
+          includes:
+            - proto
+        codegen_option:
+          keep_unknown_fields: true
+  
+  proto_service_c:
+    filename: proto_service_c_gen.rs
+    protocol: protobuf
+    with_descriptor: true
+    split_generated_files: true
+    services:
+      - idl:
+          source: local
+          path: proto/service_c.proto
+          includes:
+            - proto
   thrift:
     filename: thrift_gen.rs
     protocol: thrift
