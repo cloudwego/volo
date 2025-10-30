@@ -10,7 +10,7 @@ message FullRequest {
   string field_c = 5;
   int64 timestamp = 6;
 
-  message nested {
+  message NotNeeded {
     string nested_field = 1;
   }
 

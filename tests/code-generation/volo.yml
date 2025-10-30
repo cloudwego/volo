@@ -5,7 +5,6 @@ entries:
     filename: proto_service_a_gen.rs
     protocol: protobuf
     split_generated_files: true
-    touch_all: true
     with_descriptor: true
     services:
       - idl:
@@ -17,8 +16,6 @@ entries:
   proto_service_b:
     filename: proto_service_b_gen.rs
     protocol: protobuf
-    with_descriptor: true
-    split_generated_files: true
     services:
       - idl:
           source: local
@@ -31,8 +28,6 @@ entries:
   proto_service_c:
     filename: proto_service_c_gen.rs
     protocol: protobuf
-    with_descriptor: true
-    split_generated_files: true
     services:
       - idl:
           source: local

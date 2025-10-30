@@ -12,55 +12,12 @@ pub use proto_service_c_gen::*;
 
 #[cfg(test)]
 mod tests {
-    use pilota::{LinkedBytes, pb::Message};
+    use pilota::{
+        LinkedBytes,
+        pb::{EncodeLengthContext, Message, descriptor_getter::ItemDescriptorGetter},
+    };
 
     use super::*;
-    use crate::service_a::full_request::Nested;
-    #[test]
-    fn test_protobuf_service_a_request_creation() {
-        let req = service_a::FullRequest {
-            request_id: "test-123".into(),
-            user_id: "user-456".into(),
-            field_a: "value_a".into(),
-            field_b: "value_b".into(),
-            field_c: "value_c".into(),
-            timestamp: 1234567890,
-            ..Default::default()
-        };
-
-        assert_eq!(req.request_id, "test-123");
-        assert_eq!(req.field_a, "value_a");
-        assert_eq!(req.field_b, "value_b");
-        assert_eq!(req.field_c, "value_c");
-    }
-
-    #[test]
-    fn test_protobuf_service_b_request_creation() {
-        let req = service_b::PartialRequest {
-            request_id: "test-123".into(),
-            user_id: "user-456".into(),
-            field_b: "value_b".into(),
-            timestamp: 1234567890,
-            ..Default::default()
-        };
-
-        assert_eq!(req.request_id, "test-123");
-        assert_eq!(req.field_b, "value_b");
-    }
-
-    #[test]
-    fn test_protobuf_service_c_request_creation() {
-        let req = service_c::MinimalRequest {
-            request_id: "test-123".into(),
-            user_id: "user-456".into(),
-            field_c: "value_c".into(),
-            timestamp: 1234567890,
-            ..Default::default()
-        };
-
-        assert_eq!(req.request_id, "test-123");
-        assert_eq!(req.field_c, "value_c");
-    }
 
     // A -> B -> C
     #[test]
@@ -75,7 +32,10 @@ mod tests {
             ..Default::default()
         };
 
-        let mut buf = LinkedBytes::new();
+        let mut ctx = EncodeLengthContext::default();
+        let len = full_request.encoded_len(&mut ctx);
+        let zero_copy_len = ctx.zero_copy_len;
+        let mut buf = LinkedBytes::with_capacity(len - zero_copy_len);
         full_request.encode(&mut buf).expect("encode failed");
 
         let partial_request =
@@ -86,7 +46,10 @@ mod tests {
         assert_eq!(partial_request.field_b, "data_for_b");
         assert_eq!(partial_request.timestamp, 1234567890);
 
-        let mut buf = LinkedBytes::new();
+        let mut ctx = EncodeLengthContext::default();
+        let len = partial_request.encoded_len(&mut ctx);
+        let zero_copy_len = ctx.zero_copy_len;
+        let mut buf = LinkedBytes::with_capacity(len - zero_copy_len);
         partial_request.encode(&mut buf).expect("re-encode failed");
 
         let minimal_request = service_c::MinimalRequest::decode(buf.concat().freeze())
@@ -113,16 +76,22 @@ mod tests {
             ..Default::default()
         };
 
-        let mut buf = LinkedBytes::new();
+        let mut ctx = EncodeLengthContext::default();
+        let len = original_request.encoded_len(&mut ctx);
+        let zero_copy_len = ctx.zero_copy_len;
+        let mut buf = LinkedBytes::with_capacity(len - zero_copy_len);
         original_request.encode(&mut buf).unwrap();
 
         let partial = service_b::PartialRequest::decode(buf.concat().freeze()).unwrap();
         assert_eq!(partial.field_b, "original_b");
 
-        let mut buf_to_c = LinkedBytes::new();
-        partial.encode(&mut buf_to_c).unwrap();
+        let mut ctx = EncodeLengthContext::default();
+        let len = partial.encoded_len(&mut ctx);
+        let zero_copy_len = ctx.zero_copy_len;
+        let mut buf = LinkedBytes::with_capacity(len - zero_copy_len);
+        partial.encode(&mut buf).unwrap();
 
-        let minimal = service_c::MinimalRequest::decode(buf_to_c.concat().freeze()).unwrap();
+        let minimal = service_c::MinimalRequest::decode(buf.concat().freeze()).unwrap();
         assert_eq!(minimal.field_c, "original_c");
 
         let c_response = service_c::MinimalResponse {
@@ -132,10 +101,13 @@ mod tests {
             ..Default::default()
         };
 
-        let mut resp_buf = LinkedBytes::new();
-        c_response.encode(&mut resp_buf).unwrap();
+        let mut ctx = EncodeLengthContext::default();
+        let len = c_response.encoded_len(&mut ctx);
+        let zero_copy_len = ctx.zero_copy_len;
+        let mut buf = LinkedBytes::with_capacity(len - zero_copy_len);
+        c_response.encode(&mut buf).unwrap();
 
-        let b_response = service_b::PartialResponse::decode(resp_buf.concat().freeze()).unwrap();
+        let b_response = service_b::PartialResponse::decode(buf.concat().freeze()).unwrap();
         assert_eq!(b_response.result, "success");
 
         let b_full_response = service_b::PartialResponse {
@@ -143,65 +115,16 @@ mod tests {
             ..b_response
         };
 
-        let mut resp_buf = LinkedBytes::new();
-        b_full_response.encode(&mut resp_buf).unwrap();
+        let mut ctx = EncodeLengthContext::default();
+        let len = b_full_response.encoded_len(&mut ctx);
+        let zero_copy_len = ctx.zero_copy_len;
+        let mut buf = LinkedBytes::with_capacity(len - zero_copy_len);
+        b_full_response.encode(&mut buf).unwrap();
 
-        let final_response = service_a::FullResponse::decode(resp_buf.concat().freeze()).unwrap();
+        let final_response = service_a::FullResponse::decode(buf.concat().freeze()).unwrap();
         assert_eq!(final_response.result, "success");
         assert_eq!(final_response.response_b, "response_from_b");
         assert_eq!(final_response.response_c, "response_from_c");
-    }
-
-    #[test]
-    fn test_service_a_to_service_b() {
-        let a_request = service_a::FullRequest {
-            request_id: "test-001".into(),
-            user_id: "user-001".into(),
-            field_a: "for_a".into(),
-            field_b: "for_b".into(),
-            field_c: "for_c".into(),
-            timestamp: 1000,
-            ..Default::default()
-        };
-
-        let mut buf = LinkedBytes::new();
-        a_request.encode(&mut buf).unwrap();
-
-        let b_request = service_b::PartialRequest::decode(buf.concat().freeze()).unwrap();
-
-        assert_eq!(b_request.request_id, "test-001");
-        assert_eq!(b_request.field_b, "for_b");
-
-        let mut buf = LinkedBytes::new();
-        b_request.encode(&mut buf).unwrap();
-
-        assert!(buf.len() > 0);
-    }
-
-    #[test]
-    fn test_service_b_to_service_c() {
-        let a_request = service_a::FullRequest {
-            request_id: "abc-123".into(),
-            user_id: "user-abc".into(),
-            field_a: "a_value".into(),
-            field_b: "b_value".into(),
-            field_c: "c_value".into(),
-            timestamp: 999,
-            ..Default::default()
-        };
-
-        let mut buf_from_a = LinkedBytes::new();
-        a_request.encode(&mut buf_from_a).unwrap();
-
-        let b_request = service_b::PartialRequest::decode(buf_from_a.concat().freeze()).unwrap();
-
-        let mut buf_to_c = LinkedBytes::new();
-        b_request.encode(&mut buf_to_c).unwrap();
-
-        let c_request = service_c::MinimalRequest::decode(buf_to_c.concat().freeze()).unwrap();
-
-        assert_eq!(c_request.field_c, "c_value");
-        assert_eq!(c_request.timestamp, 999);
     }
 
     #[test]
@@ -213,7 +136,10 @@ mod tests {
             ..Default::default()
         };
 
-        let mut buf = LinkedBytes::new();
+        let mut ctx = EncodeLengthContext::default();
+        let len = c_response.encoded_len(&mut ctx);
+        let zero_copy_len = ctx.zero_copy_len;
+        let mut buf = LinkedBytes::with_capacity(len - zero_copy_len);
         c_response.encode(&mut buf).unwrap();
 
         let b_response = service_b::PartialResponse::decode(buf.concat().freeze()).unwrap();
@@ -224,7 +150,10 @@ mod tests {
             ..b_response
         };
 
-        let mut buf = LinkedBytes::new();
+        let mut ctx = EncodeLengthContext::default();
+        let len = b_enhanced_response.encoded_len(&mut ctx);
+        let zero_copy_len = ctx.zero_copy_len;
+        let mut buf = LinkedBytes::with_capacity(len - zero_copy_len);
         b_enhanced_response.encode(&mut buf).unwrap();
 
         let a_response = service_a::FullResponse::decode(buf.concat().freeze()).unwrap();
@@ -263,17 +192,18 @@ mod tests {
     fn test_get_descriptor_proto() {
         let desc = service_a::FullRequest::get_descriptor_proto().unwrap();
         assert_eq!(desc.name(), "FullRequest");
-        let desc_b = service_b::PartialRequest::get_descriptor_proto().unwrap();
-        assert_eq!(desc_b.name(), "PartialRequest");
-        let desc_c = service_c::MinimalRequest::get_descriptor_proto().unwrap();
-        assert_eq!(desc_c.name(), "MinimalRequest");
 
-        // nested message
-        let nested_desc = Nested::get_descriptor_proto().unwrap();
-        assert_eq!(nested_desc.name(), "nested");
         // nested oneof
         let nested_oneof_desc =
             service_a::full_request::NestedOneof::get_descriptor_proto().unwrap();
         assert_eq!(nested_oneof_desc.name(), "nested_oneof");
+
+        // unused message should not be generated
+        let file_desc = service_a::file_descriptor_proto_service_a();
+        assert!(
+            file_desc
+                .get_message_descriptor_proto("NotNeeded")
+                .is_none()
+        );
     }
 }
