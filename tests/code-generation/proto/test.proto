@@ -1,0 +1,84 @@
+syntax = "proto3";
+
+package codegen;
+
+// 枚举
+enum Status {
+    STATUS_UNSPECIFIED = 0;
+    OK = 1;
+    FAIL = 2;
+}
+
+// 基础类型全集
+message BasicTypes {
+    bool bool_ = 1;
+    int32 int32_ = 2;
+    int64 int64_ = 3;
+    uint32 uint32_ = 4;
+    uint64 uint64_ = 5;
+    sint32 sint32_ = 6;
+    sint64 sint64_ = 7;
+    fixed32 fixed32_ = 8;
+    fixed64 fixed64_ = 9;
+    sfixed32 sfixed32_ = 10;
+    sfixed64 sfixed64_ = 11;
+    float float_ = 12;
+    double double_ = 13;
+    string string_ = 14;
+    bytes bytes_ = 15;
+}
+
+// oneof/可选语义
+message WithOneof {
+    oneof value {
+        int32 int_value = 1;
+        string string_value = 2;
+        BasicTypes basic_value = 3;
+    }
+}
+
+// map/repeated
+message Collections {
+    repeated int32 numbers = 1;
+    repeated BasicTypes items = 2;
+    map<string, int32> dict = 3;
+    map<int32, BasicTypes> id_to_item = 4;
+}
+
+// 嵌套与保留字段
+message Parent {
+    reserved 3, 4;
+    reserved "old_field", "legacy";
+
+    message Child {
+        string name = 1;
+        Status status = 2;
+    }
+
+    repeated Child children = 1;
+    Status status = 2;
+}
+
+// 业务请求/响应
+message EchoRequest {
+    string message = 1;
+    BasicTypes basic = 2;
+    Collections coll = 3;
+    WithOneof maybe = 4;
+}
+
+message EchoResponse {
+    string message = 1;
+    Status status = 2;
+    WithOneof echoed = 3;
+}
+
+// 流式与非流式服务
+service TestService {
+    rpc UnaryEcho(EchoRequest) returns (EchoResponse);
+    rpc ClientStreamingEcho(stream EchoRequest) returns (EchoResponse);
+    rpc ServerStreamingEcho(EchoRequest) returns (stream EchoResponse);
+    rpc BidiStreamingEcho(stream EchoRequest) returns (stream EchoResponse);
+}
+
+

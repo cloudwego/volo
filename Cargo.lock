@@ -4316,6 +4316,7 @@ dependencies = [
  "hyper",
  "hyper-timeout",
  "hyper-util",
+ "linkedbytes",
  "matchit",
  "metainfo",
  "motore",

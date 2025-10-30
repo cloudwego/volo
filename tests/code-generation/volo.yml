@@ -16,6 +16,11 @@ entries:
           path: examples/addressbook.proto
           includes:
             - examples
+      - idl:
+          source: local
+          path: proto/test.proto
+          includes:
+            - proto
   thrift:
     filename: thrift_gen.rs
     protocol: thrift
