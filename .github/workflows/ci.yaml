@@ -144,3 +144,49 @@ jobs:
       - name: Cli tests
         run: |
           bash scripts/volo-cli-test.sh
+  coverage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+
+        with:
+          components: rustfmt, clippy
+      - uses: taiki-e/install-action@v2
+
+        with:
+          tool: cargo-llvm-cov
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-nextest
+
+
+      - name: Generate coverage (LCOV + HTML)
+        run: |
+          cargo llvm-cov nextest --workspace --all-targets \
+            --lcov --output-path lcov.info \
+            --ignore-filename-regex '(^|[\\/])(benches|tests?|examples|target|gen|test_data)([\\/])|(^|[\\/])build\\.rs$|(^|[\\/])\\.cargo[\\/]registry'
+          cargo llvm-cov nextest --workspace --all-targets \
+            --html \
+            --ignore-filename-regex '(^|[\\/])(benches|tests?|examples|target|gen|test_data)([\\/])|(^|[\\/])build\\.rs$|(^|[\\/])\\.cargo[\\/]registry'
+          cargo llvm-cov test --workspace --doc --no-report \
+            --ignore-filename-regex '(^|[\\/])(benches|tests?|examples|target|gen|test_data)([\\/])|(^|[\\/])build\\.rs$|(^|[\\/])\\.cargo[\\/]registry'
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: target/llvm-cov/html
+
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+
+        with:
+          files: lcov.info
+          fail_ci_if_error: true
+          verbose: true
