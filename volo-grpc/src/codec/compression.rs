@@ -12,7 +12,6 @@ use flate2::bufread::{GzDecoder, GzEncoder};
 #[cfg(feature = "zlib")]
 use flate2::bufread::{ZlibDecoder, ZlibEncoder};
 use http::HeaderValue;
-use pilota::LinkedBytes;
 
 use super::BUFFER_SIZE;
 #[cfg(feature = "compress")]
@@ -349,8 +348,7 @@ pub(crate) fn decompress(
 
 #[cfg(test)]
 mod tests {
-    use bytes::{BufMut, BytesMut};
-    use pilota::LinkedBytes;
+    use bytes::BytesMut;
 
     #[cfg(feature = "gzip")]
     use crate::codec::compression::GzipConfig;

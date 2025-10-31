@@ -93,8 +93,6 @@ where
 
 pub mod tests {
 
-    use super::*;
-
     #[derive(Debug, Default, Clone, PartialEq)]
     pub struct EchoRequest {
         pub message: ::pilota::FastStr,
@@ -102,7 +100,7 @@ pub mod tests {
     impl ::pilota::pb::Message for EchoRequest {
         #[inline]
         fn encoded_len(&self) -> usize {
-            0 + ::pilota::pb::encoding::faststr::encoded_len(1, &self.message)
+            ::pilota::pb::encoding::faststr::encoded_len(1, &self.message)
         }
 
         #[allow(unused_variables)]
@@ -118,7 +116,7 @@ pub mod tests {
             buf: &mut ::pilota::Bytes,
             ctx: &mut ::pilota::pb::encoding::DecodeContext,
         ) -> ::core::result::Result<(), ::pilota::pb::DecodeError> {
-            const STRUCT_NAME: &'static str = stringify!(EchoRequest);
+            const STRUCT_NAME: &str = stringify!(EchoRequest);
 
             match tag {
                 1 => {
@@ -136,6 +134,7 @@ pub mod tests {
 
     #[tokio::test]
     async fn test_encode() {
+        use super::*;
         let source = async_stream::stream! {
             yield Ok(EchoRequest { message: "Volo".into() });
         };
@@ -156,6 +155,7 @@ pub mod tests {
     async fn test_encode_gzip() {
         use bytes::BytesMut;
 
+        use super::*;
         use crate::codec::compression::{GzipConfig, decompress};
 
         let source = async_stream::stream! {
@@ -189,6 +189,7 @@ pub mod tests {
     async fn test_encode_zlib() {
         use bytes::BytesMut;
 
+        use super::*;
         use crate::codec::compression::{ZlibConfig, decompress};
 
         let source = async_stream::stream! {
@@ -222,6 +223,7 @@ pub mod tests {
     async fn test_encode_zstd() {
         use bytes::BytesMut;
 
+        use super::*;
         use crate::codec::compression::{ZstdConfig, decompress};
 
         let source = async_stream::stream! {
