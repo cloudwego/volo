@@ -1,6 +1,7 @@
 use bytes::{BufMut, Bytes};
 use futures::{Stream, StreamExt};
 use http_body::Frame;
+use linkedbytes::Node;
 use pilota::{LinkedBytes, pb::Message};
 
 use super::{DefaultEncoder, PREFIX_LEN};
@@ -24,26 +25,23 @@ where
         futures_util::pin_mut!(source);
 
         loop {
-            let mut buf = LinkedBytes::with_capacity(BUFFER_SIZE);
-            let mut compressed_buf = if compression_encoding.is_some() {
-                LinkedBytes::with_capacity(BUFFER_SIZE)
-            } else {
-                LinkedBytes::new()
-            };
             match source.next().await {
                 Some(Ok(item)) => {
-                    let reserve_node_idx = {
-                        buf.reserve(PREFIX_LEN);
-                        unsafe {
-                            buf.advance_mut(PREFIX_LEN);
-                        }
-                        buf.split()
+                    let mut buf = LinkedBytes::with_capacity(BUFFER_SIZE);
+                    let mut compressed_buf = if compression_encoding.is_some() {
+                        LinkedBytes::with_capacity(BUFFER_SIZE)
+                    } else {
+                        LinkedBytes::new()
                     };
+
+                    buf.reserve(PREFIX_LEN);
+                    unsafe {
+                        buf.advance_mut(PREFIX_LEN);
+                    }
 
                     let mut encoder=DefaultEncoder::default();
 
                     if let Some(config)=compression_encoding{
-                        compressed_buf.reset();
                         encoder.encode(item, &mut compressed_buf)
                             .map_err(|err| Status::internal(format!("Error encoding: {err}")))?;
                         compress(config,&mut compressed_buf.concat(), buf.bytes_mut())
@@ -57,19 +55,34 @@ where
                     let len = buf.len() - PREFIX_LEN;
                     assert!(len <= u32::MAX as usize);
                     {
-                        match buf.get_list_mut(reserve_node_idx).expect("reserve_node_idx is valid") {
-                            linkedbytes::Node::BytesMut(bytes_mut) => {
-                                let start = bytes_mut.len() - PREFIX_LEN;
-                                let mut buf = &mut bytes_mut[start..];
-                                buf.put_u8(compression_encoding.is_some() as u8);
-                                buf.put_u32(len as u32);
-                            }
-                            _ => unreachable!("reserve_node_idx is not a bytesmut"),
+                        if let Some(node) = buf.get_list_mut(0) {
+                            match node {
+                                linkedbytes::Node::BytesMut(bytes_mut) => {
+                                    let start = bytes_mut.len() - PREFIX_LEN;
+                                    let mut dest = &mut bytes_mut[start..];
+                                    dest.put_u8(compression_encoding.is_some() as u8);
+                                    dest.put_u32(len as u32);
+                                }
+                                _ => unreachable!("reserve_node_idx is not a bytesmut"),
+                            };
+                        } else {
+                            let mut dest = &mut buf.bytes_mut()[..PREFIX_LEN];
+                            dest.put_u8(compression_encoding.is_some() as u8);
+                            dest.put_u32(len as u32);
                         }
                     }
 
-                    // remove the trailing empty bytes
-                    yield Ok(Frame::data(buf.concat().split_to(len + PREFIX_LEN).freeze()));
+                    // send each node in linked bytes as a separate frame
+                    for node in buf.into_iter_list() {
+                        let bytes = match node {
+                            Node::Bytes(bytes) => bytes,
+                            Node::BytesMut(bytesmut) => bytesmut.freeze(),
+                            Node::FastStr(faststr) => faststr.into_bytes(),
+                        };
+                        if !bytes.is_empty() {
+                            yield Ok(Frame::data(bytes));
+                        }
+                    }
                 },
                 Some(Err(status)) => yield Err(status),
                 None => break,
@@ -121,6 +134,23 @@ pub mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn test_encode() {
+        let source = async_stream::stream! {
+            yield Ok(EchoRequest { message: "Volo".into() });
+        };
+
+        let mut stream = encode(source, None);
+        // frame
+        let frame = stream.next().await.unwrap().unwrap();
+        assert!(frame.is_data());
+        let data = frame.data_ref().unwrap();
+        assert_eq!(&data[..PREFIX_LEN], b"\x00\x00\x00\x00\x06");
+        assert_eq!(&data[PREFIX_LEN..], b"\x0a\x04Volo");
+
+        assert!(stream.next().await.is_none());
+    }
+
     #[cfg(feature = "gzip")]
     #[tokio::test]
     async fn test_encode_gzip() {
@@ -133,21 +163,25 @@ pub mod tests {
         };
 
         let compression_encoding = Some(CompressionEncoding::Gzip(Some(GzipConfig::default())));
-        let result = encode(source, compression_encoding).next().await.unwrap();
+        let mut stream = encode(source, compression_encoding);
 
-        assert!(result.is_ok());
-        let frame = result.unwrap();
+        // frame
+        let frame = stream.next().await.unwrap().unwrap();
         assert!(frame.is_data());
         let data = frame.data_ref().unwrap();
-        let mut data_mut = BytesMut::from(&data[PREFIX_LEN..]);
+        assert_eq!(&data[..PREFIX_LEN], b"\x01\x00\x00\x00\x1a");
+
+        let mut compressed_data = BytesMut::from(&data[PREFIX_LEN..]);
         let mut uncompressed_data_mut = BytesMut::new();
         decompress(
             compression_encoding.unwrap(),
-            &mut data_mut,
+            &mut compressed_data,
             &mut uncompressed_data_mut,
         )
         .unwrap();
         assert_eq!(&uncompressed_data_mut[..], b"\x0a\x04Volo");
+
+        assert!(stream.next().await.is_none());
     }
 
     #[cfg(feature = "zlib")]
@@ -162,21 +196,25 @@ pub mod tests {
         };
 
         let compression_encoding = Some(CompressionEncoding::Zlib(Some(ZlibConfig::default())));
-        let result = encode(source, compression_encoding).next().await.unwrap();
+        let mut stream = encode(source, compression_encoding);
 
-        assert!(result.is_ok());
-        let frame = result.unwrap();
+        // frame
+        let frame = stream.next().await.unwrap().unwrap();
         assert!(frame.is_data());
         let data = frame.data_ref().unwrap();
-        let mut data_mut = BytesMut::from(&data[PREFIX_LEN..]);
+        assert_eq!(&data[..PREFIX_LEN], b"\x01\x00\x00\x00\x0e");
+
+        let mut compressed_data = BytesMut::from(&data[PREFIX_LEN..]);
         let mut uncompressed_data_mut = BytesMut::new();
         decompress(
             compression_encoding.unwrap(),
-            &mut data_mut,
+            &mut compressed_data,
             &mut uncompressed_data_mut,
         )
         .unwrap();
         assert_eq!(&uncompressed_data_mut[..], b"\x0a\x04Volo");
+
+        assert!(stream.next().await.is_none());
     }
 
     #[cfg(feature = "zstd")]
@@ -191,20 +229,24 @@ pub mod tests {
         };
 
         let compression_encoding = Some(CompressionEncoding::Zstd(Some(ZstdConfig::default())));
-        let result = encode(source, compression_encoding).next().await.unwrap();
+        let mut stream = encode(source, compression_encoding);
 
-        assert!(result.is_ok());
-        let frame = result.unwrap();
+        // frame
+        let frame = stream.next().await.unwrap().unwrap();
         assert!(frame.is_data());
         let data = frame.data_ref().unwrap();
-        let mut data_mut = BytesMut::from(&data[PREFIX_LEN..]);
+        assert_eq!(&data[..PREFIX_LEN], b"\x01\x00\x00\x00\x0f");
+
+        let mut compressed_data = BytesMut::from(&data[PREFIX_LEN..]);
         let mut uncompressed_data_mut = BytesMut::new();
         decompress(
             compression_encoding.unwrap(),
-            &mut data_mut,
+            &mut compressed_data,
             &mut uncompressed_data_mut,
         )
         .unwrap();
         assert_eq!(&uncompressed_data_mut[..], b"\x0a\x04Volo");
+
+        assert!(stream.next().await.is_none());
     }
 }
