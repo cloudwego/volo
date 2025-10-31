@@ -58,8 +58,7 @@ where
                         if let Some(node) = buf.get_list_mut(0) {
                             match node {
                                 linkedbytes::Node::BytesMut(bytes_mut) => {
-                                    let start = bytes_mut.len() - PREFIX_LEN;
-                                    let mut dest = &mut bytes_mut[start..];
+                                    let mut dest = &mut bytes_mut[..PREFIX_LEN];
                                     dest.put_u8(compression_encoding.is_some() as u8);
                                     dest.put_u32(len as u32);
                                 }
