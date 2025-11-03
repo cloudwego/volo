@@ -3,8 +3,10 @@ mod r#gen {
     include!(concat!(env!("OUT_DIR"), "/proto_service_a_gen.rs"));
     include!(concat!(env!("OUT_DIR"), "/proto_service_b_gen.rs"));
     include!(concat!(env!("OUT_DIR"), "/proto_service_c_gen.rs"));
+    include!(concat!(env!("OUT_DIR"), "/descriptor_gen.rs"));
 }
 
+pub use descriptor_gen::descriptor;
 pub use r#gen::*;
 pub use proto_service_a_gen::*;
 pub use proto_service_b_gen::*;
@@ -14,7 +16,7 @@ pub use proto_service_c_gen::*;
 mod tests {
     use pilota::{
         LinkedBytes,
-        pb::{EncodeLengthContext, Message, descriptor_getter::ItemDescriptorGetter},
+        pb::{EncodeLengthContext, Message, descriptor_getter::*},
     };
 
     use super::*;
@@ -54,8 +56,6 @@ mod tests {
 
         let minimal_request = service_c::MinimalRequest::decode(buf.concat().freeze())
             .expect("decode to service C failed");
-
-        println!("Minimal Request: {:?}", minimal_request);
 
         assert_eq!(minimal_request.request_id, "req-123");
         assert_eq!(minimal_request.user_id, "user-456");
@@ -190,20 +190,58 @@ mod tests {
 
     #[test]
     fn test_get_descriptor_proto() {
-        let desc = service_a::FullRequest::get_descriptor_proto().unwrap();
-        assert_eq!(desc.name(), "FullRequest");
+        // Test nested message types
+        let desc = descriptor::Outer::get_descriptor_proto().unwrap();
+        assert_eq!(desc.name(), "Outer");
+        let inner = descriptor::outer::Inner::get_descriptor_proto().unwrap();
+        assert_eq!(inner.name(), "Inner");
+        let nested = descriptor::outer::inner::Nested::get_descriptor_proto().unwrap();
+        assert_eq!(nested.name(), "Nested");
 
-        // nested oneof
-        let nested_oneof_desc =
-            service_a::full_request::NestedOneof::get_descriptor_proto().unwrap();
-        assert_eq!(nested_oneof_desc.name(), "nested_oneof");
+        // Test top-level message types
+        let outer_alt = descriptor::OuterAlt::get_descriptor_proto().unwrap();
+        assert_eq!(outer_alt.name(), "OuterAlt");
+        let opt = outer_alt.options.as_ref().unwrap(); // should be deprecated
+        assert_eq!(opt.deprecated.unwrap(), true);
+        let service_ref = descriptor::ServiceReference::get_descriptor_proto().unwrap();
+        assert_eq!(service_ref.name(), "ServiceReference");
+        let request = descriptor::Request::get_descriptor_proto().unwrap();
+        assert_eq!(request.name(), "Request");
+        let response = descriptor::Response::get_descriptor_proto().unwrap();
+        assert_eq!(response.name(), "Response");
+        let optioned = descriptor::OptionedMessage::get_descriptor_proto().unwrap();
+        assert_eq!(optioned.name(), "OptionedMessage");
 
-        // unused message should not be generated
-        let file_desc = service_a::file_descriptor_proto_service_a();
-        assert!(
-            file_desc
-                .get_message_descriptor_proto("NotNeeded")
-                .is_none()
-        );
+        // Test enum types
+        let global_enum = descriptor::GlobalEnum::get_descriptor_proto().unwrap();
+        assert_eq!(global_enum.name(), "GlobalEnum");
+        let state_enum = descriptor::outer::inner::State::get_descriptor_proto().unwrap();
+        assert_eq!(state_enum.name(), "State");
+
+        // Test map types
+        let map = request.get_field_descriptor_proto("by_name").unwrap();
+        assert_eq!(map.name(), "by_name");
+
+        // Test service types
+        let file = descriptor::file_descriptor_proto_descriptor();
+        let service = file.get_service_descriptor_proto("ComplexService").unwrap();
+        assert_eq!(service.name(), "ComplexService");
+        for method in &service.method {
+            match method.name() {
+                "UnaryGet" => {
+                    assert_eq!(method.input_type, Some(".descriptor.Request".into()));
+                    assert_eq!(method.output_type, Some(".descriptor.Response".into()));
+                }
+                "ServerStream" => {
+                    assert_eq!(method.input_type, Some(".descriptor.Request".into()));
+                    assert_eq!(method.output_type, Some(".descriptor.Response".into()));
+                }
+                "ClientStream" => {
+                    assert_eq!(method.input_type, Some(".descriptor.Request".into()));
+                    assert_eq!(method.output_type, Some(".descriptor.Response".into()));
+                }
+                _ => panic!("unexpected method name {}", method.name()),
+            }
+        }
     }
 }

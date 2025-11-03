@@ -34,6 +34,19 @@ entries:
           path: proto/service_c.proto
           includes:
             - proto
+
+  proto:
+    filename: descriptor_gen.rs
+    protocol: protobuf
+    touch_all: true
+    with_descriptor: true
+    services:
+      - idl:
+          source: local
+          path: proto/descriptor.proto
+          includes:
+            - proto
+
   thrift:
     filename: thrift_gen.rs
     protocol: thrift
