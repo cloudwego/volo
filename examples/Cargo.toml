@@ -153,8 +153,12 @@ volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc", features = ["grpc-web"] }
 volo-thrift = { path = "../volo-thrift", features = ["multiplex"] }
 volo-http = { path = "../volo-http", features = [
-    "client", "server",
-    "json", "query", "form", "cookie",
+    "client",
+    "server",
+    "json",
+    "query",
+    "form",
+    "cookie",
     "http1",
 ] }
 
