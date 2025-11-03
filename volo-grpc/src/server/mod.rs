@@ -20,7 +20,7 @@ use motore::{
 pub use service::ServiceBuilder;
 use tower::util::BoxCloneService;
 #[cfg(feature = "__tls")]
-use volo::net::tls::{Acceptor, ServerTlsConfig};
+use volo::net::tls::ServerTlsConfig;
 use volo::{
     net::{conn::Conn, incoming::Incoming},
     spawn,

@@ -1,4 +1,4 @@
-use std::{io, io::Result, path::Path, sync::Arc};
+use std::{io, io::Result, sync::Arc};
 
 use rustls::{RootCertStore, ServerConfig, pki_types::ServerName};
 use rustls_pki_types::PrivateKeyDer;
@@ -6,7 +6,6 @@ use tokio::net::TcpStream;
 use tokio_rustls::{TlsAcceptor, TlsConnector, rustls::ClientConfig};
 
 use super::{Acceptor, Connector, TlsConnectorBuilder};
-use crate::net::conn::{Conn, ConnStream};
 
 /// A wrapper for [`tokio_rustls::TlsConnector`]
 #[derive(Clone)]
@@ -76,7 +75,11 @@ impl Connector for RustlsConnector {
         Ok(Self(connector))
     }
 
-    async fn connect(&self, server_name: &str, tcp_stream: TcpStream) -> Result<Conn> {
+    async fn connect(
+        &self,
+        server_name: &str,
+        tcp_stream: TcpStream,
+    ) -> io::Result<super::TlsStream> {
         let sni = ServerName::try_from(server_name)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, e))?
             .to_owned();
@@ -85,7 +88,7 @@ impl Connector for RustlsConnector {
             .connect(sni, tcp_stream)
             .await
             .map(tokio_rustls::TlsStream::Client)
-            .map(Conn::from)
+            .map(Into::into)
     }
 }
 
@@ -107,19 +110,13 @@ impl Acceptor for RustlsAcceptor {
         Ok(Self(acceptor))
     }
 
-    fn from_pem_file(cert_path: impl AsRef<Path>, key_path: impl AsRef<Path>) -> Result<Self> {
-        let cert = std::fs::read(cert_path.as_ref())?;
-        let key = std::fs::read(key_path.as_ref())?;
-        Self::from_pem(cert, key)
-    }
-
-    async fn accept(&self, tcp_stream: TcpStream) -> Result<ConnStream> {
+    async fn accept(&self, tcp_stream: TcpStream) -> Result<super::TlsStream> {
         tracing::trace!("RustlsAcceptor::accept");
         self.0
             .accept(tcp_stream)
             .await
             .map(tokio_rustls::TlsStream::Server)
-            .map(ConnStream::from)
+            .map(Into::into)
     }
 }
 

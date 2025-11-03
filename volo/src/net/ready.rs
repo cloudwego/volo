@@ -20,10 +20,10 @@ impl AsyncReady for OwnedReadHalf {
             OwnedReadHalf::Tcp(half) => half.ready(interest).await,
             #[cfg(target_family = "unix")]
             OwnedReadHalf::Unix(half) => half.ready(interest).await,
-            #[cfg(feature = "rustls")]
-            OwnedReadHalf::Rustls(_) => todo!(),
-            #[cfg(feature = "native-tls")]
-            OwnedReadHalf::NativeTls(_) => todo!(),
+            #[cfg(feature = "__tls")]
+            OwnedReadHalf::Tls(_) => {
+                unimplemented!("AsyncReady is not supported for TLS connection")
+            }
         }
     }
 }
@@ -34,10 +34,10 @@ impl AsyncReady for OwnedWriteHalf {
             OwnedWriteHalf::Tcp(half) => half.ready(interest).await,
             #[cfg(target_family = "unix")]
             OwnedWriteHalf::Unix(half) => half.ready(interest).await,
-            #[cfg(feature = "rustls")]
-            OwnedWriteHalf::Rustls(_) => todo!(),
-            #[cfg(feature = "native-tls")]
-            OwnedWriteHalf::NativeTls(_) => todo!(),
+            #[cfg(feature = "__tls")]
+            OwnedWriteHalf::Tls(_) => {
+                unimplemented!("AsyncReady is not supported for TLS connection")
+            }
         }
     }
 }

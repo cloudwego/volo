@@ -1,8 +1,8 @@
 use http::uri::Scheme;
 use motore::service::UnaryService;
 use volo::net::{
-    conn::{Conn, ConnStream},
-    tls::{Connector, TlsConnector},
+    conn::{Conn, ConnInfo, ConnStream},
+    tls::TlsConnector,
 };
 
 use super::{connector::PeerInfo, plain::PlainMakeConnection};
@@ -46,7 +46,12 @@ where
             _ => unreachable!(),
         };
         match self.tls_connector.connect(&target_name, tcp_stream).await {
-            Ok(conn) => Ok(conn),
+            Ok(stream) => Ok(Conn {
+                stream,
+                info: ConnInfo {
+                    peer_addr: Some(req.address),
+                },
+            }),
             Err(err) => {
                 tracing::warn!("[Volo-HTTP] failed to make tls connection, error: {err}");
                 Err(request_error(err))

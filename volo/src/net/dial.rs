@@ -78,7 +78,6 @@ impl DefaultMakeTransport {
 
 impl MakeTransport for DefaultMakeTransport {
     type ReadHalf = OwnedReadHalf;
-
     type WriteHalf = OwnedWriteHalf;
 
     async fn make_transport(&self, addr: Address) -> io::Result<(Self::ReadHalf, Self::WriteHalf)> {
