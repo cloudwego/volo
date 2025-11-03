@@ -671,4 +671,135 @@ mod extract_tests {
         assert_handler(option_cx_req);
         assert_handler(result_cx_req);
     }
+
+    #[cfg(any(feature = "form", feature = "json"))]
+    fn simple_req(content_type: &'static str, body: &'static str) -> crate::request::Request {
+        let mut req = crate::request::Request::new(Body::from(body));
+        req.headers_mut().insert(
+            http::header::CONTENT_TYPE,
+            http::header::HeaderValue::from_static(content_type),
+        );
+        req
+    }
+
+    #[cfg(feature = "form")]
+    #[tokio::test]
+    async fn extract_form() {
+        use crate::server::test_helpers;
+
+        #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+        struct TestForm {
+            key1: String,
+            key2: String,
+            key3: String,
+        }
+
+        const VALID_FORM: &str = "key1=value1&key2=value2&key3=value3";
+        const INVALID_FORM: &str = "if (key && value) { print(key, value) }";
+
+        let test_form = serde_urlencoded::from_str(VALID_FORM).unwrap();
+
+        // simple content-type
+        {
+            let req = simple_req("application/x-www-form-urlencoded", VALID_FORM);
+            let (parts, body) = req.into_parts();
+            assert_eq!(
+                super::Form::<TestForm>::from_request(&mut test_helpers::empty_cx(), parts, body,)
+                    .await
+                    .unwrap()
+                    .0,
+                test_form,
+            );
+        }
+        // content-type with charset
+        {
+            let req = simple_req(
+                "application/x-www-form-urlencoded; charset=utf-8",
+                VALID_FORM,
+            );
+            let (parts, body) = req.into_parts();
+            assert_eq!(
+                super::Form::<TestForm>::from_request(&mut test_helpers::empty_cx(), parts, body,)
+                    .await
+                    .unwrap()
+                    .0,
+                test_form,
+            );
+        }
+        // wrong content type
+        {
+            let req = simple_req("text/javascript", VALID_FORM);
+            let (parts, body) = req.into_parts();
+            super::Form::<TestForm>::from_request(&mut test_helpers::empty_cx(), parts, body)
+                .await
+                .unwrap_err();
+        }
+        // invalid form
+        {
+            let req = simple_req("application/x-www-form-urlencoded", INVALID_FORM);
+            let (parts, body) = req.into_parts();
+            super::Form::<TestForm>::from_request(&mut test_helpers::empty_cx(), parts, body)
+                .await
+                .unwrap_err();
+        }
+    }
+
+    #[cfg(feature = "json")]
+    #[tokio::test]
+    async fn extract_json() {
+        use crate::server::test_helpers;
+
+        #[derive(Debug, PartialEq, Eq, serde::Deserialize)]
+        struct TestJson {
+            key1: String,
+            key2: String,
+            key3: String,
+        }
+
+        const VALID_JSON: &str = r#"{"key1":"value1","key2":"value2", "key3": "value3"}"#;
+        const INVALID_JSON: &str = "if (key && value) { print(key, value) }";
+
+        let test_json = crate::utils::json::deserialize(VALID_JSON.as_bytes()).unwrap();
+
+        // simple content-type
+        {
+            let req = simple_req("application/json", VALID_JSON);
+            let (parts, body) = req.into_parts();
+            assert_eq!(
+                super::Json::<TestJson>::from_request(&mut test_helpers::empty_cx(), parts, body,)
+                    .await
+                    .unwrap()
+                    .0,
+                test_json,
+            );
+        }
+        // content-type with charset
+        {
+            let req = simple_req("application/json; charset=utf-8", VALID_JSON);
+            let (parts, body) = req.into_parts();
+            assert_eq!(
+                super::Json::<TestJson>::from_request(&mut test_helpers::empty_cx(), parts, body,)
+                    .await
+                    .unwrap()
+                    .0,
+                test_json,
+            );
+        }
+        // wrong content type
+        {
+            let req = simple_req("text/javascript", VALID_JSON);
+            let (parts, body) = req.into_parts();
+            super::Json::<TestJson>::from_request(&mut test_helpers::empty_cx(), parts, body)
+                .await
+                .unwrap_err();
+        }
+        // invalid form
+        {
+            let req = simple_req("application/json", INVALID_JSON);
+            let (parts, body) = req.into_parts();
+            super::Json::<TestJson>::from_request(&mut test_helpers::empty_cx(), parts, body)
+                .await
+                .unwrap_err();
+        }
+    }
 }
