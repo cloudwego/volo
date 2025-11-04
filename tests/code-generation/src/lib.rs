@@ -1,16 +1,12 @@
 mod r#gen {
     include!(concat!(env!("OUT_DIR"), "/thrift_gen.rs"));
-    include!(concat!(env!("OUT_DIR"), "/proto_service_a_gen.rs"));
-    include!(concat!(env!("OUT_DIR"), "/proto_service_b_gen.rs"));
-    include!(concat!(env!("OUT_DIR"), "/proto_service_c_gen.rs"));
+    include!(concat!(env!("OUT_DIR"), "/proto_gen.rs"));
     include!(concat!(env!("OUT_DIR"), "/descriptor_gen.rs"));
 }
 
 pub use descriptor_gen::descriptor;
 pub use r#gen::*;
-pub use proto_service_a_gen::*;
-pub use proto_service_b_gen::*;
-pub use proto_service_c_gen::*;
+pub use proto_gen::*;
 
 #[cfg(test)]
 mod tests {
