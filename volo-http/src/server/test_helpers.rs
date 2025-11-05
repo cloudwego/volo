@@ -1,6 +1,6 @@
 //! Test utilities for server of Volo-HTTP.
 
-use std::{fmt::Debug, marker::PhantomData};
+use std::{convert::Infallible, fmt::Debug, marker::PhantomData};
 
 use http::method::Method;
 use motore::{layer::Layer, service::Service};
@@ -14,6 +14,40 @@ use crate::{
     body::Body, context::ServerContext, request::Request, response::Response, server::Server,
     utils::test_helpers::mock_address,
 };
+
+/// Default [`Service`] that always responds `Ok(R::default())`
+pub struct DefaultService<R = Response, E = Infallible> {
+    _marker: PhantomData<fn(R, E)>,
+}
+
+impl<R, E> DefaultService<R, E> {
+    /// Create a new [`DefaultService`]
+    pub const fn new() -> Self {
+        Self {
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl<R, E> Default for DefaultService<R, E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl<Cx, Req, Resp, E> Service<Cx, Req> for DefaultService<Resp, E>
+where
+    Cx: Send,
+    Req: Send,
+    Resp: Default + Send,
+{
+    type Response = Resp;
+    type Error = E;
+
+    async fn call(&self, _: &mut Cx, _: Req) -> Result<Self::Response, Self::Error> {
+        Ok(Resp::default())
+    }
+}
 
 /// Wrap a [`Handler`] into a [`HandlerService`].
 ///
