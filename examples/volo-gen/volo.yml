@@ -3,7 +3,7 @@ entries:
   proto:
     filename: proto_gen.rs
     protocol: protobuf
-    with_descriptor: true
+    # with_descriptor: true
     touch_all: true
     services:
       - idl:
