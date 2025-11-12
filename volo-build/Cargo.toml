@@ -31,7 +31,6 @@ heck.workspace = true
 itertools.workspace = true
 mockall.workspace = true
 mockall_double.workspace = true
-nom.workspace = true
 normpath.workspace = true
 once_cell.workspace = true
 paste.workspace = true

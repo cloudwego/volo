@@ -1,0 +1,118 @@
+syntax = "proto3";
+
+package descriptor;
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+import "google/protobuf/descriptor.proto";
+
+option java_package = "com.example.codegen";
+option go_package = "github.com/cloudwego/volo/tests/codegen;codegen";
+
+// Define custom options to test descriptor options retrieval
+extend google.protobuf.MessageOptions {
+  // Custom message-level option
+  string my_msg_option = 51234;
+}
+
+extend google.protobuf.FieldOptions {
+  // Custom field-level option to mark sensitive fields
+  bool redacted = 51235;
+}
+
+// Top-level message containing nested messages, enums, map, oneof, reserved, etc.
+message Outer {
+  // Nested message
+  message Inner {
+    // Nested enum
+    enum State {
+      UNKNOWN = 0;
+      STARTED = 1;
+      FINISHED = 2;
+    }
+
+    State state = 1;
+    repeated string labels = 2;
+    map<string, int32> counts = 3;
+
+    // oneof example: only one field can be set at a time
+    oneof payload {
+      bytes raw = 4;
+      Nested nested = 5;
+    }
+
+    // Further nesting
+    message Nested {
+      string name = 1 [(redacted) = true];
+      google.protobuf.Timestamp created = 2;
+    }
+  }
+
+  repeated Inner inners = 1;
+  OuterAlt alt = 2;
+
+  // Reserved field number range for testing descriptor reserved field info
+  reserved 100 to 199;
+}
+
+// Message with deprecated option
+message OuterAlt {
+  option deprecated = true;
+  int32 id = 1;
+  google.protobuf.Any meta = 2;
+  repeated ServiceReference services = 3;
+}
+
+message ServiceReference {
+  string name = 1;
+  string endpoint = 2;
+  map<string, string> labels = 3;
+}
+
+// Top-level enum
+enum GlobalEnum {
+  GE_UNKNOWN = 0;
+  GE_ALPHA = 1;
+  GE_BETA = 2;
+  GE_GAMMA = 3;
+}
+
+// Service with multiple RPC types to test service descriptor (including streaming)
+service ComplexService {
+  // Standard Unary rpc
+  rpc UnaryGet (Request) returns (Response);
+
+  // Server streaming
+  rpc ServerStream (Request) returns (stream Response);
+
+  // Client streaming
+  rpc ClientStream (stream Request) returns (Response);
+}
+
+// Request/Response messages combining various field types
+message Request {
+  string query = 1;
+  GlobalEnum filter = 2;
+  repeated int64 ids = 3;
+  map<string, Outer.Inner> by_name = 4;
+
+  oneof payload {
+    bytes raw = 10;
+    google.protobuf.Any any = 11;
+  }
+}
+
+message Response {
+  int32 code = 1;
+  string message = 2;
+  repeated google.protobuf.Timestamp events = 3;
+}
+
+// Example message using defined options to test extension descriptor visibility
+message OptionedMessage {
+  option (my_msg_option) = "optioned";
+  string note = 1 [(redacted) = false];
+}
+
+// File-level comments to test SourceCodeInfo extraction (comments become part of descriptor)
+// End of descriptor.proto

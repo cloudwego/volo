@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use itertools::Itertools;
 use pilota_build::{
-    CodegenBackend, Context, DefId, IdentName, Symbol,
+    CodegenBackend, Context, DefId, IdentName, ModPath, Symbol,
     db::RirDatabase,
+    middle::ext::{FileExts, ModExts},
     rir::{self, Method},
     tags::{
         RustWrapperArc,
@@ -289,10 +290,14 @@ impl CodegenBackend for VoloGrpcBackend {
 
         let path = self.cx().item_path(def_id);
         let path = path.as_ref();
-        let buf = get_base_dir(self.cx().mode.as_ref(), self.cx().names.get(&def_id), path);
+        let buf = get_base_dir(
+            self.cx().source.mode.as_ref(),
+            self.cx().cache.names.get(&def_id),
+            path,
+        );
         let base_dir = buf.as_path();
 
-        if self.cx().split {
+        if self.cx().config.split {
             std::fs::create_dir_all(base_dir).expect("Failed to create base directory");
         }
 
@@ -643,7 +648,7 @@ impl CodegenBackend for VoloGrpcBackend {
             }}"#
         };
 
-        if self.cx().split {
+        if self.cx().config.split {
             let mut mod_rs_stream = String::new();
             write_item(
                 &mut mod_rs_stream,
@@ -794,29 +799,54 @@ impl CodegenBackend for VoloGrpcBackend {
         self.inner.cx()
     }
 
-    fn codegen_pilota_buf_trait(&self, stream: &mut String) {
-        self.inner.codegen_pilota_buf_trait(stream)
+    fn codegen_file_descriptor(&self, stream: &mut String, f: &rir::File, has_direct: bool) {
+        self.inner.codegen_file_descriptor(stream, f, has_direct)
+    }
+
+    fn codegen_register_mod_file_descriptor(
+        &self,
+        stream: &mut String,
+        mods: &[(ModPath, Arc<PathBuf>)],
+    ) {
+        self.inner
+            .codegen_register_mod_file_descriptor(stream, mods)
+    }
+
+    fn codegen_pilota_trait(&self, stream: &mut String) {
+        self.inner.codegen_pilota_trait(stream)
     }
 
     fn codegen_file_descriptor_at_mod(
         &self,
         stream: &mut String,
         f: &rir::File,
-        mod_path: &[FastStr],
+        mod_path: &ModPath,
         has_direct: bool,
     ) {
         self.inner
             .codegen_file_descriptor_at_mod(stream, f, mod_path, has_direct)
     }
 
-    fn codegen_exts(
+    fn codegen_file_exts(
         &self,
         stream: &mut String,
         suffix: &str,
         cur_pkg: &[Symbol],
-        extensions: &[rir::Extension],
+        extensions: &FileExts,
     ) {
-        self.inner.codegen_exts(stream, suffix, cur_pkg, extensions)
+        self.inner
+            .codegen_file_exts(stream, suffix, cur_pkg, extensions)
+    }
+
+    fn codegen_mod_exts(
+        &self,
+        stream: &mut String,
+        suffix: &str,
+        cur_pkg: &[Symbol],
+        extensions: &ModExts,
+    ) {
+        self.inner
+            .codegen_mod_exts(stream, suffix, cur_pkg, extensions)
     }
 
     fn codegen_impl_enum_message(&self, name: &str) -> String {

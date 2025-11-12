@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package nested;
+
+service Greeter {
+    rpc SayHello (HelloRequest) returns (HelloReply) {}
+}
+
+message HelloRequest {
+    string name = 1;
+    message User {
+        string username = 1;
+    }
+    oneof contact_info {
+        string email = 2;
+        string phone = 3;
+    }
+    enum Gender {
+        UNKNOWN = 0;
+        MALE = 1;
+        FEMALE = 2;
+    }
+}
+
+message HelloReply {
+    string message = 1;
+}
