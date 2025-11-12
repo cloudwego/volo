@@ -835,7 +835,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             .join(",");
 
         if let Some(p) = &method.exceptions {
-            let exception = self.inner.cur_related_item_path(p.did);
+            let exception = self.inner.codegen_ty(p.did).global_path("volo_gen");
             ret_ty = format!("::volo_thrift::MaybeException<{ret_ty}, {exception}>");
         }
 
@@ -898,5 +898,105 @@ impl pilota_build::MakeBackend for MkThriftBackend {
         VoloThriftBackend {
             inner: ThriftBackend::new(context),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use pilota_build::{
+        Builder, DefId, IdlService, SourceType,
+        middle::context::tls::CONTEXT,
+        parser::ThriftParser,
+        rir::{self, Item},
+    };
+    use tempfile::tempdir;
+
+    use super::*;
+
+    fn build_test_context(thrift_content: &str) -> Context {
+        let dir = tempdir().expect("create temp dir");
+        let file_path = dir.path().join("test.thrift");
+        fs::write(&file_path, thrift_content).expect("write thrift");
+
+        Builder::<pilota_build::MkThriftBackend, ThriftParser>::build_cx(
+            vec![IdlService::from_path(file_path)],
+            None,
+            ThriftParser::default(),
+            Vec::new(),
+            true,
+            SourceType::Thrift,
+            true,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            "common".into(),
+            false,
+            false,
+            false,
+        )
+    }
+
+    fn find_first_service(cx: &Context) -> DefId {
+        for (def_id, node) in cx.nodes().iter() {
+            if let rir::NodeKind::Item(item) = &node.kind {
+                if let Item::Service(svc) = &**item {
+                    let _ = svc; // only need def_id
+                    return *def_id;
+                }
+            }
+        }
+        panic!("no service found in parsed thrift");
+    }
+
+    #[test]
+    fn test_codegen_service_method_with_global_path_exception() {
+        let cx = build_test_context(
+            r#"
+            exception Exception1 {
+                1: string message;
+            }
+            exception Exception2 {
+                1: string message;
+            }
+            service S3 {
+                i32 DoThing(1: i64 type, 2: string Name) throws (1: Exception1 e1, 2: Exception2 e2);
+            }
+            "#,
+        );
+
+        let svc_def_id = find_first_service(&cx);
+        let methods = cx.service_methods(svc_def_id);
+        assert!(!methods.is_empty());
+        let m = &methods[0];
+
+        let backend = VoloThriftBackend {
+            inner: ThriftBackend::new(cx.clone()),
+        };
+
+        let sig = CONTEXT.set(&cx, || {
+            <VoloThriftBackend as pilota_build::CodegenBackend>::codegen_service_method_with_global_path(
+                &backend,
+                svc_def_id,
+                m,
+            )
+        });
+
+        // 期望为 Result<MaybeException<i32, <exception_enum_global_path>>, ServerError>
+        let p = m.exceptions.as_ref().expect("exceptions must exist");
+        let exc_path = cx
+            .item_path(p.did)
+            .iter()
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>()
+            .join("::");
+        let exc_global = format!("volo_gen::{exc_path}");
+        let expected = format!(
+            "-> ::core::result::Result<::volo_thrift::MaybeException<i32, {}>, \
+             ::volo_thrift::ServerError>",
+            exc_global
+        );
+        assert!(sig.contains(&expected), "signature: {sig}");
     }
 }
