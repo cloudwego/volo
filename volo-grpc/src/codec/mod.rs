@@ -39,6 +39,9 @@ impl<T: Message> Encoder for DefaultEncoder<T> {
     type Error = Status;
 
     fn encode(&mut self, item: Self::Item, dst: &mut LinkedBytes) -> Result<(), Self::Error> {
+        let mut ctx = pilota::pb::EncodeLengthContext::default();
+        let required_len = item.encoded_len(&mut ctx) - ctx.zero_copy_len;
+        dst.reserve(required_len);
         item.encode(dst)
             .map_err(|e| Status::new(Internal, e.to_string()))
     }

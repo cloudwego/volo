@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package service_c;
+
+message MinimalRequest {
+  string request_id = 1;
+  string user_id = 2;
+  string field_c = 5;
+  int64 timestamp = 6;
+}
+
+message MinimalResponse {
+  string request_id = 1;
+  string result = 2;
+  string response_c = 5;
+}
+
+service ServiceC {
+  rpc ProcessC(MinimalRequest) returns (MinimalResponse);
+}

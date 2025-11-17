@@ -1,6 +1,6 @@
 [package]
 name = "volo-build"
-version = "0.11.6"
+version = "0.12.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -18,7 +18,7 @@ keywords = ["thrift", "grpc", "protobuf", "volo", "build"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.11", path = "../volo" }
+volo = { version = "0.12", path = "../volo" }
 
 pilota-build.workspace = true
 
@@ -31,7 +31,6 @@ heck.workspace = true
 itertools.workspace = true
 mockall.workspace = true
 mockall_double.workspace = true
-nom.workspace = true
 normpath.workspace = true
 once_cell.workspace = true
 paste.workspace = true

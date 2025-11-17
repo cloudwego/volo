@@ -24,11 +24,11 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.85.0"
 
 [workspace.dependencies]
-pilota = "0.12"
-pilota-build = "0.12.2"
-pilota-thrift-parser = "0.12"
-pilota-thrift-reflect = "0.1"
-pilota-thrift-fieldmask = "0.1"
+pilota = "0.13"
+pilota-build = "0.13"
+pilota-thrift-parser = "0.13"
+pilota-thrift-reflect = "0.2"
+pilota-thrift-fieldmask = "0.2"
 motore = "0.4.1"
 metainfo = "0.7.14"
 
@@ -80,7 +80,6 @@ mockall_double = "0.3"
 multer = "3"
 mur3 = "0.1"
 nix = "0.30"
-nom = "8"
 normpath = "1"
 num_enum = "0.7"
 once_cell = "1"
@@ -152,7 +151,7 @@ panic = 'unwind'
 incremental = false
 overflow-checks = false
 
-[patch.crates-io]
+# [patch.crates-io]
 # pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
 # pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
 # pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }

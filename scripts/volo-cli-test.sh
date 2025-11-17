@@ -37,6 +37,24 @@ init() {
 	export VOLO_DIR="$PWD"
 	echo_command cargo build -p volo-cli
 	export VOLO_CLI="$PWD/target/debug/volo"
+	detect_pilota_branch
+}
+
+detect_pilota_branch() {
+	local cargo_toml="$VOLO_DIR/Cargo.toml"
+
+	if grep -q '^\[patch\.crates-io\]' "$cargo_toml"; then
+		local pilota_line=$(sed -n '/^\[patch\.crates-io\]/,/^\[/p' "$cargo_toml" | grep '^pilota[[:space:]]*=' | grep 'branch[[:space:]]*=' | head -n 1)
+		
+		if [ -n "$pilota_line" ]; then
+			export PILOTA_BRANCH=$(echo "$pilota_line" | sed -n 's/.*branch[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')
+			echo "Detected pilota patch: branch = $PILOTA_BRANCH"
+			return
+		fi
+	fi
+	
+	export PILOTA_BRANCH="main"
+	echo "No pilota patch detected, using default: branch = main"
 }
 
 append_volo_dep_item() {
@@ -44,7 +62,7 @@ append_volo_dep_item() {
 }
 
 append_pilota_dep_item() {
-	echo "$1 = { git = \"https://github.com/cloudwego/pilota.git\", branch = \"main\" }" >> Cargo.toml
+	echo "$1 = { git = \"https://github.com/cloudwego/pilota.git\", branch = \"$PILOTA_BRANCH\" }" >> Cargo.toml
 }
 
 patch_cargo_toml() {
