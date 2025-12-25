@@ -28,6 +28,8 @@ pub struct CommonOption {
     pub with_descriptor: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub with_field_mask: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub with_comments: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
