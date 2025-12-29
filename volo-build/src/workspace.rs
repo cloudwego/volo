@@ -109,6 +109,7 @@ where
             .split_generated_files(config.common_option.split_generated_files)
             .with_descriptor(config.common_option.with_descriptor)
             .with_field_mask(config.common_option.with_field_mask)
+            .with_comments(config.common_option.with_comments)
             .pilota_builder
             .compile_with_config(idl_services, pilota_build::Output::Workspace(work_dir));
     }
@@ -173,6 +174,11 @@ where
 
     pub fn with_field_mask(mut self, with_field_mask: bool) -> Self {
         self.pilota_builder = self.pilota_builder.with_field_mask(with_field_mask);
+        self
+    }
+
+    pub fn with_comments(mut self, with_comments: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.with_comments(with_comments);
         self
     }
 }

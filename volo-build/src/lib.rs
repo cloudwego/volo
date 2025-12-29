@@ -153,6 +153,11 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self.pilota_builder = self.pilota_builder.with_field_mask(with_field_mask);
         self
     }
+
+    pub fn with_comments(mut self, with_comments: bool) -> Self {
+        self.pilota_builder = self.pilota_builder.with_comments(with_comments);
+        self
+    }
 }
 
 impl<MkB, P> Builder<MkB, P>

@@ -178,6 +178,15 @@ impl InnerBuilder {
             }
         }
     }
+
+    pub fn with_comments(self, with_comments: bool) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.with_comments(with_comments))
+            }
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.with_comments(with_comments)),
+        }
+    }
 }
 
 impl ConfigBuilder {
@@ -229,6 +238,7 @@ impl ConfigBuilder {
                     .dedup(entry.common_option.dedups)
                     .with_descriptor(entry.common_option.with_descriptor)
                     .with_field_mask(entry.common_option.with_field_mask)
+                    .with_comments(entry.common_option.with_comments)
                     .write()?;
 
                 Ok(())

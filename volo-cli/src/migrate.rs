@@ -52,6 +52,7 @@ impl CliCommand for Migrate {
                             split_generated_files: false,
                             with_descriptor: false,
                             with_field_mask: false,
+                            with_comments: false,
                         },
                     };
 
