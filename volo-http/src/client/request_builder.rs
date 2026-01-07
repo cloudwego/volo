@@ -11,6 +11,7 @@ use http::{
     uri::{PathAndQuery, Scheme, Uri},
     version::Version,
 };
+use motore::layer::Layer;
 use volo::{
     client::{Apply, OneShotService, WithOptService},
     net::Address,
@@ -345,15 +346,25 @@ impl<S, B> RequestBuilder<S, B> {
         self.request.body()
     }
 
-    /// Apply a [`CallOpt`] to the request.
-    pub fn with_callopt(self, callopt: CallOpt) -> RequestBuilder<WithOptService<S, CallOpt>, B> {
+    /// Add a new [`Layer`] to the front of request builder.
+    ///
+    /// Note that the [`Layer`] generated `Service` should be a [`OneShotService`].
+    pub fn layer<L>(self, layer: L) -> RequestBuilder<L::Service, B>
+    where
+        L: Layer<S>,
+    {
         RequestBuilder {
-            inner: WithOptService::new(self.inner, callopt),
+            inner: layer.layer(self.inner),
             target: self.target,
             version: self.version,
             request: self.request,
             status: self.status,
         }
+    }
+
+    /// Apply a [`CallOpt`] to the request.
+    pub fn with_callopt(self, callopt: CallOpt) -> RequestBuilder<WithOptService<S, CallOpt>, B> {
+        self.layer(WithOptLayer::new(callopt))
     }
 
     fn set_version(&mut self) {
@@ -390,5 +401,23 @@ impl<S, B> RequestBuilder<S, B> {
         let mut cx = ClientContext::new();
         self.target.apply(&mut cx)?;
         self.inner.call(&mut cx, self.request).await
+    }
+}
+
+struct WithOptLayer {
+    opt: CallOpt,
+}
+
+impl WithOptLayer {
+    const fn new(opt: CallOpt) -> Self {
+        Self { opt }
+    }
+}
+
+impl<S> Layer<S> for WithOptLayer {
+    type Service = WithOptService<S, CallOpt>;
+
+    fn layer(self, inner: S) -> Self::Service {
+        WithOptService::new(inner, self.opt)
     }
 }
