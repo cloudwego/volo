@@ -789,6 +789,7 @@ name = "examples"
 version = "0.0.0"
 dependencies = [
  "anyhow",
+ "async-broadcast",
  "async-stream",
  "bytes",
  "faststr",
@@ -4115,6 +4116,7 @@ name = "volo"
 version = "0.12.1"
 dependencies = [
  "async-broadcast",
+ "async-trait",
  "dashmap",
  "faststr",
  "futures",
@@ -4125,6 +4127,7 @@ dependencies = [
  "native-tls",
  "nix",
  "once_cell",
+ "parking_lot",
  "pin-project",
  "rand 0.9.2",
  "rustls",

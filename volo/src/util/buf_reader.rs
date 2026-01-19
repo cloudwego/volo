@@ -132,7 +132,7 @@ impl<R: AsyncRead> BufReader<R> {
         &self.buf[self.pos..self.len]
     }
 
-    /// 整理 buffer，移动到最前。
+    /// Compact the buffer by moving data to the front.
     pub fn compact(&mut self) {
         if self.len == self.pos {
             self.pos = 0;
