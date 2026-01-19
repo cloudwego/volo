@@ -22,11 +22,11 @@ fmt_check() {
 }
 
 docs_check() {
-	echo_and_run cargo rustdoc -p volo --all-features -- --deny warnings
-	echo_and_run cargo rustdoc -p volo-build --all-features -- --deny warnings
-	echo_and_run cargo rustdoc -p volo-grpc --all-features -- --deny warnings
-	echo_and_run cargo rustdoc -p volo-http --all-features -- --deny warnings
-	echo_and_run cargo rustdoc -p volo-thrift --all-features -- --deny warnings
+	echo_and_run cargo +nightly rustdoc -p volo --all-features --config 'build.rustdocflags=["--cfg", "docsrs"]' -- --deny warnings
+	echo_and_run cargo +nightly rustdoc -p volo-build --all-features --config 'build.rustdocflags=["--cfg", "docsrs"]' -- --deny warnings
+	echo_and_run cargo +nightly rustdoc -p volo-grpc --all-features --config 'build.rustdocflags=["--cfg", "docsrs"]' -- --deny warnings
+	echo_and_run cargo +nightly rustdoc -p volo-http --all-features --config 'build.rustdocflags=["--cfg", "docsrs"]' -- --deny warnings
+	echo_and_run cargo +nightly rustdoc -p volo-thrift --all-features --config 'build.rustdocflags=["--cfg", "docsrs"]' -- --deny warnings
 }
 
 clippy_and_test() {
