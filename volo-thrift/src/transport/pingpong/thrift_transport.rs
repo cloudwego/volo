@@ -17,6 +17,8 @@ static TRANSPORT_ID_COUNTER: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsiz
 pub struct ThriftTransport<E: Encoder, D: Decoder> {
     write_half: WriteHalf<E>,
     read_half: ReadHalf<D>,
+    #[cfg(feature = "shmipc")]
+    shmipc_helper: volo::net::shmipc::ShmipcHelper,
 }
 
 impl<E, D> ThriftTransport<E, D>
@@ -35,6 +37,8 @@ where
     ) -> Self {
         let id = TRANSPORT_ID_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let (encoder, decoder) = make_codec.make_codec(read_half, write_half);
+        #[cfg(feature = "shmipc")]
+        let shmipc_helper = decoder.shmipc_helper();
         Self {
             read_half: ReadHalf {
                 decoder,
@@ -46,6 +50,8 @@ where
                 id,
                 reusable: true,
             },
+            #[cfg(feature = "shmipc")]
+            shmipc_helper,
         }
     }
 
@@ -71,6 +77,11 @@ where
             return Ok(None);
         }
         self.read_half.try_next(cx).await
+    }
+
+    #[cfg(feature = "shmipc")]
+    pub const fn shmipc_helper(&self) -> &volo::net::shmipc::ShmipcHelper {
+        &self.shmipc_helper
     }
 }
 
@@ -149,6 +160,12 @@ where
     D: Decoder,
 {
     async fn reusable(&self) -> bool {
+        #[cfg(feature = "shmipc")]
+        if self.shmipc_helper.available() {
+            self.shmipc_helper.reuse().await;
+            return false;
+        }
+
         self.read_half.reusable
             && self.write_half.reusable
             && !self.read_half.decoder.is_closed().await

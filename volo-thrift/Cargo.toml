@@ -58,3 +58,5 @@ multiplex = []
 unsafe-codec = []
 # This will use unwrap_unchecked instead of unwrap in some places.
 unsafe_unchecked = ["volo/unsafe_unchecked"]
+
+shmipc = ["volo/shmipc"]

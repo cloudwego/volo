@@ -228,6 +228,12 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
 
                         #[cfg(feature = "multiplex")]
                         if self.multiplex {
+                            #[cfg(feature = "shmipc")]
+                            if peer_addr.as_ref().is_some_and(Address::is_shmipc) {
+                                tracing::error!("multiplex is not supported when using shmipc");
+                                let _ = rh.shmipc_helper().close().await;
+                                continue;
+                            }
                             tokio::spawn(handle_conn_multiplex(
                                 rh,
                                 wh,
@@ -416,6 +422,9 @@ async fn handle_conn<R, W, Req, Svc, Resp, MkC, SP>(
     }
 
     let (encoder, decoder) = make_codec.make_codec(rh, wh);
+
+    #[cfg(feature = "shmipc")]
+    let _guard = crate::codec::Decoder::shmipc_helper(&decoder).close_guard();
 
     tracing::trace!(
         "[VOLO] handle conn by ping-pong, peer_addr: {:?}",

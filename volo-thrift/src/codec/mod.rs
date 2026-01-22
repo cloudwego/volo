@@ -23,6 +23,11 @@ pub trait Decoder: Send + Sync + 'static {
     fn is_closed(&self) -> impl Future<Output = bool> + Send {
         async { false }
     }
+
+    #[cfg(feature = "shmipc")]
+    fn shmipc_helper(&self) -> ::volo::net::shmipc::ShmipcHelper {
+        ::volo::net::shmipc::ShmipcHelper::none()
+    }
 }
 
 /// [`Encoder`] writes a [`ThriftMessage`] to an [`AsyncWrite`] and flushes the data.
@@ -37,6 +42,11 @@ pub trait Encoder: Send + Sync + 'static {
 
     fn is_closed(&self) -> impl Future<Output = bool> + Send {
         async { false }
+    }
+
+    #[cfg(feature = "shmipc")]
+    fn shmipc_helper(&self) -> ::volo::net::shmipc::ShmipcHelper {
+        ::volo::net::shmipc::ShmipcHelper::none()
     }
 }
 
