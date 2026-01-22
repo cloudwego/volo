@@ -100,6 +100,8 @@ impl ClientError {
             Address::Ip(addr) => self.addr = Some(addr),
             #[cfg(target_family = "unix")]
             Address::Unix(_) => {}
+            #[allow(unreachable_patterns)]
+            _ => unimplemented!("unsupported type of address"),
         }
         self
     }

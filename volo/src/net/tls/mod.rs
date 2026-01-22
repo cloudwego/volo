@@ -540,6 +540,11 @@ impl UnaryService<Address> for TlsMakeTransport {
                 io::ErrorKind::AddrNotAvailable,
                 "unix domain socket is unavailable for tls",
             )),
+            #[cfg(feature = "shmipc")]
+            Address::Shmipc(_) => Err(io::Error::new(
+                io::ErrorKind::AddrNotAvailable,
+                "shmipc is unavailable for tls",
+            )),
         }
     }
 }

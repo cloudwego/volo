@@ -29,7 +29,7 @@ pub trait MakeTransport: Clone + Send + Sync + 'static {
     fn set_write_timeout(&mut self, timeout: Option<Duration>);
 }
 
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone)]
 pub struct DefaultMakeTransport {
     cfg: Config,
 }
@@ -73,6 +73,14 @@ impl Config {
 impl DefaultMakeTransport {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub const fn config(&self) -> &Config {
+        &self.cfg
+    }
+
+    pub const fn config_mut(&mut self) -> &mut Config {
+        &mut self.cfg
     }
 }
 
@@ -149,6 +157,11 @@ impl UnaryService<Address> for DefaultMakeTransport {
             })?)
             .await
             .map(Conn::from),
+            #[cfg(feature = "shmipc")]
+            Address::Shmipc(addr) => super::shmipc::addr::ShmipcMakeTransport
+                .call(addr)
+                .await
+                .map(Conn::from),
         }
     }
 }

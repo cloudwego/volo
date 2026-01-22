@@ -19,10 +19,6 @@ pub struct ConnInfo {
     pub peer_addr: Option<Address>,
 }
 
-pub trait DynStream: AsyncRead + AsyncWrite + Send + 'static {}
-
-impl<T> DynStream for T where T: AsyncRead + AsyncWrite + Send + 'static {}
-
 #[pin_project(project = IoStreamProj)]
 pub enum ConnStream {
     Tcp(#[pin] TcpStream),
@@ -30,6 +26,65 @@ pub enum ConnStream {
     Unix(#[pin] UnixStream),
     #[cfg(feature = "__tls")]
     Tls(#[pin] super::tls::TlsStream),
+    #[cfg(feature = "shmipc")]
+    Shmipc(#[pin] super::shmipc::Stream),
+}
+
+impl ConnStream {
+    pub fn is_tcp(&self) -> bool {
+        matches!(self, Self::Tcp(_))
+    }
+
+    #[cfg(target_family = "unix")]
+    pub fn is_unix(&self) -> bool {
+        matches!(self, Self::Unix(_))
+    }
+
+    #[cfg(feature = "__tls")]
+    pub fn is_tls(&self) -> bool {
+        matches!(self, Self::Tls(_))
+    }
+
+    #[cfg(feature = "shmipc")]
+    pub fn is_shmipc(&self) -> bool {
+        matches!(self, Self::Shmipc(_))
+    }
+
+    pub fn into_tcp(self) -> Option<TcpStream> {
+        match self {
+            Self::Tcp(stream) => Some(stream),
+            #[cfg(target_family = "unix")]
+            Self::Unix(_) => None,
+            #[cfg(feature = "__tls")]
+            Self::Tls(_) => None,
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(_) => None,
+        }
+    }
+
+    #[cfg(target_family = "unix")]
+    pub fn into_unix(self) -> Option<UnixStream> {
+        match self {
+            Self::Unix(stream) => Some(stream),
+            _ => None,
+        }
+    }
+
+    #[cfg(feature = "__tls")]
+    pub fn into_tls(self) -> Option<super::tls::TlsStream> {
+        match self {
+            Self::Tls(stream) => Some(stream),
+            _ => None,
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    pub fn into_shmipc(self) -> Option<super::shmipc::Stream> {
+        match self {
+            Self::Shmipc(stream) => Some(stream),
+            _ => None,
+        }
+    }
 }
 
 #[pin_project(project = OwnedWriteHalfProj)]
@@ -39,6 +94,8 @@ pub enum OwnedWriteHalf {
     Unix(#[pin] unix::OwnedWriteHalf),
     #[cfg(feature = "__tls")]
     Tls(#[pin] super::tls::OwnedWriteHalf),
+    #[cfg(feature = "shmipc")]
+    Shmipc(#[pin] super::shmipc::WriteHalf),
 }
 
 impl AsyncWrite for OwnedWriteHalf {
@@ -54,6 +111,8 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Unix(half) => half.poll_write(cx, buf),
             #[cfg(feature = "__tls")]
             OwnedWriteHalfProj::Tls(half) => half.poll_write(cx, buf),
+            #[cfg(feature = "shmipc")]
+            OwnedWriteHalfProj::Shmipc(half) => half.poll_write(cx, buf),
         }
     }
 
@@ -65,6 +124,8 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Unix(half) => half.poll_flush(cx),
             #[cfg(feature = "__tls")]
             OwnedWriteHalfProj::Tls(half) => half.poll_flush(cx),
+            #[cfg(feature = "shmipc")]
+            OwnedWriteHalfProj::Shmipc(half) => half.poll_flush(cx),
         }
     }
 
@@ -76,6 +137,8 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Unix(half) => half.poll_shutdown(cx),
             #[cfg(feature = "__tls")]
             OwnedWriteHalfProj::Tls(half) => half.poll_shutdown(cx),
+            #[cfg(feature = "shmipc")]
+            OwnedWriteHalfProj::Shmipc(half) => half.poll_shutdown(cx),
         }
     }
 
@@ -91,6 +154,8 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Unix(half) => half.poll_write_vectored(cx, bufs),
             #[cfg(feature = "__tls")]
             OwnedWriteHalfProj::Tls(half) => half.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "shmipc")]
+            OwnedWriteHalfProj::Shmipc(half) => half.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -102,6 +167,8 @@ impl AsyncWrite for OwnedWriteHalf {
             Self::Unix(half) => half.is_write_vectored(),
             #[cfg(feature = "__tls")]
             Self::Tls(half) => half.is_write_vectored(),
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(half) => half.is_write_vectored(),
         }
     }
 }
@@ -113,6 +180,18 @@ pub enum OwnedReadHalf {
     Unix(#[pin] unix::OwnedReadHalf),
     #[cfg(feature = "__tls")]
     Tls(#[pin] super::tls::OwnedReadHalf),
+    #[cfg(feature = "shmipc")]
+    Shmipc(#[pin] super::shmipc::ReadHalf),
+}
+
+impl OwnedReadHalf {
+    #[cfg(feature = "shmipc")]
+    pub fn shmipc_helper(&self) -> super::shmipc::ShmipcHelper {
+        match self {
+            Self::Shmipc(rh) => rh.helper(),
+            _ => Default::default(),
+        }
+    }
 }
 
 impl AsyncRead for OwnedReadHalf {
@@ -128,6 +207,8 @@ impl AsyncRead for OwnedReadHalf {
             OwnedReadHalfProj::Unix(half) => half.poll_read(cx, buf),
             #[cfg(feature = "__tls")]
             OwnedReadHalfProj::Tls(half) => half.poll_read(cx, buf),
+            #[cfg(feature = "shmipc")]
+            OwnedReadHalfProj::Shmipc(half) => half.poll_read(cx, buf),
         }
     }
 }
@@ -148,6 +229,11 @@ impl ConnStream {
             Self::Tls(stream) => {
                 let (rh, wh) = stream.into_split();
                 (OwnedReadHalf::Tls(rh), OwnedWriteHalf::Tls(wh))
+            }
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(stream) => {
+                let (rh, wh) = stream.into_split();
+                (OwnedReadHalf::Shmipc(rh), OwnedWriteHalf::Shmipc(wh))
             }
         }
     }
@@ -188,6 +274,14 @@ where
     }
 }
 
+#[cfg(feature = "shmipc")]
+impl From<super::shmipc::Stream> for ConnStream {
+    #[inline]
+    fn from(value: super::shmipc::Stream) -> Self {
+        Self::Shmipc(value)
+    }
+}
+
 impl AsyncRead for ConnStream {
     #[inline]
     fn poll_read(
@@ -201,6 +295,8 @@ impl AsyncRead for ConnStream {
             IoStreamProj::Unix(s) => s.poll_read(cx, buf),
             #[cfg(feature = "__tls")]
             IoStreamProj::Tls(s) => s.poll_read(cx, buf),
+            #[cfg(feature = "shmipc")]
+            IoStreamProj::Shmipc(s) => s.poll_read(cx, buf),
         }
     }
 }
@@ -218,6 +314,8 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Unix(s) => s.poll_write(cx, buf),
             #[cfg(feature = "__tls")]
             IoStreamProj::Tls(s) => s.poll_write(cx, buf),
+            #[cfg(feature = "shmipc")]
+            IoStreamProj::Shmipc(s) => s.poll_write(cx, buf),
         }
     }
 
@@ -229,6 +327,8 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Unix(s) => s.poll_flush(cx),
             #[cfg(feature = "__tls")]
             IoStreamProj::Tls(s) => s.poll_flush(cx),
+            #[cfg(feature = "shmipc")]
+            IoStreamProj::Shmipc(s) => s.poll_flush(cx),
         }
     }
 
@@ -240,6 +340,8 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Unix(s) => s.poll_shutdown(cx),
             #[cfg(feature = "__tls")]
             IoStreamProj::Tls(s) => s.poll_shutdown(cx),
+            #[cfg(feature = "shmipc")]
+            IoStreamProj::Shmipc(s) => s.poll_shutdown(cx),
         }
     }
 
@@ -255,6 +357,8 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Unix(s) => s.poll_write_vectored(cx, bufs),
             #[cfg(feature = "__tls")]
             IoStreamProj::Tls(s) => s.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "shmipc")]
+            IoStreamProj::Shmipc(s) => s.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -266,6 +370,8 @@ impl AsyncWrite for ConnStream {
             Self::Unix(s) => s.is_write_vectored(),
             #[cfg(feature = "__tls")]
             Self::Tls(s) => s.is_write_vectored(),
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(s) => s.is_write_vectored(),
         }
     }
 }
@@ -279,6 +385,8 @@ impl ConnStream {
             Self::Unix(s) => s.peer_addr().map(Address::from).ok(),
             #[cfg(feature = "__tls")]
             Self::Tls(s) => s.peer_addr().map(Address::from).ok(),
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(s) => Some(Address::from(s.peer_addr())),
         }
     }
 }

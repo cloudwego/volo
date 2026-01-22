@@ -10,7 +10,7 @@ use std::{
 use pin_project::pin_project;
 use tokio::io::{AsyncBufRead, AsyncRead, AsyncReadExt, ReadBuf};
 
-use crate::net::ready::AsyncReady;
+use crate::net::ext::AsyncExt;
 
 // used by `BufReader` and `BufWriter`
 // https://github.com/rust-lang/rust/blob/master/library/std/src/sys_common/io.rs#L1
@@ -225,9 +225,14 @@ impl<R: AsyncRead> AsyncBufRead for BufReader<R> {
     }
 }
 
-impl<R: AsyncReady + Sync> AsyncReady for BufReader<R> {
+impl<R: AsyncExt + Send + Sync> AsyncExt for BufReader<R> {
     async fn ready(&self, interest: tokio::io::Interest) -> io::Result<tokio::io::Ready> {
         self.inner.ready(interest).await
+    }
+
+    #[cfg(feature = "shmipc")]
+    fn shmipc_helper(&self) -> crate::net::shmipc::ShmipcHelper {
+        self.inner.shmipc_helper()
     }
 }
 
