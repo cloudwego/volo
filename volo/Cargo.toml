@@ -1,6 +1,6 @@
 [package]
 name = "volo"
-version = "0.12.1"
+version = "0.12.2"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true

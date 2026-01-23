@@ -125,6 +125,13 @@ where
         let resp = transport.send(cx, req, oneway).await;
         if let Ok(None) = resp {
             if !oneway {
+                #[cfg(feature = "shmipc")]
+                {
+                    let helper = transport.shmipc_helper();
+                    if helper.available() {
+                        helper.reuse().await;
+                    }
+                }
                 return Err(crate::ClientError::Transport(
                     pilota::thrift::TransportException::from(io::Error::new(
                         io::ErrorKind::UnexpectedEof,
@@ -136,9 +143,21 @@ where
                 ));
             }
         }
+        // if shmipc enabled and is shmipc: close
+        #[cfg(feature = "shmipc")]
+        {
+            let helper = transport.shmipc_helper();
+            if helper.available() {
+                helper.reuse().await;
+            } else if cx.transport.should_reuse && resp.is_ok() {
+                transport.reuse().await;
+            }
+        }
+        #[cfg(not(feature = "shmipc"))]
         if cx.transport.should_reuse && resp.is_ok() {
             transport.reuse().await;
         }
+
         resp
     }
 }

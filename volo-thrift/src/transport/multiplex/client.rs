@@ -61,6 +61,13 @@ where
     type Error = io::Error;
 
     async fn call(&self, target: Address) -> Result<Self::Response, Self::Error> {
+        #[cfg(feature = "shmipc")]
+        if target.is_shmipc() {
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "shmipc does not support multiplex",
+            ));
+        }
         let make_transport = self.make_transport.clone();
         let (rh, wh) = make_transport.make_transport(target.clone()).await?;
         Ok(ThriftTransport::new(

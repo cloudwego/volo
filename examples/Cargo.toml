@@ -112,20 +112,27 @@ path = "src/grpc/grpc-web/client.rs"
 [[bin]]
 name = "example-http-server"
 path = "src/http/example-http-server.rs"
-
 [[bin]]
 name = "example-http-client"
 path = "src/http/example-http-client.rs"
-
 [[bin]]
 name = "http-tls-server"
 path = "src/http/http-tls-server.rs"
 required-features = ["__tls"]
-
 [[bin]]
 name = "http-tls-client"
 path = "src/http/http-tls-client.rs"
 required-features = ["__tls"]
+
+# shmipc
+[[bin]]
+name = "shmipc-thrift-server"
+path = "src/thrift/shmipc/server.rs"
+required-features = ["shmipc"]
+[[bin]]
+name = "shmipc-thrift-client"
+path = "src/thrift/shmipc/client.rs"
+required-features = ["shmipc"]
 
 [dependencies]
 anyhow.workspace = true
@@ -166,6 +173,7 @@ volo-gen = { path = "./volo-gen" }
 
 [features]
 tls = ["rustls"]
+shmipc = ["volo/shmipc", "volo-thrift/shmipc"]
 
 __tls = []
 rustls = ["__tls", "volo/rustls", "volo-grpc/rustls", "volo-http/rustls"]

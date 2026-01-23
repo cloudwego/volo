@@ -43,6 +43,8 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
 
     metainfo::METAINFO
         .scope(RefCell::new(MetaInfo::default()), async {
+            #[cfg(feature = "shmipc")]
+            let helper = decoder.shmipc_helper();
             loop {
                 // new context
                 let mut cx = SERVER_CONTEXT_CACHE.with(|cache| {
@@ -59,7 +61,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                             "[VOLO] close conn by notified, peer_addr: {:?}",
                             peer_addr,
                         );
-                        return;
+                        break;
                     },
                     out = decoder.decode(&mut cx) => out
                 };
@@ -69,6 +71,8 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     cx,
                     peer_addr
                 );
+                #[cfg(feature = "shmipc")]
+                helper.release_read_and_reuse();
 
                 // it is promised safe here, because span only reads cx before handling polling
                 let tracing_cx = unsafe {

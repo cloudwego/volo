@@ -33,7 +33,6 @@ use bytes::Bytes;
 use linkedbytes::LinkedBytes;
 use pilota::thrift::ThriftException;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, Interest};
-use tracing::{trace, warn};
 use volo::{net::ext::AsyncExt, util::buf_reader::BufReader};
 
 use self::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec};
@@ -131,9 +130,10 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncExt + Unpin + Send + Sync + 'stati
 
         // first, we need to get the size of the message
         let (real_size, malloc_size) = self.encoder.size(cx, &msg)?;
-        trace!(
+        tracing::trace!(
             "[VOLO] codec encode message real size: {}, malloc size: {}",
-            real_size, malloc_size
+            real_size,
+            malloc_size
         );
         cx.stats_mut().set_write_size(real_size);
 
@@ -176,7 +176,7 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncExt + Unpin + Send + Sync + 'stati
                     malloc_size
                 );
                 e.append_msg(&msg);
-                warn!("[VOLO] thrift codec encode message error: {}", e);
+                tracing::warn!("[VOLO] thrift codec encode message error: {}", e);
                 Err(e)
             }
         }
@@ -191,10 +191,15 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncExt + Unpin + Send + Sync + 'stati
         {
             Ok(ready) => ready.is_read_closed() || ready.is_write_closed(),
             Err(e) => {
-                warn!("[VOLO] thrift codec write half ready error: {}", e);
+                tracing::debug!("[VOLO] thrift codec write half ready error: {}", e);
                 true
             }
         }
+    }
+
+    #[cfg(feature = "shmipc")]
+    fn shmipc_helper(&self) -> volo::net::shmipc::ShmipcHelper {
+        self.writer.shmipc_helper()
     }
 }
 
@@ -213,7 +218,7 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + AsyncExt + Unpin + Send + Sync + 'static
     ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
         // just to check if we have reached EOF
         if self.reader.fill_buf().await?.is_empty() {
-            trace!(
+            tracing::trace!(
                 "[VOLO] thrift codec decode message EOF, rpcinfo: {:?}",
                 cx.rpc_info()
             );
@@ -224,7 +229,7 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + AsyncExt + Unpin + Send + Sync + 'static
         cx.stats_mut().record_decode_start_at();
         cx.stats_mut().record_read_start_at();
 
-        trace!(
+        tracing::trace!(
             "[VOLO] codec decode message received: {:?}",
             self.reader.buffer()
         );
@@ -234,9 +239,14 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + AsyncExt + Unpin + Send + Sync + 'static
 
         let end = std::time::Instant::now();
         cx.stats_mut().record_decode_end_at();
-        trace!("[VOLO] thrift codec decode message cost: {:?}", end - start);
+        tracing::trace!("[VOLO] thrift codec decode message cost: {:?}", end - start);
 
         res
+    }
+
+    #[cfg(feature = "shmipc")]
+    fn shmipc_helper(&self) -> volo::net::shmipc::ShmipcHelper {
+        self.reader.shmipc_helper()
     }
 }
 
