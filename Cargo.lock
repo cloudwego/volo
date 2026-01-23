@@ -4161,7 +4161,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "volo"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "arc-swap",
  "async-broadcast",
@@ -4261,7 +4261,7 @@ dependencies = [
 
 [[package]]
 name = "volo-grpc"
-version = "0.12.1"
+version = "0.12.2"
 dependencies = [
  "anyhow",
  "async-broadcast",
@@ -4307,7 +4307,7 @@ dependencies = [
 
 [[package]]
 name = "volo-http"
-version = "0.5.2"
+version = "0.5.3"
 dependencies = [
  "ahash",
  "async-broadcast",
@@ -4364,7 +4364,7 @@ version = "0.12.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.12.0"
+version = "0.12.1"
 dependencies = [
  "ahash",
  "anyhow",

@@ -134,7 +134,10 @@ impl Hash for Address {
                 }
             }
             #[cfg(feature = "shmipc")]
-            Self::Shmipc(addr) => Hash::hash(addr, state),
+            Self::Shmipc(addr) => {
+                state.write_u8(4);
+                Hash::hash(addr, state);
+            }
         }
     }
 }
