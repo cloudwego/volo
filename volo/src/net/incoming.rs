@@ -22,6 +22,8 @@ pub enum DefaultIncoming {
     Tcp(#[pin] TcpListenerStream),
     #[cfg(target_family = "unix")]
     Unix(#[pin] UnixListenerStream),
+    #[cfg(feature = "shmipc")]
+    Shmipc(#[pin] super::shmipc::conn::ListenerStream),
 }
 
 impl MakeIncoming for DefaultIncoming {
@@ -32,6 +34,12 @@ impl MakeIncoming for DefaultIncoming {
     }
 }
 
+impl From<TcpListener> for DefaultIncoming {
+    fn from(l: TcpListener) -> Self {
+        DefaultIncoming::Tcp(TcpListenerStream::new(l))
+    }
+}
+
 #[cfg(target_family = "unix")]
 impl From<UnixListener> for DefaultIncoming {
     fn from(l: UnixListener) -> Self {
@@ -39,9 +47,10 @@ impl From<UnixListener> for DefaultIncoming {
     }
 }
 
-impl From<TcpListener> for DefaultIncoming {
-    fn from(l: TcpListener) -> Self {
-        DefaultIncoming::Tcp(TcpListenerStream::new(l))
+#[cfg(feature = "shmipc")]
+impl From<super::shmipc::Listener> for DefaultIncoming {
+    fn from(value: super::shmipc::Listener) -> Self {
+        DefaultIncoming::Shmipc(super::shmipc::conn::ListenerStream::new(value))
     }
 }
 
@@ -88,6 +97,10 @@ impl MakeIncoming for Address {
                 .await;
                 UnixListener::from_std(listener?).map(DefaultIncoming::from)
             }
+            #[cfg(feature = "shmipc")]
+            Address::Shmipc(addr) => super::shmipc::conn::Listener::listen(addr, None)
+                .await
+                .map(DefaultIncoming::from),
         }
     }
 }
@@ -113,6 +126,8 @@ impl Stream for DefaultIncoming {
             IncomingProj::Tcp(s) => s.poll_next(cx).map_ok(Conn::from),
             #[cfg(target_family = "unix")]
             IncomingProj::Unix(s) => s.poll_next(cx).map_ok(Conn::from),
+            #[cfg(feature = "shmipc")]
+            IncomingProj::Shmipc(s) => s.poll_next(cx).map_ok(Conn::from),
         }
     }
 }

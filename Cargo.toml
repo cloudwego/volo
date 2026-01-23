@@ -34,6 +34,7 @@ metainfo = "0.7.14"
 
 ahash = "0.8"
 anyhow = "1"
+arc-swap = "1"
 async-broadcast = "0.7"
 async-stream = "0.3"
 base64 = "0.22"
@@ -139,6 +140,8 @@ tokio-native-tls = "0.3"
 
 tungstenite = "0.28"
 tokio-tungstenite = "0.28"
+
+shmipc = "0.1"
 
 [profile.release]
 opt-level = 3

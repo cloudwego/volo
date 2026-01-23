@@ -234,6 +234,8 @@ fn build_uri(addr: Address, path: &str) -> hyper::Uri {
             .path_and_query(path)
             .build()
             .expect("fail to build unix uri"),
+        #[allow(unreachable_patterns)]
+        _ => unimplemented!("unsupported type of address"),
     }
 }
 

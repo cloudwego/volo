@@ -26,6 +26,7 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 motore.workspace = true
 
+arc-swap.workspace = true
 async-broadcast.workspace = true
 dashmap.workspace = true
 faststr.workspace = true
@@ -58,6 +59,7 @@ webpki-roots = { workspace = true, optional = true }
 tokio-rustls = { workspace = true, optional = true }
 native-tls = { workspace = true, optional = true }
 tokio-native-tls = { workspace = true, optional = true }
+shmipc = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -86,3 +88,5 @@ native-tls = [
     "native-tls/alpn",
 ]
 native-tls-vendored = ["native-tls", "tokio-native-tls/vendored"]
+
+shmipc = ["dep:shmipc"]

@@ -1,7 +1,9 @@
 pub mod conn;
 pub mod dial;
+pub mod ext;
 pub mod incoming;
-pub mod ready;
+#[cfg(feature = "shmipc")]
+pub mod shmipc;
 #[cfg(feature = "__tls")]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 pub mod tls;
@@ -27,22 +29,53 @@ pub enum Address {
     Ip(SocketAddr),
     #[cfg(target_family = "unix")]
     Unix(StdUnixSocketAddr),
+    #[cfg(feature = "shmipc")]
+    Shmipc(crate::net::shmipc::Address),
 }
 
 impl Address {
-    pub fn ip_addr(&self) -> Option<&SocketAddr> {
+    pub const fn is_ip(&self) -> bool {
+        matches!(self, Self::Ip(_))
+    }
+
+    #[cfg(target_family = "unix")]
+    pub const fn is_unix(&self) -> bool {
+        matches!(self, Self::Unix(_))
+    }
+
+    #[cfg(feature = "shmipc")]
+    pub const fn is_shmipc(&self) -> bool {
+        matches!(self, Self::Shmipc(_))
+    }
+
+    pub const fn ip_addr(&self) -> Option<&SocketAddr> {
         match self {
             Self::Ip(ip) => Some(ip),
             #[cfg(target_family = "unix")]
             Self::Unix(_) => None,
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(_) => None,
         }
     }
 
     #[cfg(target_family = "unix")]
-    pub fn unix_addr(&self) -> Option<&StdUnixSocketAddr> {
+    pub const fn unix_addr(&self) -> Option<&StdUnixSocketAddr> {
         match self {
             Self::Ip(_) => None,
             Self::Unix(unix) => Some(unix),
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(_) => None,
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    pub const fn shmipc_addr(&self) -> Option<&crate::net::shmipc::Address> {
+        match self {
+            Self::Ip(_) => None,
+            #[cfg(target_family = "unix")]
+            Self::Unix(_) => None,
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(addr) => Some(addr),
         }
     }
 }
@@ -67,7 +100,10 @@ impl PartialEq for Address {
                     _ => false,
                 }
             }
-            #[cfg(target_family = "unix")]
+            #[cfg(feature = "shmipc")]
+            // There should only be one shmipc connection, just treat them as the same.
+            (Self::Shmipc(self_shmipc), Self::Shmipc(other_shmipc)) => self_shmipc.eq(other_shmipc),
+            #[cfg(any(target_family = "unix", feature = "shmipc"))]
             _ => false,
         }
     }
@@ -97,6 +133,8 @@ impl Hash for Address {
                     state.write_u8(3);
                 }
             }
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(addr) => Hash::hash(addr, state),
         }
     }
 }
@@ -104,9 +142,9 @@ impl Hash for Address {
 impl Address {
     pub fn favor_dual_stack(self) -> Self {
         match self {
-            Address::Ip(addr) => {
+            Self::Ip(addr) => {
                 if addr.ip().is_unspecified() && should_favor_ipv6() {
-                    Address::Ip((Ipv6Addr::UNSPECIFIED, addr.port()).into())
+                    Self::Ip((Ipv6Addr::UNSPECIFIED, addr.port()).into())
                 } else {
                     self
                 }
@@ -125,9 +163,9 @@ fn should_favor_ipv6() -> bool {
 impl fmt::Display for Address {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Address::Ip(addr) => write!(f, "{addr}"),
+            Self::Ip(addr) => write!(f, "{addr}"),
             #[cfg(target_family = "unix")]
-            Address::Unix(addr) => {
+            Self::Unix(addr) => {
                 #[cfg(target_os = "linux")]
                 if let Some(abs_name) = addr.as_abstract_name() {
                     return write!(f, "{}", abs_name.escape_ascii());
@@ -138,6 +176,8 @@ impl fmt::Display for Address {
                     f.write_str("(unnamed)")
                 }
             }
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(addr) => write!(f, "shmipc: {addr}"),
         }
     }
 }
@@ -165,5 +205,25 @@ impl From<TokioUnixSocketAddr> for Address {
                 value,
             )
         })
+    }
+}
+
+#[cfg(feature = "shmipc")]
+pub struct ShmipcAddr<A>(pub A);
+
+#[cfg(feature = "shmipc")]
+impl<A> From<ShmipcAddr<A>> for Address
+where
+    A: Into<self::shmipc::addr::Address>,
+{
+    fn from(value: ShmipcAddr<A>) -> Self {
+        value.0.into().into()
+    }
+}
+
+#[cfg(feature = "shmipc")]
+impl From<self::shmipc::Address> for Address {
+    fn from(value: self::shmipc::Address) -> Self {
+        Address::Shmipc(value)
     }
 }

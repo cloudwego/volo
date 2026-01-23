@@ -323,6 +323,8 @@ impl From<Address> for Target {
             }
             #[cfg(target_family = "unix")]
             Address::Unix(uds) => Target::Local(uds),
+            #[allow(unreachable_patterns)]
+            _ => unimplemented!("unsupported type of address"),
         }
     }
 }

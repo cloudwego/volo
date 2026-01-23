@@ -34,7 +34,7 @@ use linkedbytes::LinkedBytes;
 use pilota::thrift::ThriftException;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, Interest};
 use tracing::{trace, warn};
-use volo::{net::ready::AsyncReady, util::buf_reader::BufReader};
+use volo::{net::ext::AsyncExt, util::buf_reader::BufReader};
 
 use self::{framed::MakeFramedCodec, thrift::MakeThriftCodec, ttheader::MakeTTHeaderCodec};
 use super::{Decoder, Encoder, MakeCodec};
@@ -118,7 +118,7 @@ pub struct DefaultEncoder<E, W> {
     linked_bytes: LinkedBytes,
 }
 
-impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncReady + Unpin + Send + Sync + 'static> Encoder
+impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncExt + Unpin + Send + Sync + 'static> Encoder
     for DefaultEncoder<E, W>
 {
     #[inline]
@@ -203,7 +203,7 @@ pub struct DefaultDecoder<D, R> {
     reader: BufReader<R>,
 }
 
-impl<D: ZeroCopyDecoder, R: AsyncRead + AsyncReady + Unpin + Send + Sync + 'static> Decoder
+impl<D: ZeroCopyDecoder, R: AsyncRead + AsyncExt + Unpin + Send + Sync + 'static> Decoder
     for DefaultDecoder<D, R>
 {
     #[inline]
@@ -290,8 +290,8 @@ impl Default for DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCo
 impl<MkZC, R, W> MakeCodec<R, W> for DefaultMakeCodec<MkZC>
 where
     MkZC: MakeZeroCopyCodec,
-    R: AsyncRead + AsyncReady + Unpin + Send + Sync + 'static,
-    W: AsyncWrite + AsyncReady + Unpin + Send + Sync + 'static,
+    R: AsyncRead + AsyncExt + Unpin + Send + Sync + 'static,
+    W: AsyncWrite + AsyncExt + Unpin + Send + Sync + 'static,
 {
     type Encoder = DefaultEncoder<MkZC::Encoder, W>;
     type Decoder = DefaultDecoder<MkZC::Decoder, R>;
