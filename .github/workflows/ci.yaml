@@ -111,7 +111,7 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          bash scripts/clippy-and-test.sh --no-test
+          bash scripts/clippy-and-test.sh --no-test --no-shmipc
 
   test-windows:
     runs-on: [self-hosted, Windows]
@@ -127,7 +127,7 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          bash scripts/clippy-and-test.sh --no-test
+          bash scripts/clippy-and-test.sh --no-test --no-shmipc
 
   test-cli:
     runs-on: [self-hosted, Linux, amd64]
@@ -144,6 +144,7 @@ jobs:
       - name: Cli tests
         run: |
           bash scripts/volo-cli-test.sh
+
   coverage:
     runs-on: [self-hosted, Linux, amd64]
     timeout-minutes: 40
