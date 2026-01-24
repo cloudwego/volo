@@ -158,7 +158,7 @@ pilota-thrift-fieldmask.workspace = true
 pilota-thrift-reflect.workspace = true
 volo = { path = "../volo" }
 volo-grpc = { path = "../volo-grpc", features = ["grpc-web"] }
-volo-thrift = { path = "../volo-thrift", features = ["multiplex"] }
+volo-thrift = { path = "../volo-thrift" }
 volo-http = { path = "../volo-http", features = [
     "client",
     "server",
@@ -172,8 +172,10 @@ volo-http = { path = "../volo-http", features = [
 volo-gen = { path = "./volo-gen" }
 
 [features]
+default = ["multiplex"]
 tls = ["rustls"]
 shmipc = ["volo/shmipc", "volo-thrift/shmipc"]
+multiplex = ["volo-thrift/multiplex"]
 
 __tls = []
 rustls = ["__tls", "volo/rustls", "volo-grpc/rustls", "volo-http/rustls"]
