@@ -212,6 +212,9 @@ pub(crate) const TT_HEADER_BIZ_STATUS_KEY: &str = "biz-status";
 pub(crate) const TT_HEADER_BIZ_MESSAGE_KEY: &str = "biz-message";
 pub(crate) const TT_HEADER_BIZ_EXTRA_KEY: &str = "biz-extra";
 
+/// IDL service name header key for multi-service routing.
+pub const HEADER_IDL_SERVICE_NAME: &str = "isn";
+
 #[derive(TryFromPrimitive, Clone, Copy, Default)]
 #[repr(u8)]
 pub enum ProtocolId {
@@ -320,7 +323,9 @@ pub(crate) fn encode<Cx: ThriftContext>(
 
         let has_string_kv = match role {
             Role::Client => {
-                metainfo.get_all_persistents().is_some() || metainfo.get_all_transients().is_some()
+                metainfo.get_all_persistents().is_some()
+                    || metainfo.get_all_transients().is_some()
+                    || cx.idl_service_name().is_some()
             }
             Role::Server => {
                 metainfo.get_all_backward_transients().is_some()
@@ -361,6 +366,14 @@ pub(crate) fn encode<Cx: ThriftContext>(
                             dst.put_slice(value.as_bytes());
                             string_kv_len += 1;
                         }
+                    }
+                    // Write IDL service name (ISN) for multi-service routing
+                    if let Some(isn) = cx.idl_service_name() {
+                        dst.put_u16(HEADER_IDL_SERVICE_NAME.len() as u16);
+                        dst.put_slice(HEADER_IDL_SERVICE_NAME.as_bytes());
+                        dst.put_u16(isn.len() as u16);
+                        dst.put_slice(isn.as_bytes());
+                        string_kv_len += 1;
                     }
                 }
                 Role::Server => {
@@ -579,7 +592,9 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
 
         let has_string_kv = match role {
             Role::Client => {
-                metainfo.get_all_persistents().is_some() || metainfo.get_all_transients().is_some()
+                metainfo.get_all_persistents().is_some()
+                    || metainfo.get_all_transients().is_some()
+                    || thrift_cx.idl_service_name().is_some()
             }
             Role::Server => {
                 metainfo.get_all_backward_transients().is_some() || thrift_cx.encode_conn_reset()
@@ -611,6 +626,13 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                             len += 2;
                             len += value.len();
                         }
+                    }
+                    // IDL service name (ISN) for multi-service routing
+                    if let Some(isn) = thrift_cx.idl_service_name() {
+                        len += 2; // key length
+                        len += HEADER_IDL_SERVICE_NAME.len();
+                        len += 2; // value length
+                        len += isn.len();
                     }
                 }
                 Role::Server => {
@@ -862,6 +884,11 @@ pub(crate) fn decode<Cx: ThriftContext>(
                     }
                 }
                 Role::Server => {
+                    // Extract IDL service name (ISN) for multi-service routing
+                    if let Some(isn) = headers.remove(HEADER_IDL_SERVICE_NAME) {
+                        cx.set_idl_service_name(isn);
+                    }
+
                     // Caller
                     let from_service = int_headers
                         .remove_entry(&IntMetaKey::FromService)
@@ -955,4 +982,14 @@ fn set_biz_error_header<Cx: ThriftContext>(
     };
 
     thrift_cx.stats_mut().set_biz_error(biz_error);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_idl_service_name_constant() {
+        assert_eq!(HEADER_IDL_SERVICE_NAME, "isn");
+    }
 }

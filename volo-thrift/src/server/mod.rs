@@ -38,6 +38,9 @@ use crate::{
 
 mod layer;
 pub mod panic_handler;
+pub mod router;
+
+pub use router::{NamedService, Router};
 
 /// This is unstable now and may be changed in the future.
 #[doc(hidden)]
@@ -71,6 +74,51 @@ impl<S, Req>
         Self {
             make_codec: DefaultMakeCodec::default(),
             service,
+            layer: Identity::new(),
+            stat_tracer: Vec::new(),
+            #[cfg(feature = "multiplex")]
+            multiplex: false,
+            span_provider: DefaultProvider {},
+            shutdown_hooks: Vec::new(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+impl
+    Server<
+        Router,
+        Identity,
+        bytes::Bytes,
+        DefaultMakeCodec<MakeTTHeaderCodec<MakeFramedCodec<MakeThriftCodec>>>,
+        DefaultProvider,
+    >
+{
+    /// Creates a new server with a multi-service router.
+    ///
+    /// Use this method when you need to serve multiple Thrift services from a single server.
+    /// Requests are routed based on the IDL service name (`isn`) field in TTHeader.
+    ///
+    /// # Example
+    ///
+    /// ```ignore
+    /// use volo_thrift::server::{Router, Server};
+    ///
+    /// let service_a = volo_gen::a::ServiceAServer::new(ImplA);
+    /// let service_b = volo_gen::b::ServiceBServer::new(ImplB);
+    ///
+    /// let router = Router::new()
+    ///     .with_default_service(service_a)
+    ///     .add_service(service_b);
+    ///
+    /// Server::with_router(router)
+    ///     .run(addr)
+    ///     .await?;
+    /// ```
+    pub fn with_router(router: Router) -> Self {
+        Self {
+            make_codec: DefaultMakeCodec::default(),
+            service: router,
             layer: Identity::new(),
             stat_tracer: Vec::new(),
             #[cfg(feature = "multiplex")]
