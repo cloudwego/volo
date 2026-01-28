@@ -4,6 +4,7 @@ use chrono::{DateTime, Local};
 use paste::paste;
 use pilota::thrift::TMessageIdentifier;
 use volo::{
+    FastStr,
     context::{Context, Reusable, Role, RpcCx, RpcInfo},
     newtype_impl_context,
 };
@@ -184,6 +185,8 @@ pub struct ClientCxInner {
     pub seq_id: i32,
     pub message_type: TMessageType,
     pub transport: PooledTransport,
+    /// The IDL service name to send via TTHeader `isn` field, used for multi-service routing.
+    pub idl_service_name: Option<FastStr>,
     /// This is unstable now and may be changed in the future.
     pub stats: ClientStats,
     /// This is unstable now and may be changed in the future.
@@ -196,6 +199,8 @@ pub struct ServerCxInner {
     pub req_msg_type: Option<TMessageType>,
     pub msg_type: Option<TMessageType>,
     pub transport: ServerTransportInfo,
+    /// The IDL service name from TTHeader `isn` field, used for multi-service routing.
+    pub idl_service_name: Option<FastStr>,
     /// This is unstable now and may be changed in the future.
     pub stats: ServerStats,
     /// This is unstable now and may be changed in the future.
@@ -216,6 +221,7 @@ impl ClientContext {
                 seq_id,
                 message_type: msg_type,
                 transport: PooledTransport { should_reuse: true },
+                idl_service_name: None,
                 stats: ClientStats::default(),
                 common_stats: CommonStats::default(),
             },
@@ -227,6 +233,7 @@ impl ClientContext {
         self.seq_id = seq_id;
         self.message_type = msg_type;
         self.transport.should_reuse = true;
+        self.idl_service_name = None;
         self.stats.reset();
         self.common_stats.reset();
         // self.0 is RpcCx, this reset will clear rpcinfo and extension
@@ -303,6 +310,14 @@ pub trait ThriftContext: volo::context::Context<Config = Config> + Send + 'stati
     /// This is unstable now and may be changed in the future.
     #[doc(hidden)]
     fn stats_mut(&mut self) -> &mut CommonStats;
+
+    /// Gets the IDL service name from TTHeader `isn` field.
+    /// Used for multi-service routing.
+    fn idl_service_name(&self) -> Option<&FastStr>;
+
+    /// Sets the IDL service name from TTHeader `isn` field.
+    /// Used for multi-service routing.
+    fn set_idl_service_name(&mut self, _name: FastStr);
 }
 
 impl ThriftContext for ClientContext {
@@ -337,6 +352,16 @@ impl ThriftContext for ClientContext {
     #[inline]
     fn stats_mut(&mut self) -> &mut CommonStats {
         &mut self.common_stats
+    }
+
+    #[inline]
+    fn idl_service_name(&self) -> Option<&FastStr> {
+        self.idl_service_name.as_ref()
+    }
+
+    #[inline]
+    fn set_idl_service_name(&mut self, name: FastStr) {
+        self.idl_service_name = Some(name);
     }
 }
 
@@ -376,6 +401,16 @@ impl ThriftContext for ServerContext {
     #[inline]
     fn stats_mut(&mut self) -> &mut CommonStats {
         &mut self.common_stats
+    }
+
+    #[inline]
+    fn idl_service_name(&self) -> Option<&FastStr> {
+        self.idl_service_name.as_ref()
+    }
+
+    #[inline]
+    fn set_idl_service_name(&mut self, name: FastStr) {
+        self.idl_service_name = Some(name);
     }
 }
 
