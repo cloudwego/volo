@@ -1,0 +1,114 @@
+# CLAUDE.md - volo-thrift
+
+`volo-thrift` is the Thrift RPC implementation of the Volo project, providing high-performance async Thrift client and server. Core features include TTHeader protocol (CloudWeGo proprietary for Volo/Kitex interop), Framed transport, Binary/Compact protocols, connection pooling, multi-service routing, BizError support, optional multiplex mode, and optional shmipc transport.
+
+## Directory Structure
+
+```
+volo-thrift/src/
+├── lib.rs              # Library entry, exports public API
+├── error.rs            # Error types (ServerError, ClientError, BizError)
+├── message.rs          # EntryMessage trait
+├── message_wrapper.rs  # ThriftMessage wrapper
+├── context.rs          # ClientContext, ServerContext, Config
+├── protocol/           # Re-exports pilota protocol types
+├── tracing.rs          # Tracing/Span provider
+├── client/
+│   ├── mod.rs          # ClientBuilder, Client, MessageService
+│   ├── callopt.rs      # Call-time options (CallOpt)
+│   └── layer/          # Client middleware (timeout)
+├── server/
+│   ├── mod.rs          # Server struct and core logic
+│   ├── router.rs       # Multi-service router (Router)
+│   ├── panic_handler.rs
+│   └── layer/          # Server middleware (biz_error)
+├── codec/
+│   ├── mod.rs          # Encoder, Decoder, MakeCodec traits
+│   └── default/        # DefaultMakeCodec, ZeroCopyEncoder/Decoder
+│       ├── thrift.rs   # Thrift protocol encoding/decoding
+│       ├── framed.rs   # Framed transport layer
+│       └── ttheader.rs # TTHeader protocol
+└── transport/
+    ├── incoming.rs     # Connection acceptance
+    ├── pingpong/       # Ping-Pong mode (default)
+    ├── multiplex/      # Multiplex mode (feature: multiplex)
+    └── pool/           # Connection pool
+```
+
+## Key Modules
+
+### Client
+
+`ClientBuilder` configures and constructs the `Client`. Key options:
+
+- `rpc_timeout` (default 1s), `connect_timeout` (default 50ms), `read_write_timeout` (default 1s)
+- `pool_config`, `discover`, `load_balance`
+- `layer_inner` / `layer_outer` for middleware
+
+`Client` is designed for clone-and-use with low clone cost. `CallOpt` overrides config per call.
+
+### Server and Router
+
+`Server` supports `layer` / `layer_front` for middleware, `multiplex` mode (requires feature), and graceful shutdown via `register_shutdown_hook`.
+
+`Router` enables multi-service hosting on a single server. Routing uses the `isn` (IDL Service Name) field in TTHeader. Services implement `NamedService` (provides `const NAME`) for routing support. The default service handles requests without a matching ISN.
+
+### Context
+
+`ClientContext` / `ServerContext` contain `RpcInfo` (caller, callee, method, config), `seq_id`, `message_type`, `stats`, `transport` info, and `idl_service_name` for routing. `Config` holds timeout settings. Both implement the `ThriftContext` trait.
+
+### Codec Stack
+
+Default codec: `TTHeader<Framed<Binary>>`
+
+Available configurations:
+- `DefaultMakeCodec::framed()` -- `Framed<Binary>`
+- `DefaultMakeCodec::ttheader_framed()` -- `TTHeader<Framed<Binary>>`
+- `DefaultMakeCodec::buffered()` -- Pure Binary (no framing)
+
+### TTHeader Protocol
+
+CloudWeGo proprietary protocol supporting:
+- Metadata propagation (persistent/transient/backward)
+- RPC timeout passing
+- Business error passing (biz-status, biz-message, biz-extra)
+- Connection reset notification (crrst)
+- IDL service name (isn) for multi-service routing
+
+### Transport Modes
+
+- **Ping-Pong (default):** One request per connection at a time; next request waits for current to complete.
+- **Multiplex (feature: `multiplex`):** Concurrent requests on a single connection, matched by sequence number. Not compatible with shmipc.
+
+### Connection Pool
+
+Based on hyper connection pool design. Defaults: `max_idle_per_key` = 10240, `timeout` = 15 seconds.
+
+### Error Types
+
+- `ServerError`: `Application(ApplicationException)` | `Biz(BizError)`
+- `ClientError`: `Application(ApplicationException)` | `Transport(TransportException)` | `Protocol(ProtocolException)` | `Biz(BizError)`
+- `BizError`: Business error with `status_code`, `status_message`, and optional `extra` map, passed via TTHeader.
+
+## Feature Flags
+
+| Feature            | Description                                                           |
+| ------------------ | --------------------------------------------------------------------- |
+| `multiplex`        | Enable multiplex mode (unstable, no backward compatibility guarantee) |
+| `unsafe-codec`     | Use unsafe codec for better performance (may cause UB)                |
+| `unsafe_unchecked` | Use `unwrap_unchecked` instead of `unwrap`                            |
+| `shmipc`           | Enable shared memory IPC transport                                    |
+
+## Architecture Layer Structure
+
+**Client:** `OuterLayers -> Timeout -> LoadBalance -> InnerLayers -> Transport`
+
+**Server:** `Layers -> BizErrorLayer -> Service`
+
+## Notes
+
+1. **Users should not use volo-thrift directly**: Use code generated by `volo-build`
+2. **TTHeader is a proprietary protocol**: Only for Volo/Kitex inter-service communication
+3. **Multiplex mode is unstable**: May change in future versions
+4. **unsafe-codec is risky**: May cause undefined behavior
+5. **shmipc does not support multiplex**: Cannot be used together
