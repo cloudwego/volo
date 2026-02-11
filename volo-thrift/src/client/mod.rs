@@ -17,6 +17,8 @@ use motore::{
 };
 use pilota::thrift::TMessageType;
 use tokio::time::Duration;
+#[cfg(feature = "shmipc")]
+use volo::net::shmipc_fallback::ShmipcMakeTransportWithFallback;
 use volo::{
     FastStr,
     client::WithOptService,
@@ -492,6 +494,42 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
             enable_biz_error: self.enable_biz_error,
 
             multiplex,
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    /// Set the address for the client with shmipc fallback.
+    ///
+    /// Must be called after `.address(shmipc_addr)`.
+    pub fn shmipc_fallback_address<A: Into<Address>>(
+        self,
+        fallback_addr: A,
+    ) -> ClientBuilder<IL, OL, C, Req, Resp, ShmipcMakeTransportWithFallback, MkC, LB> {
+        let shmipc_addr = self
+            .address
+            .expect("Must call .address() before .with_fallback_address()");
+
+        ClientBuilder {
+            config: self.config,
+            pool: self.pool,
+            caller_name: self.caller_name,
+            callee_name: self.callee_name,
+            address: Some(shmipc_addr),
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
+            mk_client: self.mk_client,
+            _marker: PhantomData,
+            make_transport: ShmipcMakeTransportWithFallback::new(
+                DefaultMakeTransport::default(),
+                DefaultMakeTransport::default(),
+                fallback_addr.into(),
+            ),
+            make_codec: self.make_codec,
+            mk_lb: self.mk_lb,
+            disable_timeout_layer: self.disable_timeout_layer,
+            enable_biz_error: self.enable_biz_error,
+            #[cfg(feature = "multiplex")]
+            multiplex: self.multiplex,
         }
     }
 
