@@ -1,7 +1,5 @@
 use std::io;
 
-use futures::{FutureExt, future::Either};
-
 use super::{
     Address, DefaultIncoming, MakeIncoming,
     conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
@@ -49,15 +47,13 @@ where
     I: Incoming,
 {
     async fn try_next(&mut self) -> io::Result<Option<Conn>> {
-        let shmipc_conn = self.shmipc_listener.accept().fuse();
-        let default_conn = self.default_incoming.accept().fuse();
-        futures::pin_mut!(shmipc_conn, default_conn);
-        match futures::future::select(shmipc_conn, default_conn).await {
-            Either::Left((conn, _)) => {
+        tokio::select! {
+            biased;
+            conn = self.shmipc_listener.accept() => {
                 tracing::trace!("recv a conn from shmipc");
                 conn
             }
-            Either::Right((conn, _)) => {
+            conn = self.default_incoming.accept() => {
                 tracing::trace!("recv a conn from default");
                 conn
             }
@@ -111,13 +107,16 @@ impl MakeTransport for ShmipcMakeTransportWithFallback {
 
     fn set_connect_timeout(&mut self, timeout: Option<std::time::Duration>) {
         self.default_mkt.set_connect_timeout(timeout);
+        self.shmipc_mkt.set_connect_timeout(timeout);
     }
 
     fn set_read_timeout(&mut self, timeout: Option<std::time::Duration>) {
         self.default_mkt.set_read_timeout(timeout);
+        self.shmipc_mkt.set_read_timeout(timeout);
     }
 
     fn set_write_timeout(&mut self, timeout: Option<std::time::Duration>) {
         self.default_mkt.set_write_timeout(timeout);
+        self.shmipc_mkt.set_write_timeout(timeout);
     }
 }
