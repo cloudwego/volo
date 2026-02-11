@@ -499,26 +499,31 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
 
     #[cfg(feature = "shmipc")]
     /// Set the address for the client with shmipc fallback.
-    pub fn address_with_fallback<A1: Into<Address>, A2: Into<Address>>(
+    ///
+    /// Must be called after `.address(shmipc_addr)`.
+    pub fn shmipc_fallback_address<A: Into<Address>>(
         self,
-        shmipc_addr: A1,
-        fallback_addr: A2,
+        fallback_addr: A,
     ) -> ClientBuilder<IL, OL, C, Req, Resp, ShmipcMakeTransportWithFallback, MkC, LB> {
+        let shmipc_addr = self
+            .address
+            .expect("Must call .address() before .with_fallback_address()");
+
         ClientBuilder {
-            address: Some(shmipc_addr.into()),
+            config: self.config,
+            pool: self.pool,
+            caller_name: self.caller_name,
+            callee_name: self.callee_name,
+            address: Some(shmipc_addr),
+            inner_layer: self.inner_layer,
+            outer_layer: self.outer_layer,
+            mk_client: self.mk_client,
+            _marker: PhantomData,
             make_transport: ShmipcMakeTransportWithFallback::new(
                 DefaultMakeTransport::default(),
                 DefaultMakeTransport::default(),
                 fallback_addr.into(),
             ),
-            config: self.config,
-            pool: self.pool,
-            caller_name: self.caller_name,
-            callee_name: self.callee_name,
-            inner_layer: self.inner_layer,
-            outer_layer: self.outer_layer,
-            mk_client: self.mk_client,
-            _marker: PhantomData,
             make_codec: self.make_codec,
             mk_lb: self.mk_lb,
             disable_timeout_layer: self.disable_timeout_layer,
