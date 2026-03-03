@@ -382,7 +382,6 @@ impl<TTEncoder: Send, Resp: Send> Poolable for ThriftTransport<TTEncoder, Resp> 
         if !self.write_error.load(std::sync::atomic::Ordering::Relaxed)
             && !self.read_error.load(std::sync::atomic::Ordering::Relaxed)
             && !self.read_closed.load(std::sync::atomic::Ordering::Relaxed)
-            && !self.dirty.load(std::sync::atomic::Ordering::Relaxed)
         {
             Some(self.clone())
         } else {
