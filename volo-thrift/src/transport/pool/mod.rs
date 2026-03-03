@@ -57,6 +57,16 @@ pub trait Poolable: Sized {
     fn can_share(&self) -> bool {
         false
     }
+
+    /// Synchronous, non-consuming checkout for shared connections.
+    ///
+    /// Returns `Some(clone)` if the connection is reusable; `None` otherwise.
+    /// This allows shared (multiplex) connections to be checked out while
+    /// holding the pool lock, eliminating the race window where the idle pool
+    /// appears empty to concurrent callers.
+    fn try_checkout(&self) -> Option<Self> {
+        None
+    }
 }
 
 /// When checking out a pooled connection, it might be that the connection
@@ -239,6 +249,26 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
 
                     if let Some(list) = inner.idle.get_mut(&key) {
                         tracing::trace!("[VOLO] take? {:?}: expiration = {:?}", key, expiration.0);
+
+                        // Fast path: shared (multiplex) connections can be checked out
+                        // synchronously while holding the lock. This avoids the race where
+                        // the idle pool appears empty after pop, causing spurious new
+                        // connections.
+                        while list.front().is_some_and(|e| e.inner.can_share()) {
+                            if expiration.expires(list[0].idle_at) {
+                                list.pop_front();
+                                continue;
+                            }
+                            if let Some(conn) = list[0].inner.try_checkout() {
+                                list[0].idle_at = Instant::now();
+                                return Ok(self.reuse(&key, conn));
+                            }
+                            // try_checkout returned None: either not implemented or
+                            // connection is broken. Fall through to the slow path
+                            // which will do the full async reusable() check.
+                            break;
+                        }
+
                         while let Some(entry) = list.pop_front() {
                             // TODO: Actually, since the `idle` list is pushed to the end always,
                             // that would imply that if *this* entry is expired, then anything
