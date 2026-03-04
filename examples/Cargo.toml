@@ -123,6 +123,12 @@ required-features = ["__tls"]
 name = "http-tls-client"
 path = "src/http/http-tls-client.rs"
 required-features = ["__tls"]
+[[bin]]
+name = "sse-http-server"
+path = "src/http/sse/server.rs"
+[[bin]]
+name = "sse-http-client"
+path = "src/http/sse/client.rs"
 
 # shmipc
 [[bin]]

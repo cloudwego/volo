@@ -59,6 +59,7 @@ pub mod dns;
 pub mod layer;
 pub mod loadbalance;
 mod request_builder;
+pub mod sse;
 pub mod target;
 #[cfg(test)]
 pub mod test_helpers;
