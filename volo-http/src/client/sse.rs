@@ -1,8 +1,7 @@
-//! SSE (Server-Sent Events) client support.
-//!
 //! This module provides [`SseReader`] for consuming SSE streams from a server,
 //! mirroring the server-side [`Sse`] response type in `server::response::sse`.
-
+//!
+//! [`Sse`]: crate::server::response::sse::Sse
 use std::{pin::Pin, time::Duration};
 
 use bytes::Bytes;
@@ -512,8 +511,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn retry_with_suffix_is_ignored() {
-        let mut reader =
-            SseReader::new(make_response("retry: 1000abc\ndata: hello\n\n")).unwrap();
+        let mut reader = SseReader::new(make_response("retry: 1000abc\ndata: hello\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello"));
         assert_eq!(event.retry(), None);
