@@ -8,7 +8,7 @@ use bytes::Bytes;
 use http_body::Body;
 use http_body_util::BodyExt;
 
-use crate::error::BoxError;
+use crate::{error::BoxError, response::Response};
 
 /// Error message when the response body is not a valid SSE stream.
 const ERR_INVALID_CONTENT_TYPE: &str = "Content-Type returned by server is NOT text/event-stream";
@@ -27,6 +27,28 @@ const BIT_DATA: u8 = 0b0001;
 const BIT_EVENT: u8 = 0b0010;
 const BIT_ID: u8 = 0b0100;
 const BIT_RETRY: u8 = 0b1000;
+
+/// Extension trait adding [`into_sse`] to [`Response`].
+pub trait SseExt<B>
+where
+    B: Body<Data = Bytes> + Unpin,
+    B::Error: Into<BoxError>,
+{
+    /// Consume the response and return an [`SseReader`].
+    ///
+    /// Returns an error if the `Content-Type` is not `text/event-stream`.
+    fn into_sse(self) -> Result<SseReader<B>, BoxError>;
+}
+
+impl<B> SseExt<B> for Response<B>
+where
+    B: Body<Data = Bytes> + Unpin,
+    B::Error: Into<BoxError>,
+{
+    fn into_sse(self) -> Result<SseReader<B>, BoxError> {
+        SseReader::into_sse(self)
+    }
+}
 
 /// A parsed SSE event received from the server.
 #[derive(Debug, Default, Clone)]
@@ -139,7 +161,7 @@ where
     /// Create a new SSE reader from an HTTP response, validating `Content-Type`.
     ///
     /// Returns an error if the response's `Content-Type` is not `text/event-stream`.
-    pub fn new(resp: http::Response<B>) -> Result<Self, BoxError> {
+    pub fn into_sse(resp: Response<B>) -> Result<Self, BoxError> {
         let content_type = resp
             .headers()
             .get(http::header::CONTENT_TYPE)
@@ -318,10 +340,11 @@ mod sse_reader_tests {
     use std::time::Duration;
 
     use bytes::Bytes;
-    use http::{Response, header};
+    use http::header;
     use http_body_util::Full;
 
     use super::SseReader;
+    use crate::response::Response;
 
     fn make_response(body: &'static str) -> Response<Full<Bytes>> {
         Response::builder()
@@ -336,18 +359,18 @@ mod sse_reader_tests {
             .header(header::CONTENT_TYPE, "application/json")
             .body(Full::new(Bytes::new()))
             .unwrap();
-        assert!(SseReader::new(resp).is_err());
+        assert!(SseReader::into_sse(resp).is_err());
     }
 
     #[test]
     fn rejects_missing_content_type() {
         let resp = Response::builder().body(Full::new(Bytes::new())).unwrap();
-        assert!(SseReader::new(resp).is_err());
+        assert!(SseReader::into_sse(resp).is_err());
     }
 
     #[tokio::test]
     async fn single_data_field() {
-        let mut reader = SseReader::new(make_response("data: hello\n\n")).unwrap();
+        let mut reader = SseReader::into_sse(make_response("data: hello\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello"));
         assert_eq!(event.event(), "message");
@@ -357,7 +380,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn single_event_field() {
-        let mut reader = SseReader::new(make_response("event: ping\n\n")).unwrap();
+        let mut reader = SseReader::into_sse(make_response("event: ping\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), None);
         assert_eq!(event.event(), "ping");
@@ -367,7 +390,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn single_id_field() {
-        let mut reader = SseReader::new(make_response("id: 42\n\n")).unwrap();
+        let mut reader = SseReader::into_sse(make_response("id: 42\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), None);
         assert_eq!(event.event(), "message");
@@ -377,7 +400,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn single_retry_field() {
-        let mut reader = SseReader::new(make_response("retry: 3000\n\n")).unwrap();
+        let mut reader = SseReader::into_sse(make_response("retry: 3000\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), None);
         assert_eq!(event.event(), "message");
@@ -387,7 +410,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn multi_field_event() {
-        let mut reader = SseReader::new(make_response(
+        let mut reader = SseReader::into_sse(make_response(
             "event: ping\ndata: hello\ndata: world\nid: first\nretry: 15000\n: test comment\n\n",
         ))
         .unwrap();
@@ -400,7 +423,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn multiline_data() {
-        let mut reader = SseReader::new(make_response(
+        let mut reader = SseReader::into_sse(make_response(
             "data: 114\ndata: 514\ndata: 1919\ndata: 810\n\n",
         ))
         .unwrap();
@@ -413,7 +436,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn empty_data_field() {
-        let mut reader = SseReader::new(make_response("data:\n\n")).unwrap();
+        let mut reader = SseReader::into_sse(make_response("data:\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some(""));
         assert_eq!(event.event(), "message");
@@ -423,7 +446,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn multiple_events() {
-        let mut reader = SseReader::new(make_response(
+        let mut reader = SseReader::into_sse(make_response(
             "event: ping\ndata: -\n\nevent: pong\ndata: -\n\n",
         ))
         .unwrap();
@@ -445,13 +468,13 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn returns_none_on_empty_stream() {
-        let mut reader = SseReader::new(make_response("")).unwrap();
+        let mut reader = SseReader::into_sse(make_response("")).unwrap();
         assert!(reader.read().await.unwrap().is_none());
     }
 
     #[tokio::test]
     async fn returns_none_after_last_event() {
-        let mut reader = SseReader::new(make_response("data: hello\n\n")).unwrap();
+        let mut reader = SseReader::into_sse(make_response("data: hello\n\n")).unwrap();
         reader.read().await.unwrap().unwrap();
         assert!(reader.read().await.unwrap().is_none());
     }
@@ -459,7 +482,7 @@ mod sse_reader_tests {
     #[tokio::test]
     async fn comments_are_ignored() {
         let mut reader =
-            SseReader::new(make_response(": ping\n: pong\n\ndata: hello\n\n")).unwrap();
+            SseReader::into_sse(make_response(": ping\n: pong\n\ndata: hello\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello"));
         assert_eq!(event.event(), "message");
@@ -470,7 +493,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn last_event_id_tracks_across_events() {
-        let mut reader = SseReader::new(make_response(
+        let mut reader = SseReader::into_sse(make_response(
             "id: 1\ndata: a\n\ndata: b\n\nid: 3\ndata: c\n\n",
         ))
         .unwrap();
@@ -489,7 +512,7 @@ mod sse_reader_tests {
     #[tokio::test]
     async fn empty_id_clears_last_event_id() {
         let mut reader =
-            SseReader::new(make_response("id: 42\ndata: a\n\nid:\ndata: b\n\n")).unwrap();
+            SseReader::into_sse(make_response("id: 42\ndata: a\n\nid:\ndata: b\n\n")).unwrap();
 
         reader.read().await.unwrap().unwrap();
         assert_eq!(reader.last_event_id(), "42");
@@ -503,7 +526,7 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn retry_invalid_is_ignored() {
-        let mut reader = SseReader::new(make_response("retry: abc\ndata: hello\n\n")).unwrap();
+        let mut reader = SseReader::into_sse(make_response("retry: abc\ndata: hello\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello"));
         assert_eq!(event.retry(), None);
@@ -511,7 +534,8 @@ mod sse_reader_tests {
 
     #[tokio::test]
     async fn retry_with_suffix_is_ignored() {
-        let mut reader = SseReader::new(make_response("retry: 1000abc\ndata: hello\n\n")).unwrap();
+        let mut reader =
+            SseReader::into_sse(make_response("retry: 1000abc\ndata: hello\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello"));
         assert_eq!(event.retry(), None);
@@ -520,14 +544,15 @@ mod sse_reader_tests {
     #[tokio::test]
     async fn crlf_line_endings() {
         let mut reader =
-            SseReader::new(make_response("data: hello\r\ndata: world\r\n\r\n")).unwrap();
+            SseReader::into_sse(make_response("data: hello\r\ndata: world\r\n\r\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello\nworld"));
     }
 
     #[tokio::test]
     async fn bare_cr_line_endings() {
-        let mut reader = SseReader::new(make_response("data: hello\rdata: world\r\r")).unwrap();
+        let mut reader =
+            SseReader::into_sse(make_response("data: hello\rdata: world\r\r")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello\nworld"));
     }
@@ -540,28 +565,30 @@ mod sse_reader_tests {
             .header(header::CONTENT_TYPE, mime::TEXT_EVENT_STREAM.essence_str())
             .body(Full::new(Bytes::from(body)))
             .unwrap();
-        let mut reader = SseReader::new(resp).unwrap();
+        let mut reader = SseReader::into_sse(resp).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello"));
     }
 
     #[tokio::test]
     async fn unknown_field_is_ignored() {
-        let mut reader = SseReader::new(make_response("unknown: value\ndata: hello\n\n")).unwrap();
+        let mut reader =
+            SseReader::into_sse(make_response("unknown: value\ndata: hello\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello"));
     }
 
     #[tokio::test]
     async fn field_with_no_colon_is_ignored() {
-        let mut reader = SseReader::new(make_response("unknownfield\ndata: hello\n\n")).unwrap();
+        let mut reader =
+            SseReader::into_sse(make_response("unknownfield\ndata: hello\n\n")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello"));
     }
 
     #[tokio::test]
     async fn event_without_trailing_blank_line_is_flushed() {
-        let mut reader = SseReader::new(make_response("data: hello")).unwrap();
+        let mut reader = SseReader::into_sse(make_response("data: hello")).unwrap();
         let event = reader.read().await.unwrap().unwrap();
         assert_eq!(event.data(), Some("hello"));
     }
