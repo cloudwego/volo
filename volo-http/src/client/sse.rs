@@ -28,7 +28,7 @@ const BIT_EVENT: u8 = 0b0010;
 const BIT_ID: u8 = 0b0100;
 const BIT_RETRY: u8 = 0b1000;
 
-/// Extension trait adding [`into_sse`] to [`Response`].
+/// Extension trait adding [`SseExt::into_sse`] to [`Response`].
 pub trait SseExt<B>
 where
     B: Body<Data = Bytes> + Unpin,
