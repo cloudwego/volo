@@ -1,5 +1,5 @@
 use volo_http::{
-    client::{Client, sse::SseReader},
+    client::{Client, sse::SseExt},
     error::BoxError,
 };
 
@@ -7,15 +7,24 @@ use volo_http::{
 async fn main() -> Result<(), BoxError> {
     let client = Client::builder().build()?;
 
-    let resp = client.get("http://127.0.0.1:8080/sse").send().await?;
+    let mut reader = client
+        .get("http://127.0.0.1:8080/sse")
+        .send()
+        .await?
+        .into_sse()?;
 
-    let mut reader = SseReader::new(resp)?;
-
-    while let Some(sse_event) = reader.read().await? {
-        println!("Event: {:?}", sse_event.event());
-        println!("Data: {:?}", sse_event.data());
-        println!("ID: {:?}", sse_event.id());
-        println!("Retry: {:?}\n", sse_event.retry());
+    while let Some(event) = reader.read().await? {
+        println!("event: {}", event.event());
+        if let Some(data) = event.data() {
+            println!("data: {}", data);
+        }
+        if let Some(id) = event.id() {
+            println!("id: {}", id);
+        }
+        if let Some(retry) = event.retry() {
+            println!("retry: {}", retry.as_millis());
+        }
+        println!();
     }
 
     Ok(())
