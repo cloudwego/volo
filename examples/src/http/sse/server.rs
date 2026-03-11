@@ -6,23 +6,19 @@ use tokio::time::Duration;
 use volo::net::Address;
 use volo_http::server::{
     Server,
-    response::sse::{Event, KeepAlive, Sse},
+    response::sse::{Event, Sse},
     route::{Router, get},
 };
 
 async fn sse_handler() -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let stream = stream! {
         loop {
-            yield Ok(Event::new().event("ping"));
-            tokio::time::sleep(Duration::from_secs(5)).await;
+            yield Ok(Event::new().event("ping").data("hello"));
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
     };
 
-    Sse::new(stream).keep_alive(
-        KeepAlive::new()
-            .interval(Duration::from_secs(1))
-            .text("do not kill me"),
-    )
+    Sse::new(stream)
 }
 
 #[volo::main]

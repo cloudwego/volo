@@ -15,8 +15,7 @@ async fn main() -> Result<(), BoxError> {
         println!("Event: {:?}", sse_event.event());
         println!("Data: {:?}", sse_event.data());
         println!("ID: {:?}", sse_event.id());
-        println!("Retry: {:?}", sse_event.retry());
-        println!("Comment: {:?}\n", sse_event.comment());
+        println!("Retry: {:?}\n", sse_event.retry());
     }
 
     Ok(())
