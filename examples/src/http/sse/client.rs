@@ -9,6 +9,7 @@ async fn main() -> Result<(), BoxError> {
 
     let mut reader = client
         .get("http://127.0.0.1:8080/sse")
+        .header(http::header::ACCEPT, mime::TEXT_EVENT_STREAM.essence_str())
         .send()
         .await?
         .into_sse()?;
