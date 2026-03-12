@@ -158,10 +158,12 @@ where
     B: Body<Data = Bytes> + Unpin,
     B::Error: Into<BoxError>,
 {
-    /// Create a new SSE reader from an HTTP response, validating `Content-Type`.
-    ///
-    /// Returns an error if the response's `Content-Type` is not `text/event-stream`.
+    /// Create a new SSE reader from an HTTP response.
     pub fn into_sse(resp: Response<B>) -> Result<Self, BoxError> {
+        if !resp.status().is_success() {
+            return Err(format!("Server returned error status: {}", resp.status()).into());
+        }
+
         let content_type = resp
             .headers()
             .get(http::header::CONTENT_TYPE)
@@ -312,9 +314,9 @@ where
                 }
             }
             RETRY => {
-                // Parse as i64, ignore if not a valid integer.
-                if let Ok(ms) = value.parse::<i64>() {
-                    self.pending.retry = Some(Duration::from_millis(ms as u64));
+                // Parse as u64, ignore if not a valid integer.
+                if let Ok(ms) = value.parse::<u64>() {
+                    self.pending.retry = Some(Duration::from_millis(ms));
                     self.pending.bitset |= BIT_RETRY;
                 }
             }
