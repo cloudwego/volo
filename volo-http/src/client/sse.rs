@@ -306,12 +306,10 @@ where
                 self.pending.event = Some(value);
                 self.pending.bitset |= BIT_EVENT;
             }
-            ID => {
-                // Ignore if the value contains a NULL byte, per spec.
-                if !value.contains('\0') {
-                    self.pending.id = Some(value);
-                    self.pending.bitset |= BIT_ID;
-                }
+            // Ignore if the value contains a NULL byte, per spec.
+            ID if !value.contains('\0') => {
+                self.pending.id = Some(value);
+                self.pending.bitset |= BIT_ID;
             }
             RETRY => {
                 // Parse as u64, ignore if not a valid integer.
