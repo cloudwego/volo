@@ -21,7 +21,6 @@ maintenance = { status = "actively-developed" }
 [dependencies]
 volo = { version = "0.12.2", path = "../volo" }
 
-async-stream.workspace = true
 ahash.workspace = true
 bytes.workspace = true
 faststr.workspace = true
