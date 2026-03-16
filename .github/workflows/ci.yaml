@@ -25,7 +25,7 @@ jobs:
       - run: exit 0
 
   lint:
-    runs-on: [self-hosted, Linux, amd64]
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
@@ -44,7 +44,7 @@ jobs:
           cargo fmt -- --check
 
   docs-check:
-    runs-on: [self-hosted, Linux, amd64]
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
@@ -77,11 +77,11 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          bash scripts/install-linux-dependencies.sh
+          sudo bash scripts/install-linux-dependencies.sh
           bash scripts/clippy-and-test.sh
 
   test-linux-aarch64:
-    runs-on: [self-hosted, Linux, aarch64]
+    runs-on: ubuntu-24.04-arm
 
     strategy:
       matrix:
@@ -94,11 +94,11 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          bash scripts/install-linux-dependencies.sh
+          sudo bash scripts/install-linux-dependencies.sh
           bash scripts/clippy-and-test.sh --no-test
 
   test-macos:
-    runs-on: [self-hosted, macOS]
+    runs-on: macos-latest
 
     strategy:
       matrix:
@@ -114,7 +114,7 @@ jobs:
           bash scripts/clippy-and-test.sh --no-test --no-shmipc
 
   test-windows:
-    runs-on: [self-hosted, Windows]
+    runs-on: windows-latest
 
     strategy:
       matrix:
@@ -130,7 +130,7 @@ jobs:
           bash scripts/clippy-and-test.sh --no-test --no-shmipc
 
   test-cli:
-    runs-on: [self-hosted, Linux, amd64]
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
@@ -146,7 +146,7 @@ jobs:
           bash scripts/volo-cli-test.sh
 
   coverage:
-    runs-on: [self-hosted, Linux, amd64]
+    runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
       contents: read

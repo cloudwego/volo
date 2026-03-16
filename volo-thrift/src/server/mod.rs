@@ -16,6 +16,8 @@ use tokio::{
     sync::Notify,
 };
 use tracing::{info, trace};
+#[cfg(feature = "shmipc")]
+use volo::net::shmipc_fallback::ShmipcAddressWithFallback;
 use volo::{
     net::{
         Address,
@@ -406,6 +408,38 @@ impl<S, L, Req, MkC, SP> Server<S, L, Req, MkC, SP> {
             tokio::time::sleep(Duration::from_secs(1)).await;
         }
         Ok(())
+    }
+
+    #[cfg(feature = "shmipc")]
+    /// Run the server with shmipc and TCP fallback support.
+    ///
+    /// The server will listen on both the shmipc address and the fallback TCP address.
+    /// Clients can connect via either transport.
+    pub async fn run_with_fallback<A1, A2>(
+        self,
+        shmipc_addr: A1,
+        fallback_addr: A2,
+    ) -> Result<(), BoxError>
+    where
+        A1: Into<Address>,
+        A2: volo::net::incoming::MakeIncoming + Send,
+        A2::Incoming: Send,
+        L: Layer<BoxService<ServerContext, Req, S::Response, crate::ServerError>>,
+        MkC: MakeCodec<OwnedReadHalf, OwnedWriteHalf>,
+        L::Service: Service<ServerContext, Req, Response = S::Response, Error = crate::ServerError>
+            + Send
+            + 'static
+            + Sync,
+        S: Service<ServerContext, Req, Error = crate::ServerError> + Send + 'static + Sync,
+        S::Response: EntryMessage + Send + 'static + Sync,
+        Req: EntryMessage + Send + 'static,
+        SP: SpanProvider,
+    {
+        self.run(ShmipcAddressWithFallback {
+            shmipc_addr: shmipc_addr.into(),
+            default_mi: fallback_addr,
+        })
+        .await
     }
 
     #[cfg(feature = "multiplex")]

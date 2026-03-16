@@ -4,6 +4,8 @@ pub mod ext;
 pub mod incoming;
 #[cfg(feature = "shmipc")]
 pub mod shmipc;
+#[cfg(feature = "shmipc")]
+pub mod shmipc_fallback;
 #[cfg(feature = "__tls")]
 #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
 pub mod tls;
