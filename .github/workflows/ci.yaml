@@ -77,7 +77,7 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          bash scripts/install-linux-dependencies.sh
+          sudo bash scripts/install-linux-dependencies.sh
           bash scripts/clippy-and-test.sh
 
   test-linux-aarch64:
@@ -94,7 +94,7 @@ jobs:
           toolchain: ${{matrix.rust}}
       - name: Run tests
         run: |
-          bash scripts/install-linux-dependencies.sh
+          sudo bash scripts/install-linux-dependencies.sh
           bash scripts/clippy-and-test.sh --no-test
 
   test-macos:
