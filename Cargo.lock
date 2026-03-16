@@ -808,6 +808,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "metainfo",
+ "mime",
  "motore",
  "pilota",
  "pilota-thrift-fieldmask",

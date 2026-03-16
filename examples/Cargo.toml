@@ -123,6 +123,12 @@ required-features = ["__tls"]
 name = "http-tls-client"
 path = "src/http/http-tls-client.rs"
 required-features = ["__tls"]
+[[bin]]
+name = "http-sse-server"
+path = "src/http/sse/server.rs"
+[[bin]]
+name = "http-sse-client"
+path = "src/http/sse/client.rs"
 
 # shmipc
 [[bin]]
@@ -146,6 +152,7 @@ http-body-util.workspace = true
 hyper.workspace = true
 hyper-util.workspace = true
 metainfo.workspace = true
+mime.workspace = true
 motore.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["full"] }
