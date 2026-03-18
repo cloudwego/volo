@@ -20,6 +20,22 @@ use tokio::time::{Instant, Sleep};
 use super::IntoResponse;
 use crate::{body::Body, error::BoxError, response::Response};
 
+/// Extension trait for [`Response`] to check if it's an SSE response.
+pub trait ResponseExt {
+    /// Check if the response is an SSE response by checking `Content-Type` header.
+    fn is_sse(&self) -> bool;
+}
+
+impl ResponseExt for Response {
+    fn is_sse(&self) -> bool {
+        self.headers()
+            .get(header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .map(|v| v.starts_with(mime::TEXT_EVENT_STREAM.essence_str()))
+            .unwrap_or(false)
+    }
+}
+
 /// Response of [SSE][sse] (Server-Sent Events), inclusing a stream with SSE [`Event`]s.
 ///
 /// [sse]: https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events
