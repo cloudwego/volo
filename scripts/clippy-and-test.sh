@@ -52,6 +52,7 @@ run_clippy() {
 
 run_test() {
 	echo_command cargo test -p volo-thrift
+	echo_command cargo test -p volo-thrift --features shmipc
 	echo_command cargo test -p volo-grpc --features rustls
 	echo_command cargo test -p volo-http --features client,server,http1,query,form,json,tls,cookie,multipart,ws
 	echo_command cargo test -p volo-http --features client,server,http2,query,form,json,tls,cookie,multipart,ws

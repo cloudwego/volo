@@ -64,7 +64,7 @@ jobs:
           cargo +nightly rustdoc -p volo-thrift --all-features --config 'build.rustdocflags=["--cfg", "docsrs"]' -- --deny warnings
 
   test-linux:
-    runs-on: [self-hosted, Linux, amd64]
+    runs-on: ubuntu-latest
 
     strategy:
       matrix:
