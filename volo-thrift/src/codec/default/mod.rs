@@ -216,8 +216,26 @@ impl<D: ZeroCopyDecoder, R: AsyncRead + AsyncExt + Unpin + Send + Sync + 'static
         &mut self,
         cx: &mut Cx,
     ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
-        // just to check if we have reached EOF
-        if self.reader.fill_buf().await?.is_empty() {
+        let buf = match self.reader.fill_buf().await {
+            Ok(buf) => buf,
+            Err(e) => {
+                #[cfg(feature = "shmipc")]
+                {
+                    if e.kind() == std::io::ErrorKind::UnexpectedEof
+                        && self.shmipc_helper().available()
+                    {
+                        tracing::trace!(
+                            "[VOLO] thrift codec decode message EOF (shmipc), rpcinfo: {:?}",
+                            cx.rpc_info()
+                        );
+                        return Ok(None);
+                    }
+                }
+                return Err(e.into());
+            }
+        };
+
+        if buf.is_empty() {
             tracing::trace!(
                 "[VOLO] thrift codec decode message EOF, rpcinfo: {:?}",
                 cx.rpc_info()
@@ -325,12 +343,250 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::DefaultMakeCodec;
+    use std::{
+        io,
+        pin::Pin,
+        task::{Context, Poll},
+    };
+
+    use bytes::Bytes;
+    use tokio::io::{AsyncBufRead, AsyncRead, ReadBuf};
+    use volo::context::RpcInfo;
+
+    use super::*;
+    use crate::ThriftMessage;
 
     #[test]
     fn test_mk_codec() {
         let _framed = DefaultMakeCodec::framed();
         let _ttheader_framed = DefaultMakeCodec::ttheader_framed();
         let _buffered = DefaultMakeCodec::buffered();
+    }
+
+    struct MockReader {
+        eof_behavior: EofBehavior,
+        #[cfg(feature = "shmipc")]
+        shmipc_stream: Option<volo::net::shmipc::Stream>,
+    }
+
+    enum EofBehavior {
+        EmptyBuffer,
+        UnexpectedEof,
+        OtherError,
+    }
+
+    impl AsyncRead for MockReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            _buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            match self.eof_behavior {
+                EofBehavior::EmptyBuffer => Poll::Ready(Ok(())),
+                EofBehavior::UnexpectedEof => Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "unexpected eof",
+                ))),
+                EofBehavior::OtherError => Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::ConnectionReset,
+                    "connection reset",
+                ))),
+            }
+        }
+    }
+
+    impl AsyncBufRead for MockReader {
+        fn poll_fill_buf(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<&[u8]>> {
+            match self.eof_behavior {
+                EofBehavior::EmptyBuffer => Poll::Ready(Ok(&[])),
+                EofBehavior::UnexpectedEof => Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "unexpected eof",
+                ))),
+                EofBehavior::OtherError => Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::ConnectionReset,
+                    "connection reset",
+                ))),
+            }
+        }
+
+        fn consume(self: Pin<&mut Self>, _amt: usize) {}
+    }
+
+    impl volo::net::ext::AsyncExt for MockReader {
+        async fn ready(&self, _interest: tokio::io::Interest) -> io::Result<tokio::io::Ready> {
+            Ok(tokio::io::Ready::READABLE | tokio::io::Ready::WRITABLE)
+        }
+
+        #[cfg(feature = "shmipc")]
+        fn shmipc_helper(&self) -> volo::net::shmipc::ShmipcHelper {
+            if let Some(stream) = &self.shmipc_stream {
+                stream.helper()
+            } else {
+                volo::net::shmipc::ShmipcHelper::none()
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn test_decode_empty_buffer_returns_none() {
+        let reader = MockReader {
+            eof_behavior: EofBehavior::EmptyBuffer,
+            #[cfg(feature = "shmipc")]
+            shmipc_stream: None,
+        };
+        let mut decoder = DefaultDecoder {
+            decoder: thrift::MakeThriftCodec::default().make_codec().1,
+            reader: BufReader::new(reader),
+        };
+
+        let mut cx = crate::context::ClientContext::new(
+            1,
+            RpcInfo::with_role(volo::context::Role::Client),
+            pilota::thrift::TMessageType::Call,
+        );
+
+        let result: Result<Option<ThriftMessage<Bytes>>, _> = decoder.decode(&mut cx).await;
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_decode_unexpected_eof_returns_error() {
+        let reader = MockReader {
+            eof_behavior: EofBehavior::UnexpectedEof,
+            #[cfg(feature = "shmipc")]
+            shmipc_stream: None,
+        };
+        let mut decoder = DefaultDecoder {
+            decoder: thrift::MakeThriftCodec::default().make_codec().1,
+            reader: BufReader::new(reader),
+        };
+
+        let mut cx = crate::context::ClientContext::new(
+            1,
+            RpcInfo::with_role(volo::context::Role::Client),
+            pilota::thrift::TMessageType::Call,
+        );
+
+        let result: Result<Option<ThriftMessage<Bytes>>, _> = decoder.decode(&mut cx).await;
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("unexpected eof"));
+    }
+
+    #[cfg(feature = "shmipc")]
+    struct ShmipcTestEnv {
+        path: std::path::PathBuf,
+    }
+
+    #[cfg(feature = "shmipc")]
+    impl ShmipcTestEnv {
+        async fn new() -> (Self, volo::net::shmipc::Stream) {
+            use std::{
+                os::unix::net::SocketAddr,
+                sync::atomic::{AtomicUsize, Ordering},
+            };
+
+            use motore::service::UnaryService;
+            use volo::net::shmipc::{
+                Listener,
+                addr::{Address, ShmipcMakeTransport},
+            };
+
+            static COUNTER: AtomicUsize = AtomicUsize::new(0);
+            let id = COUNTER.fetch_add(1, Ordering::Relaxed);
+
+            let dir = std::env::temp_dir();
+            let path = dir.join(format!(
+                "volo_shmipc_test_{}_{}.sock",
+                std::process::id(),
+                id
+            ));
+            let _ = std::fs::remove_file(&path);
+
+            let addr_val = SocketAddr::from_pathname(&path).expect("failed to create socket addr");
+            let addr = Address::from(addr_val);
+            let addr_clone = addr.clone();
+
+            tokio::spawn(async move {
+                if let Ok(mut listener) = Listener::listen(addr_clone, None).await {
+                    while let Ok(_stream) = listener.accept().await {}
+                }
+            });
+
+            // Give listener time to start
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+            let svc = ShmipcMakeTransport::new();
+            let stream = svc
+                .call(addr)
+                .await
+                .expect("failed to connect to shmipc listener");
+
+            (Self { path }, stream)
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    impl Drop for ShmipcTestEnv {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[tokio::test]
+    async fn test_decode_unexpected_eof_returns_none_when_shmipc_available() {
+        let (_env, stream) = ShmipcTestEnv::new().await;
+
+        let reader = MockReader {
+            eof_behavior: EofBehavior::UnexpectedEof,
+            shmipc_stream: Some(stream),
+        };
+
+        let mut decoder = DefaultDecoder {
+            decoder: thrift::MakeThriftCodec::default().make_codec().1,
+            reader: BufReader::new(reader),
+        };
+
+        let mut cx = crate::context::ClientContext::new(
+            1,
+            RpcInfo::with_role(volo::context::Role::Client),
+            pilota::thrift::TMessageType::Call,
+        );
+
+        let result: Result<Option<ThriftMessage<Bytes>>, _> = decoder.decode(&mut cx).await;
+
+        assert!(result.is_ok());
+        assert!(result.unwrap().is_none());
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[tokio::test]
+    async fn test_decode_other_error_returns_error_when_shmipc_available() {
+        let (_env, stream) = ShmipcTestEnv::new().await;
+
+        let reader = MockReader {
+            eof_behavior: EofBehavior::OtherError,
+            shmipc_stream: Some(stream),
+        };
+
+        let mut decoder = DefaultDecoder {
+            decoder: thrift::MakeThriftCodec::default().make_codec().1,
+            reader: BufReader::new(reader),
+        };
+
+        let mut cx = crate::context::ClientContext::new(
+            1,
+            RpcInfo::with_role(volo::context::Role::Client),
+            pilota::thrift::TMessageType::Call,
+        );
+
+        let result: Result<Option<ThriftMessage<Bytes>>, _> = decoder.decode(&mut cx).await;
+
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert!(err.to_string().contains("connection reset"));
     }
 }
