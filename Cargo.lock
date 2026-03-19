@@ -4364,7 +4364,7 @@ version = "0.12.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "ahash",
  "anyhow",
