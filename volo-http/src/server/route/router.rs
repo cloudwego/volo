@@ -22,7 +22,7 @@ use crate::{
     context::ServerContext,
     request::Request,
     response::Response,
-    server::{IntoResponse, handler::Handler},
+    server::{IntoResponse, handler::Handler, response::sse::ResponseExt},
 };
 
 /// The router for routing path to [`Service`]s or handlers.
@@ -450,7 +450,32 @@ where
         req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         match self {
-            Self::MethodRouter(mr) => mr.call(cx, req).await,
+            Self::MethodRouter(mr) => {
+                // Determine if the client accepts SSE by checking the `Accept` header.
+                // If the header is missing, assume the client accepts SSE (default true).
+                let accepts_sse = req
+                    .headers()
+                    .get(http::header::ACCEPT)
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| v.contains(mime::TEXT_EVENT_STREAM.essence_str()))
+                    .unwrap_or(true);
+
+                // Call the inner router and get the response.
+                let resp = mr.call(cx, req).await?;
+
+                // If the client does not explicitly accept SSE but the response is SSE,
+                // return 415 Unsupported Media Type.
+                if !accepts_sse && resp.is_sse() {
+                    return Ok(Response::builder()
+                        .status(StatusCode::UNSUPPORTED_MEDIA_TYPE)
+                        .body("Not Acceptable".into())
+                        .unwrap());
+                }
+
+                // Otherwise, return the response as-is.
+                Ok(resp)
+            }
+
             Self::Service(service) => service.call(cx, req).await,
         }
     }
