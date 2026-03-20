@@ -451,8 +451,8 @@ where
     ) -> Result<Self::Response, Self::Error> {
         match self {
             Self::MethodRouter(mr) => {
-                // Check if the client accepts SSE by `Accept` header, true if the header is missing
-                // or contains `text/event-stream`.
+                // Determine if the client accepts SSE by checking the `Accept` header.
+                // If the header is missing, assume the client accepts SSE (default true).
                 let accepts_sse = req
                     .headers()
                     .get(http::header::ACCEPT)
@@ -460,10 +460,11 @@ where
                     .map(|v| v.contains(mime::TEXT_EVENT_STREAM.essence_str()))
                     .unwrap_or(true);
 
+                // Call the inner router and get the response.
                 let resp = mr.call(cx, req).await?;
 
-                // If the client does not explicitly accept SSE but the response is SSE, return 415
-                // Unsupported Media Type.
+                // If the client does not explicitly accept SSE but the response is SSE,
+                // return 415 Unsupported Media Type.
                 if !accepts_sse && resp.is_sse() {
                     return Ok(Response::builder()
                         .status(StatusCode::UNSUPPORTED_MEDIA_TYPE)
@@ -471,6 +472,7 @@ where
                         .unwrap());
                 }
 
+                // Otherwise, return the response as-is.
                 Ok(resp)
             }
 

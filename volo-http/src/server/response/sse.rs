@@ -29,10 +29,10 @@ pub trait ResponseExt {
 impl ResponseExt for Response {
     fn is_sse(&self) -> bool {
         self.headers()
-            .get(header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.starts_with(mime::TEXT_EVENT_STREAM.essence_str()))
-            .unwrap_or(false)
+            .get(header::CONTENT_TYPE) // Get the Content-Type header
+            .and_then(|v| v.to_str().ok()) // Convert header value to &str
+            .map(|v| v.starts_with(mime::TEXT_EVENT_STREAM.essence_str())) // Check SSE type
+            .unwrap_or(false) // Return false if header is missing or invalid
     }
 }
 
