@@ -535,7 +535,7 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "shmipc")]
+    #[cfg(all(feature = "shmipc", target_os = "linux"))]
     #[tokio::test]
     async fn test_decode_unexpected_eof_returns_none_when_shmipc_available() {
         let (_env, stream) = ShmipcTestEnv::new().await;
@@ -562,7 +562,7 @@ mod tests {
         assert!(result.unwrap().is_none());
     }
 
-    #[cfg(feature = "shmipc")]
+    #[cfg(all(feature = "shmipc", target_os = "linux"))]
     #[tokio::test]
     async fn test_decode_other_error_returns_error_when_shmipc_available() {
         let (_env, stream) = ShmipcTestEnv::new().await;
