@@ -94,7 +94,7 @@ macro_rules! impl_getter {
 #[cfg(feature = "server")]
 pub(crate) use impl_getter;
 
-#[cfg(feature = "client")]
+#[cfg(any(feature = "client", feature = "server"))]
 macro_rules! stat_impl {
     ($t: ident) => {
         paste::paste! {
@@ -119,5 +119,5 @@ macro_rules! stat_impl {
         }
     };
 }
-#[cfg(feature = "client")]
+#[cfg(any(feature = "client", feature = "server"))]
 pub(crate) use stat_impl;
