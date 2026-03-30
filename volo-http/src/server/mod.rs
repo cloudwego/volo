@@ -567,7 +567,6 @@ where
                 let (parts, body) = resp.into_parts();
                 let body = body.with_write_stats(stats.clone());
                 let resp = http::Response::from_parts(parts, body);
-                eprintln!("{:?}", cx.stats);
                 service.span_provider.leave_serve(&cx);
                 Ok(resp)
             }),

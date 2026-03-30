@@ -154,14 +154,12 @@ impl http_body::Body for Body {
                 let mut stats = stats.lock().unwrap();
                 if stats.read_body_start().is_none() {
                     stats.record_read_body_start();
-                    eprintln!("read_body_start: {:?}", stats.read_body_start());
                 }
             }
             Some(BodyStats::Write(stats)) => {
                 let mut stats = stats.lock().unwrap();
                 if stats.write_start().is_none() {
                     stats.record_write_start();
-                    eprintln!("write_start: {:?}", stats.write_start());
                 }
             }
             None => {}
@@ -196,21 +194,18 @@ impl http_body::Body for Body {
                         let mut stats = stats.lock().unwrap();
                         if stats.read_body_finish().is_none() {
                             stats.record_read_body_finish();
-                            eprintln!("read_body_finish: {:?}", stats.read_body_finish());
                         }
                     }
                     Some(BodyStats::Write(stats)) => {
                         let mut stats = stats.lock().unwrap();
                         if stats.write_finish().is_none() {
                             stats.record_write_finish();
-                            eprintln!("write_finish: {:?}", stats.write_finish());
                         }
                     }
                     None => {}
                 }
             }
         }
-        eprintln!("stats: {:?}", this.stats);
         result
     }
 
