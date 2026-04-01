@@ -194,6 +194,7 @@ impl http_body::Body for Body {
                         let mut stats = stats.lock().unwrap();
                         if stats.read_body_finish().is_none() {
                             stats.record_read_body_finish();
+                            stats.record_handle_start();
                         }
                     }
                     Some(BodyStats::Write(stats)) => {

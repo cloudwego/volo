@@ -545,7 +545,6 @@ where
                     let mut s = stats.lock().unwrap();
                     s.set_read_header_start(service.accept_time);
                     s.set_read_header_finish(call_time);
-                    s.record_handle_start();
                 }
 
                 let (parts, body) = req.into_parts();
