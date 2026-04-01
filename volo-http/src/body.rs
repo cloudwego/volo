@@ -2,8 +2,6 @@
 //!
 //! See [`Body`] for more details.
 
-#[cfg(feature = "server")]
-use std::sync::{Arc, Mutex};
 use std::{
     convert::Infallible,
     error::Error,
@@ -24,28 +22,16 @@ use pin_project::pin_project;
 #[cfg(feature = "json")]
 use serde::de::DeserializeOwned;
 
-#[cfg(feature = "server")]
-use crate::context::server::ServerStats;
 use crate::error::BoxError;
 
 // The `futures_util::stream::BoxStream` does not have `Sync`
 type BoxStream<'a, T> = Pin<Box<dyn Stream<Item = T> + Send + Sync + 'a>>;
 
-#[cfg(feature = "server")]
-#[derive(Debug)]
-enum BodyStats {
-    /// Attached to request bodies: tracks when the server reads the request.
-    Read(Arc<Mutex<ServerStats>>),
-    /// Attached to response bodies: tracks when the server writes the response.
-    Write(Arc<Mutex<ServerStats>>),
-}
 /// An implementation for [`http_body::Body`].
 #[pin_project]
 pub struct Body {
     #[pin]
     repr: BodyRepr,
-    #[cfg(feature = "server")]
-    stats: Option<BodyStats>,
 }
 
 #[pin_project(project = BodyProj)]
@@ -74,8 +60,6 @@ impl Body {
     pub fn empty() -> Self {
         Self {
             repr: BodyRepr::Full(Full::new(Bytes::new())),
-            #[cfg(feature = "server")]
-            stats: None,
         }
     }
 
@@ -86,8 +70,6 @@ impl Body {
     pub fn from_incoming(incoming: Incoming) -> Self {
         Self {
             repr: BodyRepr::Hyper(incoming),
-            #[cfg(feature = "server")]
-            stats: None,
         }
     }
 
@@ -98,8 +80,6 @@ impl Body {
     {
         Self {
             repr: BodyRepr::Stream(StreamBody::new(Box::pin(stream))),
-            #[cfg(feature = "server")]
-            stats: None,
         }
     }
 
@@ -111,27 +91,7 @@ impl Body {
     {
         Self {
             repr: BodyRepr::Body(BoxBody::new(body.map_err(Into::into))),
-            #[cfg(feature = "server")]
-            stats: None,
         }
-    }
-
-    /// Attach server stats for recording body read timings.
-    ///
-    /// This should only be called on request bodies in a server context.
-    #[cfg(feature = "server")]
-    pub fn with_read_stats(mut self, stats: Arc<Mutex<ServerStats>>) -> Self {
-        self.stats = Some(BodyStats::Read(stats));
-        self
-    }
-
-    /// Attach server stats for recording body write timings.
-    ///
-    /// This should only be called on response bodies in a server context.
-    #[cfg(feature = "server")]
-    pub fn with_write_stats(mut self, stats: Arc<Mutex<ServerStats>>) -> Self {
-        self.stats = Some(BodyStats::Write(stats));
-        self
     }
 }
 
@@ -143,71 +103,14 @@ impl http_body::Body for Body {
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
     ) -> Poll<Option<Result<Frame<Self::Data>, Self::Error>>> {
-        #[cfg(feature = "server")]
-        let is_full = matches!(self.repr, BodyRepr::Full(_));
-
-        let this = self.project();
-
-        #[cfg(feature = "server")]
-        match this.stats.as_ref() {
-            Some(BodyStats::Read(stats)) => {
-                let mut stats = stats.lock().unwrap();
-                if stats.read_body_start().is_none() {
-                    stats.record_read_body_start();
-                }
-            }
-            Some(BodyStats::Write(stats)) => {
-                let mut stats = stats.lock().unwrap();
-                if stats.write_start().is_none() {
-                    stats.record_write_start();
-                }
-            }
-            None => {}
-        }
-
-        let result = match this.repr.project() {
+        match self.project().repr.project() {
             BodyProj::Full(full) => http_body::Body::poll_frame(full, cx).map_err(BoxError::from),
             BodyProj::Hyper(incoming) => {
                 http_body::Body::poll_frame(incoming, cx).map_err(BoxError::from)
             }
             BodyProj::Stream(stream) => http_body::Body::poll_frame(stream, cx),
             BodyProj::Body(body) => http_body::Body::poll_frame(body, cx),
-        };
-
-        #[cfg(feature = "server")]
-        {
-            let is_terminal = match this.stats.as_ref() {
-                // For response bodies, also treat a successful frame as terminal.
-                // Hyper uses is_end_stream() for Full bodies and won't poll again
-                // after the last frame, so Poll::Ready(None) never fires.
-                Some(BodyStats::Write(_)) => {
-                    matches!(result, Poll::Ready(None) | Poll::Ready(Some(Err(_))))
-                        || (is_full && matches!(result, Poll::Ready(Some(Ok(_)))))
-                }
-                // For request bodies, only treat exhaustion or error as terminal.
-                _ => matches!(result, Poll::Ready(None) | Poll::Ready(Some(Err(_)))),
-            };
-
-            if is_terminal {
-                match this.stats.as_ref() {
-                    Some(BodyStats::Read(stats)) => {
-                        let mut stats = stats.lock().unwrap();
-                        if stats.read_body_finish().is_none() {
-                            stats.record_read_body_finish();
-                            stats.record_handle_start();
-                        }
-                    }
-                    Some(BodyStats::Write(stats)) => {
-                        let mut stats = stats.lock().unwrap();
-                        if stats.write_finish().is_none() {
-                            stats.record_write_finish();
-                        }
-                    }
-                    None => {}
-                }
-            }
         }
-        result
     }
 
     fn is_end_stream(&self) -> bool {
@@ -396,8 +299,6 @@ impl From<&'static str> for Body {
     fn from(value: &'static str) -> Self {
         Self {
             repr: BodyRepr::Full(Full::new(Bytes::from_static(value.as_bytes()))),
-            #[cfg(feature = "server")]
-            stats: None,
         }
     }
 }
@@ -406,8 +307,6 @@ impl From<Vec<u8>> for Body {
     fn from(value: Vec<u8>) -> Self {
         Self {
             repr: BodyRepr::Full(Full::new(Bytes::from(value))),
-            #[cfg(feature = "server")]
-            stats: None,
         }
     }
 }
@@ -416,8 +315,6 @@ impl From<Bytes> for Body {
     fn from(value: Bytes) -> Self {
         Self {
             repr: BodyRepr::Full(Full::new(value)),
-            #[cfg(feature = "server")]
-            stats: None,
         }
     }
 }
@@ -426,8 +323,6 @@ impl From<FastStr> for Body {
     fn from(value: FastStr) -> Self {
         Self {
             repr: BodyRepr::Full(Full::new(value.into_bytes())),
-            #[cfg(feature = "server")]
-            stats: None,
         }
     }
 }
@@ -436,8 +331,6 @@ impl From<String> for Body {
     fn from(value: String) -> Self {
         Self {
             repr: BodyRepr::Full(Full::new(Bytes::from(value))),
-            #[cfg(feature = "server")]
-            stats: None,
         }
     }
 }

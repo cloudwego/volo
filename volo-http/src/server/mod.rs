@@ -13,7 +13,6 @@ use std::{
     time::Duration,
 };
 
-use chrono::{DateTime, Local};
 use futures::future::BoxFuture;
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
@@ -448,14 +447,12 @@ async fn serve<I, S, SP>(
                 continue;
             }
         };
-        let accept_time = Local::now();
 
         let hyper_service = HyperService {
             inner: service.clone(),
             peer,
             config: config.clone(),
             span_provider: span_provider.clone(),
-            accept_time,
         };
 
         tokio::spawn(serve_conn(
@@ -515,7 +512,6 @@ struct HyperService<S, SP> {
     peer: Address,
     config: Config,
     span_provider: SP,
-    accept_time: DateTime<Local>,
 }
 
 type HyperRequest = http::request::Request<hyper::body::Incoming>;
@@ -533,39 +529,19 @@ where
 
     fn call(&self, req: HyperRequest) -> Self::Future {
         let service = self.clone();
-        let call_time = Local::now();
         Box::pin(
             METAINFO.scope(RefCell::new(MetaInfo::default()), async move {
                 let mut cx = ServerContext::new(service.peer);
                 cx.rpc_info_mut().set_config(service.config);
-
-                let stats = cx.stats().clone();
-
-                {
-                    let mut s = stats.lock().unwrap();
-                    s.set_read_header_start(service.accept_time);
-                    s.set_read_header_finish(call_time);
-                }
-
-                let (parts, body) = req.into_parts();
-                let body = Body::from_incoming(body).with_read_stats(stats.clone());
-                let req = http::Request::from_parts(parts, body);
-
                 let span = service.span_provider.on_serve(&cx);
-                let resp = service
+                cx.stats.record_handle_start();
+                let resp: http::Response<Body> = service
                     .inner
-                    .call(&mut cx, req)
+                    .call(&mut cx, req.map(Body::from_incoming))
                     .instrument(span)
                     .await
                     .into_response();
-
-                stats.lock().unwrap().record_handle_finish();
-
-                // Wrap response body — shares the same Arc, write_start/finish
-                // will be recorded directly into cx's stats
-                let (parts, body) = resp.into_parts();
-                let body = body.with_write_stats(stats.clone());
-                let resp = http::Response::from_parts(parts, body);
+                cx.stats.record_handle_finish();
                 service.span_provider.leave_serve(&cx);
                 Ok(resp)
             }),

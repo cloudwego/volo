@@ -1,5 +1,4 @@
 //! Context and its utilities of server
-use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Local};
 use volo::{
@@ -48,16 +47,12 @@ pub struct ServerCxInner {
     pub params: PathParamsVec,
 
     /// Statistics of the request
-    pub stats: Arc<Mutex<ServerStats>>,
+    pub stats: ServerStats,
 }
 
 impl ServerCxInner {
     impl_getter!(params, PathParamsVec);
-
-    /// Return the statistics of the request
-    pub fn stats(&self) -> &Arc<Mutex<ServerStats>> {
-        &self.stats
-    }
+    impl_getter!(stats, ServerStats);
 }
 
 /// Statistics of server
