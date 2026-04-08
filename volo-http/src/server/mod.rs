@@ -534,14 +534,12 @@ where
                 let mut cx = ServerContext::new(service.peer);
                 cx.rpc_info_mut().set_config(service.config);
                 let span = service.span_provider.on_serve(&cx);
-                cx.stats.record_handle_start();
                 let resp: http::Response<Body> = service
                     .inner
                     .call(&mut cx, req.map(Body::from_incoming))
                     .instrument(span)
                     .await
                     .into_response();
-                cx.stats.record_handle_finish();
                 service.span_provider.leave_serve(&cx);
                 Ok(resp)
             }),
