@@ -37,6 +37,7 @@ volo-http/src/
     ├── cookie.rs       # Cookie jar (feature: cookie)
     ├── dns.rs          # DNS resolver
     ├── loadbalance.rs
+    ├── sse.rs          # SseReader
     ├── target.rs       # Request target (address/host)
     ├── layer/          # Timeout, Host, UserAgent, FailOnStatus, HttpProxy
     └── transport/      # Connector, HTTP1/2, connection pool, TLS
