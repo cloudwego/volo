@@ -808,6 +808,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "metainfo",
+ "mime",
  "motore",
  "pilota",
  "pilota-thrift-fieldmask",
@@ -4307,7 +4308,7 @@ dependencies = [
 
 [[package]]
 name = "volo-http"
-version = "0.5.3"
+version = "0.5.4"
 dependencies = [
  "ahash",
  "async-broadcast",
