@@ -11,3 +11,6 @@ pub mod server;
 
 #[cfg(feature = "server")]
 pub use self::server::ServerContext;
+
+#[cfg(all(feature = "client", feature = "server"))]
+pub mod stat;
