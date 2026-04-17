@@ -1,6 +1,6 @@
 [package]
 name = "volo-http"
-version = "0.5.4"
+version = "0.5.5"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -117,7 +117,7 @@ client = [
 ] # client core
 server = [
     "hyper-util/server",
-    "dep:ipnet", "dep:matchit", "dep:memchr", "dep:scopeguard", "dep:mime_guess",
+    "dep:ipnet", "dep:matchit", "dep:memchr", "dep:scopeguard", "dep:mime_guess", "dep:chrono",
 ] # server core
 
 __serde = ["dep:serde"] # a private feature for enabling `serde` by `serde_xxx`

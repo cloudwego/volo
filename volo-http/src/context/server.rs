@@ -1,5 +1,6 @@
 //! Context and its utilities of server
 
+use chrono::{DateTime, Local};
 use volo::{
     context::{Context, Reusable, Role, RpcCx, RpcInfo},
     net::Address,
@@ -8,7 +9,7 @@ use volo::{
 
 use crate::{
     server::param::PathParamsVec,
-    utils::macros::{impl_deref_and_deref_mut, impl_getter},
+    utils::macros::{impl_deref_and_deref_mut, impl_getter, stat_impl},
 };
 
 /// RPC context of http server
@@ -44,10 +45,38 @@ pub struct ServerCxInner {
     /// [`PathParamsMap`]: crate::server::param::PathParamsMap
     /// [`PathParams`]: crate::server::param::PathParams
     pub params: PathParamsVec,
+
+    /// Statistics of the request
+    pub stats: ServerStats,
 }
 
 impl ServerCxInner {
     impl_getter!(params, PathParamsVec);
+    impl_getter!(stats, ServerStats);
+}
+
+/// Statistics of server
+#[derive(Debug, Default, Clone)]
+pub struct ServerStats {
+    read_header_start: Option<DateTime<Local>>,
+    read_header_finish: Option<DateTime<Local>>,
+    read_body_start: Option<DateTime<Local>>,
+    read_body_finish: Option<DateTime<Local>>,
+    handle_start: Option<DateTime<Local>>,
+    handle_finish: Option<DateTime<Local>>,
+    write_start: Option<DateTime<Local>>,
+    write_finish: Option<DateTime<Local>>,
+}
+
+impl ServerStats {
+    stat_impl!(read_header_start);
+    stat_impl!(read_header_finish);
+    stat_impl!(read_body_start);
+    stat_impl!(read_body_finish);
+    stat_impl!(handle_start);
+    stat_impl!(handle_finish);
+    stat_impl!(write_start);
+    stat_impl!(write_finish);
 }
 
 /// Configuration of the request

@@ -74,7 +74,10 @@ macro_rules! impl_handler {
                     Ok(value) => value,
                     Err(rejection) => return rejection.into_response(),
                 };
-                self($($ty,)* $last).await.into_response()
+                cx.stats.record_handle_start();
+                let result = self($($ty,)* $last).await;
+                cx.stats.record_handle_finish();
+                result.into_response()
             }
         }
     };

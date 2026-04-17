@@ -534,7 +534,7 @@ where
                 let mut cx = ServerContext::new(service.peer);
                 cx.rpc_info_mut().set_config(service.config);
                 let span = service.span_provider.on_serve(&cx);
-                let resp = service
+                let resp: http::Response<Body> = service
                     .inner
                     .call(&mut cx, req.map(Body::from_incoming))
                     .instrument(span)

@@ -12,7 +12,8 @@ volo-http/src/
 ├── response.rs         # Response type alias
 ├── context/            # RPC contexts
 │   ├── client.rs       # ClientContext (target, stats, timeout)
-│   └── server.rs       # ServerContext (RpcInfo, path params, extensions)
+│   ├── server.rs       # ServerContext (RpcInfo, path params, extensions)
+│   └── stat.rs         # CommonStats
 ├── error/
 │   ├── client.rs       # ClientError
 │   └── server.rs       # ExtractBodyError
