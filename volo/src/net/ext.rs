@@ -34,6 +34,11 @@ impl AsyncExt for Conn {
                 io::ErrorKind::Unsupported,
                 "AsyncExt is not supported for ShmIPC connection",
             )),
+            #[cfg(feature = "named-pipe")]
+            ConnStream::NamedPipeClient(_) | ConnStream::NamedPipeServer(_) => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "AsyncExt is not supported for NamedPipe connection",
+            )),
         }
     }
 
@@ -62,6 +67,11 @@ impl AsyncExt for OwnedReadHalf {
                 io::ErrorKind::Unsupported,
                 "AsyncExt is not supported for ShmIPC connection",
             )),
+            #[cfg(feature = "named-pipe")]
+            OwnedReadHalf::NamedPipeClient(_) | OwnedReadHalf::NamedPipeServer(_) => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "AsyncExt is not supported for NamedPipe connection",
+            )),
         }
     }
 
@@ -89,6 +99,11 @@ impl AsyncExt for OwnedWriteHalf {
             OwnedWriteHalf::Shmipc(_) => Err(io::Error::new(
                 io::ErrorKind::Unsupported,
                 "AsyncExt is not supported for ShmIPC connection",
+            )),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalf::NamedPipeClient(_) | OwnedWriteHalf::NamedPipeServer(_) => Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "AsyncExt is not supported for NamedPipe connection",
             )),
         }
     }
