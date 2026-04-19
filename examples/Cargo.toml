@@ -143,6 +143,10 @@ required-features = ["named-pipe"]
 name = "named-pipe-thrift-client"
 path = "src/thrift/named_pipe/client.rs"
 required-features = ["named-pipe"]
+[[bin]]
+name = "named-pipe-stress"
+path = "src/thrift/named_pipe/stress.rs"
+required-features = ["named-pipe"]
 
 [dependencies]
 anyhow.workspace = true
