@@ -8,6 +8,7 @@ use std::{
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::windows::named_pipe::{ClientOptions, ServerOptions},
+    sync::oneshot,
     task::JoinHandle,
     time::sleep,
 };
@@ -52,10 +53,10 @@ impl StressConfig {
                 "VOLO_NP_STRESS_ITERATIONS must be greater than 0",
             ));
         }
-        if self.payload_len < 16 {
+        if self.payload_len < 8 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "VOLO_NP_STRESS_PAYLOAD_LEN must be at least 16",
+                "VOLO_NP_STRESS_PAYLOAD_LEN must be at least 8",
             ));
         }
         if self.flush_every == 0 {
@@ -103,9 +104,25 @@ async fn join_result(handle: JoinHandle<io::Result<()>>) -> io::Result<io::Resul
 
 async fn run_server_pool(cfg: Arc<StressConfig>) -> io::Result<()> {
     let mut tasks = Vec::with_capacity(cfg.connections);
-    for conn_id in 0..cfg.connections {
+
+    let (ready_tx, ready_rx) = oneshot::channel();
+    let cfg0 = cfg.clone();
+    tasks.push(tokio::spawn(async move {
+        run_server_connection(cfg0, 0, Some(ready_tx)).await
+    }));
+
+    ready_rx.await.map_err(|err| {
+        io::Error::new(
+            io::ErrorKind::Other,
+            format!("first pipe instance was not created successfully: {err}"),
+        )
+    })?;
+
+    for conn_id in 1..cfg.connections {
         let cfg = cfg.clone();
-        tasks.push(tokio::spawn(async move { run_server_connection(cfg, conn_id).await }));
+        tasks.push(tokio::spawn(async move {
+            run_server_connection(cfg, conn_id, None).await
+        }));
     }
 
     for task in tasks {
@@ -130,10 +147,17 @@ async fn run_client_pool(cfg: Arc<StressConfig>) -> io::Result<()> {
     Ok(())
 }
 
-async fn run_server_connection(cfg: Arc<StressConfig>, conn_id: usize) -> io::Result<()> {
+async fn run_server_connection(
+    cfg: Arc<StressConfig>,
+    conn_id: usize,
+    ready_tx: Option<oneshot::Sender<()>>,
+) -> io::Result<()> {
     let server = ServerOptions::new()
         .first_pipe_instance(conn_id == 0)
         .create(PIPE_NAME)?;
+    if let Some(ready_tx) = ready_tx {
+        let _ = ready_tx.send(());
+    }
     server.connect().await?;
 
     run_duplex(
@@ -197,14 +221,14 @@ async fn run_duplex(
 async fn write_frames<W>(
     writer: &mut W,
     cfg: &StressConfig,
-    conn_id: usize,
+    _conn_id: usize,
     marker: u8,
 ) -> io::Result<()>
 where
     W: AsyncWrite + Unpin,
 {
     for seq in 0..cfg.iterations {
-        let payload = make_payload(cfg.payload_len, marker, conn_id, seq);
+        let payload = make_payload(cfg.payload_len, marker, seq);
         writer.write_u32_le(payload.len() as u32).await?;
         writer.write_all(&payload).await?;
         if (seq + 1) % cfg.flush_every == 0 {
@@ -245,10 +269,9 @@ where
     Ok(())
 }
 
-fn make_payload(payload_len: usize, marker: u8, conn_id: usize, seq: usize) -> Vec<u8> {
+fn make_payload(payload_len: usize, marker: u8, seq: usize) -> Vec<u8> {
     let mut payload = vec![marker; payload_len];
-    payload[..8].copy_from_slice(&(conn_id as u64).to_le_bytes());
-    payload[8..16].copy_from_slice(&(seq as u64).to_le_bytes());
+    payload[..8].copy_from_slice(&(seq as u64).to_le_bytes());
     payload
 }
 
@@ -258,23 +281,14 @@ fn validate_payload(
     expected_conn_id: usize,
     expected_seq: usize,
 ) -> io::Result<()> {
-    if buf.len() < 16 {
+    if buf.len() < 8 {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!("payload too short: {}", buf.len()),
         ));
     }
 
-    let conn_id =
-        u64::from_le_bytes(buf[..8].try_into().expect("payload conn id length")) as usize;
-    if conn_id != expected_conn_id {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("unexpected connection id: expected {expected_conn_id}, got {conn_id}"),
-        ));
-    }
-
-    let seq = u64::from_le_bytes(buf[8..16].try_into().expect("payload seq length")) as usize;
+    let seq = u64::from_le_bytes(buf[..8].try_into().expect("payload seq length")) as usize;
     if seq != expected_seq {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
@@ -284,7 +298,7 @@ fn validate_payload(
         ));
     }
 
-    if buf[16..].iter().any(|byte| *byte != expected_marker) {
+    if buf[8..].iter().any(|byte| *byte != expected_marker) {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
             format!(
