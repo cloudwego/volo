@@ -7,14 +7,16 @@ use volo::FastStr;
 use crate::{
     model::{self, Entry},
     util::{
-        DEFAULT_CONFIG_FILE, DEFAULT_DIR, ServiceBuilder, download_repos_to_target,
-        get_service_builders_from_services, open_config_file, read_config_from_file,
+        DEFAULT_CONFIG_FILE, DEFAULT_DIR, ServiceBuilder, collect_no_service_paths,
+        download_repos_to_target, get_service_builders_from_services, open_config_file,
+        read_config_from_file,
     },
 };
 
 pub struct ConfigBuilder {
     filename: PathBuf,
     plugins: Vec<BoxClonePlugin>,
+    out_dir: Option<PathBuf>,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -71,6 +73,13 @@ impl InnerBuilder {
         }
     }
 
+    fn out_dir<P: AsRef<Path>>(self, out_dir: P) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.out_dir(&out_dir)),
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.out_dir(&out_dir)),
+        }
+    }
+
     pub fn add_service<P>(self, path: P) -> Self
     where
         P: AsRef<Path>,
@@ -89,12 +98,12 @@ impl InnerBuilder {
             keep_unknown_fields,
         } in service_builders
         {
-            self = self
-                .add_service(path.clone())
-                .includes(includes)
-                .touch([(path.clone(), touch)]);
+            self = self.add_service(path.clone()).includes(includes);
+            if !touch.is_empty() {
+                self = self.touch([(path.clone(), touch)]);
+            }
             if keep_unknown_fields {
-                self = self.keep_unknown_fields([path])
+                self = self.keep_unknown_fields([path]);
             }
         }
         self
@@ -113,6 +122,13 @@ impl InnerBuilder {
                 InnerBuilder::Protobuf(inner.ignore_unused(ignore_unused))
             }
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.ignore_unused(ignore_unused)),
+        }
+    }
+
+    pub fn touch_files(self, paths: impl IntoIterator<Item = PathBuf>) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.touch_files(paths)),
+            InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.touch_files(paths)),
         }
     }
 
@@ -194,6 +210,7 @@ impl ConfigBuilder {
         ConfigBuilder {
             filename,
             plugins: Vec::new(),
+            out_dir: None,
         }
     }
 
@@ -203,10 +220,32 @@ impl ConfigBuilder {
         self
     }
 
+    /// Overrides the output directory used by the underlying code generator.
+    /// This also relocates downloaded IDL repos from `${OUT_DIR}/idl` to `<out_dir>/idl`.
+    pub fn out_dir<P: AsRef<Path>>(mut self, out_dir: P) -> Self {
+        self.out_dir = Some(out_dir.as_ref().to_path_buf());
+        self
+    }
+
+    fn get_out_dir(&self) -> anyhow::Result<PathBuf> {
+        if let Some(out_dir) = &self.out_dir {
+            return Ok(out_dir.clone());
+        }
+
+        // Default to OUT_DIR derived from `DEFAULT_DIR` (which is `${OUT_DIR}/idl`).
+        // We intentionally don't check `OUT_DIR` here, because `DEFAULT_DIR` already
+        // provides a clear panic message when used outside build.rs.
+        Ok(PathBuf::from(DEFAULT_DIR.parent().expect(
+            "DEFAULT_DIR should always have a parent directory",
+        )))
+    }
+
     pub fn write(self) -> anyhow::Result<()> {
         println!("cargo:rerun-if-changed={}", self.filename.display());
         let mut f = open_config_file(self.filename.clone())?;
         let config = read_config_from_file(&mut f)?;
+        let out_dir = self.get_out_dir()?;
+        let idl_dir = out_dir.join("idl");
         config
             .entries
             .into_iter()
@@ -215,23 +254,30 @@ impl ConfigBuilder {
                     model::IdlProtocol::Thrift => InnerBuilder::thrift(),
                     model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
                 }
-                .filename(entry.filename.clone());
+                .filename(entry.filename.clone())
+                .out_dir(&out_dir);
 
                 for p in self.plugins.iter() {
                     builder = builder.plugin(p.clone());
                 }
 
                 // download repos and get the repo paths
-                let target_dir = PathBuf::from(&*DEFAULT_DIR).join(entry_name);
+                let target_dir = idl_dir.join(&entry_name);
                 let repo_dir_map = download_repos_to_target(&entry.repos, target_dir)?;
+
+                // collect per-IDL no_service flags from `codegen_option.config.no_service`
+                let no_service_paths = collect_no_service_paths(&entry.services, &repo_dir_map);
 
                 // get idl builders from services
                 let service_builders =
                     get_service_builders_from_services(&entry.services, &repo_dir_map);
 
                 // add build options to the builder and build
+                let mut builder = builder.add_services(service_builders);
+                if !no_service_paths.is_empty() {
+                    builder = builder.touch_files(no_service_paths);
+                }
                 builder
-                    .add_services(service_builders)
                     .ignore_unused(!entry.common_option.touch_all)
                     .special_namings(entry.common_option.special_namings)
                     .split_generated_files(entry.common_option.split_generated_files)
@@ -250,6 +296,75 @@ impl ConfigBuilder {
 impl Default for ConfigBuilder {
     fn default() -> Self {
         ConfigBuilder::new(PathBuf::from(DEFAULT_CONFIG_FILE))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+    };
+
+    use tempfile::tempdir;
+
+    use super::ConfigBuilder;
+
+    fn write_thrift(path: &Path, namespace: &str, type_name: &str) {
+        fs::write(
+            path,
+            format!(
+                "namespace rs {namespace}\n\nstruct {type_name} {{\n    1: required string \
+                 value,\n}}\n"
+            ),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn write_respects_service_level_no_service_per_path() {
+        let dir = tempdir().unwrap();
+        let target_idl = dir.path().join("target.thrift");
+        let ignored_idl = dir.path().join("ignored.thrift");
+        let config_path = dir.path().join("volo.yml");
+        let out_dir = dir.path().join("out");
+
+        write_thrift(&target_idl, "no_service_target", "WantedRecord");
+        write_thrift(&ignored_idl, "no_service_ignored", "IgnoredRecord");
+
+        fs::write(
+            &config_path,
+            format!(
+                "entries:\n  sample:\n    filename: generated.rs\n    protocol: thrift\n    services:\n      - idl:\n          source: local\n          path: {}\n        codegen_option:\n          config:\n            no_service: true\n      - idl:\n          source: local\n          path: {}\n",
+                target_idl.display(),
+                ignored_idl.display()
+            ),
+        )
+        .unwrap();
+
+        ConfigBuilder::new(config_path)
+            .out_dir(&out_dir)
+            .write()
+            .unwrap();
+
+        let generated = fs::read_to_string(out_dir.join("generated.rs")).unwrap();
+        assert!(generated.contains("WantedRecord"));
+        assert!(!generated.contains("IgnoredRecord"));
+    }
+
+    #[test]
+    fn get_out_dir_prefers_explicit_out_dir() {
+        let explicit = tempfile::tempdir()
+            .unwrap()
+            .path()
+            .join("volo-build-explicit-out");
+
+        let out_dir = ConfigBuilder::new(PathBuf::from("volo.yml"))
+            .out_dir(&explicit)
+            .get_out_dir()
+            .unwrap();
+
+        assert_eq!(out_dir, explicit);
     }
 }
 
@@ -273,11 +388,17 @@ impl InitBuilder {
         let temp_target_dir = tempfile::TempDir::new()?;
         let repo_dir_map = download_repos_to_target(&self.entry.repos, temp_target_dir.as_ref())?;
 
+        // collect per-IDL no_service flags from `codegen_option.config.no_service`
+        let no_service_paths = collect_no_service_paths(&self.entry.services, &repo_dir_map);
+
         // get idl builders from services
         let idl_builders = get_service_builders_from_services(&self.entry.services, &repo_dir_map);
 
         // add services to the builder
         builder = builder.add_services(idl_builders);
+        if !no_service_paths.is_empty() {
+            builder = builder.touch_files(no_service_paths);
+        }
 
         builder.init_service()
     }

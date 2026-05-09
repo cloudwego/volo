@@ -76,29 +76,44 @@ where
             .into_iter()
             .map(|s| {
                 let (path, includes) = get_idl_build_path_and_includes(&s.idl, &repo_dir_map);
+                let no_service = s.codegen_option.no_service();
                 (
                     IdlService {
                         path: path.clone(),
                         config: s.codegen_option.config,
                     },
-                    ServiceBuilder {
-                        path,
-                        includes,
-                        touch: s.codegen_option.touch,
-                        keep_unknown_fields: s.codegen_option.keep_unknown_fields,
-                    },
+                    (
+                        ServiceBuilder {
+                            path,
+                            includes,
+                            touch: s.codegen_option.touch,
+                            keep_unknown_fields: s.codegen_option.keep_unknown_fields,
+                        },
+                        no_service,
+                    ),
                 )
             })
             .unzip();
-        for ServiceBuilder {
-            path,
-            includes,
-            touch,
-            keep_unknown_fields,
-        } in service_builders
+        for (
+            ServiceBuilder {
+                path,
+                includes,
+                touch,
+                keep_unknown_fields,
+            },
+            no_service,
+        ) in service_builders
         {
-            self = self.include_dirs(includes).touch([(path.clone(), touch)]);
-            if keep_unknown_fields {
+            self = self.include_dirs(includes);
+            if !touch.is_empty() {
+                self = self.touch([(path.clone(), touch)]);
+            }
+            if no_service {
+                if keep_unknown_fields {
+                    self = self.keep_unknown_fields([path.clone()]);
+                }
+                self = self.touch_files([path]);
+            } else if keep_unknown_fields {
                 self = self.keep_unknown_fields([path]);
             }
         }
@@ -149,6 +164,11 @@ where
         keep_unknown_fields: impl IntoIterator<Item = PathBuf>,
     ) -> Self {
         self.pilota_builder = self.pilota_builder.keep_unknown_fields(keep_unknown_fields);
+        self
+    }
+
+    pub fn touch_files(mut self, paths: impl IntoIterator<Item = PathBuf>) -> Self {
+        self.pilota_builder = self.pilota_builder.touch_files(paths);
         self
     }
 

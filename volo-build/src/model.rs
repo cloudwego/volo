@@ -107,6 +107,13 @@ impl CodegenOption {
             && !self.keep_unknown_fields
             && self.config.is_null()
     }
+
+    pub(crate) fn no_service(&self) -> bool {
+        self.config
+            .get("no_service")
+            .and_then(serde_yaml::Value::as_bool)
+            .unwrap_or(false)
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

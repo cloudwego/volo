@@ -103,6 +103,11 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self
     }
 
+    pub fn touch_files(mut self, items: impl IntoIterator<Item = PathBuf>) -> Self {
+        self.pilota_builder = self.pilota_builder.touch_files(items);
+        self
+    }
+
     pub fn keep_unknown_fields(
         mut self,
         keep_unknown_fields: impl IntoIterator<Item = PathBuf>,

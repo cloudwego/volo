@@ -46,3 +46,21 @@ entries:
           path: ../thrift/echo_unknown.thrift
         codegen_option:
           keep_unknown_fields: true
+  # Regression scenario for service-level `no_service`.
+  # The first IDL enables `codegen_option.config.no_service`, so its types appear
+  # in the generated module. The second IDL is intentionally listed without
+  # `touch_all` to prove that service-level `no_service` only affects the
+  # files it is attached to, instead of whitelisting the whole entry.
+  thrift_no_service:
+    filename: thrift_no_service_gen.rs
+    protocol: thrift
+    services:
+      - idl:
+          source: local
+          path: ../thrift/no_service.thrift
+        codegen_option:
+          config:
+            no_service: true
+      - idl:
+          source: local
+          path: ../thrift/no_service_ignored.thrift

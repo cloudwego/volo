@@ -327,25 +327,25 @@ impl VoloThriftBackend {
             write_item(
                 stream,
                 base_dir,
-                format!("enum_{}.rs", &req_recv_name),
+                format!("enum_{}.rs", req_recv_name),
                 req_recv_stream,
             );
             write_item(
                 stream,
                 base_dir,
-                format!("enum_{}.rs", &res_recv_name),
+                format!("enum_{}.rs", res_recv_name),
                 res_recv_stream,
             );
             write_item(
                 stream,
                 base_dir,
-                format!("enum_{}.rs", &req_send_name),
+                format!("enum_{}.rs", req_send_name),
                 req_send_stream,
             );
             write_item(
                 stream,
                 base_dir,
-                format!("enum_{}.rs", &res_send_name),
+                format!("enum_{}.rs", res_send_name),
                 res_send_stream,
             );
         } else {

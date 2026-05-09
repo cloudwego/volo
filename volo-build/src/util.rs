@@ -449,6 +449,21 @@ pub fn get_service_builders_from_services(
         .collect()
 }
 
+/// Collect the resolved IDL build paths for services whose `codegen_option.config.no_service`
+/// is set to `true`. These paths are later passed to the underlying builder via `touch_files`,
+/// which switches the root-selection mode away from "pick init service" so that services
+/// without any RPC definition can still be code-generated as types-only.
+pub(crate) fn collect_no_service_paths(
+    services: &[Service],
+    repo_dir_map: &HashMap<FastStr, PathBuf>,
+) -> Vec<PathBuf> {
+    services
+        .iter()
+        .filter(|s| s.codegen_option.no_service())
+        .map(|s| get_idl_build_path_and_includes(&s.idl, repo_dir_map).0)
+        .collect()
+}
+
 pub fn check_and_get_repo_name(
     entry_name: &String,
     repos: &HashMap<FastStr, Repo>,
@@ -595,7 +610,7 @@ pub(crate) fn write_item(stream: &mut String, base_dir: &Path, name: String, imp
     let path_buf = base_dir.join(&name);
     let path = path_buf.as_path();
     write_file(path, impl_str);
-    stream.push_str(format!("include!(\"{}\");", &name).as_str());
+    stream.push_str(format!("include!(\"{}\");", name).as_str());
 }
 
 pub(crate) fn write_file(path: &Path, stream: String) {
@@ -652,6 +667,7 @@ mod tests {
     use tempfile::{NamedTempFile, tempdir};
 
     use super::*;
+    use crate::model::CodegenOption;
 
     #[test]
     fn test_ensure_path() {
@@ -772,6 +788,37 @@ mod tests {
         let builders = get_service_builders_from_services(&services, &repo_dir_map);
         assert_eq!(builders.len(), 1);
         assert_eq!(builders[0].path, idl.path);
+    }
+
+    #[test]
+    fn test_collect_no_service_paths() {
+        let selected_idl = Idl {
+            source: Source::Local,
+            path: PathBuf::from("../idl/selected.thrift"),
+            includes: vec![PathBuf::from("../idl")],
+        };
+        let ignored_idl = Idl {
+            source: Source::Local,
+            path: PathBuf::from("../idl/ignored.thrift"),
+            includes: vec![PathBuf::from("../idl")],
+        };
+        let services = vec![
+            Service {
+                idl: selected_idl.clone(),
+                codegen_option: CodegenOption {
+                    config: serde_yaml::from_str("no_service: true").unwrap(),
+                    ..Default::default()
+                },
+            },
+            Service {
+                idl: ignored_idl,
+                codegen_option: Default::default(),
+            },
+        ];
+
+        let paths = collect_no_service_paths(&services, &HashMap::new());
+
+        assert_eq!(paths, vec![selected_idl.path]);
     }
 
     #[test]
