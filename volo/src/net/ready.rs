@@ -24,6 +24,13 @@ impl AsyncReady for OwnedReadHalf {
             OwnedReadHalf::Rustls(_) => todo!(),
             #[cfg(feature = "native-tls")]
             OwnedReadHalf::NativeTls(_) => todo!(),
+            #[cfg(feature = "named-pipe")]
+            OwnedReadHalf::NamedPipeClient(_) | OwnedReadHalf::NamedPipeServer(_) => {
+                Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "AsyncReady is not supported for NamedPipe connection",
+                ))
+            }
         }
     }
 }
@@ -38,6 +45,13 @@ impl AsyncReady for OwnedWriteHalf {
             OwnedWriteHalf::Rustls(_) => todo!(),
             #[cfg(feature = "native-tls")]
             OwnedWriteHalf::NativeTls(_) => todo!(),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalf::NamedPipeClient(_) | OwnedWriteHalf::NamedPipeServer(_) => {
+                Err(io::Error::new(
+                    io::ErrorKind::Unsupported,
+                    "AsyncReady is not supported for NamedPipe connection",
+                ))
+            }
         }
     }
 }

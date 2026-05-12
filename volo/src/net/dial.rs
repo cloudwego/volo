@@ -150,6 +150,26 @@ impl UnaryService<Address> for DefaultMakeTransport {
             })?)
             .await
             .map(Conn::from),
+            #[cfg(feature = "named-pipe")]
+            Address::NamedPipe(pipe_name) => {
+                use std::time::Duration;
+
+                use tokio::net::windows::named_pipe::ClientOptions;
+
+                let mut backoff = Duration::from_millis(10);
+                let max_backoff = Duration::from_millis(200);
+
+                loop {
+                    match ClientOptions::new().open(&pipe_name) {
+                        Ok(client) => break Ok(Conn::from(client)),
+                        Err(e) if e.kind() == io::ErrorKind::WouldBlock => {
+                            tokio::time::sleep(backoff).await;
+                            backoff = std::cmp::min(backoff * 2, max_backoff);
+                        }
+                        Err(e) => break Err(e),
+                    }
+                }
+            }
         }
     }
 }

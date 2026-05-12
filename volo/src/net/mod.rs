@@ -1,5 +1,6 @@
 pub mod conn;
 pub mod dial;
+pub mod ext;
 pub mod incoming;
 pub mod ready;
 #[cfg(feature = "__tls")]
@@ -27,14 +28,32 @@ pub enum Address {
     Ip(SocketAddr),
     #[cfg(target_family = "unix")]
     Unix(StdUnixSocketAddr),
+    #[cfg(feature = "named-pipe")]
+    NamedPipe(String),
 }
 
 impl Address {
+    pub const fn is_ip(&self) -> bool {
+        matches!(self, Self::Ip(_))
+    }
+
+    #[cfg(target_family = "unix")]
+    pub const fn is_unix(&self) -> bool {
+        matches!(self, Self::Unix(_))
+    }
+
+    #[cfg(feature = "named-pipe")]
+    pub const fn is_named_pipe(&self) -> bool {
+        matches!(self, Self::NamedPipe(_))
+    }
+
     pub fn ip_addr(&self) -> Option<&SocketAddr> {
         match self {
             Self::Ip(ip) => Some(ip),
             #[cfg(target_family = "unix")]
             Self::Unix(_) => None,
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipe(_) => None,
         }
     }
 
@@ -43,6 +62,18 @@ impl Address {
         match self {
             Self::Ip(_) => None,
             Self::Unix(unix) => Some(unix),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipe(_) => None,
+        }
+    }
+
+    #[cfg(feature = "named-pipe")]
+    pub fn named_pipe_addr(&self) -> Option<&String> {
+        match self {
+            Self::Ip(_) => None,
+            #[cfg(target_family = "unix")]
+            Self::Unix(_) => None,
+            Self::NamedPipe(pipe) => Some(pipe),
         }
     }
 }
@@ -67,7 +98,9 @@ impl PartialEq for Address {
                     _ => false,
                 }
             }
-            #[cfg(target_family = "unix")]
+            #[cfg(feature = "named-pipe")]
+            (Self::NamedPipe(self_pipe), Self::NamedPipe(other_pipe)) => self_pipe == other_pipe,
+            #[cfg(any(target_family = "unix", feature = "named-pipe"))]
             _ => false,
         }
     }
@@ -97,6 +130,11 @@ impl Hash for Address {
                     state.write_u8(3);
                 }
             }
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipe(pipe) => {
+                state.write_u8(5);
+                Hash::hash(pipe, state);
+            }
         }
     }
 }
@@ -112,7 +150,9 @@ impl Address {
                 }
             }
             #[cfg(target_family = "unix")]
-            _ => self,
+            Address::Unix(_) => self,
+            #[cfg(feature = "named-pipe")]
+            Address::NamedPipe(_) => self,
         }
     }
 }
@@ -138,6 +178,8 @@ impl fmt::Display for Address {
                     f.write_str("(unnamed)")
                 }
             }
+            #[cfg(feature = "named-pipe")]
+            Address::NamedPipe(pipe) => write!(f, "namedpipe: {}", pipe),
         }
     }
 }
@@ -165,5 +207,19 @@ impl From<TokioUnixSocketAddr> for Address {
                 value,
             )
         })
+    }
+}
+
+#[cfg(feature = "named-pipe")]
+impl From<String> for Address {
+    fn from(pipe: String) -> Self {
+        Address::NamedPipe(pipe)
+    }
+}
+
+#[cfg(feature = "named-pipe")]
+impl From<&str> for Address {
+    fn from(pipe: &str) -> Self {
+        Address::NamedPipe(pipe.to_string())
     }
 }

@@ -16,12 +16,75 @@ use tokio_stream::{wrappers::TcpListenerStream, StreamExt};
 
 use super::{conn::Conn, Address};
 
+#[cfg(feature = "named-pipe")]
+#[derive(Debug)]
+pub struct NamedPipeIncoming {
+    rx: tokio::sync::mpsc::Receiver<io::Result<crate::net::conn::Conn>>,
+}
+
+#[cfg(feature = "named-pipe")]
+impl NamedPipeIncoming {
+    pub fn new(pipe_name: String) -> io::Result<Self> {
+        let (tx, rx) = tokio::sync::mpsc::channel(10);
+
+        tokio::spawn(async move {
+            let mut is_first = true;
+            loop {
+                let server_result = tokio::net::windows::named_pipe::ServerOptions::new()
+                    .first_pipe_instance(is_first)
+                    .create(&pipe_name);
+
+                match server_result {
+                    Ok(server) => {
+                        is_first = false;
+                        match server.connect().await {
+                            Ok(_) => {
+                                let conn = crate::net::conn::Conn::from(
+                                    crate::net::conn::ConnStream::from(server),
+                                );
+                                if tx.send(Ok(conn)).await.is_err() {
+                                    break;
+                                }
+                            }
+                            Err(e) => {
+                                if tx.send(Err(e)).await.is_err() {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        let _ = tx.send(Err(e)).await;
+                        break;
+                    }
+                }
+            }
+        });
+
+        Ok(Self { rx })
+    }
+}
+
+#[cfg(feature = "named-pipe")]
+impl Stream for NamedPipeIncoming {
+    type Item = io::Result<Conn>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        self.rx.poll_recv(cx)
+    }
+}
+
 #[pin_project(project = IncomingProj)]
 #[derive(Debug)]
 pub enum DefaultIncoming {
     Tcp(#[pin] TcpListenerStream),
     #[cfg(target_family = "unix")]
     Unix(#[pin] UnixListenerStream),
+    #[cfg(feature = "named-pipe")]
+    NamedPipe(#[pin] NamedPipeIncoming),
 }
 
 impl MakeIncoming for DefaultIncoming {
@@ -88,6 +151,10 @@ impl MakeIncoming for Address {
                 .await;
                 UnixListener::from_std(listener?).map(DefaultIncoming::from)
             }
+            #[cfg(feature = "named-pipe")]
+            Address::NamedPipe(pipe_name) => {
+                NamedPipeIncoming::new(pipe_name).map(DefaultIncoming::NamedPipe)
+            }
         }
     }
 }
@@ -101,6 +168,10 @@ impl MakeIncoming for Address {
             Address::Ip(addr) => TcpListener::bind(addr).await.map(DefaultIncoming::from),
             #[cfg(target_family = "unix")]
             Address::Unix(addr) => UnixListener::bind(addr).map(DefaultIncoming::from),
+            #[cfg(feature = "named-pipe")]
+            Address::NamedPipe(pipe_name) => {
+                NamedPipeIncoming::new(pipe_name).map(DefaultIncoming::NamedPipe)
+            }
         }
     }
 }
@@ -113,6 +184,8 @@ impl Stream for DefaultIncoming {
             IncomingProj::Tcp(s) => s.poll_next(cx).map_ok(Conn::from),
             #[cfg(target_family = "unix")]
             IncomingProj::Unix(s) => s.poll_next(cx).map_ok(Conn::from),
+            #[cfg(feature = "named-pipe")]
+            IncomingProj::NamedPipe(s) => s.poll_next(cx),
         }
     }
 }

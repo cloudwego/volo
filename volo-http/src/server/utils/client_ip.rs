@@ -217,6 +217,8 @@ impl<S> ClientIpService<S> {
             Some(Address::Ip(socket_addr)) => Some(socket_addr.ip()),
             #[cfg(target_family = "unix")]
             Some(Address::Unix(_)) => None,
+            #[allow(unreachable_patterns)]
+            Some(_) => unimplemented!("unsupported type of address"),
             None => return ClientIp(None),
         };
 

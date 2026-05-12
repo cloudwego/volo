@@ -166,6 +166,7 @@ fn gen_host(
             }
             #[cfg(target_family = "unix")]
             Address::Unix(_) => None,
+            _ => None,
         }
     } else {
         if let Some(port) = port {

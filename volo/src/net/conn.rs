@@ -5,6 +5,8 @@ use std::{
 };
 
 use pin_project::pin_project;
+#[cfg(feature = "named-pipe")]
+use tokio::net::windows::named_pipe::{NamedPipeClient, NamedPipeServer};
 #[cfg(target_family = "unix")]
 use tokio::net::{unix, UnixStream};
 use tokio::{
@@ -33,6 +35,10 @@ pub enum ConnStream {
     Rustls(#[pin] tokio_rustls::TlsStream<TcpStream>),
     #[cfg(feature = "native-tls")]
     NativeTls(#[pin] tokio_native_tls::TlsStream<TcpStream>),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeClient(#[pin] NamedPipeClient),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeServer(#[pin] NamedPipeServer),
 }
 
 #[cfg(feature = "rustls")]
@@ -40,6 +46,12 @@ type RustlsWriteHalf = tokio::io::WriteHalf<tokio_rustls::TlsStream<TcpStream>>;
 
 #[cfg(feature = "native-tls")]
 type NativeTlsWriteHalf = tokio::io::WriteHalf<tokio_native_tls::TlsStream<TcpStream>>;
+
+#[cfg(feature = "named-pipe")]
+type NamedPipeClientWriteHalf = tokio::io::WriteHalf<NamedPipeClient>;
+
+#[cfg(feature = "named-pipe")]
+type NamedPipeServerWriteHalf = tokio::io::WriteHalf<NamedPipeServer>;
 
 #[pin_project(project = OwnedWriteHalfProj)]
 pub enum OwnedWriteHalf {
@@ -50,6 +62,10 @@ pub enum OwnedWriteHalf {
     Rustls(#[pin] RustlsWriteHalf),
     #[cfg(feature = "native-tls")]
     NativeTls(#[pin] NativeTlsWriteHalf),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeClient(#[pin] NamedPipeClientWriteHalf),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeServer(#[pin] NamedPipeServerWriteHalf),
 }
 
 impl AsyncWrite for OwnedWriteHalf {
@@ -67,6 +83,10 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Rustls(half) => half.poll_write(cx, buf),
             #[cfg(feature = "native-tls")]
             OwnedWriteHalfProj::NativeTls(half) => half.poll_write(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeClient(half) => half.poll_write(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeServer(half) => half.poll_write(cx, buf),
         }
     }
 
@@ -80,6 +100,10 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Rustls(half) => half.poll_flush(cx),
             #[cfg(feature = "native-tls")]
             OwnedWriteHalfProj::NativeTls(half) => half.poll_flush(cx),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeClient(half) => half.poll_flush(cx),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeServer(half) => half.poll_flush(cx),
         }
     }
 
@@ -93,6 +117,10 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Rustls(half) => half.poll_shutdown(cx),
             #[cfg(feature = "native-tls")]
             OwnedWriteHalfProj::NativeTls(half) => half.poll_shutdown(cx),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeClient(half) => half.poll_shutdown(cx),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeServer(half) => half.poll_shutdown(cx),
         }
     }
 
@@ -110,6 +138,10 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Rustls(half) => half.poll_write_vectored(cx, bufs),
             #[cfg(feature = "native-tls")]
             OwnedWriteHalfProj::NativeTls(half) => half.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeClient(half) => half.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeServer(half) => half.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -123,6 +155,10 @@ impl AsyncWrite for OwnedWriteHalf {
             Self::Rustls(half) => half.is_write_vectored(),
             #[cfg(feature = "native-tls")]
             Self::NativeTls(half) => half.is_write_vectored(),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeClient(half) => half.is_write_vectored(),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeServer(half) => half.is_write_vectored(),
         }
     }
 }
@@ -133,6 +169,12 @@ type RustlsReadHalf = tokio::io::ReadHalf<tokio_rustls::TlsStream<TcpStream>>;
 #[cfg(feature = "native-tls")]
 type NativeTlsReadHalf = tokio::io::ReadHalf<tokio_native_tls::TlsStream<TcpStream>>;
 
+#[cfg(feature = "named-pipe")]
+type NamedPipeClientReadHalf = tokio::io::ReadHalf<NamedPipeClient>;
+
+#[cfg(feature = "named-pipe")]
+type NamedPipeServerReadHalf = tokio::io::ReadHalf<NamedPipeServer>;
+
 #[pin_project(project = OwnedReadHalfProj)]
 pub enum OwnedReadHalf {
     Tcp(#[pin] tcp::OwnedReadHalf),
@@ -142,6 +184,10 @@ pub enum OwnedReadHalf {
     Rustls(#[pin] RustlsReadHalf),
     #[cfg(feature = "native-tls")]
     NativeTls(#[pin] NativeTlsReadHalf),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeClient(#[pin] NamedPipeClientReadHalf),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeServer(#[pin] NamedPipeServerReadHalf),
 }
 
 impl AsyncRead for OwnedReadHalf {
@@ -159,6 +205,10 @@ impl AsyncRead for OwnedReadHalf {
             OwnedReadHalfProj::Rustls(half) => half.poll_read(cx, buf),
             #[cfg(feature = "native-tls")]
             OwnedReadHalfProj::NativeTls(half) => half.poll_read(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            OwnedReadHalfProj::NamedPipeClient(half) => half.poll_read(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            OwnedReadHalfProj::NamedPipeServer(half) => half.poll_read(cx, buf),
         }
     }
 }
@@ -184,6 +234,22 @@ impl ConnStream {
             Self::NativeTls(stream) => {
                 let (rh, wh) = tokio::io::split(stream);
                 (OwnedReadHalf::NativeTls(rh), OwnedWriteHalf::NativeTls(wh))
+            }
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeClient(stream) => {
+                let (rh, wh) = tokio::io::split(stream);
+                (
+                    OwnedReadHalf::NamedPipeClient(rh),
+                    OwnedWriteHalf::NamedPipeClient(wh),
+                )
+            }
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeServer(stream) => {
+                let (rh, wh) = tokio::io::split(stream);
+                (
+                    OwnedReadHalf::NamedPipeServer(rh),
+                    OwnedWriteHalf::NamedPipeServer(wh),
+                )
             }
         }
     }
@@ -221,6 +287,22 @@ impl From<tokio_native_tls::TlsStream<TcpStream>> for ConnStream {
     }
 }
 
+#[cfg(feature = "named-pipe")]
+impl From<NamedPipeClient> for ConnStream {
+    #[inline]
+    fn from(s: NamedPipeClient) -> Self {
+        Self::NamedPipeClient(s)
+    }
+}
+
+#[cfg(feature = "named-pipe")]
+impl From<NamedPipeServer> for ConnStream {
+    #[inline]
+    fn from(s: NamedPipeServer) -> Self {
+        Self::NamedPipeServer(s)
+    }
+}
+
 impl AsyncRead for ConnStream {
     #[inline]
     fn poll_read(
@@ -236,6 +318,10 @@ impl AsyncRead for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_read(cx, buf),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_read(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_read(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_read(cx, buf),
         }
     }
 }
@@ -255,6 +341,10 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_write(cx, buf),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_write(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_write(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_write(cx, buf),
         }
     }
 
@@ -268,6 +358,10 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_flush(cx),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_flush(cx),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_flush(cx),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_flush(cx),
         }
     }
 
@@ -281,6 +375,10 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_shutdown(cx),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_shutdown(cx),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_shutdown(cx),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_shutdown(cx),
         }
     }
 
@@ -298,6 +396,10 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Rustls(s) => s.poll_write_vectored(cx, bufs),
             #[cfg(feature = "native-tls")]
             IoStreamProj::NativeTls(s) => s.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -311,6 +413,10 @@ impl AsyncWrite for ConnStream {
             Self::Rustls(s) => s.is_write_vectored(),
             #[cfg(feature = "native-tls")]
             Self::NativeTls(s) => s.is_write_vectored(),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeClient(s) => s.is_write_vectored(),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeServer(s) => s.is_write_vectored(),
         }
     }
 }
@@ -332,6 +438,8 @@ impl ConnStream {
                 .peer_addr()
                 .map(Address::from)
                 .ok(),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeClient(_) | Self::NamedPipeServer(_) => None,
         }
     }
 }

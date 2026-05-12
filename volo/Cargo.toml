@@ -63,6 +63,7 @@ tokio-native-tls = { workspace = true, optional = true }
 default = []
 unsafe_unchecked = [
 ] # This will use unwrap_unchecked instead of unwrap in some places.
+named-pipe = []
 
 tls = ["rustls"]
 __tls = []
