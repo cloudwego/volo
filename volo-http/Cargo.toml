@@ -79,6 +79,7 @@ cookie_store = { workspace = true, optional = true }
 
 # multipart optional
 multer = { workspace = true, optional = true }
+rand = { workspace = true, optional = true }
 
 # websocket optional
 tungstenite = { workspace = true, optional = true }
@@ -93,6 +94,7 @@ async-stream.workspace = true
 libc.workspace = true
 serde = { workspace = true, features = ["derive"] }
 reqwest = { workspace = true, features = ["multipart"] }
+tempfile.workspace = true
 tokio-test.workspace = true
 
 [features]
@@ -141,7 +143,7 @@ json = ["__serde", "dep:sonic-rs"]
 json-utf8-lossy = ["json", "sonic-rs/utf8_lossy"] # json feature
 
 cookie = ["dep:cookie", "dep:cookie_store"]
-multipart = ["dep:multer"]
+multipart = ["dep:multer", "dep:mime_guess", "dep:rand"]
 ws = ["dep:tungstenite", "dep:tokio-tungstenite"]
 
 tls = ["rustls"]

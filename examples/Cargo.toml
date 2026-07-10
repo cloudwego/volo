@@ -132,6 +132,9 @@ path = "src/http/sse/server.rs"
 [[bin]]
 name = "http-sse-client"
 path = "src/http/sse/client.rs"
+[[bin]]
+name = "http-multipart-e2e"
+path = "src/http/multipart-e2e.rs"
 
 # shmipc
 [[bin]]
@@ -158,6 +161,7 @@ metainfo.workspace = true
 mime.workspace = true
 motore.workspace = true
 serde.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["full"] }
 tokio-stream.workspace = true
 tracing.workspace = true
@@ -175,6 +179,7 @@ volo-http = { path = "../volo-http", features = [
     "json",
     "query",
     "form",
+    "multipart",
     "cookie",
     "http1",
 ] }
