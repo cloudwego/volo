@@ -58,6 +58,8 @@ pub mod cookie;
 pub mod dns;
 pub mod layer;
 pub mod loadbalance;
+#[cfg(feature = "multipart")]
+pub mod multipart;
 mod request_builder;
 pub mod sse;
 pub mod target;
