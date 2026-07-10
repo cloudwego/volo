@@ -93,6 +93,25 @@ impl Body {
             repr: BodyRepr::Body(BoxBody::new(body.map_err(Into::into))),
         }
     }
+
+    /// Try to clone the body.
+    ///
+    /// Only in-memory bodies (created from bytes, string, [`Body::empty`], etc.) can be cloned,
+    /// and the clone is cheap since the underlying [`Bytes`] is reference-counted (a shallow
+    /// clone, the payload is not copied).
+    ///
+    /// Streaming bodies ([`Body::from_stream`], [`Body::from_incoming`], [`Body::from_body`]) are
+    /// one-shot and cannot be replayed, so this method returns [`None`] for them. This is mainly
+    /// used by redirect-following, where a request may need to be re-sent: a request with a
+    /// non-cloneable body will not be followed across redirects.
+    pub fn try_clone(&self) -> Option<Self> {
+        match &self.repr {
+            BodyRepr::Full(full) => Some(Self {
+                repr: BodyRepr::Full(full.clone()),
+            }),
+            BodyRepr::Hyper(_) | BodyRepr::Stream(_) | BodyRepr::Body(_) => None,
+        }
+    }
 }
 
 impl http_body::Body for Body {
@@ -401,5 +420,27 @@ mod tests {
         bytes.insert_faststr(FastStr::new("world!"));
         let body = Body::from(bytes);
         assert_eq!(body.into_string().await.unwrap(), "Hello, world!");
+    }
+
+    #[tokio::test]
+    async fn test_try_clone_in_memory() {
+        // In-memory bodies can be cloned, and the clone carries the same content.
+        let body = Body::from("hello");
+        let cloned = body.try_clone().expect("full body should be cloneable");
+        assert_eq!(cloned.into_string().await.unwrap(), "hello");
+        assert_eq!(body.into_string().await.unwrap(), "hello");
+
+        // Empty body is also cloneable.
+        assert!(Body::empty().try_clone().is_some());
+    }
+
+    #[test]
+    fn test_try_clone_streaming_is_none() {
+        // Streaming bodies are one-shot and cannot be cloned.
+        let stream = futures_util::stream::empty::<
+            Result<http_body::Frame<Bytes>, crate::error::BoxError>,
+        >();
+        let body = Body::from_stream(stream);
+        assert!(body.try_clone().is_none());
     }
 }

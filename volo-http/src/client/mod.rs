@@ -331,6 +331,34 @@ impl<IL, OL, C, LB> ClientBuilder<IL, OL, C, LB> {
         }
     }
 
+    /// Enable HTTP redirect following for this client.
+    ///
+    /// Redirects are followed by an outer client layer so each redirected target is applied before
+    /// service discovery and load balancing run for the next hop. `0` disables redirect following
+    /// and returns redirect responses as-is.
+    pub fn follow_redirects(
+        self,
+        max_redirects: usize,
+    ) -> ClientBuilder<IL, Stack<layer::FollowRedirect, OL>, C, LB> {
+        self.layer_outer(layer::FollowRedirect::new(max_redirects))
+    }
+
+    /// Enable HTTP redirect following only for requests accepted by `predicate`.
+    ///
+    /// The predicate is checked before the initial request and before every follow-up redirect hop.
+    /// Requests rejected by the initial predicate bypass redirect handling without cloning their
+    /// request head for possible replay.
+    pub fn follow_redirects_when<P>(
+        self,
+        max_redirects: usize,
+        predicate: P,
+    ) -> ClientBuilder<IL, Stack<layer::FollowRedirect<P>, OL>, C, LB>
+    where
+        P: layer::RedirectPredicate,
+    {
+        self.layer_outer(layer::FollowRedirect::new(max_redirects).when(predicate))
+    }
+
     /// Set a new load balance for the client.
     pub fn mk_load_balance<NLB>(self, mk_load_balance: NLB) -> ClientBuilder<IL, OL, C, NLB> {
         ClientBuilder {
