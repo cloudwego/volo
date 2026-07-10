@@ -116,6 +116,9 @@ path = "src/http/example-http-server.rs"
 name = "example-http-client"
 path = "src/http/example-http-client.rs"
 [[bin]]
+name = "http-client-follow-redirects"
+path = "src/http/client-follow-redirects.rs"
+[[bin]]
 name = "http-tls-server"
 path = "src/http/http-tls-server.rs"
 required-features = ["__tls"]

@@ -341,14 +341,19 @@ fn ipv6_strip_brackets(src: FastStr) -> FastStr {
 impl Apply<ClientContext> for Target {
     type Error = ClientError;
 
-    fn apply(self, cx: &mut ClientContext) -> Result<(), Self::Error> {
-        cx.set_target(self.clone());
+    fn apply(self, cx: &mut ClientContext) -> std::prelude::v1::Result<(), Self::Error> {
+        self.apply_and_replace(cx)?;
+        Ok(())
+    }
+}
 
-        match self {
+impl Target {
+    pub(crate) fn apply_and_replace(self, cx: &mut ClientContext) -> Result<Target> {
+        match &self {
             Self::Remote(rt) => {
-                match rt.host {
+                match &rt.host {
                     RemoteHost::Ip(ip) => {
-                        let sa = SocketAddr::new(ip, rt.port);
+                        let sa = SocketAddr::new(*ip, rt.port);
                         let callee = cx.rpc_info_mut().callee_mut();
                         callee.set_service_name(FastStr::from_string(format!("{}", sa.ip())));
                         callee.set_address(Address::Ip(sa));
@@ -356,7 +361,7 @@ impl Apply<ClientContext> for Target {
                     RemoteHost::Name(host) => {
                         let port = rt.port;
                         let callee = cx.rpc_info_mut().callee_mut();
-                        callee.set_service_name(ipv6_strip_brackets(host));
+                        callee.set_service_name(ipv6_strip_brackets(host.clone()));
                         // Since Service Discover (DNS) can only access the `callee`, we must
                         // insert port into `callee` so that Service Discover can return the full
                         // address (IP with port) for transporting.
@@ -367,13 +372,13 @@ impl Apply<ClientContext> for Target {
             #[cfg(target_family = "unix")]
             Self::Local(uds) => {
                 let callee = cx.rpc_info_mut().callee_mut();
-                callee.set_address(Address::Unix(uds));
+                callee.set_address(Address::Unix(uds.clone()));
                 callee.set_service_name(FastStr::from_static_str("unix-domain-socket"));
             }
             Self::None => {}
         }
 
-        Ok(())
+        Ok(cx.replace_target(self))
     }
 }
 
