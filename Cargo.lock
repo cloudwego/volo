@@ -458,7 +458,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fde0e0ec90c9dfb3b4b1a0891a7dcd0e2bffde2f7efed5fe7c9bb00e5bfb915e"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1375,7 +1375,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -2612,7 +2612,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -2649,7 +2649,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -3282,9 +3282,8 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "shmipc"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a5f842e4e077bb5719fd45b7a6dd42b90c5697c46e852a4bec6415ab57142ea0"
+version = "0.2.0"
+source = "git+https://github.com/cloudwego/shmipc-rs.git?branch=feature%2Fpolling-to-eventfd#25b42bab0312e1514773172905cac6f8da4d453b"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3296,6 +3295,7 @@ dependencies = [
  "nix",
  "pin-project",
  "serde",
+ "serde_json",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -4163,7 +4163,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "volo"
-version = "0.12.3"
+version = "0.12.4"
 dependencies = [
  "arc-swap",
  "async-broadcast",
@@ -4555,7 +4555,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

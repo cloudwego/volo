@@ -1,7 +1,6 @@
 use std::{io, marker::PhantomData};
 
 use motore::service::{Service, UnaryService};
-use pilota::thrift::TransportException;
 use volo::net::{Address, dial::MakeTransport};
 
 use crate::{
@@ -10,8 +9,9 @@ use crate::{
     context::ClientContext,
     protocol::TMessageType,
     transport::{
+        dial::TransportAcquirer,
         pingpong::thrift_transport::ThriftTransport,
-        pool::{Config, PooledMakeTransport, Ver},
+        pool::{Config, Ver},
     },
 };
 
@@ -61,8 +61,7 @@ where
     MkT: MakeTransport,
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
 {
-    #[allow(clippy::type_complexity)]
-    make_transport: PooledMakeTransport<MakeClientTransport<MkT, MkC>, Address>,
+    acquirer: TransportAcquirer<MakeClientTransport<MkT, MkC>>,
     _marker: PhantomData<Resp>,
 }
 
@@ -73,7 +72,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            make_transport: self.make_transport.clone(),
+            acquirer: self.acquirer.clone(),
             _marker: self._marker,
         }
     }
@@ -86,9 +85,9 @@ where
 {
     pub fn new(make_transport: MkT, pool_cfg: Option<Config>, make_codec: MkC) -> Self {
         let make_transport = MakeClientTransport::new(make_transport, make_codec);
-        let make_transport = PooledMakeTransport::new(make_transport, pool_cfg);
+        let acquirer = TransportAcquirer::new(make_transport, pool_cfg);
         Client {
-            make_transport,
+            acquirer,
             _marker: PhantomData,
         }
     }
@@ -111,23 +110,15 @@ where
         cx: &mut ClientContext,
         req: ThriftMessage<Req>,
     ) -> Result<Self::Response, Self::Error> {
-        let rpc_info = &cx.rpc_info;
-        let target = rpc_info.callee().address().ok_or_else(|| {
-            TransportException::from(io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("address is required, rpc_info: {rpc_info:?}"),
-            ))
-        })?;
         let oneway = cx.message_type == TMessageType::OneWay;
-        cx.stats.record_make_transport_start_at();
-        let mut transport = self.make_transport.call((target, Ver::PingPong)).await?;
-        cx.stats.record_make_transport_end_at();
-        let resp = transport.send(cx, req, oneway).await;
+        // Acquire happens before `send`; the candidate walk and stats live in the acquirer.
+        let mut acquired = self.acquirer.acquire(cx, Ver::PingPong).await?;
+        let resp = acquired.transport_mut().send(cx, req, oneway).await;
         if let Ok(None) = resp {
             if !oneway {
                 #[cfg(feature = "shmipc")]
                 {
-                    let helper = transport.shmipc_helper();
+                    let helper = acquired.transport().shmipc_helper();
                     if helper.available() {
                         helper.reuse().await;
                     }
@@ -146,16 +137,16 @@ where
         // if shmipc enabled and is shmipc: close
         #[cfg(feature = "shmipc")]
         {
-            let helper = transport.shmipc_helper();
+            let helper = acquired.transport().shmipc_helper();
             if helper.available() {
                 helper.reuse().await;
             } else if cx.transport.should_reuse && resp.is_ok() {
-                transport.reuse().await;
+                acquired.reuse().await;
             }
         }
         #[cfg(not(feature = "shmipc"))]
         if cx.transport.should_reuse && resp.is_ok() {
-            transport.reuse().await;
+            acquired.reuse().await;
         }
 
         resp

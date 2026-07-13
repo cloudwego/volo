@@ -9,8 +9,9 @@ use crate::{
     context::ClientContext,
     protocol::TMessageType,
     transport::{
+        dial::TransportAcquirer,
         multiplex::thrift_transport::ThriftTransport,
-        pool::{Config, PooledMakeTransport, Ver},
+        pool::{Config, Ver},
     },
 };
 
@@ -85,8 +86,7 @@ where
     MkC: MakeCodec<MkT::ReadHalf, MkT::WriteHalf> + Sync,
     Resp: EntryMessage + Send + 'static,
 {
-    #[allow(clippy::type_complexity)]
-    make_transport: PooledMakeTransport<MakeClientTransport<MkT, MkC, Resp>, Address>,
+    acquirer: TransportAcquirer<MakeClientTransport<MkT, MkC, Resp>>,
     _marker: PhantomData<Resp>,
 }
 
@@ -98,7 +98,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
-            make_transport: self.make_transport.clone(),
+            acquirer: self.acquirer.clone(),
             _marker: self._marker,
         }
     }
@@ -112,9 +112,9 @@ where
 {
     pub fn new(make_transport: MkT, pool_cfg: Option<Config>, make_codec: MkC) -> Self {
         let make_transport = MakeClientTransport::new(make_transport, make_codec);
-        let make_transport = PooledMakeTransport::new(make_transport, pool_cfg);
+        let acquirer = TransportAcquirer::new(make_transport, pool_cfg);
         Client {
-            make_transport,
+            acquirer,
             _marker: PhantomData,
         }
     }
@@ -136,16 +136,11 @@ where
         cx: &mut ClientContext,
         req: ThriftMessage<Req>,
     ) -> Result<Self::Response, Self::Error> {
-        let rpc_info = &cx.rpc_info;
-        let target = rpc_info.callee().address().ok_or_else(|| {
-            let msg = format!("address is required, rpcinfo: {rpc_info:?}");
-            ClientError::Transport(io::Error::new(io::ErrorKind::InvalidData, msg).into())
-        })?;
         let oneway = cx.message_type == TMessageType::OneWay;
-        cx.stats.record_make_transport_start_at();
-        let transport = self.make_transport.call((target, Ver::Multiplex)).await?;
-        cx.stats.record_make_transport_end_at();
-        let resp = transport.send(cx, req, oneway).await;
+        // Acquire happens before `send`; the candidate walk and stats live in the acquirer.
+        // A multiplex acquire always yields a pooled lease (shmipc candidates are skipped).
+        let acquired = self.acquirer.acquire(cx, Ver::Multiplex).await?;
+        let resp = acquired.transport().send(cx, req, oneway).await;
         if let Ok(None) = resp {
             if !oneway {
                 return Err(ClientError::Transport(
@@ -157,7 +152,7 @@ where
             }
         }
         if cx.transport.should_reuse && resp.is_ok() {
-            transport.reuse().await;
+            acquired.reuse().await;
         }
         resp
     }

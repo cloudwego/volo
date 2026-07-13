@@ -141,7 +141,7 @@ tokio-native-tls = "0.3"
 tungstenite = "0.28"
 tokio-tungstenite = "0.28"
 
-shmipc = "0.1"
+shmipc = "0.2"
 
 [profile.release]
 opt-level = 3
@@ -154,7 +154,9 @@ panic = 'unwind'
 incremental = false
 overflow-checks = false
 
-# [patch.crates-io]
+[patch.crates-io]
+shmipc = { git = "https://github.com/cloudwego/shmipc-rs.git", branch = "feature/polling-to-eventfd" }
+
 # pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
 # pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }
 # pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "main" }

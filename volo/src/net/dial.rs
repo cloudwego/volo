@@ -16,6 +16,17 @@ use super::{
 };
 
 /// [`MakeTransport`] creates an [`AsyncRead`] and an [`AsyncWrite`] for the given [`Address`].
+///
+/// # Single-address contract
+///
+/// An implementation MUST connect to exactly the [`Address`] it is given, or return an error.
+/// It MUST NOT silently redial a different address (for example, falling back from a shmipc
+/// address to a UDS/TCP address inside `make_transport`).
+///
+/// This invariant is required by the connection pool: `volo-thrift` builds the pool key from the
+/// address *before* calling `make_transport`, so redialing another address here would insert the
+/// resulting transport under the wrong key. Address fallback must instead be performed by the
+/// acquire layer, which can pick the correct pool key for each attempt.
 pub trait MakeTransport: Clone + Send + Sync + 'static {
     type ReadHalf: AsyncRead + Send + Sync + Unpin + 'static;
     type WriteHalf: AsyncWrite + Send + Sync + Unpin + 'static;
@@ -163,5 +174,50 @@ impl UnaryService<Address> for DefaultMakeTransport {
                 .await
                 .map(Conn::from),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::net::Address;
+
+    /// The single-address contract: `DefaultMakeTransport` connects to exactly the address it is
+    /// given and returns the error directly on failure. It never silently redials another address.
+    #[tokio::test]
+    async fn default_make_transport_tcp_failure_is_reported() {
+        let mkt = DefaultMakeTransport::default();
+        // An address with no listener; connecting must fail rather than fall back elsewhere.
+        let addr = Address::Ip("127.0.0.1:1".parse().unwrap());
+        let res = mkt.make_transport(addr).await;
+        assert!(res.is_err(), "connecting to a closed TCP port must fail");
+    }
+
+    #[cfg(target_family = "unix")]
+    #[tokio::test]
+    async fn default_make_transport_uds_failure_is_reported() {
+        let mkt = DefaultMakeTransport::default();
+        // A path that does not exist; connecting must fail rather than fall back elsewhere.
+        let addr = Address::Unix(
+            std::os::unix::net::SocketAddr::from_pathname("/tmp/volo-nonexistent-dial-test.sock")
+                .unwrap(),
+        );
+        let res = mkt.make_transport(addr).await;
+        assert!(res.is_err(), "connecting to a missing UDS must fail");
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[tokio::test]
+    async fn default_make_transport_shmipc_failure_is_reported() {
+        let mkt = DefaultMakeTransport::default();
+        // An unroutable shmipc TCP address; the shmipc maker must surface the error, not fall back.
+        let addr = Address::Shmipc(crate::net::shmipc::Address::Tcp(
+            "127.0.0.1:1".parse().unwrap(),
+        ));
+        let res = mkt.make_transport(addr).await;
+        assert!(
+            res.is_err(),
+            "connecting to an unreachable shmipc must fail"
+        );
     }
 }
