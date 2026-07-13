@@ -19,7 +19,7 @@ use motore::{
 use volo::context::Context;
 
 use super::{
-    HTTPBIN_GET, HttpBinResponse,
+    HttpBinResponse, httpbin_endpoint, httpbin_url,
     utils::{
         AutoBody, AutoBodyLayer, AutoFull, AutoFullLayer, DropBodyLayer, Nothing,
         RespBodyToFullLayer,
@@ -92,11 +92,13 @@ async fn client_with_generics() {
 #[cfg(feature = "json")]
 #[tokio::test]
 async fn client_test() {
+    let httpbin = httpbin_endpoint();
+    let httpbin_get = httpbin.url("/get");
     let client = builder_for_debug().build().unwrap();
 
     {
         let resp = client
-            .get(HTTPBIN_GET)
+            .get(&httpbin_get)
             .send()
             .await
             .unwrap()
@@ -104,12 +106,13 @@ async fn client_test() {
             .await
             .unwrap();
         assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET);
+        assert_eq!(resp.url, httpbin_get);
     }
     {
         let resp = client
             .get("/get")
-            .host("httpbin.org")
+            .host(httpbin.host.clone())
+            .with_port(httpbin.port_or(crate::utils::consts::HTTP_DEFAULT_PORT))
             .send()
             .await
             .unwrap()
@@ -117,21 +120,23 @@ async fn client_test() {
             .await
             .unwrap();
         assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET);
+        assert_eq!(resp.url, httpbin_get);
     }
 }
 
 #[cfg(feature = "json")]
 #[tokio::test]
 async fn client_target() {
+    let httpbin = httpbin_endpoint();
+    let httpbin_get = httpbin.url("/get");
     let client = builder_for_debug()
-        .layer_outer_front(TargetLayer::new_host("httpbin.org"))
+        .layer_outer_front(TargetLayer::from_uri(&httpbin.uri()))
         .build()
         .unwrap();
 
     {
         let resp = client
-            .get(HTTPBIN_GET)
+            .get(&httpbin_get)
             .send()
             .await
             .unwrap()
@@ -139,7 +144,7 @@ async fn client_target() {
             .await
             .unwrap();
         assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET);
+        assert_eq!(resp.url, httpbin_get);
     }
     {
         let resp = client
@@ -151,7 +156,7 @@ async fn client_target() {
             .await
             .unwrap();
         assert!(resp.args.is_empty());
-        assert_eq!(resp.url, HTTPBIN_GET);
+        assert_eq!(resp.url, httpbin_get);
     }
 }
 
@@ -169,7 +174,7 @@ async fn set_query() {
 
     let client = builder_for_debug().build().unwrap();
     let resp = client
-        .get("http://httpbin.org/get")
+        .get(httpbin_url("/get"))
         .set_query(&data)
         .send()
         .await
@@ -187,7 +192,7 @@ async fn set_form() {
 
     let client = builder_for_debug().build().unwrap();
     let resp = client
-        .post("http://httpbin.org/post")
+        .post(httpbin_url("/post"))
         .form(&data)
         .send()
         .await
@@ -205,7 +210,7 @@ async fn set_json() {
 
     let client = builder_for_debug().build().unwrap();
     let resp = client
-        .post("http://httpbin.org/post")
+        .post(httpbin_url("/post"))
         .json(&data)
         .send()
         .await
@@ -284,15 +289,16 @@ async fn callopt_test() {
 #[cfg(all(feature = "cookie", feature = "json"))]
 #[tokio::test]
 async fn cookie_store() {
+    let httpbin = httpbin_endpoint();
     let client = builder_for_debug()
         .layer_inner(crate::client::cookie::CookieLayer::new(Default::default()))
-        .layer_outer_front(crate::client::layer::TargetLayer::new_host("httpbin.org"))
+        .layer_outer_front(crate::client::layer::TargetLayer::from_uri(&httpbin.uri()))
         .build()
         .unwrap();
 
     // test server add cookie
     let resp = client
-        .get("http://httpbin.org/cookies/set?key=value")
+        .get(httpbin.url("/cookies/set?key=value"))
         .send()
         .await
         .unwrap();
@@ -310,29 +316,43 @@ async fn cookie_store() {
     assert_eq!(cookies[0].value(), "value");
 
     #[derive(serde::Deserialize)]
-    struct CookieResponse {
-        #[serde(default)]
-        cookies: HashMap<String, String>,
+    #[serde(untagged)]
+    enum CookieResponse {
+        Flat(HashMap<String, String>),
+        Nested {
+            #[serde(default)]
+            cookies: HashMap<String, String>,
+        },
     }
-    let resp = client
-        .get("http://httpbin.org/cookies")
-        .send()
+
+    impl CookieResponse {
+        fn into_cookies(self) -> HashMap<String, String> {
+            match self {
+                Self::Nested { cookies } => cookies,
+                Self::Flat(cookies) => cookies,
+            }
+        }
+    }
+
+    let resp = client.get(httpbin.url("/cookies")).send().await.unwrap();
+    let cookies = resp
+        .into_json::<CookieResponse>()
         .await
-        .unwrap();
-    let json = resp.into_json::<CookieResponse>().await.unwrap();
-    assert_eq!(json.cookies["key"], "value");
+        .unwrap()
+        .into_cookies();
+    assert_eq!(cookies["key"], "value");
 
     // test server delete cookie
     _ = client
-        .get("http://httpbin.org/cookies/delete?key")
+        .get(httpbin.url("/cookies/delete?key"))
         .send()
         .await
         .unwrap();
-    let resp = client
-        .get("http://httpbin.org/cookies")
-        .send()
+    let resp = client.get(httpbin.url("/cookies")).send().await.unwrap();
+    let cookies = resp
+        .into_json::<CookieResponse>()
         .await
-        .unwrap();
-    let json = resp.into_json::<CookieResponse>().await.unwrap();
-    assert_eq!(json.cookies.len(), 0);
+        .unwrap()
+        .into_cookies();
+    assert_eq!(cookies.len(), 0);
 }
