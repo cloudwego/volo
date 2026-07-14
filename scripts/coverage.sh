@@ -32,6 +32,9 @@ main() {
   # 1. clean up previous coverage data
   cargo llvm-cov clean --workspace || true
 
+  source scripts/setup-httpbin-for-ci.sh
+  trap 'docker stop volo-httpbin volo-httpbin-https >/dev/null 2>&1 || true' EXIT
+
   # 2.run tests with coverage, align with scripts/clippy-and-test.sh
   run_nextest volo-thrift
   run_nextest volo-grpc 'rustls'
