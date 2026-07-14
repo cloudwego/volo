@@ -333,7 +333,7 @@ where
                     if let Some(started) = fallback_start {
                         // A fallback candidate succeeded after earlier attempts failed/skipped.
                         // Record the transition so fallback usage is observable even on success.
-                        tracing::info!(
+                        tracing::debug!(
                             attempt,
                             candidate = %candidate,
                             elapsed_us = started.elapsed().as_micros(),
@@ -381,7 +381,7 @@ where
                                 })
                                 .unwrap_or(0),
                         };
-                        tracing::info!(
+                        tracing::debug!(
                             attempt,
                             candidate = %candidate,
                             elapsed_us,
