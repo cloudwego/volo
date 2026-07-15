@@ -758,7 +758,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1573,7 +1573,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2272,7 +2272,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.13.1"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#16c37dc235e7deee308acad59f4c3b849dde25f3"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2294,7 +2294,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.13.10"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#16c37dc235e7deee308acad59f4c3b849dde25f3"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2350,7 +2350,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.13.6"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#16c37dc235e7deee308acad59f4c3b849dde25f3"
 dependencies = [
  "anyhow",
  "ariadne",
@@ -2363,7 +2363,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-reflect"
 version = "0.2.0"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#16c37dc235e7deee308acad59f4c3b849dde25f3"
 dependencies = [
  "ahash",
  "bytes",
@@ -2647,7 +2647,7 @@ dependencies = [
  "once_cell",
  "socket2 0.5.10",
  "tracing",
- "windows-sys 0.60.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2986,7 +2986,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
- "windows-sys 0.59.0",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -2999,7 +2999,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3164,7 +3164,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -3427,6 +3427,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
+ "windows-sys 0.52.0",
  "windows-sys 0.59.0",
 ]
 
@@ -3524,7 +3525,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.3",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -5191,4 +5192,4 @@ dependencies = [
 [[patch.unused]]
 name = "pilota-thrift-fieldmask"
 version = "0.2.1"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#16c37dc235e7deee308acad59f4c3b849dde25f3"
