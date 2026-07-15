@@ -1,13 +1,43 @@
 #[cfg(target_os = "linux")]
 use std::os::linux::net::SocketAddrExt;
-use std::{collections::HashMap, fmt, hash::Hash, io, sync::LazyLock};
+use std::{
+    collections::HashMap,
+    fmt,
+    hash::Hash,
+    io,
+    sync::{Arc, LazyLock},
+};
 
 use motore::service::UnaryService;
 use shmipc::session::SessionManager;
-use tokio::sync::RwLock;
+use tokio::sync::{OnceCell, RwLock};
 
-pub(crate) static SESSION_MANAGERS: LazyLock<RwLock<HashMap<Address, SessionManager<Connector>>>> =
+type SessionManagerCell = Arc<OnceCell<SessionManager<Connector>>>;
+
+pub(crate) static SESSION_MANAGERS: LazyLock<RwLock<HashMap<Address, SessionManagerCell>>> =
     LazyLock::new(Default::default);
+
+async fn get_or_insert_cell<K, V>(
+    cells: &RwLock<HashMap<K, Arc<OnceCell<V>>>>,
+    key: K,
+) -> Arc<OnceCell<V>>
+where
+    K: Eq + Hash,
+{
+    {
+        let read = cells.read().await;
+        if let Some(cell) = read.get(&key) {
+            return Arc::clone(cell);
+        }
+    }
+
+    let mut write = cells.write().await;
+    Arc::clone(
+        write
+            .entry(key)
+            .or_insert_with(|| Arc::new(OnceCell::new())),
+    )
+}
 
 #[derive(Clone, Debug)]
 pub enum Address {
@@ -195,21 +225,60 @@ impl UnaryService<Address> for ShmipcMakeTransport {
             ));
         }
 
-        {
-            let read = SESSION_MANAGERS.read().await;
-            if let Some(sm) = read.get(&addr) {
-                return sm.get_stream().map(super::Stream::new).map_err(Into::into);
-            }
+        let cell = get_or_insert_cell(&SESSION_MANAGERS, addr.clone()).await;
+        let sm = cell
+            .get_or_try_init(|| async {
+                let config = super::config::session_manager_config();
+                tracing::debug!("ShmipcMakeTransport: config: {config:?}");
+                SessionManager::new(config, Connector, addr)
+                    .await
+                    .map_err(Into::<io::Error>::into)
+            })
+            .await?;
+
+        sm.get_stream().map(super::Stream::new).map_err(Into::into)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    use tokio::sync::Barrier;
+
+    use super::*;
+
+    #[tokio::test]
+    async fn same_key_initialization_is_singleflight() {
+        const CONCURRENCY: usize = 32;
+
+        let cells = Arc::new(RwLock::new(HashMap::<usize, Arc<OnceCell<usize>>>::new()));
+        let barrier = Arc::new(Barrier::new(CONCURRENCY));
+        let initializations = Arc::new(AtomicUsize::new(0));
+        let mut tasks = Vec::with_capacity(CONCURRENCY);
+
+        for _ in 0..CONCURRENCY {
+            let cells = Arc::clone(&cells);
+            let barrier = Arc::clone(&barrier);
+            let initializations = Arc::clone(&initializations);
+            tasks.push(tokio::spawn(async move {
+                barrier.wait().await;
+                let cell = get_or_insert_cell(&cells, 1).await;
+                *cell
+                    .get_or_try_init(|| async {
+                        initializations.fetch_add(1, Ordering::Relaxed);
+                        tokio::task::yield_now().await;
+                        Ok::<_, ()>(42)
+                    })
+                    .await
+                    .unwrap()
+            }));
         }
 
-        let config = super::config::session_manager_config();
-        tracing::debug!("ShmipcMakeTransport: config: {config:?}");
-        let sm = SessionManager::new(config, Connector, addr.clone())
-            .await
-            .map_err(Into::<io::Error>::into)?;
-        let ret = sm.get_stream().map(super::Stream::new).map_err(Into::into);
-        SESSION_MANAGERS.write().await.insert(addr, sm);
-
-        ret
+        for task in tasks {
+            assert_eq!(task.await.unwrap(), 42);
+        }
+        assert_eq!(initializations.load(Ordering::Relaxed), 1);
+        assert_eq!(cells.read().await.len(), 1);
     }
 }
