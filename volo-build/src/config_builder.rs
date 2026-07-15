@@ -17,6 +17,7 @@ pub struct ConfigBuilder {
     filename: PathBuf,
     plugins: Vec<BoxClonePlugin>,
     out_dir: Option<PathBuf>,
+    serde_plugins: crate::SerdePlugins,
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -42,6 +43,17 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.plugin(p)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.plugin(p)),
+        }
+    }
+
+    fn with_serde_plugins(self, serde_plugins: crate::SerdePlugins) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.with_serde_plugins(serde_plugins))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(inner.with_serde_plugins(serde_plugins))
+            }
         }
     }
 
@@ -203,6 +215,17 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.with_comments(with_comments)),
         }
     }
+
+    pub fn with_preserve_idl_field_names(self, enable: bool) -> Self {
+        match self {
+            InnerBuilder::Protobuf(inner) => {
+                InnerBuilder::Protobuf(inner.with_preserve_idl_field_names(enable))
+            }
+            InnerBuilder::Thrift(inner) => {
+                InnerBuilder::Thrift(inner.with_preserve_idl_field_names(enable))
+            }
+        }
+    }
 }
 
 impl ConfigBuilder {
@@ -211,10 +234,12 @@ impl ConfigBuilder {
             filename,
             plugins: Vec::new(),
             out_dir: None,
+            serde_plugins: Default::default(),
         }
     }
 
     pub fn plugin<P: pilota_build::ClonePlugin + 'static>(mut self, p: P) -> Self {
+        self.serde_plugins.record::<P>();
         self.plugins.push(BoxClonePlugin::new(p));
 
         self
@@ -255,7 +280,8 @@ impl ConfigBuilder {
                     model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
                 }
                 .filename(entry.filename.clone())
-                .out_dir(&out_dir);
+                .out_dir(&out_dir)
+                .with_serde_plugins(self.serde_plugins);
 
                 for p in self.plugins.iter() {
                     builder = builder.plugin(p.clone());
@@ -285,6 +311,7 @@ impl ConfigBuilder {
                     .with_descriptor(entry.common_option.with_descriptor)
                     .with_field_mask(entry.common_option.with_field_mask)
                     .with_comments(entry.common_option.with_comments)
+                    .with_preserve_idl_field_names(entry.common_option.preserve_idl_field_names)
                     .write()?;
 
                 Ok(())
@@ -319,6 +346,116 @@ mod tests {
             ),
         )
         .unwrap();
+    }
+
+    /// Generates from an entry that sets `preserve_idl_field_names` to `enabled`,
+    /// returning the generated source.
+    fn gen_with_preserve_idl_field_names(dir: &Path, enabled: bool) -> String {
+        gen_with_preserve_idl_field_names_and(dir, enabled, |builder| builder)
+    }
+
+    /// [`gen_with_preserve_idl_field_names`], with `customize` applied to the
+    /// builder first.
+    fn gen_with_preserve_idl_field_names_and(
+        dir: &Path,
+        enabled: bool,
+        customize: impl FnOnce(ConfigBuilder) -> ConfigBuilder,
+    ) -> String {
+        let idl = dir.join("rename.thrift");
+        let config_path = dir.join("volo.yml");
+        let out_dir = dir.join("out");
+
+        fs::write(
+            &idl,
+            "namespace rs rename_test\n\nstruct Item {\n    1: required string ItemName,\n}\n",
+        )
+        .unwrap();
+
+        fs::write(
+            &config_path,
+            format!(
+                "entries:\n  sample:\n    filename: generated.rs\n    protocol: thrift\n    \
+                 touch_all: true\n    preserve_idl_field_names: {enabled}\n    services:\n      - \
+                 idl:\n          source: local\n          path: {}\n",
+                idl.display()
+            ),
+        )
+        .unwrap();
+
+        customize(ConfigBuilder::new(config_path))
+            .out_dir(&out_dir)
+            .write()
+            .unwrap();
+
+        fs::read_to_string(out_dir.join("generated.rs")).unwrap()
+    }
+
+    #[test]
+    fn preserve_idl_field_names_renames_fields_to_the_idl_spelling() {
+        let dir = tempdir().unwrap();
+        let generated = gen_with_preserve_idl_field_names(dir.path(), true);
+
+        assert!(generated.contains("item_name"), "{generated}");
+        assert!(
+            generated.contains(r#"#[serde(rename = "ItemName")]"#),
+            "{generated}"
+        );
+        // The option implies the derives the rename attributes attach to.
+        assert!(
+            generated.contains("::pilota::serde::Serialize"),
+            "{generated}"
+        );
+    }
+
+    /// A build.rs that already registered `SerdePlugin` must keep working when
+    /// `preserve_idl_field_names` is turned on: a second registration would emit
+    /// a second `derive(Serialize, Deserialize)` and fail to compile.
+    #[test]
+    fn preserve_idl_field_names_skips_a_hand_registered_serde_plugin() {
+        let dir = tempdir().unwrap();
+        let generated = gen_with_preserve_idl_field_names_and(dir.path(), true, |builder| {
+            builder.plugin(pilota_build::plugin::SerdePlugin)
+        });
+
+        assert_eq!(
+            generated.matches("::pilota::serde::Serialize").count(),
+            1,
+            "{generated}"
+        );
+        assert!(
+            generated.contains(r#"#[serde(rename = "ItemName")]"#),
+            "{generated}"
+        );
+    }
+
+    #[test]
+    fn preserve_idl_field_names_skips_a_hand_registered_serde_rename_plugin() {
+        let dir = tempdir().unwrap();
+        let generated = gen_with_preserve_idl_field_names_and(dir.path(), true, |builder| {
+            builder.plugin(pilota_build::plugin::SerdeRenamePlugin)
+        });
+
+        assert_eq!(
+            generated
+                .matches(r#"#[serde(rename = "ItemName")]"#)
+                .count(),
+            1,
+            "{generated}"
+        );
+        assert_eq!(
+            generated.matches("::pilota::serde::Serialize").count(),
+            1,
+            "{generated}"
+        );
+    }
+
+    #[test]
+    fn preserve_idl_field_names_is_off_by_default() {
+        let dir = tempdir().unwrap();
+        let generated = gen_with_preserve_idl_field_names(dir.path(), false);
+
+        assert!(generated.contains("item_name"), "{generated}");
+        assert!(!generated.contains("serde"), "{generated}");
     }
 
     #[test]

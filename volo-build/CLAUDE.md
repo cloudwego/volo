@@ -22,7 +22,7 @@ volo-build/src/
 
 Main code generation builder supporting both Thrift and Protobuf protocols. Created via `Builder::thrift()` or `Builder::protobuf()`.
 
-Key methods: `add_service(path)`, `out_dir(path)`, `filename(name)`, `plugin(p)`, `ignore_unused(bool)`, `touch(items)`, `keep_unknown_fields(paths)`, `split_generated_files(bool)`, `special_namings(namings)`, `dedup(list)`, `common_crate_name(name)`, `with_descriptor(bool)`, `with_field_mask(bool)`, `with_comments(bool)`, `include_dirs(dirs)`, `write()`, `init_service()`.
+Key methods: `add_service(path)`, `out_dir(path)`, `filename(name)`, `plugin(p)`, `ignore_unused(bool)`, `touch(items)`, `keep_unknown_fields(paths)`, `split_generated_files(bool)`, `special_namings(namings)`, `dedup(list)`, `common_crate_name(name)`, `with_descriptor(bool)`, `with_field_mask(bool)`, `with_comments(bool)`, `with_preserve_idl_field_names(bool)`, `include_dirs(dirs)`, `write()`, `init_service()`.
 
 ## ConfigBuilder (`config_builder.rs`)
 
@@ -56,6 +56,7 @@ entries:
     dedups: []
     special_namings: []
     split_generated_files: false
+    preserve_idl_field_names: false
 ```
 
 ## Thrift Backend (`thrift_backend.rs`)

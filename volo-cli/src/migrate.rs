@@ -53,6 +53,7 @@ impl CliCommand for Migrate {
                             with_descriptor: false,
                             with_field_mask: false,
                             with_comments: false,
+                            preserve_idl_field_names: false,
                         },
                     };
 

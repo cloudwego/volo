@@ -10,6 +10,8 @@ use crate::{
 
 pub struct Builder<MkB, P> {
     pilota_builder: pilota_build::Builder<MkB, P>,
+    preserve_idl_field_names: bool,
+    serde_plugins: crate::SerdePlugins,
 }
 
 impl Builder<crate::thrift_backend::MkThriftBackend, crate::parser::ThriftParser> {
@@ -17,6 +19,8 @@ impl Builder<crate::thrift_backend::MkThriftBackend, crate::parser::ThriftParser
         Self {
             pilota_builder: pilota_build::Builder::thrift()
                 .with_backend(crate::thrift_backend::MkThriftBackend),
+            preserve_idl_field_names: false,
+            serde_plugins: Default::default(),
         }
     }
 }
@@ -26,6 +30,8 @@ impl Builder<crate::grpc_backend::MkGrpcBackend, crate::parser::ProtobufParser> 
         Self {
             pilota_builder: pilota_build::Builder::pb()
                 .with_backend(crate::grpc_backend::MkGrpcBackend),
+            preserve_idl_field_names: false,
+            serde_plugins: Default::default(),
         }
     }
 }
@@ -117,7 +123,8 @@ where
                 self = self.keep_unknown_fields([path]);
             }
         }
-        self.ignore_unused(!config.common_option.touch_all)
+        let mut this = self
+            .ignore_unused(!config.common_option.touch_all)
             .dedup(config.common_option.dedups)
             .special_namings(config.common_option.special_namings)
             .common_crate_name(config.common_crate_name)
@@ -125,11 +132,27 @@ where
             .with_descriptor(config.common_option.with_descriptor)
             .with_field_mask(config.common_option.with_field_mask)
             .with_comments(config.common_option.with_comments)
-            .pilota_builder
+            .with_preserve_idl_field_names(config.common_option.preserve_idl_field_names);
+
+        if this.preserve_idl_field_names {
+            if !this.serde_plugins.serde {
+                this.pilota_builder = this
+                    .pilota_builder
+                    .plugin(pilota_build::plugin::SerdePlugin);
+            }
+            if !this.serde_plugins.serde_rename {
+                this.pilota_builder = this
+                    .pilota_builder
+                    .plugin(pilota_build::plugin::SerdeRenamePlugin);
+            }
+        }
+
+        this.pilota_builder
             .compile_with_config(idl_services, pilota_build::Output::Workspace(work_dir));
     }
 
-    pub fn plugin(mut self, plugin: impl Plugin + 'static) -> Self {
+    pub fn plugin<Plu: Plugin + 'static>(mut self, plugin: Plu) -> Self {
+        self.serde_plugins.record::<Plu>();
         self.pilota_builder = self.pilota_builder.plugin(plugin);
         self
     }
@@ -199,6 +222,16 @@ where
 
     pub fn with_comments(mut self, with_comments: bool) -> Self {
         self.pilota_builder = self.pilota_builder.with_comments(with_comments);
+        self
+    }
+
+    /// Keeps the IDL spelling of field names in serde output, instead of the
+    /// snake_case idents generated for Rust.
+    ///
+    /// Off by default. Like the other [`crate::model::CommonOption`] flags, `gen`
+    /// applies the value from `volo.workspace.yml` over anything set here.
+    pub fn with_preserve_idl_field_names(mut self, enable: bool) -> Self {
+        self.preserve_idl_field_names = enable;
         self
     }
 }

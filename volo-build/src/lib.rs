@@ -4,6 +4,7 @@
 #![cfg_attr(not(doctest), doc = include_str!("../README.md"))]
 #![allow(clippy::mutable_key_type)]
 use std::{
+    any::TypeId,
     path::{Path, PathBuf},
     str::FromStr,
 };
@@ -25,12 +26,36 @@ pub use pilota_build::{
     BoxClonePlugin, ClonePlugin, Context, DefId, MakeBackend, Plugin, parser, plugin, rir,
 };
 
+/// Tracks the serde plugins a caller registered by hand.
+#[derive(Default, Clone, Copy)]
+pub(crate) struct SerdePlugins {
+    serde: bool,
+    serde_rename: bool,
+}
+
+impl SerdePlugins {
+    pub(crate) fn record<P: 'static>(&mut self) {
+        if TypeId::of::<P>() == TypeId::of::<pilota_build::plugin::SerdePlugin>() {
+            self.serde = true;
+        } else if TypeId::of::<P>() == TypeId::of::<pilota_build::plugin::SerdeRenamePlugin>() {
+            self.serde_rename = true;
+        }
+    }
+
+    pub(crate) fn merge(&mut self, other: Self) {
+        self.serde |= other.serde;
+        self.serde_rename |= other.serde_rename;
+    }
+}
+
 pub struct Builder<MkB, P> {
     pilota_builder: pilota_build::Builder<MkB, P>,
     idls: Vec<PathBuf>,
     out_dir: Option<PathBuf>,
     filename: PathBuf,
     config_file_path: PathBuf,
+    preserve_idl_field_names: bool,
+    serde_plugins: SerdePlugins,
 }
 
 impl Builder<thrift_backend::MkThriftBackend, parser::ThriftParser> {
@@ -42,6 +67,8 @@ impl Builder<thrift_backend::MkThriftBackend, parser::ThriftParser> {
             filename: "volo_gen.rs".into(),
             idls: Default::default(),
             config_file_path: "volo.yml".into(),
+            preserve_idl_field_names: false,
+            serde_plugins: Default::default(),
         }
     }
 }
@@ -54,6 +81,8 @@ impl Builder<grpc_backend::MkGrpcBackend, parser::ProtobufParser> {
             filename: "volo_gen.rs".into(),
             idls: Default::default(),
             config_file_path: "volo.yml".into(),
+            preserve_idl_field_names: false,
+            serde_plugins: Default::default(),
         }
     }
 }
@@ -69,8 +98,14 @@ impl<MkB, Parser> Builder<MkB, Parser> {
     }
 
     pub fn plugin<P: Plugin + 'static>(mut self, p: P) -> Self {
+        self.serde_plugins.record::<P>();
         self.pilota_builder = self.pilota_builder.plugin(p);
 
+        self
+    }
+
+    pub(crate) fn with_serde_plugins(mut self, serde_plugins: SerdePlugins) -> Self {
+        self.serde_plugins.merge(serde_plugins);
         self
     }
 
@@ -163,6 +198,17 @@ impl<MkB, Parser> Builder<MkB, Parser> {
         self.pilota_builder = self.pilota_builder.with_comments(with_comments);
         self
     }
+
+    /// Keeps the IDL spelling of field names in serde output, instead of the
+    /// snake_case idents generated for Rust.
+    ///
+    /// Off by default. Enabling it also registers
+    /// [`pilota_build::plugin::SerdePlugin`], since the `rename` attributes need
+    /// serde derives to attach to.
+    pub fn with_preserve_idl_field_names(mut self, enable: bool) -> Self {
+        self.preserve_idl_field_names = enable;
+        self
+    }
 }
 
 impl<MkB, P> Builder<MkB, P>
@@ -176,7 +222,20 @@ where
         self
     }
 
-    pub fn write(self) -> anyhow::Result<()> {
+    pub fn write(mut self) -> anyhow::Result<()> {
+        if self.preserve_idl_field_names {
+            if !self.serde_plugins.serde {
+                self.pilota_builder = self
+                    .pilota_builder
+                    .plugin(pilota_build::plugin::SerdePlugin);
+            }
+            if !self.serde_plugins.serde_rename {
+                self.pilota_builder = self
+                    .pilota_builder
+                    .plugin(pilota_build::plugin::SerdeRenamePlugin);
+            }
+        }
+
         let out_dir = self.get_out_dir()?;
 
         if !out_dir.exists() {
@@ -220,3 +279,46 @@ macro_rules! join_multi_strs {
 
 pub(crate) use join_multi_strs;
 use volo::FastStr;
+
+#[cfg(test)]
+mod tests {
+    use tempfile::tempdir;
+
+    use super::Builder;
+
+    #[test]
+    fn preserve_idl_field_names_skips_a_hand_registered_serde_plugin() {
+        let dir = tempdir().unwrap();
+        let idl = dir.path().join("rename.thrift");
+        let out_dir = dir.path().join("out");
+        std::fs::write(
+            &idl,
+            "namespace rs rename_test\n\nstruct Item {\n    1: required string ItemName,\n}\n",
+        )
+        .unwrap();
+
+        Builder::thrift()
+            .add_service(&idl)
+            .out_dir(&out_dir)
+            .plugin(pilota_build::plugin::SerdePlugin)
+            .with_preserve_idl_field_names(true)
+            // The IDL has no service, so keep `Item` from being pruned as unused.
+            .ignore_unused(false)
+            .write()
+            .unwrap();
+
+        let generated = std::fs::read_to_string(out_dir.join("volo_gen.rs")).unwrap();
+        assert_eq!(
+            generated.matches("::pilota::serde::Serialize").count(),
+            1,
+            "{generated}"
+        );
+        assert_eq!(
+            generated
+                .matches(r#"#[serde(rename = "ItemName")]"#)
+                .count(),
+            1,
+            "{generated}"
+        );
+    }
+}
