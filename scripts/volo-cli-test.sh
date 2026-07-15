@@ -45,16 +45,20 @@ detect_pilota_branch() {
 
 	if grep -q '^\[patch\.crates-io\]' "$cargo_toml"; then
 		local pilota_line=$(sed -n '/^\[patch\.crates-io\]/,/^\[/p' "$cargo_toml" | grep '^pilota[[:space:]]*=' | grep 'branch[[:space:]]*=' | head -n 1)
-		
+
 		if [ -n "$pilota_line" ]; then
 			export PILOTA_BRANCH=$(echo "$pilota_line" | sed -n 's/.*branch[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')
-			echo "Detected pilota patch: branch = $PILOTA_BRANCH"
-			return
+			export PILOTA_GIT=$(echo "$pilota_line" | sed -n 's/.*git[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p')
+			if [ -n "$PILOTA_GIT" ]; then
+				echo "Detected pilota patch: git = $PILOTA_GIT, branch = $PILOTA_BRANCH"
+				return
+			fi
 		fi
 	fi
-	
+
+	export PILOTA_GIT="https://github.com/cloudwego/pilota.git"
 	export PILOTA_BRANCH="main"
-	echo "No pilota patch detected, using default: branch = main"
+	echo "No pilota patch detected, using default: git = $PILOTA_GIT, branch = main"
 }
 
 append_volo_dep_item() {
@@ -62,7 +66,7 @@ append_volo_dep_item() {
 }
 
 append_pilota_dep_item() {
-	echo "$1 = { git = \"https://github.com/cloudwego/pilota.git\", branch = \"$PILOTA_BRANCH\" }" >> Cargo.toml
+	echo "$1 = { git = \"$PILOTA_GIT\", branch = \"$PILOTA_BRANCH\" }" >> Cargo.toml
 }
 
 patch_cargo_toml() {
