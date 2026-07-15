@@ -432,7 +432,7 @@ mod tests {
     fn preserve_idl_field_names_skips_a_hand_registered_serde_rename_plugin() {
         let dir = tempdir().unwrap();
         let generated = gen_with_preserve_idl_field_names_and(dir.path(), true, |builder| {
-            builder.plugin(pilota_build::plugin::SerdeRenamePlugin)
+            builder.plugin(pilota_build::plugin::SerdePreserveIdlNamesPlugin)
         });
 
         assert_eq!(

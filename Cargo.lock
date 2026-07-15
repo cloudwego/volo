@@ -2272,7 +2272,7 @@ dependencies = [
 [[package]]
 name = "pilota"
 version = "0.13.1"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#51173ac1d5fccfc0d530afc1b45a65dfe3a064cd"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2294,7 +2294,7 @@ dependencies = [
 [[package]]
 name = "pilota-build"
 version = "0.13.10"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#51173ac1d5fccfc0d530afc1b45a65dfe3a064cd"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2350,7 +2350,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-parser"
 version = "0.13.6"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#51173ac1d5fccfc0d530afc1b45a65dfe3a064cd"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"
 dependencies = [
  "anyhow",
  "ariadne",
@@ -2363,7 +2363,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-reflect"
 version = "0.2.0"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#51173ac1d5fccfc0d530afc1b45a65dfe3a064cd"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"
 dependencies = [
  "ahash",
  "bytes",
@@ -5191,4 +5191,4 @@ dependencies = [
 [[patch.unused]]
 name = "pilota-thrift-fieldmask"
 version = "0.2.1"
-source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#51173ac1d5fccfc0d530afc1b45a65dfe3a064cd"
+source = "git+https://github.com/Joshuahoky/pilota.git?branch=feat%2Fserde_rename_plugin#6592fff59b9142f217ff666d389b642b60cae0cf"

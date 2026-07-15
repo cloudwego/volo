@@ -37,7 +37,7 @@ impl SerdePlugins {
     pub(crate) fn record<P: 'static>(&mut self) {
         if TypeId::of::<P>() == TypeId::of::<pilota_build::plugin::SerdePlugin>() {
             self.serde = true;
-        } else if TypeId::of::<P>() == TypeId::of::<pilota_build::plugin::SerdeRenamePlugin>() {
+        } else if TypeId::of::<P>() == TypeId::of::<pilota_build::plugin::SerdePreserveIdlNamesPlugin>() {
             self.serde_rename = true;
         }
     }
@@ -232,7 +232,7 @@ where
             if !self.serde_plugins.serde_rename {
                 self.pilota_builder = self
                     .pilota_builder
-                    .plugin(pilota_build::plugin::SerdeRenamePlugin);
+                    .plugin(pilota_build::plugin::SerdePreserveIdlNamesPlugin);
             }
         }
 

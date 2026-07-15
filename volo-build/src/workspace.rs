@@ -143,7 +143,7 @@ where
             if !this.serde_plugins.serde_rename {
                 this.pilota_builder = this
                     .pilota_builder
-                    .plugin(pilota_build::plugin::SerdeRenamePlugin);
+                    .plugin(pilota_build::plugin::SerdePreserveIdlNamesPlugin);
             }
         }
 
