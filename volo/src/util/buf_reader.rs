@@ -228,6 +228,11 @@ impl<R: AsyncExt + Send + Sync> AsyncExt for BufReader<R> {
     }
 
     #[cfg(feature = "shmipc")]
+    fn is_shmipc(&self) -> bool {
+        self.inner.is_shmipc()
+    }
+
+    #[cfg(feature = "shmipc")]
     fn shmipc_helper(&self) -> crate::net::shmipc::ShmipcHelper {
         self.inner.shmipc_helper()
     }

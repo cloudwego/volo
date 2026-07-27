@@ -3283,7 +3283,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 [[package]]
 name = "shmipc"
 version = "0.2.0"
-source = "git+https://github.com/cloudwego/shmipc-rs.git?branch=feature%2Fpolling-to-eventfd#c2747ce9f02c0b0a3195480c41e7b45474dca8a6"
+source = "git+https://github.com/cloudwego/shmipc-rs.git?branch=feature%2Fpolling-to-eventfd#d405368faf2c2cd1fa7eae3e06bb79aec6134ec8"
 dependencies = [
  "anyhow",
  "arc-swap",
