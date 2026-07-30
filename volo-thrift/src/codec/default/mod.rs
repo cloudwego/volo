@@ -137,6 +137,13 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncExt + Unpin + Send + Sync + 'stati
         );
         cx.stats_mut().set_write_size(real_size);
 
+        // reset on entry as well, so we always start from a clean buffer even
+        // if the previous encode on this (possibly multiplexed, cross-request
+        // reused) encoder bailed out early. Some paths (e.g. the `size(..)?`
+        // above) can return before reaching the reset after the write, leaving
+        // stale nodes behind; resetting on entry guarantees a clean start
+        // regardless of how the previous call exited. This is the fix for the
+        // multiplex panic in #222 (commit f05a888).
         self.linked_bytes.reset();
         // then we reserve the size of the message in the linked bytes
         self.linked_bytes.reserve(malloc_size);
@@ -165,6 +172,12 @@ impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncExt + Unpin + Send + Sync + 'stati
 
         // put write end here so we can also record the time of encode error
         cx.stats_mut().record_write_end_at();
+
+        // reset here (rather than only at the start of the next encode) so the
+        // zero-copy Bytes/FastStr references inserted for large fields are
+        // dropped as soon as the write completes, releasing their memory
+        // without waiting for the next request on this connection.
+        self.linked_bytes.reset();
 
         match write_result {
             Ok(()) => Ok(()),
@@ -426,6 +439,261 @@ mod tests {
                 volo::net::shmipc::ShmipcHelper::none()
             }
         }
+    }
+
+    /// A writer that discards everything written to it, used to drive the
+    /// encoder's write path without a real transport.
+    struct MockWriter;
+
+    impl AsyncWrite for MockWriter {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_write_vectored(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            bufs: &[io::IoSlice<'_>],
+        ) -> Poll<io::Result<usize>> {
+            Poll::Ready(Ok(bufs.iter().map(|b| b.len()).sum()))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    impl volo::net::ext::AsyncExt for MockWriter {
+        async fn ready(&self, _interest: tokio::io::Interest) -> io::Result<tokio::io::Ready> {
+            Ok(tokio::io::Ready::READABLE | tokio::io::Ready::WRITABLE)
+        }
+
+        #[cfg(feature = "shmipc")]
+        fn shmipc_helper(&self) -> volo::net::shmipc::ShmipcHelper {
+            volo::net::shmipc::ShmipcHelper::none()
+        }
+    }
+
+    /// A writer that records everything written to it, so a test can inspect
+    /// the exact bytes the encoder produced.
+    #[derive(Clone, Default)]
+    struct RecordingWriter(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+    impl RecordingWriter {
+        fn contents(&self) -> Vec<u8> {
+            self.0.lock().unwrap().clone()
+        }
+    }
+
+    impl AsyncWrite for RecordingWriter {
+        fn poll_write(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &[u8],
+        ) -> Poll<io::Result<usize>> {
+            self.0.lock().unwrap().extend_from_slice(buf);
+            Poll::Ready(Ok(buf.len()))
+        }
+
+        fn poll_write_vectored(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            bufs: &[io::IoSlice<'_>],
+        ) -> Poll<io::Result<usize>> {
+            let mut guard = self.0.lock().unwrap();
+            let mut n = 0;
+            for b in bufs {
+                guard.extend_from_slice(b);
+                n += b.len();
+            }
+            Poll::Ready(Ok(n))
+        }
+
+        fn poll_flush(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+
+        fn poll_shutdown(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<io::Result<()>> {
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    impl volo::net::ext::AsyncExt for RecordingWriter {
+        async fn ready(&self, _interest: tokio::io::Interest) -> io::Result<tokio::io::Ready> {
+            Ok(tokio::io::Ready::READABLE | tokio::io::Ready::WRITABLE)
+        }
+
+        #[cfg(feature = "shmipc")]
+        fn shmipc_helper(&self) -> volo::net::shmipc::ShmipcHelper {
+            volo::net::shmipc::ShmipcHelper::none()
+        }
+    }
+
+    /// An [`EntryMessage`] carrying a single large binary field, so that
+    /// encoding it takes the zero-copy path (`LinkedBytes::insert`) instead of
+    /// copying the payload into the scratch buffer.
+    struct BigField(Bytes);
+
+    impl EntryMessage for BigField {
+        fn encode<T: pilota::thrift::TOutputProtocol>(
+            &self,
+            protocol: &mut T,
+        ) -> Result<(), ThriftException> {
+            // `write_bytes` routes to `insert` when len >= ZERO_COPY_THRESHOLD.
+            protocol.write_bytes(self.0.clone())
+        }
+
+        fn decode<T: pilota::thrift::TInputProtocol>(
+            _protocol: &mut T,
+            _msg_ident: &pilota::thrift::TMessageIdentifier,
+        ) -> Result<Self, ThriftException> {
+            unreachable!("BigField is encode-only in tests")
+        }
+
+        async fn decode_async<T: pilota::thrift::TAsyncInputProtocol>(
+            _protocol: &mut T,
+            _msg_ident: &pilota::thrift::TMessageIdentifier,
+        ) -> Result<Self, ThriftException> {
+            unreachable!("BigField is encode-only in tests")
+        }
+
+        fn size<T: pilota::thrift::TLengthProtocol>(&self, protocol: &mut T) -> usize {
+            // `bytes_len` accounts the payload as zero-copy when it is large
+            // enough, matching the `insert` taken during `encode`.
+            protocol.bytes_len(self.0.as_ref())
+        }
+    }
+
+    fn client_cx() -> crate::context::ClientContext {
+        crate::context::ClientContext::new(
+            1,
+            RpcInfo::with_role(volo::context::Role::Client),
+            pilota::thrift::TMessageType::Call,
+        )
+    }
+
+    fn buffered_encoder() -> DefaultEncoder<thrift::ThriftCodec, MockWriter> {
+        buffered_encoder_with(MockWriter)
+    }
+
+    fn buffered_encoder_with<W>(writer: W) -> DefaultEncoder<thrift::ThriftCodec, W> {
+        let (encoder, _decoder) = thrift::MakeThriftCodec::default().make_codec();
+        DefaultEncoder {
+            encoder,
+            writer,
+            linked_bytes: LinkedBytes::new(),
+        }
+    }
+
+    /// Custom owner whose `Drop` flips a shared flag, so we can assert the
+    /// external memory backing a `Bytes::from_owner` is released by `encode`.
+    struct DropFlag(std::sync::Arc<std::sync::atomic::AtomicBool>, Vec<u8>);
+
+    impl AsRef<[u8]> for DropFlag {
+        fn as_ref(&self) -> &[u8] {
+            &self.1
+        }
+    }
+
+    impl Drop for DropFlag {
+        fn drop(&mut self) {
+            self.0.store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
+    /// Builds an 8 KiB payload (above the 4 KiB zero-copy threshold) backed by
+    /// a [`DropFlag`] owner, returning the payload and the shared drop flag.
+    fn tracked_payload() -> (Bytes, std::sync::Arc<std::sync::atomic::AtomicBool>) {
+        let dropped = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let payload = Bytes::from_owner(DropFlag(dropped.clone(), vec![0x2c_u8; 8 * 1024]));
+        (payload, dropped)
+    }
+
+    /// Reproduces the failure mode behind the #222 multiplex panic: an encoder
+    /// whose `LinkedBytes` still holds stale nodes from a previous encode that
+    /// exited early (e.g. via `size(..)?`) without reaching the post-write
+    /// reset. The reset on entry must recover from this, so the next encode
+    /// neither panics in `LinkedBytes::reset` nor leaks the stale bytes into
+    /// the output.
+    #[tokio::test]
+    async fn test_encode_entry_reset_recovers_stale_buffer() {
+        use bytes::BufMut;
+
+        // Baseline: encode a message on a pristine encoder and capture output.
+        let mut clean = buffered_encoder_with(RecordingWriter::default());
+        let mut cx = client_cx();
+        let msg = ThriftMessage::mk_client_msg(&cx, BigField(Bytes::from(vec![0x42_u8; 8 * 1024])));
+        clean.encode(&mut cx, msg).await.expect("clean encode ok");
+        let expected = clean.writer.contents();
+
+        // Now build an encoder whose buffer is left dirty, mimicking a previous
+        // encode that inserted a large field and then bailed out before the
+        // post-write reset. The head node is a `Bytes` (via `insert`), which is
+        // exactly the shape that made `LinkedBytes::reset` panic in #222.
+        let (encoder, _decoder) = thrift::MakeThriftCodec::default().make_codec();
+        let mut dirty_bytes = LinkedBytes::new();
+        dirty_bytes.bytes_mut().put_slice(b"stale-header");
+        dirty_bytes.insert(Bytes::from(vec![0xff_u8; 8 * 1024]));
+        assert!(!dirty_bytes.is_empty(), "precondition: buffer is dirty");
+        let mut encoder = DefaultEncoder {
+            encoder,
+            writer: RecordingWriter::default(),
+            linked_bytes: dirty_bytes,
+        };
+
+        // Encoding the same message must not panic and must produce exactly the
+        // same bytes as the clean encoder: the stale content was dropped.
+        let mut cx = client_cx();
+        let msg = ThriftMessage::mk_client_msg(&cx, BigField(Bytes::from(vec![0x42_u8; 8 * 1024])));
+        encoder
+            .encode(&mut cx, msg)
+            .await
+            .expect("encode after dirty buffer ok");
+        assert_eq!(
+            encoder.writer.contents(),
+            expected,
+            "entry reset must discard stale buffer content"
+        );
+    }
+
+    /// End-to-end check of the "notify external owner" use case: a payload
+    /// backed by an external buffer via `Bytes::from_owner` is still alive
+    /// before `encode`, and its owner is dropped by the time `encode` returns.
+    /// The before/after assertions pin the release to the encode step itself
+    /// (the reset-after-flush), not to some earlier or unrelated drop.
+    #[tokio::test]
+    async fn test_encode_drops_external_owner_after_write() {
+        let (payload, dropped) = tracked_payload();
+
+        let mut encoder = buffered_encoder();
+        let mut cx = client_cx();
+        let msg = ThriftMessage::mk_client_msg(&cx, BigField(payload));
+
+        // The payload is still held by `msg`, so the owner must be alive here.
+        assert!(
+            !dropped.load(std::sync::atomic::Ordering::SeqCst),
+            "external owner must still be alive before encode"
+        );
+
+        encoder
+            .encode(&mut cx, msg)
+            .await
+            .expect("encode should ok");
+
+        // `encode` consumed `msg` and reset the buffer after flushing, so the
+        // last reference is gone and the owner has been dropped.
+        assert!(
+            dropped.load(std::sync::atomic::Ordering::SeqCst),
+            "external owner should be dropped once the write completes"
+        );
     }
 
     #[tokio::test]
