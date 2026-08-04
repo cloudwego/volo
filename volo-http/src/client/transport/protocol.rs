@@ -81,6 +81,7 @@ pub struct ClientTransport<B = Body> {
     config: ClientTransportConfig,
     connector: HttpMakeConnection,
     pool: Pool<PoolKey, HttpConnection<B>>,
+    idle_pool_enabled: bool,
 }
 
 type PoolKey = (Scheme, Address);
@@ -113,6 +114,7 @@ impl<B> ClientTransport<B> {
             config: transport_config,
             connector,
             pool: Pool::new(pool_config),
+            idle_pool_enabled: pool_config.max_idle_per_host > 0,
         }
     }
 
@@ -333,6 +335,14 @@ where
             cx.stats.record_transport_end_at();
         }
 
+        if res.is_ok() && self.idle_pool_enabled && conn.should_wait_until_ready() {
+            tokio::spawn(async move {
+                if conn.ready().await.is_err() {
+                    tracing::warn!("HTTP connection closed before becoming reusable");
+                }
+            });
+        }
+
         res
     }
 }
@@ -382,6 +392,24 @@ where
     B::Data: Send,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
 {
+    fn should_wait_until_ready(&self) -> bool {
+        match self {
+            #[cfg(feature = "http1")]
+            Self::H1(h1) => !h1.is_ready(),
+            #[cfg(feature = "http2")]
+            Self::H2(h2) => false,
+        }
+    }
+
+    async fn ready(&mut self) -> hyper::Result<()> {
+        match self {
+            #[cfg(feature = "http1")]
+            Self::H1(h1) => h1.ready().await,
+            #[cfg(feature = "http2")]
+            Self::H2(h2) => h2.ready().await,
+        }
+    }
+
     pub async fn send_request(&mut self, req: Request<B>) -> Result<Response> {
         let res = match self {
             #[cfg(feature = "http1")]
