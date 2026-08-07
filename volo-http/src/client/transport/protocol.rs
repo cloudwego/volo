@@ -1,6 +1,13 @@
 //! Protocol related implementations
 
-use std::{error::Error, str::FromStr, sync::LazyLock};
+use std::{
+    error::Error,
+    future::Future,
+    pin::Pin,
+    str::FromStr,
+    sync::LazyLock,
+    task::{Context as TaskContext, Poll},
+};
 
 use futures::{
     FutureExt, TryFutureExt,
@@ -11,9 +18,10 @@ use http::{
     uri::{Authority, Scheme, Uri},
     version::Version,
 };
-use hyper::client::conn;
+use hyper::{body::Incoming, client::conn};
 use hyper_util::rt::TokioIo;
 use motore::{make::MakeConnection, service::Service};
+use pin_project::pin_project;
 use volo::{context::Context, net::Address};
 
 use super::{
@@ -335,15 +343,115 @@ where
             cx.stats.record_transport_end_at();
         }
 
-        if res.is_ok() && self.idle_pool_enabled && conn.should_wait_until_ready() {
-            tokio::spawn(async move {
-                if conn.ready().await.is_err() {
+        match res {
+            Ok(res) if self.idle_pool_enabled && !conn.can_share() && !conn.is_open() => {
+                Ok(res.map(|body| Body::from_body(OnIdleBody::new(body, OnIdle::new(conn)))))
+            }
+            Ok(res) => Ok(res.map(Body::from_incoming)),
+            Err(err) => Err(err),
+        }
+    }
+}
+
+struct OnIdle<B>
+where
+    B: Send + 'static,
+{
+    conn: Option<Pooled<PoolKey, HttpConnection<B>>>,
+}
+
+impl<B> OnIdle<B>
+where
+    B: Send + 'static,
+{
+    fn new(conn: Pooled<PoolKey, HttpConnection<B>>) -> Self {
+        Self { conn: Some(conn) }
+    }
+}
+
+impl<B> Future for OnIdle<B>
+where
+    B: Send + 'static,
+{
+    type Output = ();
+
+    fn poll(mut self: Pin<&mut Self>, cx: &mut TaskContext<'_>) -> Poll<Self::Output> {
+        let result = self
+            .conn
+            .as_mut()
+            .expect("OnIdle polled after completion")
+            .poll_ready(cx);
+
+        match result {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(result) => {
+                self.conn.take();
+                if result.is_err() {
                     tracing::warn!("HTTP connection closed before becoming reusable");
                 }
-            });
+                Poll::Ready(())
+            }
+        }
+    }
+}
+
+#[pin_project]
+struct OnIdleBody<B>
+where
+    B: Send + 'static,
+{
+    #[pin]
+    body: Incoming,
+    on_idle: OnIdle<B>,
+    body_done: bool,
+}
+
+impl<B> OnIdleBody<B>
+where
+    B: Send + 'static,
+{
+    fn new(body: Incoming, on_idle: OnIdle<B>) -> Self {
+        Self {
+            body,
+            on_idle,
+            body_done: false,
+        }
+    }
+}
+
+impl<B> http_body::Body for OnIdleBody<B>
+where
+    B: Send + 'static,
+{
+    type Data = bytes::Bytes;
+    type Error = hyper::Error;
+
+    fn poll_frame(
+        self: Pin<&mut Self>,
+        cx: &mut TaskContext<'_>,
+    ) -> Poll<Option<hyper::Result<http_body::Frame<Self::Data>>>> {
+        let mut this = self.project();
+
+        if !*this.body_done {
+            match this.body.as_mut().poll_frame(cx) {
+                Poll::Pending => return Poll::Pending,
+                Poll::Ready(Some(frame)) => return Poll::Ready(Some(frame)),
+                Poll::Ready(None) => *this.body_done = true,
+            }
         }
 
-        res
+        match Pin::new(this.on_idle).poll(cx) {
+            Poll::Pending => Poll::Pending,
+            Poll::Ready(()) => Poll::Ready(None),
+        }
+    }
+
+    fn is_end_stream(&self) -> bool {
+        self.body_done && self.on_idle.conn.is_none()
+    }
+
+    fn size_hint(&self) -> http_body::SizeHint {
+        self.body.size_hint()
     }
 }
 
@@ -386,31 +494,24 @@ where
     }
 }
 
+impl<B> HttpConnection<B> {
+    fn poll_ready(&mut self, cx: &mut TaskContext<'_>) -> Poll<hyper::Result<()>> {
+        match self {
+            #[cfg(feature = "http1")]
+            Self::H1(h1) => h1.poll_ready(cx),
+            #[cfg(feature = "http2")]
+            Self::H2(h2) => h2.poll_ready(cx),
+        }
+    }
+}
+
 impl<B> HttpConnection<B>
 where
     B: http_body::Body + Send + 'static,
     B::Data: Send,
     B::Error: Into<Box<dyn std::error::Error + Send + Sync>> + 'static,
 {
-    fn should_wait_until_ready(&self) -> bool {
-        match self {
-            #[cfg(feature = "http1")]
-            Self::H1(h1) => !h1.is_ready(),
-            #[cfg(feature = "http2")]
-            Self::H2(h2) => false,
-        }
-    }
-
-    async fn ready(&mut self) -> hyper::Result<()> {
-        match self {
-            #[cfg(feature = "http1")]
-            Self::H1(h1) => h1.ready().await,
-            #[cfg(feature = "http2")]
-            Self::H2(h2) => h2.ready().await,
-        }
-    }
-
-    pub async fn send_request(&mut self, req: Request<B>) -> Result<Response> {
+    pub async fn send_request(&mut self, req: Request<B>) -> Result<Response<Incoming>> {
         let res = match self {
             #[cfg(feature = "http1")]
             Self::H1(h1) => h1.send_request(req).await,
@@ -418,7 +519,7 @@ where
             Self::H2(h2) => h2.send_request(req).await,
         };
         match res {
-            Ok(resp) => Ok(resp.map(Body::from_incoming)),
+            Ok(resp) => Ok(resp),
             Err(err) => Err(request_error(err)),
         }
     }
@@ -463,4 +564,88 @@ fn rewrite_uri<B>(cx: &ClientContext, req: &mut Request<B>) {
         return;
     };
     *req.uri_mut() = uri;
+}
+
+#[cfg(all(test, feature = "http1"))]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    use http_body_util::BodyExt;
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+    use super::*;
+
+    async fn read_request_head(io: &mut tokio::io::DuplexStream) {
+        let mut head = Vec::new();
+        let mut byte = [0; 1];
+        while !head.ends_with(b"\r\n\r\n") {
+            io.read_exact(&mut byte).await.unwrap();
+            head.push(byte[0]);
+        }
+        assert!(head.starts_with(b"GET / HTTP/1.1\r\n"));
+    }
+
+    fn request() -> Request {
+        Request::builder()
+            .uri("/")
+            .header(header::HOST, "example.com")
+            .body(Body::empty())
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn on_idle_returns_http1_connection_after_response_body() {
+        let (client_io, mut server_io) = tokio::io::duplex(1024);
+        let (mut sender, connection) = conn::http1::handshake::<_, Body>(TokioIo::new(client_io))
+            .await
+            .unwrap();
+        tokio::spawn(connection);
+        sender.ready().await.unwrap();
+
+        let (finish_body_tx, finish_body_rx) = tokio::sync::oneshot::channel();
+        let server = tokio::spawn(async move {
+            read_request_head(&mut server_io).await;
+            server_io
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\nhe")
+                .await
+                .unwrap();
+
+            finish_body_rx.await.unwrap();
+            server_io.write_all(b"llo").await.unwrap();
+
+            read_request_head(&mut server_io).await;
+            server_io
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                .await
+                .unwrap();
+        });
+
+        let pool = Pool::new(pool::Config::default());
+        pool.no_timer();
+        let key = (
+            Scheme::HTTP,
+            Address::Ip(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 80)),
+        );
+        let connecting = pool.connecting(&key, pool::Ver::Auto).unwrap();
+        let mut conn = pool.pooled(connecting, HttpConnection::H1(sender));
+
+        let response = conn.send_request(request()).await.unwrap();
+        assert!(!conn.is_open());
+        let response =
+            response.map(|body| Body::from_body(OnIdleBody::new(body, OnIdle::new(conn))));
+
+        let mut early_checkout = Box::pin(pool.checkout(key.clone()));
+        assert!(matches!(futures::poll!(&mut early_checkout), Poll::Pending));
+        drop(early_checkout);
+
+        finish_body_tx.send(()).unwrap();
+        assert_eq!(
+            response.into_body().collect().await.unwrap().to_bytes(),
+            "hello"
+        );
+
+        let mut conn = pool.checkout(key).await.unwrap();
+        conn.send_request(request()).await.unwrap();
+        server.await.unwrap();
+    }
 }
