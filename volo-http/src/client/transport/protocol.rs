@@ -18,7 +18,7 @@ use volo::{context::Context, net::Address};
 
 use super::{
     connector::{HttpMakeConnection, PeerInfo},
-    pool::{self, Connecting, Pool, Poolable, Pooled, Reservation},
+    pool::{self, Connecting, Pool, Poolable, Pooled, Reservation, Reusable},
 };
 use crate::{
     body::Body,
@@ -354,6 +354,29 @@ where
             Self::H1(h1) => h1.is_ready(),
             #[cfg(feature = "http2")]
             Self::H2(h2) => h2.is_ready(),
+        }
+    }
+
+    fn reusable(&self) -> Reusable {
+        match &self {
+            #[cfg(feature = "http1")]
+            Self::H1(h1) => {
+                if h1.is_closed() {
+                    Reusable::Closed
+                } else if h1.is_ready() {
+                    Reusable::Ready
+                } else {
+                    Reusable::Pending
+                }
+            }
+            #[cfg(feature = "http2")]
+            Self::H2(h2) => {
+                if h2.is_ready() {
+                    Reusable::Ready
+                } else {
+                    Reusable::Closed
+                }
+            }
         }
     }
 

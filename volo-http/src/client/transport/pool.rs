@@ -25,6 +25,14 @@ pub struct Pool<K: Key, T> {
     inner: Arc<Mutex<PoolInner<K, T>>>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Reusable {
+    Ready,
+    #[cfg_attr(not(feature = "http1"), allow(dead_code))]
+    Pending,
+    Closed,
+}
+
 // Before using a pooled connection, make sure the sender is not dead.
 //
 // This is a trait to allow the `client::pool::tests` to work for `i32`.
@@ -37,6 +45,14 @@ pub trait Poolable: Unpin + Send + Sized + 'static {
     /// Allows for HTTP/2 to return a shared reservation.
     fn reserve(self) -> Reservation<Self>;
     fn can_share(&self) -> bool;
+
+    fn reusable(&self) -> Reusable {
+        if self.is_open() {
+            Reusable::Ready
+        } else {
+            Reusable::Closed
+        }
+    }
 }
 
 pub trait Key: Eq + Hash + Clone + Debug + Unpin + Send + 'static {}
@@ -86,6 +102,7 @@ struct PoolInner<K: Eq + Hash, T> {
     // These are internal Conns sitting in the event loop in the KeepAlive
     // state, waiting to receive a new Request to send on the socket.
     idle: AHashMap<K, Vec<Idle<T>>>,
+    pending: AHashMap<K, Vec<T>>,
     max_idle_per_host: usize,
     // These are outstanding Checkouts that are waiting for a socket to be
     // able to send a Request one. This is used when "racing" for a new
@@ -127,6 +144,7 @@ impl<K: Key, T> Pool<K, T> {
         let inner = PoolInner {
             connecting: AHashSet::new(),
             idle: AHashMap::new(),
+            pending: AHashMap::new(),
             idle_interval_ref: None,
             max_idle_per_host: config.max_idle_per_host,
             waiters: AHashMap::new(),
@@ -370,6 +388,52 @@ impl<K: Key, T: Poolable> PoolInner<K, T> {
         }
     }
 
+    fn put_pending(&mut self, key: K, value: T, pool_ref: &Arc<Mutex<PoolInner<K, T>>>) {
+        debug_assert!(!value.can_share());
+
+        if self.max_idle_per_host == 0 {
+            tracing::trace!(
+                "max idle per host is zero for {:?}, dropping pending connection",
+                key
+            );
+            return;
+        }
+
+        self.pending.entry(key).or_default().push(value);
+        self.spawn_idle_interval(pool_ref);
+    }
+
+    fn take_pending(&mut self, key: &K) -> Option<T> {
+        let (ready, remove_key) = {
+            let values = self.pending.get_mut(key)?;
+
+            let mut index = 0;
+            let mut ready = None;
+            while index < values.len() {
+                match values[index].reusable() {
+                    Reusable::Closed => {
+                        let _ = values.swap_remove(index);
+                    }
+                    Reusable::Ready => {
+                        ready = Some(values.swap_remove(index));
+                        break;
+                    }
+                    Reusable::Pending => {
+                        index += 1;
+                    }
+                }
+            }
+
+            (ready, values.is_empty())
+        };
+
+        if remove_key {
+            self.pending.remove(key);
+        }
+
+        ready
+    }
+
     /// A `Connecting` task is complete. Not necessarily successfully,
     /// but the lock is going away, so clean up.
     fn connected(&mut self, key: &K) {
@@ -419,7 +483,7 @@ impl<K: Eq + Hash, T> PoolInner<K, T> {
 
 impl<K: Key, T: Poolable> PoolInner<K, T> {
     /// This should *only* be called by the IdleTask
-    fn clear_expired(&mut self) {
+    fn clear_expired(&mut self, pool_ref: &Arc<Mutex<PoolInner<K, T>>>) {
         let now = Instant::now();
         // self.last_idle_check_at = now;
 
@@ -443,6 +507,31 @@ impl<K: Key, T: Poolable> PoolInner<K, T> {
             // returning false evicts this key/val
             !values.is_empty()
         });
+
+        let mut ready_values = Vec::new();
+        self.pending.retain(|key, values| {
+            let mut index = 0;
+
+            while index < values.len() {
+                match values[index].reusable() {
+                    Reusable::Closed => {
+                        let _ = values.swap_remove(index);
+                    }
+                    Reusable::Ready => {
+                        ready_values.push((key.clone(), values.swap_remove(index)));
+                    }
+                    Reusable::Pending => {
+                        index += 1;
+                    }
+                }
+            }
+
+            !values.is_empty()
+        });
+
+        for (key, value) in ready_values {
+            self.put(key, value, pool_ref);
+        }
     }
 }
 
@@ -488,14 +577,16 @@ impl<K: Key, T: Poolable> DerefMut for Pooled<K, T> {
 impl<K: Key, T: Poolable> Drop for Pooled<K, T> {
     fn drop(&mut self) {
         if let Some(value) = self.value.take() {
-            if !value.is_open() {
-                // If we *already* know the connection is done here,
-                // it shouldn't be re-inserted back into the pool.
-                return;
-            }
-
             if let Some(pool) = self.pool.upgrade() {
-                pool.lock().put(self.key.clone(), value, &pool);
+                match value.reusable() {
+                    Reusable::Closed => {}
+                    Reusable::Ready => {
+                        pool.lock().put(self.key.clone(), value, &pool);
+                    }
+                    Reusable::Pending => {
+                        pool.lock().put_pending(self.key.clone(), value, &pool);
+                    }
+                }
             } else if !value.can_share() {
                 tracing::trace!("pool dropped, dropping pooled ({:?})", self.key);
             }
@@ -571,7 +662,7 @@ impl<K: Key, T: Poolable> Checkout<K, T> {
     }
 
     fn checkout(&mut self, cx: &mut Context<'_>) -> Option<Pooled<K, T>> {
-        let entry = {
+        let value = {
             let mut inner = self.pool.inner.lock();
             let expiration = Expiration::new(inner.timeout);
             let maybe_entry = inner.idle.get_mut(&self.key).and_then(|list| {
@@ -599,7 +690,13 @@ impl<K: Key, T: Poolable> Checkout<K, T> {
                 inner.idle.remove(&self.key);
             }
 
-            if entry.is_none() && self.waiter.is_none() {
+            let mut value = entry.map(|entry| entry.value);
+
+            if value.is_none() {
+                value = inner.take_pending(&self.key);
+            }
+
+            if value.is_none() && self.waiter.is_none() {
                 let (tx, mut rx) = oneshot::channel();
                 tracing::trace!("checkout waiting for idle connection: {:?}", self.key);
                 inner
@@ -613,10 +710,10 @@ impl<K: Key, T: Poolable> Checkout<K, T> {
                 self.waiter = Some(rx);
             }
 
-            entry
+            value
         };
 
-        entry.map(|e| self.pool.reuse(&self.key, e.value))
+        value.map(|v| self.pool.reuse(&self.key, v))
     }
 }
 
@@ -726,7 +823,7 @@ impl<T: Poolable + 'static, K: Key> Future for IdleTask<K, T> {
 
             if let Some(inner) = this.pool.upgrade() {
                 tracing::trace!("idle interval checking for expired");
-                inner.lock().clear_expired();
+                inner.lock().clear_expired(&inner);
                 continue;
             }
             return Poll::Ready(());
@@ -756,11 +853,15 @@ mod tests {
         future::Future,
         hash::Hash,
         pin::Pin,
+        sync::{
+            Arc,
+            atomic::{AtomicU8, Ordering},
+        },
         task::{self, Poll},
         time::Duration,
     };
 
-    use super::{Connecting, Key, Pool, Poolable, Reservation, WeakOpt};
+    use super::{Connecting, Key, Pool, Poolable, Reservation, Reusable, WeakOpt};
 
     #[derive(Clone, Debug, PartialEq, Eq, Hash)]
     struct KeyImpl(http::uri::Scheme, http::uri::Authority);
@@ -999,5 +1100,175 @@ mod tests {
         );
 
         assert!(!pool.locked().idle.contains_key(&key));
+    }
+
+    const READY: u8 = 0;
+    const PENDING: u8 = 1;
+    const CLOSED: u8 = 2;
+
+    #[derive(Debug)]
+    struct Stateful {
+        value: i32,
+        state: Arc<AtomicU8>,
+    }
+
+    impl Stateful {
+        fn new(value: i32, state: u8) -> (Self, Arc<AtomicU8>) {
+            let state = Arc::new(AtomicU8::new(state));
+            (
+                Self {
+                    value,
+                    state: state.clone(),
+                },
+                state,
+            )
+        }
+    }
+
+    impl Poolable for Stateful {
+        fn is_open(&self) -> bool {
+            self.state.load(Ordering::SeqCst) == READY
+        }
+
+        fn reserve(self) -> Reservation<Self> {
+            Reservation::Unique(self)
+        }
+
+        fn can_share(&self) -> bool {
+            false
+        }
+
+        fn reusable(&self) -> Reusable {
+            match self.state.load(Ordering::SeqCst) {
+                READY => Reusable::Ready,
+                PENDING => Reusable::Pending,
+                CLOSED => Reusable::Closed,
+                state => panic!("invalid test state: {state}"),
+            }
+        }
+    }
+
+    #[test]
+    fn reusable_default_preserves_existing_poolable_behavior() {
+        assert_eq!(Uniq(1).reusable(), Reusable::Ready);
+        assert_eq!(
+            CanClose {
+                val: 1,
+                closed: true,
+            }
+            .reusable(),
+            Reusable::Closed,
+        );
+    }
+
+    #[test]
+    fn pooled_drop_stores_pending_without_making_it_idle() {
+        let pool = pool_no_timer();
+        let key = host_key("foo");
+        let (value, _state) = Stateful::new(41, PENDING);
+
+        drop(pool.pooled(c(key.clone()), value));
+
+        let inner = pool.locked();
+        assert_eq!(inner.pending.get(&key).map(Vec::len), Some(1));
+        assert!(!inner.idle.contains_key(&key));
+        assert!(!inner.waiters.contains_key(&key));
+    }
+
+    #[tokio::test]
+    async fn checkout_reuses_pending_connection_after_it_becomes_ready() {
+        let pool = pool_no_timer();
+        let key = host_key("foo");
+        let (value, state) = Stateful::new(41, PENDING);
+        drop(pool.pooled(c(key.clone()), value));
+
+        state.store(READY, Ordering::SeqCst);
+
+        let pooled = pool.checkout(key.clone()).await.unwrap();
+        assert_eq!(pooled.as_ref().value, 41);
+        assert!(!pool.locked().pending.contains_key(&key));
+    }
+
+    #[tokio::test]
+    async fn checkout_prefers_idle_over_pending() {
+        let pool = pool_no_timer();
+        let key = host_key("foo");
+        let (pending, _pending_state) = Stateful::new(1, PENDING);
+        let (ready, _ready_state) = Stateful::new(2, READY);
+
+        drop(pool.pooled(c(key.clone()), pending));
+        drop(pool.pooled(c(key.clone()), ready));
+
+        let pooled = pool.checkout(key.clone()).await.unwrap();
+        assert_eq!(pooled.as_ref().value, 2);
+        assert_eq!(pool.locked().pending.get(&key).map(Vec::len), Some(1));
+    }
+
+    #[tokio::test]
+    async fn clear_expired_promotes_ready_and_removes_closed_pending() {
+        let pool = pool_no_timer();
+        let key = host_key("foo");
+        let (ready, ready_state) = Stateful::new(1, PENDING);
+        let (pending, _pending_state) = Stateful::new(2, PENDING);
+        let (closed, closed_state) = Stateful::new(3, PENDING);
+
+        drop(pool.pooled(c(key.clone()), ready));
+        drop(pool.pooled(c(key.clone()), pending));
+        drop(pool.pooled(c(key.clone()), closed));
+
+        ready_state.store(READY, Ordering::SeqCst);
+        closed_state.store(CLOSED, Ordering::SeqCst);
+
+        let pool_ref = pool.inner.clone();
+        pool_ref.lock().clear_expired(&pool_ref);
+
+        let inner = pool.locked();
+        let pending_values = inner.pending.get(&key).unwrap();
+        assert_eq!(pending_values.len(), 1);
+        assert_eq!(pending_values[0].value, 2);
+
+        let idle_values = inner.idle.get(&key).unwrap();
+        assert_eq!(idle_values.len(), 1);
+        assert_eq!(idle_values[0].value.value, 1);
+    }
+
+    #[tokio::test]
+    async fn max_idle_zero_does_not_reuse_pending_connection() {
+        let pool = pool_max_idle_no_timer(0); // max_idle = 0
+        let key = host_key("foo");
+        let (value, state) = Stateful::new(41, PENDING);
+
+        drop(pool.pooled(c(key.clone()), value)); // Drop -> put_pending -> max_idle == 0 -> return
+
+        assert!(!pool.locked().pending.contains_key(&key));
+
+        state.store(READY, Ordering::SeqCst);
+
+        let mut checkout = pool.checkout(key);
+        assert!(PollOnce(&mut checkout).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn pending_connection_does_not_unpark_waiter() {
+        let pool = pool_no_timer();
+        let key = host_key("foo");
+        let mut checkout = pool.checkout(key.clone());
+
+        assert!(PollOnce(&mut checkout).await.is_none());
+        assert_eq!(
+            pool.locked().waiters.get(&key).map(|waiters| waiters.len()),
+            Some(1)
+        );
+
+        let (value, _state) = Stateful::new(41, PENDING);
+        drop(pool.pooled(c(key.clone()), value));
+
+        assert!(PollOnce(&mut checkout).await.is_none());
+        let inner = pool.locked();
+        assert_eq!(inner.pending.get(&key).map(Vec::len), Some(1));
+        assert_eq!(
+            inner.waiters.get(&key).map(|waiters| waiters.len()),
+            Some(1)
+        );
     }
 }
