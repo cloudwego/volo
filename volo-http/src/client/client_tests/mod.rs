@@ -9,6 +9,8 @@ use serde::{Deserialize, Deserializer};
 
 #[cfg(feature = "http1")]
 mod http1_only;
+#[cfg(feature = "http1")]
+mod pool;
 #[cfg(feature = "__tls")]
 mod tls;
 mod utils;
