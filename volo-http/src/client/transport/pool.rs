@@ -25,6 +25,32 @@ pub struct Pool<K: Key, T> {
     inner: Arc<Mutex<PoolInner<K, T>>>,
 }
 
+#[cfg(feature = "http1")]
+impl<K: Key, T: Poolable> Pool<K, T> {
+    pub(crate) fn return_handle(&self) -> PoolReturn<K, T> {
+        PoolReturn {
+            inner: Arc::downgrade(&self.inner),
+        }
+    }
+}
+
+#[cfg(feature = "http1")]
+pub(crate) struct PoolReturn<K: Key, T: Poolable> {
+    inner: Weak<Mutex<PoolInner<K, T>>>,
+}
+
+#[cfg(feature = "http1")]
+impl<K: Key, T: Poolable> PoolReturn<K, T> {
+    pub(crate) fn put_ready(&self, key: K, value: T) -> Result<(), T> {
+        let Some(inner) = self.inner.upgrade() else {
+            return Err(value);
+        };
+
+        inner.lock().put(key, value, &inner);
+        Ok(())
+    }
+}
+
 // Before using a pooled connection, make sure the sender is not dead.
 //
 // This is a trait to allow the `client::pool::tests` to work for `i32`.
@@ -999,5 +1025,38 @@ mod tests {
         );
 
         assert!(!pool.locked().idle.contains_key(&key));
+    }
+
+    #[tokio::test]
+    async fn return_handle_put_ready_unparks_checkout() {
+        let pool = pool_no_timer();
+        let key = host_key("foo");
+        let returner = pool.return_handle();
+        let mut checkout = pool.checkout(key.clone());
+
+        // Register the checkout as a waiter before returning the connection.
+        assert!(PollOnce(&mut checkout).await.is_none());
+
+        returner
+            .put_ready(key, Uniq(41))
+            .expect("the pool should still exist");
+
+        let pooled = checkout.await.expect("the waiter should be notified");
+        assert_eq!(*pooled, Uniq(41));
+    }
+
+    #[test]
+    fn return_handle_returns_value_after_pool_drop() {
+        let key = host_key("foo");
+        let returner = {
+            let pool = pool_no_timer::<KeyImpl, Uniq<i32>>();
+            pool.return_handle()
+        };
+
+        let value = returner
+            .put_ready(key, Uniq(41))
+            .expect_err("the weak pool reference should no longer upgrade");
+
+        assert_eq!(value, Uniq(41));
     }
 }
