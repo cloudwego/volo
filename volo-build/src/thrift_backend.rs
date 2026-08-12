@@ -78,14 +78,14 @@ impl VoloThriftBackend {
                 // let match_methods = crate::join_multi_strs!("", |methods_names, variant_names| ->
                 // "\"{methods_names}\" => {{ Self::{variant_names}({decode_variants}) }},");
 
-                format! {
+                format!(
                     r#"::std::result::Result::Ok(match &*msg_ident.name {{
                         {match_methods}
                         _ => {{
                             return ::std::result::Result::Err(::pilota::thrift::new_application_exception(::pilota::thrift::ApplicationExceptionKind::UNKNOWN_METHOD,  format!("unknown method {{}}", msg_ident.name)));
                         }},
                     }})"#
-                }
+                )
             };
 
             let send_decode = mk_decode(false, true);
@@ -101,7 +101,7 @@ impl VoloThriftBackend {
                 match_size = "_ => unreachable!(),".to_string();
             }
 
-            let recv_impl = format! {
+            let recv_impl = format!(
                 r#"impl ::volo_thrift::EntryMessage for {req_recv_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
@@ -127,9 +127,9 @@ impl VoloThriftBackend {
                         }}
                     }}
                 }}"#
-            };
+            );
 
-            let send_impl = format! {
+            let send_impl = format!(
                 r#"impl ::volo_thrift::EntryMessage for {req_send_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
@@ -155,7 +155,7 @@ impl VoloThriftBackend {
                         }}
                     }}
                 }}"#
-            };
+            );
 
             (recv_impl, send_impl)
         };
@@ -207,7 +207,7 @@ impl VoloThriftBackend {
             let recv_decode = mk_decode(false, false);
             let recv_decode_async = mk_decode(true, false);
 
-            let recv_impl = format! {
+            let recv_impl = format!(
                 r#"impl ::volo_thrift::EntryMessage for {res_recv_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
@@ -233,9 +233,9 @@ impl VoloThriftBackend {
                         }}
                     }}
                 }}"#
-            };
+            );
 
-            let send_impl = format! {
+            let send_impl = format!(
                 r#"impl ::volo_thrift::EntryMessage for {res_send_name} {{
                     fn encode<T: ::pilota::thrift::TOutputProtocol>(&self, __protocol: &mut T) -> ::core::result::Result<(), ::pilota::thrift::ThriftException> {{
                         match self {{
@@ -261,7 +261,7 @@ impl VoloThriftBackend {
                         }}
                     }}
                 }}"#
-            };
+            );
 
             (recv_impl, send_impl)
         };
@@ -285,7 +285,7 @@ impl VoloThriftBackend {
         );
 
         if self.cx().config.split {
-            let req_recv_stream = format! {
+            let req_recv_stream = format!(
                 r#"#[derive(Debug, Clone)]
                 pub enum {req_recv_name} {{
                     {req_recv_variants}
@@ -293,9 +293,9 @@ impl VoloThriftBackend {
 
                 {req_recv_impl}
             "#
-            };
+            );
 
-            let req_send_stream = format! {
+            let req_send_stream = format!(
                 r#"#[derive(Debug, Clone)]
             pub enum {req_send_name} {{
                 {req_send_variants}
@@ -303,18 +303,18 @@ impl VoloThriftBackend {
 
             {req_send_impl}
             "#
-            };
+            );
 
-            let res_recv_stream = format! {
+            let res_recv_stream = format!(
                 r#"#[derive(Debug, Clone)]
             pub enum {res_recv_name} {{
                 {res_recv_variants}
             }}
             {res_recv_impl}
             "#
-            };
+            );
 
-            let res_send_stream = format! {
+            let res_send_stream = format!(
                 r#"#[derive(Debug, Clone)]
             pub enum {res_send_name} {{
                 {res_send_variants}
@@ -322,7 +322,7 @@ impl VoloThriftBackend {
 
             {res_send_impl}
             "#
-            };
+            );
 
             write_item(
                 stream,
@@ -349,7 +349,7 @@ impl VoloThriftBackend {
                 res_send_stream,
             );
         } else {
-            stream.push_str(&format! {
+            stream.push_str(&format!(
                 r#"#[derive(Debug, Clone)]
             pub enum {req_recv_name} {{
                 {req_recv_variants}
@@ -375,7 +375,7 @@ impl VoloThriftBackend {
             {res_recv_impl}
             {res_send_impl}
             "#
-            });
+            ));
         }
     }
 
@@ -525,7 +525,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 resp_type_str = format!("::volo_thrift::MaybeException<{resp_type_str}, {exception}>");
                 resp_str = "::std::result::Result::Ok(::volo_thrift::MaybeException::Ok(resp))";
             }
-            client_methods.push(format! {
+            client_methods.push(format!(
                 r#"pub async fn {name}(&self {req_fields}) -> ::std::result::Result<{resp_type_str}, ::volo_thrift::ClientError> {{
                     let req = {req_send_name}::{enum_variant}({anonymous_args_send_name} {{
                         {req_field_names}
@@ -547,9 +547,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     }});
                     resp
                 }}"#
-            });
+            ));
 
-            oneshot_client_methods.push(format! {
+            oneshot_client_methods.push(format!(
                 r#"pub async fn {name}(self {req_fields}) -> ::std::result::Result<{resp_type_str}, ::volo_thrift::ClientError> {{
                     let req = {req_send_name}::{enum_variant}({anonymous_args_send_name} {{
                         {req_field_names}
@@ -571,7 +571,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     }});
                     resp
                 }}"#
-            });
+            ));
         });
 
         let variants = all_methods
@@ -613,20 +613,20 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     .join("");
 
                 if has_exception {
-                    format! {
+                    format!(
                         r#"match self.inner.{name}({args}).await {{
                         ::std::result::Result::Ok(::volo_thrift::MaybeException::Ok(resp)) => {method_result_path}::Ok(resp),
                         {convert_exceptions}
                         ::std::result::Result::Err(err) => return ::std::result::Result::Err(err),
                     }}"#
-                    }
+                    )
                 } else {
-                    format! {
+                    format!(
                         r#"match self.inner.{name}({args}).await {{
                         ::std::result::Result::Ok(resp) => {method_result_path}::Ok(resp),
                         ::std::result::Result::Err(err) => return ::std::result::Result::Err(err),
                     }}"#
-                    }
+                    )
                 }
             })
             .collect_vec();
@@ -642,7 +642,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         let mut mod_rs_stream = String::new();
 
-        let server_string = format! {
+        let server_string = format!(
             r#"#[derive(Clone)]
             pub struct {server_name}<S> {{
                 inner: S, // handler
@@ -769,9 +769,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     Ok(linked_bytes.into_bytes_mut().freeze())
                 }}
             }}"#
-        };
+        );
 
-        let client_string = format! {
+        let client_string = format!(
             r#" pub struct {mk_client_name};
 
             pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_thrift::context::ClientContext, {req_send_name}, ::std::option::Option<{res_recv_name}>, ::volo_thrift::ClientError>>;
@@ -818,7 +818,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     ::volo_thrift::client::ClientBuilder::new(service_name, {mk_client_name})
                 }}
             }}"#
-        };
+        );
 
         if self.cx().config.split {
             write_item(
@@ -1019,23 +1019,24 @@ mod tests {
     use std::fs;
 
     use pilota_build::{
-        Builder, DefId, IdlService, SourceType,
-        middle::context::tls::CONTEXT,
+        Builder, DefId, IdlService, Output, SourceType,
+        middle::context::tls::{CONTEXT, CUR_ITEM},
         parser::ThriftParser,
         rir::{self, Item},
     };
-    use tempfile::tempdir;
+    use tempfile::{TempDir, tempdir};
 
     use super::*;
 
-    fn build_test_context(thrift_content: &str) -> Context {
+    #[allow(deprecated)]
+    fn build_test_context(thrift_content: &str, split: bool) -> (Context, TempDir) {
         let dir = tempdir().expect("create temp dir");
         let file_path = dir.path().join("test.thrift");
         fs::write(&file_path, thrift_content).expect("write thrift");
 
-        Builder::<pilota_build::MkThriftBackend, ThriftParser>::build_cx(
+        let cx = Builder::<pilota_build::MkThriftBackend, ThriftParser>::build_cx(
             vec![IdlService::from_path(file_path)],
-            None,
+            Some(Output::File(dir.path().join("out.rs"))),
             ThriftParser::default(),
             Vec::new(),
             true,
@@ -1045,19 +1046,19 @@ mod tests {
             Vec::new(),
             Vec::new(),
             "common".into(),
+            split,
             false,
             false,
             false,
-            false,
-        )
+        );
+        (cx, dir)
     }
 
-    fn find_first_service(cx: &Context) -> DefId {
+    fn find_first_service(cx: &Context) -> (DefId, std::sync::Arc<rir::Service>) {
         for (def_id, node) in cx.nodes().iter() {
             if let rir::NodeKind::Item(item) = &node.kind {
                 if let Item::Service(svc) = &**item {
-                    let _ = svc; // only need def_id
-                    return *def_id;
+                    return (*def_id, std::sync::Arc::new(svc.clone()));
                 }
             }
         }
@@ -1066,7 +1067,7 @@ mod tests {
 
     #[test]
     fn test_codegen_service_method_with_global_path_exception() {
-        let cx = build_test_context(
+        let (cx, _dir) = build_test_context(
             r#"
             exception Exception1 {
                 1: string message;
@@ -1078,9 +1079,10 @@ mod tests {
                 i32 DoThing(1: i64 type, 2: string Name) throws (1: Exception1 e1, 2: Exception2 e2);
             }
             "#,
+            false,
         );
 
-        let svc_def_id = find_first_service(&cx);
+        let (svc_def_id, _) = find_first_service(&cx);
         let methods = cx.service_methods(svc_def_id);
         assert!(!methods.is_empty());
         let m = &methods[0];
@@ -1112,5 +1114,91 @@ mod tests {
             exc_global
         );
         assert!(sig.contains(&expected), "signature: {sig}");
+    }
+
+    const SERVICE_IMPL_IDL: &str = r#"
+        exception BizError {
+            1: string message;
+        }
+        struct Req {
+            1: string name;
+        }
+        struct Resp {
+            1: string greeting;
+        }
+        service Greeter {
+            Resp SayHello(1: Req req);
+            Resp SayHelloEx(1: Req req) throws (1: BizError err);
+        }
+    "#;
+
+    fn codegen_service_impl(split: bool) -> (String, TempDir) {
+        let (cx, dir) = build_test_context(SERVICE_IMPL_IDL, split);
+        let (def_id, service) = find_first_service(&cx);
+
+        let backend = VoloThriftBackend {
+            inner: ThriftBackend::new(cx.clone()),
+        };
+
+        let mut stream = String::new();
+        CONTEXT.set(&cx, || {
+            CUR_ITEM.set(&def_id, || {
+                <VoloThriftBackend as pilota_build::CodegenBackend>::codegen_service_impl(
+                    &backend,
+                    def_id,
+                    &mut stream,
+                    &service,
+                )
+            })
+        });
+        (stream, dir)
+    }
+
+    #[test]
+    fn test_codegen_service_impl_non_split() {
+        let (stream, _dir) = codegen_service_impl(false);
+
+        assert!(stream.contains("GreeterServer"), "stream: {stream}");
+        assert!(stream.contains("GreeterClientBuilder"), "stream: {stream}");
+        assert!(stream.contains("GreeterGenericClient"), "stream: {stream}");
+        assert!(
+            stream.contains("pub async fn say_hello("),
+            "stream: {stream}"
+        );
+        assert!(
+            stream.contains("pub async fn say_hello_ex("),
+            "stream: {stream}"
+        );
+        assert!(stream.contains("MaybeException"), "stream: {stream}");
+        assert!(stream.contains("OneShotService"), "stream: {stream}");
+        assert!(
+            stream.contains("pub enum GreeterRequestRecv"),
+            "stream: {stream}"
+        );
+        assert!(!stream.contains("include!("), "stream: {stream}");
+    }
+
+    #[test]
+    fn test_codegen_service_impl_split() {
+        let (stream, dir) = codegen_service_impl(true);
+
+        assert!(
+            stream.contains("include!(\"Greeter/mod.rs\");"),
+            "stream: {stream}"
+        );
+
+        let base = dir.path().join("test").join("Greeter");
+        for file in [
+            "enum_GreeterRequestRecv.rs",
+            "enum_GreeterRequestSend.rs",
+            "enum_GreeterResponseRecv.rs",
+            "enum_GreeterResponseSend.rs",
+        ] {
+            let content =
+                fs::read_to_string(base.join(file)).unwrap_or_else(|e| panic!("{file}: {e}"));
+            assert!(content.contains("pub enum "), "{file}: {content}");
+            assert!(content.contains("SayHello("), "{file}: {content}");
+            assert!(content.contains("SayHelloEx("), "{file}: {content}");
+        }
     }
 }
