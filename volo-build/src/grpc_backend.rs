@@ -181,12 +181,12 @@ impl VoloGrpcBackend {
         );
 
         if streaming {
-            format! {
+            format!(
                 r#"{resp_stream}
                 ::std::result::Result::Ok(::volo_grpc::Response::from_parts(metadata, extensions, message_stream))"#
-            }
+            )
         } else {
-            format! {
+            format!(
                 r#"{resp_stream}
                 let message = ::volo_grpc::codegen::StreamExt::try_next(&mut message_stream)
                     .await
@@ -199,7 +199,7 @@ impl VoloGrpcBackend {
                     metadata.merge(trailers);
                 }}
                 ::std::result::Result::Ok(::volo_grpc::Response::from_parts(metadata, extensions, message))"#
-            }
+            )
         }.into()
     }
 
@@ -219,12 +219,12 @@ impl VoloGrpcBackend {
             }};"#
         );
         if streaming {
-            format! {
+            format!(
                 r#"{req_stream}
                 let req = ::volo_grpc::Request::from_parts(metadata, extensions, message_stream);"#
-            }
+            )
         } else {
-            format! {
+            format!(
                 r#"{req_stream}
                 ::volo_grpc::codegen::futures::pin_mut!(message_stream);
                 let message = ::volo_grpc::codegen::StreamExt::try_next(&mut message_stream)
@@ -234,7 +234,7 @@ impl VoloGrpcBackend {
                     metadata.merge(trailers);
                 }}
                 let req = ::volo_grpc::Request::from_parts(metadata, extensions, message);"#
-            }
+            )
         }.into()
     }
 
@@ -339,13 +339,13 @@ impl CodegenBackend for VoloGrpcBackend {
                     server_streaming,
                 );
 
-                format! {
+                format!(
                     r#""{path}" => {{
                     {req}
                     {call}
                     {resp}
                 }},"#
-                }
+                )
             })
             .join("");
 
@@ -402,7 +402,7 @@ impl CodegenBackend for VoloGrpcBackend {
             let resp = self.build_client_resp(&resp_enum_name_recv.clone().into(), &variant_name.clone().into(), output_ty.clone(), server_streaming);
 
             client_methods.push(
-                format! {
+                format!(
                     r#"pub async fn {method_name}(
                         &self,
                         requests: {req_ty},
@@ -413,11 +413,11 @@ impl CodegenBackend for VoloGrpcBackend {
                         let resp = ::volo::Service::call(&self.0, &mut cx, req).await?;
                         {resp}
                     }}"#
-                }
+                )
             );
 
             oneshot_client_methods.push(
-                format! {
+                format!(
                     r#"pub async fn {method_name}(
                         self,
                         requests: {req_ty},
@@ -429,7 +429,7 @@ impl CodegenBackend for VoloGrpcBackend {
 
                         {resp}
                     }}"#
-                }
+                )
             );
         });
 
@@ -486,7 +486,7 @@ impl CodegenBackend for VoloGrpcBackend {
             }}"
         );
 
-        let req_enum_send_impl = format! {
+        let req_enum_send_impl = format!(
             r#"
             pub enum {req_enum_name_send} {{
                 {req_enum_send_variants}
@@ -499,9 +499,9 @@ impl CodegenBackend for VoloGrpcBackend {
                     }}
                 }}
             }}"#
-        };
+        );
 
-        let req_enum_recv_impl = format! {
+        let req_enum_recv_impl = format!(
             r#"
             pub enum {req_enum_name_recv} {{
                 {req_enum_recv_variants}
@@ -515,9 +515,9 @@ impl CodegenBackend for VoloGrpcBackend {
                     }}
                 }}
             }}"#
-        };
+        );
 
-        let resp_enum_send_impl = format! {
+        let resp_enum_send_impl = format!(
             r#"
             pub enum {resp_enum_name_send} {{
                 {resp_enum_send_variants}
@@ -530,9 +530,9 @@ impl CodegenBackend for VoloGrpcBackend {
                     }}
                 }}
             }}"#
-        };
+        );
 
-        let resp_enum_recv_impl = format! {
+        let resp_enum_recv_impl = format!(
             r#"
             pub enum {resp_enum_name_recv} {{
                 {resp_enum_recv_variants}
@@ -549,9 +549,9 @@ impl CodegenBackend for VoloGrpcBackend {
                     }}
                 }}
             }}"#
-        };
+        );
 
-        let client_impl = format! {
+        let client_impl = format!(
             r#"
             pub struct {client_builder_name} {{}}
             impl {client_builder_name} {{
@@ -596,9 +596,9 @@ impl CodegenBackend for VoloGrpcBackend {
             impl<S: ::volo::client::OneShotService<::volo_grpc::context::ClientContext,::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + Send + Sync + 'static> {oneshot_client_name}<S> {{
                 {oneshot_client_methods}
             }}"#
-        };
+        );
 
-        let server_impl = format! {
+        let server_impl = format!(
             r#"
             pub struct {server_name}<S> {{
                 inner: ::std::sync::Arc<S>,
@@ -646,7 +646,7 @@ impl CodegenBackend for VoloGrpcBackend {
             impl<S: {service_name}> ::volo_grpc::server::NamedService for {server_name}<S> {{
                 const NAME: &'static str = "{name}";
             }}"#
-        };
+        );
 
         if self.cx().config.split {
             let mut mod_rs_stream = String::new();
@@ -698,7 +698,7 @@ impl CodegenBackend for VoloGrpcBackend {
                 .as_str(),
             );
         } else {
-            stream.push_str(&format! {
+            stream.push_str(&format!(
                 r#"
             {req_enum_send_impl}
             {req_enum_recv_impl}
@@ -707,7 +707,8 @@ impl CodegenBackend for VoloGrpcBackend {
 
             {client_impl}
             {server_impl}
-            "#});
+            "#
+            ));
         }
     }
 
@@ -851,5 +852,151 @@ impl CodegenBackend for VoloGrpcBackend {
 
     fn codegen_impl_enum_message(&self, name: &str) -> String {
         self.inner.codegen_impl_enum_message(name)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+
+    use pilota_build::{
+        Builder, DefId, IdlService, SourceType,
+        db::RirDatabase,
+        middle::{
+            context::tls::{CONTEXT, CUR_ITEM},
+            rir,
+        },
+        parser::ProtobufParser,
+    };
+    use tempfile::tempdir;
+
+    use super::*;
+
+    #[allow(deprecated)]
+    fn build_test_context(proto_content: &str) -> Context {
+        use pilota_build::parser::Parser;
+
+        let dir = tempdir().expect("create temp dir");
+        let file_path = dir.path().join("test.proto");
+        fs::write(&file_path, proto_content).expect("write proto");
+
+        let mut parser = ProtobufParser::default();
+        parser.include_dirs(vec![dir.path().to_path_buf()]);
+
+        Builder::<pilota_build::MkPbBackend, ProtobufParser>::build_cx(
+            vec![IdlService::from_path(file_path)],
+            None,
+            parser,
+            Vec::new(),
+            true,
+            SourceType::Protobuf,
+            true,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            "common".into(),
+            false,
+            false,
+            false,
+            false,
+        )
+    }
+
+    fn find_first_service(cx: &Context) -> (DefId, std::sync::Arc<rir::Service>) {
+        for (def_id, node) in cx.nodes().iter() {
+            if let rir::NodeKind::Item(item) = &node.kind {
+                if let rir::Item::Service(svc) = &**item {
+                    return (*def_id, svc.clone().into());
+                }
+            }
+        }
+        panic!("no service found in parsed proto");
+    }
+
+    #[test]
+    fn test_codegen_service_impl_covers_streaming_and_unary() {
+        let cx = build_test_context(
+            r#"
+            syntax = "proto3";
+            package test.v1;
+
+            message Req { string name = 1; }
+            message Resp { string greeting = 1; }
+
+            service Greeter {
+                rpc Unary(Req) returns (Resp);
+                rpc ServerStream(Req) returns (stream Resp);
+                rpc ClientStream(stream Req) returns (Resp);
+                rpc BidiStream(stream Req) returns (stream Resp);
+            }
+            "#,
+        );
+
+        let (def_id, service) = find_first_service(&cx);
+
+        let backend = VoloGrpcBackend {
+            inner: pilota_build::codegen::pb::ProtobufBackend::new(cx.clone()),
+        };
+
+        let mut stream = String::new();
+        CONTEXT.set(&cx, || {
+            CUR_ITEM.set(&def_id, || {
+                <VoloGrpcBackend as CodegenBackend>::codegen_service_impl(
+                    &backend,
+                    def_id,
+                    &mut stream,
+                    &service,
+                )
+            })
+        });
+
+        assert!(stream.contains("GreeterServer"), "stream: {stream}");
+        assert!(stream.contains("GreeterClientBuilder"), "stream: {stream}");
+        assert!(stream.contains("GreeterGenericClient"), "stream: {stream}");
+        assert!(stream.contains("pub async fn unary("), "stream: {stream}");
+        assert!(
+            stream.contains("pub async fn server_stream("),
+            "stream: {stream}"
+        );
+        assert!(
+            stream.contains("pub async fn client_stream("),
+            "stream: {stream}"
+        );
+        assert!(
+            stream.contains("pub async fn bidi_stream("),
+            "stream: {stream}"
+        );
+        assert!(stream.contains("RecvStream"), "stream: {stream}");
+        assert!(stream.contains("Response::from_parts"), "stream: {stream}");
+
+        let count = |needle: &str| stream.matches(needle).count();
+        assert_eq!(
+            count("Missing request message."),
+            2,
+            "non-streaming server request extraction: Unary + ServerStream\nstream: {stream}"
+        );
+        assert_eq!(
+            count("Missing response message."),
+            4,
+            "non-streaming client response extraction: Unary + ClientStream, each in client and \
+             oneshot\nstream: {stream}"
+        );
+        assert_eq!(
+            count("into_streaming_request()"),
+            4,
+            "streaming client request: ClientStream + BidiStream, each in client and \
+             oneshot\nstream: {stream}"
+        );
+        assert_eq!(
+            count("Response::from_parts(metadata, extensions, message_stream)"),
+            4,
+            "streaming client response passthrough: ServerStream + BidiStream, each in client and \
+             oneshot\nstream: {stream}"
+        );
+        assert_eq!(
+            count("::volo_grpc::Request::from_parts(metadata, extensions, message_stream)"),
+            2,
+            "streaming server request passthrough: ClientStream + BidiStream\nstream: {stream}"
+        );
     }
 }
