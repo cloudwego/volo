@@ -6,11 +6,13 @@ mod fail_on_status;
 pub mod header;
 #[cfg(feature = "http1")]
 pub mod http_proxy;
+mod redirect;
 mod timeout;
-mod utils;
+pub(crate) mod utils;
 
 pub use self::{
     fail_on_status::{FailOnStatus, StatusCodeError},
+    redirect::{FollowRedirect, RedirectPredicate},
     timeout::Timeout,
     utils::TargetLayer,
 };

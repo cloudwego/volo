@@ -121,6 +121,7 @@ where
         mut req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         self.target.clone().apply(cx)?;
+        update_request_extension(req.extensions_mut(), &self.target);
         if !self.service_name.is_empty() {
             cx.rpc_info_mut()
                 .callee_mut()
@@ -135,4 +136,11 @@ where
         }
         self.inner.call(cx, req).await
     }
+}
+
+pub(in crate::client) fn update_request_extension(ext: &mut http::Extensions, target: &Target) {
+    ext.remove::<http::uri::Scheme>();
+    if let Some(scheme) = target.scheme().cloned() {
+        ext.insert(scheme);
+    };
 }

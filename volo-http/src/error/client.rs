@@ -315,6 +315,9 @@ simple_error!(Builder => SchemeUnavailable => "scheme is unavailable in current 
 simple_error!(Builder => PortUnavailable => "port is unavailable in current target");
 simple_error!(Connect => Retry => "retry");
 simple_error!(Request => Timeout => "request timeout");
+simple_error!(Request => TooManyRedirects => "too many redirects");
+simple_error!(Request => InvalidRedirectLocation => "invalid Location header in redirect response");
+simple_error!(Request => BodyNotReplayable => "request body is not replayable for redirect");
 simple_error!(LoadBalance => NoAvailableEndpoint => "no available endpoint");
 
 #[cfg(test)]
@@ -322,8 +325,9 @@ mod client_error_tests {
     use std::error::Error;
 
     use crate::error::client::{
-        BadHostName, BadScheme, NoAddress, NoAvailableEndpoint, Timeout, bad_host_name, bad_scheme,
-        no_address, no_available_endpoint, timeout,
+        BadHostName, BadScheme, BodyNotReplayable, InvalidRedirectLocation, NoAddress,
+        NoAvailableEndpoint, Timeout, bad_host_name, bad_scheme, body_not_replayable,
+        invalid_redirect_location, no_address, no_available_endpoint, timeout,
     };
 
     #[test]
@@ -342,6 +346,18 @@ mod client_error_tests {
                 .is::<BadHostName>()
         );
         assert!(timeout().source().unwrap().is::<Timeout>());
+        assert!(
+            body_not_replayable()
+                .source()
+                .unwrap()
+                .is::<BodyNotReplayable>()
+        );
+        assert!(
+            invalid_redirect_location()
+                .source()
+                .unwrap()
+                .is::<InvalidRedirectLocation>()
+        );
         assert!(
             no_available_endpoint()
                 .source()

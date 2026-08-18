@@ -15,7 +15,10 @@ use volo::{client::Apply, context::Context};
 use crate::{
     client::{Target, target::RemoteHost, utils::is_default_port},
     context::ClientContext,
-    error::{ClientError, client::request_error},
+    error::{
+        ClientError,
+        client::{Result, request_error},
+    },
     request::Request,
 };
 
@@ -132,34 +135,38 @@ pub struct HttpProxyService<S> {
 }
 
 impl<S> HttpProxyService<S> {
-    fn update_req<B>(&self, cx: &mut ClientContext, req: &mut Request<B>) {
+    fn update_req<B>(&self, cx: &mut ClientContext, req: &mut Request<B>) -> Option<Target> {
         let Some(target) = &self.target else {
-            return;
+            return None;
         };
+
+        // A configured proxy is a routing requirement. Unsupported requests must not silently
+        // fall back to a direct connection.
         if req.version() != Version::HTTP_11 {
             tracing::info!("[Volo-HTTP] HttpProxy only works for HTTP/1.1");
-            return;
+            return None;
         }
         if let Some(scheme) = cx.target().scheme() {
             if scheme != &Scheme::HTTP {
                 tracing::info!("[Volo-HTTP] HttpProxy only supports HTTP protocol");
-                return;
+                return None;
             }
         }
 
-        // Generate authority by old target, and then update request
+        // Generate authority from the logical upstream target, then rewrite the HTTP/1.1
+        // request-target to absolute-form for the proxy.
         let Some(authority) = gen_authority(cx.target()) else {
             tracing::warn!(
                 "[Volo-HTTP] HttpProxy: failed to gen authority by {:?}",
                 cx.target()
             );
-            return;
+            return None;
         };
         let authority = match Authority::from_maybe_shared(Bytes::from(authority)) {
             Ok(authority) => authority,
             Err(e) => {
                 tracing::warn!("[Volo-HTTP] HttpProxy: failed to parse authority: {e}");
-                return;
+                return None;
             }
         };
         let mut parts = req.uri().to_owned().into_parts();
@@ -174,19 +181,20 @@ impl<S> HttpProxyService<S> {
             Ok(uri) => uri,
             Err(e) => {
                 tracing::warn!("[Volo-HTTP] HttpProxy: failed to build uri: {e}");
-                return;
+                return None;
             }
         };
         *req.uri_mut() = uri;
 
-        // Clear callee and update proxy target to it
-        // Note: we must apply target after updating request because `target.apply(cx)` will update
-        // self to `cx.target`
+        // Only the transport target becomes the proxy. HttpProxy::call owns restoring the logical
+        // upstream after the inner call returns.
         cx.rpc_info_mut().callee_mut().clear();
-        target
+        let old_target = target
             .to_owned()
-            .apply(cx)
+            .apply_and_replace(cx)
             .expect("infallible: failed to parse target in HttpProxy");
+
+        Some(old_target)
     }
 }
 
@@ -227,6 +235,11 @@ fn gen_authority(target: &Target) -> Option<String> {
     Some(host)
 }
 
+fn restore_target(cx: &mut ClientContext, target: Target) -> Result<()> {
+    cx.rpc_info_mut().callee_mut().clear();
+    target.apply(cx)
+}
+
 impl<B, S> Service<ClientContext, Request<B>> for HttpProxyService<S>
 where
     B: Send,
@@ -240,8 +253,17 @@ where
         cx: &mut ClientContext,
         mut req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
-        self.update_req(cx, &mut req);
-        match self.inner.call(cx, req).await {
+        let old_target = self.update_req(cx, &mut req);
+        let result = self.inner.call(cx, req).await;
+
+        // HttpProxy only borrows cx.target() as a transport target. Restore the logical upstream
+        // before returning to FollowRedirect or any other outer layer. Do this for both success and
+        // error responses.
+        if let Some(target) = old_target {
+            restore_target(cx, target)?;
+        };
+
+        match result {
             Ok(resp) => Ok(resp),
             Err(e) => {
                 if let Some(target) = &self.target {

@@ -58,8 +58,8 @@ impl ClientCxInner {
         &self.target
     }
 
-    pub(crate) fn set_target(&mut self, target: Target) {
-        self.target = target;
+    pub(crate) fn replace_target(&mut self, target: Target) -> Target {
+        std::mem::replace(&mut self.target, target)
     }
 }
 
