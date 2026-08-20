@@ -192,6 +192,12 @@ impl<R: AsyncRead> AsyncBufRead for BufReader<R> {
     fn poll_fill_buf(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<io::Result<&[u8]>> {
         let me = self.project();
 
+        // Always return buffered data before polling the underlying reader. In particular, an
+        // EOF or error from the underlying reader must not hide data that has already been read.
+        if *me.pos < *me.len {
+            return Poll::Ready(Ok(&me.buf[*me.pos..*me.len]));
+        }
+
         // If we've reached the end of our internal buffer then we need to fetch
         // some more data from the underlying reader.
         // Branch using `>=` instead of the more correct `==`
@@ -203,17 +209,8 @@ impl<R: AsyncRead> AsyncBufRead for BufReader<R> {
             *me.len = buf.filled().len();
             *me.pos = 0;
         } else if *me.len < *me.cap {
-            // We have some buffer
             let mut buf = ReadBuf::new(&mut me.buf[*me.len..*me.cap]);
-            match me.inner.poll_read(cx, &mut buf) {
-                Poll::Ready(t) => t,
-                Poll::Pending => {
-                    if *me.pos < *me.len {
-                        return Poll::Ready(Ok(&me.buf[*me.pos..*me.len]));
-                    }
-                    return Poll::Pending;
-                }
-            }?;
+            ready!(me.inner.poll_read(cx, &mut buf))?;
             *me.len += buf.filled().len();
         }
         Poll::Ready(Ok(&me.buf[*me.pos..*me.len]))
@@ -228,6 +225,11 @@ impl<R: AsyncRead> AsyncBufRead for BufReader<R> {
 impl<R: AsyncExt + Send + Sync> AsyncExt for BufReader<R> {
     async fn ready(&self, interest: tokio::io::Interest) -> io::Result<tokio::io::Ready> {
         self.inner.ready(interest).await
+    }
+
+    #[cfg(feature = "shmipc")]
+    fn is_shmipc(&self) -> bool {
+        self.inner.is_shmipc()
     }
 
     #[cfg(feature = "shmipc")]
@@ -250,7 +252,36 @@ impl<R: fmt::Debug> fmt::Debug for BufReader<R> {
 
 #[cfg(test)]
 mod tests {
+    use tokio::io::AsyncBufReadExt;
+
     use super::*;
+
+    struct DataThenError {
+        data: Option<Vec<u8>>,
+        reads: usize,
+    }
+
+    impl AsyncRead for DataThenError {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            let this = self.get_mut();
+            this.reads += 1;
+
+            if let Some(data) = this.data.take() {
+                assert!(buf.remaining() >= data.len());
+                buf.put_slice(&data);
+                Poll::Ready(Ok(()))
+            } else {
+                Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::UnexpectedEof,
+                    "stream closed",
+                )))
+            }
+        }
+    }
 
     #[cfg(test)]
     fn is_unpin<T: Unpin>() {}
@@ -301,5 +332,41 @@ mod tests {
         assert_eq!(buf.pos, 0);
         assert_eq!(buf.len, 5);
         assert_eq!(buf.buf[buf.pos..buf.len], [6, 7, 8, 9, 10]);
+    }
+
+    #[tokio::test]
+    async fn test_buffered_ttheader_data_is_delivered_before_close_error() {
+        // Simulate a complete 1123-byte fallback TTHeader event immediately followed by close.
+        const FRAME_LEN: usize = 1123;
+        const PAYLOAD_LEN: usize = FRAME_LEN - 4;
+
+        let mut frame = vec![0x5a; FRAME_LEN];
+        frame[..4].copy_from_slice(&(PAYLOAD_LEN as u32).to_be_bytes());
+        frame[4..6].copy_from_slice(&[0x10, 0x00]);
+        let expected_payload = frame[4..].to_vec();
+
+        let inner = DataThenError {
+            data: Some(frame),
+            reads: 0,
+        };
+        let mut reader = BufReader::new(inner);
+
+        let header = reader.fill_buf_at_least(6).await.unwrap();
+        assert_eq!(
+            u32::from_be_bytes(header[..4].try_into().unwrap()) as usize,
+            PAYLOAD_LEN
+        );
+        assert_eq!(&header[4..6], &[0x10, 0x00]);
+
+        reader.consume(4);
+        let mut payload = vec![0; PAYLOAD_LEN];
+        reader.read_exact(&mut payload).await.unwrap();
+
+        assert_eq!(payload, expected_payload);
+        assert_eq!(reader.get_ref().reads, 1);
+
+        let err = reader.read_u8().await.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::UnexpectedEof);
+        assert_eq!(reader.get_ref().reads, 2);
     }
 }

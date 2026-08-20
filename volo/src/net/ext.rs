@@ -11,6 +11,12 @@ pub trait AsyncExt {
     /// See [`tokio::net::TcpStream::ready`] for details.
     fn ready(&self, interest: Interest) -> impl Future<Output = io::Result<Ready>> + Send;
 
+    /// Returns whether this IO object is backed by ShmIPC.
+    #[cfg(feature = "shmipc")]
+    fn is_shmipc(&self) -> bool {
+        false
+    }
+
     /// Get helper of ShmIPC.
     #[cfg(feature = "shmipc")]
     fn shmipc_helper(&self) -> super::shmipc::ShmipcHelper {
@@ -35,6 +41,11 @@ impl AsyncExt for Conn {
                 "AsyncExt is not supported for ShmIPC connection",
             )),
         }
+    }
+
+    #[cfg(feature = "shmipc")]
+    fn is_shmipc(&self) -> bool {
+        self.stream.is_shmipc()
     }
 
     #[cfg(feature = "shmipc")]
@@ -66,6 +77,11 @@ impl AsyncExt for OwnedReadHalf {
     }
 
     #[cfg(feature = "shmipc")]
+    fn is_shmipc(&self) -> bool {
+        matches!(self, OwnedReadHalf::Shmipc(_))
+    }
+
+    #[cfg(feature = "shmipc")]
     fn shmipc_helper(&self) -> super::shmipc::ShmipcHelper {
         match self {
             OwnedReadHalf::Shmipc(rh) => rh.helper(),
@@ -91,6 +107,11 @@ impl AsyncExt for OwnedWriteHalf {
                 "AsyncExt is not supported for ShmIPC connection",
             )),
         }
+    }
+
+    #[cfg(feature = "shmipc")]
+    fn is_shmipc(&self) -> bool {
+        matches!(self, OwnedWriteHalf::Shmipc(_))
     }
 
     #[cfg(feature = "shmipc")]

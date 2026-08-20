@@ -1,11 +1,92 @@
 use std::sync::LazyLock;
 
-use volo_thrift::client::CallOpt;
+use motore::{layer::Layer, service::Service};
+use volo::{context::Context, net::Address};
+use volo_thrift::{
+    ClientError,
+    client::CallOpt,
+    context::ClientContext,
+    transport::{DialPlan, SelectedTransport},
+};
+
+/// A per-request layer that dials shmipc first and falls back to a UDS/TCP address.
+///
+/// It follows the `callee.address()` contract: it sets the primary (shmipc) address on the callee
+/// *before* injecting the [`DialPlan`], so `volo-thrift` can validate that the plan primary matches
+/// the callee address. The pool key is chosen per-attempt from the actually selected address, so a
+/// UDS/TCP fallback transport never pollutes the shmipc key. There is no `.dial_plan(...)` builder;
+/// the plan is always injected through the request context.
+#[derive(Clone)]
+struct ShmipcFallbackLayer {
+    plan: DialPlan,
+}
+
+impl ShmipcFallbackLayer {
+    fn new(shmipc_addr: Address, fallback_addr: Address) -> Self {
+        Self {
+            plan: DialPlan::with_fallback(shmipc_addr, fallback_addr),
+        }
+    }
+}
+
+impl<S> Layer<S> for ShmipcFallbackLayer {
+    type Service = ShmipcFallbackService<S>;
+
+    fn layer(self, inner: S) -> Self::Service {
+        ShmipcFallbackService {
+            inner,
+            plan: self.plan,
+        }
+    }
+}
+
+#[derive(Clone)]
+struct ShmipcFallbackService<S> {
+    inner: S,
+    plan: DialPlan,
+}
+
+impl<S, Req> Service<ClientContext, Req> for ShmipcFallbackService<S>
+where
+    S: Service<ClientContext, Req, Error = ClientError> + Send + Sync + 'static,
+    Req: Send + 'static,
+{
+    type Response = S::Response;
+    type Error = S::Error;
+
+    async fn call(&self, cx: &mut ClientContext, req: Req) -> Result<Self::Response, Self::Error> {
+        // 1. Set the primary address first, then inject the plan (order matters).
+        cx.rpc_info_mut()
+            .callee_mut()
+            .set_address(self.plan.primary().clone());
+        cx.extensions_mut().insert(self.plan.clone());
+
+        let resp = self.inner.call(cx, req).await;
+
+        // The actually selected transport is written back by volo-thrift.
+        if let Some(selected) = cx.extensions().get::<SelectedTransport>() {
+            println!(
+                "selected transport: {} (attempt {})",
+                selected.address(),
+                selected.attempt()
+            );
+        }
+        resp
+    }
+}
 
 static CLIENT: LazyLock<volo_gen::thrift_gen::hello::HelloServiceClient> = LazyLock::new(|| {
-    let uds_path = std::os::unix::net::SocketAddr::from_pathname("/tmp/hello_test.sock").unwrap();
+    let shmipc_path =
+        std::os::unix::net::SocketAddr::from_pathname("/tmp/hello_test.sock").unwrap();
+    let shmipc_addr = Address::from(volo::net::ShmipcAddr(shmipc_path));
+    // Fallback to a plain UDS address when shmipc is unavailable.
+    let fallback_path =
+        std::os::unix::net::SocketAddr::from_pathname("/tmp/hello_fallback.sock").unwrap();
+    let fallback_addr = Address::from(fallback_path);
+
     volo_gen::thrift_gen::hello::HelloServiceClientBuilder::new("hello")
-        .address(volo::net::ShmipcAddr(uds_path))
+        .address(shmipc_addr.clone())
+        .layer_outer_front(ShmipcFallbackLayer::new(shmipc_addr, fallback_addr))
         .build()
 });
 

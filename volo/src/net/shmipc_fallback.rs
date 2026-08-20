@@ -1,11 +1,6 @@
 use std::io;
 
-use super::{
-    Address, DefaultIncoming, MakeIncoming,
-    conn::{Conn, OwnedReadHalf, OwnedWriteHalf},
-    dial::{DefaultMakeTransport, MakeTransport},
-    incoming::Incoming,
-};
+use super::{Address, DefaultIncoming, MakeIncoming, conn::Conn, incoming::Incoming};
 
 pub struct ShmipcAddressWithFallback<MI> {
     pub shmipc_addr: Address,
@@ -58,65 +53,5 @@ where
                 conn
             }
         }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ShmipcMakeTransportWithFallback {
-    pub shmipc_mkt: DefaultMakeTransport,
-    pub default_mkt: DefaultMakeTransport,
-    pub fallback_addr: Address,
-}
-
-impl ShmipcMakeTransportWithFallback {
-    pub fn new(
-        shmipc: DefaultMakeTransport,
-        default_mkt: DefaultMakeTransport,
-        fallback_addr: Address,
-    ) -> Self {
-        Self {
-            shmipc_mkt: shmipc,
-            default_mkt,
-            fallback_addr,
-        }
-    }
-}
-
-impl MakeTransport for ShmipcMakeTransportWithFallback {
-    type ReadHalf = OwnedReadHalf;
-    type WriteHalf = OwnedWriteHalf;
-
-    async fn make_transport(
-        &self,
-        mut addr: Address,
-    ) -> io::Result<(Self::ReadHalf, Self::WriteHalf)> {
-        if addr.is_shmipc() {
-            match self.shmipc_mkt.make_transport(addr).await {
-                Ok(ret) => return Ok(ret),
-                Err(e) => {
-                    tracing::info!(
-                        "failed to connect to shmipc target: {e}, fallback to default target"
-                    );
-                    addr = self.fallback_addr.clone();
-                }
-            }
-        }
-
-        self.default_mkt.make_transport(addr).await
-    }
-
-    fn set_connect_timeout(&mut self, timeout: Option<std::time::Duration>) {
-        self.default_mkt.set_connect_timeout(timeout);
-        self.shmipc_mkt.set_connect_timeout(timeout);
-    }
-
-    fn set_read_timeout(&mut self, timeout: Option<std::time::Duration>) {
-        self.default_mkt.set_read_timeout(timeout);
-        self.shmipc_mkt.set_read_timeout(timeout);
-    }
-
-    fn set_write_timeout(&mut self, timeout: Option<std::time::Duration>) {
-        self.default_mkt.set_write_timeout(timeout);
-        self.shmipc_mkt.set_write_timeout(timeout);
     }
 }
