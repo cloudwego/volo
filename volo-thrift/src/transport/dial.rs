@@ -218,6 +218,20 @@ fn resolve_dial_plan(cx: &ClientContext, target: &Address) -> Result<ResolvedPla
     }
 }
 
+fn restore_plan_primary_for_retry(cx: &mut ClientContext, selected: &SelectedTransport) {
+    let current = cx.rpc_info().callee().address();
+    let primary = cx.extensions().get::<DialPlan>().and_then(|plan| {
+        // `acquire` rewrites callee.address to the selected candidate. Only undo that internal
+        // rewrite when the address still matches the previous selection; an address explicitly
+        // changed by the caller must continue through the normal mismatch validation below.
+        (current.as_ref() == Some(selected.address())).then(|| plan.primary().clone())
+    });
+
+    if let Some(primary) = primary {
+        cx.rpc_info_mut().callee_mut().set_address(primary);
+    }
+}
+
 fn missing_address_error(cx: &ClientContext) -> ClientError {
     ClientError::Transport(
         io::Error::new(
@@ -291,11 +305,13 @@ where
         cx: &mut ClientContext,
         ver: Ver,
     ) -> Result<AcquiredTransport<Address, MT::Response>, ClientError> {
-        // A retry layer may reuse this context across attempts. Clear any SelectedTransport left by
-        // a previous acquire so that if this acquire fails entirely, downstream layers (metrics,
-        // logging) do not report the previous success's transport. It is re-inserted below only
-        // when a candidate succeeds.
-        cx.extensions_mut().remove::<SelectedTransport>();
+        // A retry layer may reuse this context after send/decode fails. A previous acquire may have
+        // rewritten callee.address to a fallback, so restore the plan primary before validating and
+        // walking candidates again. Then clear the stale selection so a fully failed retry cannot
+        // be reported as the previous success's transport; it is re-inserted below on success.
+        if let Some(selected) = cx.extensions_mut().remove::<SelectedTransport>() {
+            restore_plan_primary_for_retry(cx, &selected);
+        }
 
         // `callee.address()` is mandatory and represents the primary transport target.
         let target = cx
@@ -388,8 +404,8 @@ where
                             error = %e,
                             "[VOLO] dial plan candidate failed"
                         );
+                        let _ = write!(summary, "; attempt {attempt} ({candidate}): {e}");
                     }
-                    let _ = write!(summary, "; attempt {attempt} ({candidate}): {e}");
                     last_err = Some(e);
                 }
             }
@@ -397,6 +413,13 @@ where
 
         // No candidate succeeded. `make_transport_end_at` stays unset to preserve the existing
         // "never acquired a transport" semantics.
+        if let ResolvedPlan::Plan(plan) = &resolved {
+            // No SelectedTransport is inserted on failure, so a retry cannot rely on the recovery
+            // at the start of `acquire`. Restore the primary now to keep the context reusable.
+            cx.rpc_info_mut()
+                .callee_mut()
+                .set_address(plan.primary().clone());
+        }
         match last_err {
             Some(mut e) => {
                 e.append_msg(&format!(", dial plan exhausted{summary}"));
@@ -675,6 +698,31 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn acquire_retry_after_fallback_success_restarts_from_primary() {
+        let maker = MockMaker::new([ip(1)]);
+        let acquirer = TransportAcquirer::new(maker.clone(), None);
+        let mut cx = make_cx(Some(ip(1)));
+        cx.extensions_mut()
+            .insert(DialPlan::with_fallback(ip(1), ip(2)));
+
+        // The first acquire falls back and leaves callee.address pointing at the selected fallback.
+        acquirer.acquire(&mut cx, Ver::PingPong).await.unwrap();
+        assert_eq!(maker.calls(), vec![ip(1), ip(2)]);
+        assert_eq!(cx.rpc_info().callee().address(), Some(ip(2)));
+
+        // Model a retry after send/decode failure. The primary has recovered, so the reused context
+        // must restore it before validation and dial it first instead of returning InvalidData.
+        maker.set_fail([]);
+        acquirer.acquire(&mut cx, Ver::PingPong).await.unwrap();
+
+        assert_eq!(maker.calls(), vec![ip(1), ip(2), ip(1)]);
+        assert_eq!(cx.rpc_info().callee().address(), Some(ip(1)));
+        let selected = cx.extensions().get::<SelectedTransport>().unwrap();
+        assert_eq!(selected.address(), &ip(1));
+        assert_eq!(selected.attempt(), 0);
+    }
+
+    #[tokio::test]
     async fn acquire_all_fail_aggregates_errors() {
         let maker = MockMaker::new([ip(1), ip(2)]);
         let acquirer = TransportAcquirer::new(maker.clone(), None);
@@ -692,11 +740,35 @@ mod tests {
             msg.contains("127.0.0.1:2"),
             "second attempt in summary: {msg}"
         );
-        // callee address reflects the last attempt.
-        assert_eq!(cx.rpc_info().callee().address(), Some(ip(2)));
+        // A fully failed plan restores the primary so the context remains reusable.
+        assert_eq!(cx.rpc_info().callee().address(), Some(ip(1)));
         // end stays unset on total failure.
         assert!(cx.stats.make_transport_start_at().is_some());
         assert!(cx.stats.make_transport_end_at().is_none());
+
+        // A retry with the same context starts from the primary instead of failing plan validation.
+        maker.set_fail([]);
+        acquirer.acquire(&mut cx, Ver::PingPong).await.unwrap();
+        assert_eq!(maker.calls(), vec![ip(1), ip(2), ip(1)]);
+        let selected = cx.extensions().get::<SelectedTransport>().unwrap();
+        assert_eq!(selected.address(), &ip(1));
+        assert_eq!(selected.attempt(), 0);
+    }
+
+    #[tokio::test]
+    async fn acquire_single_failure_does_not_duplicate_error() {
+        let maker = MockMaker::new([ip(1)]);
+        let acquirer = TransportAcquirer::new(maker.clone(), None);
+        let mut cx = make_cx(Some(ip(1)));
+
+        let err = expect_err(acquirer.acquire(&mut cx, Ver::PingPong).await);
+        let msg = format!("{err}");
+
+        assert_eq!(
+            msg.matches("mock fail for 127.0.0.1:1").count(),
+            1,
+            "single-address failure must include the original error only once: {msg}"
+        );
     }
 
     #[tokio::test]
@@ -723,12 +795,12 @@ mod tests {
         maker.set_fail([ip(1), ip(2)]);
         let _ = expect_err(acquirer.acquire(&mut cx, Ver::PingPong).await);
 
-        // The stale selection is gone, so downstream reads fall back to the last attempted address.
+        // The stale selection is gone and the failed plan has restored its primary.
         assert!(
             cx.extensions().get::<SelectedTransport>().is_none(),
             "stale SelectedTransport must be cleared on a fully-failed acquire"
         );
-        assert_eq!(cx.rpc_info().callee().address(), Some(ip(2)));
+        assert_eq!(cx.rpc_info().callee().address(), Some(ip(1)));
     }
 
     #[tokio::test]
@@ -772,12 +844,14 @@ mod tests {
         let maker = MockMaker::new([]);
         let acquirer = TransportAcquirer::new(maker.clone(), None);
         let mut cx = make_cx(Some(shmipc(1)));
-        cx.extensions_mut().insert(DialPlan::new(shmipc(1)));
+        cx.extensions_mut()
+            .insert(DialPlan::with_fallback(shmipc(1), shmipc(2)));
 
         let err = expect_err(acquirer.acquire(&mut cx, Ver::Multiplex).await);
         assert_eq!(io_kind(&err), Some(std::io::ErrorKind::Unsupported));
         assert!(format!("{err}").contains("shmipc does not support multiplex"));
         assert!(maker.calls().is_empty(), "shmipc maker must not be called");
+        assert_eq!(cx.rpc_info().callee().address(), Some(shmipc(1)));
     }
 
     #[cfg(feature = "shmipc")]

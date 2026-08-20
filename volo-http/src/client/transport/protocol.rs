@@ -321,11 +321,7 @@ fn conn_use_h2(ver: pool::Ver, _conn: &volo::net::conn::Conn) -> bool {
     let use_h2 = true;
 
     // H2 is specified or H1 is disabled
-    if use_h2 && (ver == pool::Ver::Http2 || cfg!(not(feature = "http1"))) {
-        return true;
-    }
-
-    false
+    use_h2 && (ver == pool::Ver::Http2 || cfg!(not(feature = "http1")))
 }
 
 impl<B> Service<ClientContext, Request<B>> for ClientTransport<B>

@@ -579,6 +579,52 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "shmipc")]
+    struct LargeProbeDecoder;
+
+    #[cfg(feature = "shmipc")]
+    impl ZeroCopyDecoder for LargeProbeDecoder {
+        fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
+            &mut self,
+            _cx: &mut Cx,
+            _bytes: &mut Bytes,
+        ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
+            Ok(None)
+        }
+
+        async fn decode_async<
+            Msg: Send + EntryMessage,
+            Cx: ThriftContext,
+            R: AsyncRead + Unpin + Send + Sync,
+        >(
+            &mut self,
+            _cx: &mut Cx,
+            reader: &mut BufReader<R>,
+        ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
+            let buf = reader
+                .fill_buf_at_least(SHMIPC_DECODE_BUFFER_CAPACITY + 1)
+                .await?;
+            assert_eq!(buf.len(), SHMIPC_DECODE_BUFFER_CAPACITY + 1);
+            assert!(buf.iter().all(|byte| *byte == 0x5a));
+            Ok(None)
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[derive(Clone)]
+    struct MakeLargeProbeCodec;
+
+    #[cfg(feature = "shmipc")]
+    impl MakeZeroCopyCodec for MakeLargeProbeCodec {
+        type Encoder = thrift::ThriftCodec;
+        type Decoder = LargeProbeDecoder;
+
+        fn make_codec(&self) -> (Self::Encoder, Self::Decoder) {
+            let (encoder, _) = thrift::MakeThriftCodec::default().make_codec();
+            (encoder, LargeProbeDecoder)
+        }
+    }
+
     /// A writer that records everything written to it, so a test can inspect
     /// the exact bytes the encoder produced.
     #[derive(Clone, Default)]
@@ -866,6 +912,19 @@ mod tests {
             .unwrap();
         assert_eq!(buffered, data);
         assert_eq!(*read_sizes.lock().unwrap(), [SHMIPC_DECODE_BUFFER_CAPACITY]);
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[tokio::test]
+    async fn test_custom_decoder_can_probe_beyond_shmipc_initial_capacity() {
+        let data = Bytes::from(vec![0x5a; SHMIPC_DECODE_BUFFER_CAPACITY + 1]);
+        let reader = CapabilityReader::new(data, true, []);
+        let (_, mut decoder) = DefaultMakeCodec::new(MakeLargeProbeCodec)
+            .make_codec(reader, RecordingWriter::default());
+        let mut cx = crate::context::ServerContext::default();
+
+        let decoded: Result<Option<ThriftMessage<Bytes>>, _> = decoder.decode(&mut cx).await;
+        assert!(decoded.unwrap().is_none());
     }
 
     #[cfg(feature = "shmipc")]

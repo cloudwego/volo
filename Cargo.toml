@@ -141,7 +141,7 @@ tokio-native-tls = "0.3"
 tungstenite = "0.28"
 tokio-tungstenite = "0.28"
 
-shmipc = "0.2.0"
+shmipc = "0.2.1"
 
 [profile.release]
 opt-level = 3

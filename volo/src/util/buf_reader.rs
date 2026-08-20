@@ -35,9 +35,22 @@ impl<R: AsyncRead + Unpin> BufReader<R> {
             return Ok(&self.buf[self.pos..self.len]);
         }
 
-        assert!(len <= self.cap);
-        // if the requested length is larger than the buffer, we need to compact the buffer
-        if len > (self.cap - self.pos) {
+        if len > self.cap {
+            // `fill_buf_at_least` is also exposed to custom codecs, whose probe size may be larger
+            // than this reader's initial capacity. Grow on demand instead of panicking, while
+            // preserving bytes that have already been read but not consumed.
+            self.compact();
+            let mut new_cap = self.cap.max(1);
+            while new_cap < len {
+                new_cap = new_cap.checked_mul(2).unwrap_or(len);
+            }
+            let mut buf = vec![0; new_cap].into_boxed_slice();
+            buf[..self.len].copy_from_slice(&self.buf[..self.len]);
+            self.buf = buf;
+            self.cap = new_cap;
+        } else if len > (self.cap - self.pos) {
+            // There is enough total capacity, but the unread bytes need to move to the front before
+            // the requested amount can become contiguous.
             self.compact();
         }
 
@@ -332,6 +345,20 @@ mod tests {
         assert_eq!(buf.pos, 0);
         assert_eq!(buf.len, 5);
         assert_eq!(buf.buf[buf.pos..buf.len], [6, 7, 8, 9, 10]);
+    }
+
+    #[tokio::test]
+    async fn fill_buf_at_least_grows_and_preserves_unread_data() {
+        let data = b"abcdefgh";
+        let mut reader = BufReader::with_capacity(4, &data[..]);
+
+        assert_eq!(reader.fill_buf_at_least(4).await.unwrap(), b"abcd");
+        reader.consume(2);
+
+        assert_eq!(reader.fill_buf_at_least(6).await.unwrap(), b"cdefgh");
+        assert_eq!(reader.cap, 8);
+        assert_eq!(reader.pos, 0);
+        assert_eq!(reader.len, 6);
     }
 
     #[tokio::test]

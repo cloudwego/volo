@@ -3,6 +3,7 @@ use std::os::linux::net::SocketAddrExt;
 use std::{
     collections::HashMap,
     fmt,
+    future::Future,
     hash::Hash,
     io,
     sync::{Arc, LazyLock},
@@ -12,7 +13,8 @@ use motore::service::UnaryService;
 use shmipc::session::SessionManager;
 use tokio::sync::{OnceCell, RwLock};
 
-type SessionManagerCell = Arc<OnceCell<SessionManager<Connector>>>;
+type SharedInitCell<V, E> = Arc<OnceCell<Result<Arc<V>, Arc<E>>>>;
+type SessionManagerCell = SharedInitCell<SessionManager<Connector>, io::Error>;
 
 pub(crate) static SESSION_MANAGERS: LazyLock<RwLock<HashMap<Address, SessionManagerCell>>> =
     LazyLock::new(Default::default);
@@ -37,6 +39,47 @@ where
             .entry(key)
             .or_insert_with(|| Arc::new(OnceCell::new())),
     )
+}
+
+async fn remove_cell_if_same<K, V>(
+    cells: &RwLock<HashMap<K, Arc<OnceCell<V>>>>,
+    key: &K,
+    expected: &Arc<OnceCell<V>>,
+) where
+    K: Eq + Hash,
+{
+    let mut write = cells.write().await;
+    let is_same = write
+        .get(key)
+        .is_some_and(|current| Arc::ptr_eq(current, expected));
+    if is_same {
+        write.remove(key);
+    }
+}
+
+async fn get_or_try_init_shared<K, V, E, F, Fut>(
+    cells: &RwLock<HashMap<K, SharedInitCell<V, E>>>,
+    key: K,
+    init: F,
+) -> Result<Arc<V>, Arc<E>>
+where
+    K: Eq + Hash + Clone,
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = Result<V, E>>,
+{
+    let cell = get_or_insert_cell(cells, key.clone()).await;
+    let result = cell
+        .get_or_init(|| async { init().await.map(Arc::new).map_err(Arc::new) })
+        .await
+        .clone();
+
+    // Keep a failed result in this cell long enough for callers that joined this initialization
+    // attempt to observe it, but detach the cell from the address map so a later call can retry.
+    if result.is_err() {
+        remove_cell_if_same(cells, &key, &cell).await;
+    }
+
+    result
 }
 
 #[derive(Clone, Debug)]
@@ -225,16 +268,15 @@ impl UnaryService<Address> for ShmipcMakeTransport {
             ));
         }
 
-        let cell = get_or_insert_cell(&SESSION_MANAGERS, addr.clone()).await;
-        let sm = cell
-            .get_or_try_init(|| async {
-                let config = super::config::session_manager_config();
-                tracing::debug!("ShmipcMakeTransport: config: {config:?}");
-                SessionManager::new(config, Connector, addr)
-                    .await
-                    .map_err(Into::<io::Error>::into)
-            })
-            .await?;
+        let sm = get_or_try_init_shared(&SESSION_MANAGERS, addr.clone(), || async move {
+            let config = super::config::session_manager_config();
+            tracing::debug!("ShmipcMakeTransport: config: {config:?}");
+            SessionManager::new(config, Connector, addr)
+                .await
+                .map_err(Into::<io::Error>::into)
+        })
+        .await
+        .map_err(|err| io::Error::new(err.kind(), err.to_string()))?;
 
         sm.get_stream().map(super::Stream::new).map_err(Into::into)
     }
@@ -279,6 +321,78 @@ mod tests {
             assert_eq!(task.await.unwrap(), 42);
         }
         assert_eq!(initializations.load(Ordering::Relaxed), 1);
+        assert_eq!(cells.read().await.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn same_key_failed_initialization_is_shared_then_retried() {
+        const CONCURRENCY: usize = 32;
+
+        type TestCell = SharedInitCell<usize, &'static str>;
+
+        let cells = Arc::new(RwLock::new(HashMap::<usize, TestCell>::new()));
+        let barrier = Arc::new(Barrier::new(CONCURRENCY));
+        let initializations = Arc::new(AtomicUsize::new(0));
+        let mut tasks = Vec::with_capacity(CONCURRENCY);
+
+        for _ in 0..CONCURRENCY {
+            let cells = Arc::clone(&cells);
+            let barrier = Arc::clone(&barrier);
+            let initializations = Arc::clone(&initializations);
+            tasks.push(tokio::spawn(async move {
+                barrier.wait().await;
+                get_or_try_init_shared(&cells, 1, || {
+                    let cells = Arc::clone(&cells);
+                    let initializations = Arc::clone(&initializations);
+                    async move {
+                        initializations.fetch_add(1, Ordering::Relaxed);
+
+                        // Do not fail until every concurrent caller holds this same cell. This
+                        // makes the waiter-sharing assertion deterministic instead of scheduler
+                        // dependent.
+                        loop {
+                            let strong_count = {
+                                let read = cells.read().await;
+                                Arc::strong_count(read.get(&1).expect("cell must be registered"))
+                            };
+                            if strong_count > CONCURRENCY {
+                                break;
+                            }
+                            tokio::task::yield_now().await;
+                        }
+
+                        Err("injected initialization failure")
+                    }
+                })
+                .await
+                .unwrap_err()
+            }));
+        }
+
+        let mut errors = Vec::with_capacity(CONCURRENCY);
+        for task in tasks {
+            errors.push(task.await.unwrap());
+        }
+
+        assert_eq!(initializations.load(Ordering::Relaxed), 1);
+        assert!(
+            errors.iter().all(|error| Arc::ptr_eq(error, &errors[0])),
+            "all concurrent waiters must observe the same failed attempt"
+        );
+        assert!(
+            cells.read().await.is_empty(),
+            "a failed cell must be detached so a later request can retry"
+        );
+
+        let value = get_or_try_init_shared(&cells, 1, || async {
+            initializations.fetch_add(1, Ordering::Relaxed);
+            Ok::<_, &'static str>(42)
+        })
+        .await
+        .unwrap();
+
+        assert_eq!(*value, 42);
+        assert_eq!(initializations.load(Ordering::Relaxed), 2);
         assert_eq!(cells.read().await.len(), 1);
     }
 }

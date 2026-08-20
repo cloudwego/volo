@@ -3282,9 +3282,9 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "shmipc"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2654da930bc890717401543372629920c62c821191400a800224770da0930439"
+checksum = "e46b66b2fbc3ed49e95bd15d9ff81017cabe482b0ef9de4591df0e9bb2430a53"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -4369,7 +4369,7 @@ version = "0.12.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.12.5"
+version = "0.12.6"
 dependencies = [
  "ahash",
  "anyhow",
