@@ -4171,6 +4171,7 @@ dependencies = [
  "faststr",
  "futures",
  "libc",
+ "linked-hash-map",
  "metainfo",
  "motore",
  "mur3",
