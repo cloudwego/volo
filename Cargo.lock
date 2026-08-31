@@ -4277,7 +4277,6 @@ dependencies = [
  "futures",
  "futures-util",
  "h2",
- "hex",
  "hickory-resolver",
  "http",
  "http-body",

@@ -33,7 +33,7 @@ volo-grpc/src/
 ├── codec/              # Codec trait, encode/decode, compression (gzip/zlib/zstd)
 ├── metadata/           # MetadataMap, MetadataKey, MetadataValue (binary keys use `-bin` suffix)
 ├── layer/              # Shared layers: loadbalance, grpc_timeout, grpc_web, user_agent, CORS
-└── transport/          # Client transport, connection, TLS config
+└── transport/          # Client transport: per-address HTTP/2 connections, `:authority` selection
 ```
 
 ## Key Components
@@ -90,3 +90,4 @@ Server HTTP/2 settings:
 2. **gRPC-Web requires additional configuration**: Enable `grpc-web` feature and set `accept_http1(true)`
 3. **Compression is optional**: gzip and zlib enabled by default, zstd requires manual enabling
 4. **TLS requires backend selection**: rustls or native-tls
+5. **`:authority` is derived, not configured**: the client transport pools HTTP/2 connections in `volo::pool::Pool<Address, _>` (shared mode, 90s idle timeout) keyed by the callee `Address`, and builds the request URI from the callee `Endpoint`: an explicit `client::Authority` faststr tag on the callee if present, else TLS `server_name` (+ non-443 port) if TLS is on, else the callee `service_name`, else the address. See `transport/client.rs::authority`.
