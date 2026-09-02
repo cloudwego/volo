@@ -764,6 +764,15 @@ impl From<LoadBalanceError> for Status {
     }
 }
 
+impl From<volo::pool::Error<Status>> for Status {
+    fn from(err: volo::pool::Error<Status>) -> Self {
+        match err {
+            volo::pool::Error::Connect(status) => status,
+            volo::pool::Error::Canceled => Status::unavailable(err.to_string()),
+        }
+    }
+}
+
 impl From<anyhow::Error> for Status {
     fn from(err: anyhow::Error) -> Self {
         Self::from_error(err.into())
