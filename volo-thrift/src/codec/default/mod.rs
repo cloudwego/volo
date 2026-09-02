@@ -43,6 +43,9 @@ pub mod framed;
 pub mod thrift;
 pub mod ttheader;
 
+#[cfg(feature = "shmipc")]
+const SHMIPC_DECODE_BUFFER_CAPACITY: usize = 512;
+
 /// Trait for encoding a [`ThriftMessage`] in place.
 ///
 /// [`ZeroCopyEncoder`] tries to encode a message without copying large data taking the advantage
@@ -340,22 +343,38 @@ where
     #[inline]
     fn make_codec(&self, reader: R, writer: W) -> (Self::Encoder, Self::Decoder) {
         let (encoder, decoder) = self.make_zero_copy_codec.make_codec();
+
+        #[cfg(feature = "shmipc")]
+        let reader = if reader.is_shmipc() {
+            BufReader::with_capacity(SHMIPC_DECODE_BUFFER_CAPACITY, reader)
+        } else {
+            BufReader::new(reader)
+        };
+        #[cfg(not(feature = "shmipc"))]
+        let reader = BufReader::new(reader);
+
         (
             DefaultEncoder {
                 encoder,
                 writer,
                 linked_bytes: LinkedBytes::new(),
             },
-            DefaultDecoder {
-                decoder,
-                reader: BufReader::new(reader),
-            },
+            DefaultDecoder { decoder, reader },
         )
     }
 }
 
 #[cfg(test)]
 mod tests {
+    #[cfg(feature = "shmipc")]
+    use std::{
+        cell::RefCell,
+        collections::VecDeque,
+        sync::{
+            Arc, Mutex,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
     use std::{
         io,
         pin::Pin,
@@ -363,7 +382,9 @@ mod tests {
     };
 
     use bytes::Bytes;
-    use tokio::io::{AsyncBufRead, AsyncRead, ReadBuf};
+    use tokio::io::{AsyncBufRead, AsyncRead, AsyncWrite, ReadBuf};
+    #[cfg(feature = "shmipc")]
+    use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt};
     use volo::context::RpcInfo;
 
     use super::*;
@@ -385,6 +406,7 @@ mod tests {
     enum EofBehavior {
         EmptyBuffer,
         UnexpectedEof,
+        #[cfg(feature = "shmipc")]
         OtherError,
     }
 
@@ -400,6 +422,7 @@ mod tests {
                     io::ErrorKind::UnexpectedEof,
                     "unexpected eof",
                 ))),
+                #[cfg(feature = "shmipc")]
                 EofBehavior::OtherError => Poll::Ready(Err(io::Error::new(
                     io::ErrorKind::ConnectionReset,
                     "connection reset",
@@ -416,6 +439,7 @@ mod tests {
                     io::ErrorKind::UnexpectedEof,
                     "unexpected eof",
                 ))),
+                #[cfg(feature = "shmipc")]
                 EofBehavior::OtherError => Poll::Ready(Err(io::Error::new(
                     io::ErrorKind::ConnectionReset,
                     "connection reset",
@@ -429,6 +453,11 @@ mod tests {
     impl volo::net::ext::AsyncExt for MockReader {
         async fn ready(&self, _interest: tokio::io::Interest) -> io::Result<tokio::io::Ready> {
             Ok(tokio::io::Ready::READABLE | tokio::io::Ready::WRITABLE)
+        }
+
+        #[cfg(feature = "shmipc")]
+        fn is_shmipc(&self) -> bool {
+            self.shmipc_stream.is_some()
         }
 
         #[cfg(feature = "shmipc")]
@@ -479,6 +508,120 @@ mod tests {
         #[cfg(feature = "shmipc")]
         fn shmipc_helper(&self) -> volo::net::shmipc::ShmipcHelper {
             volo::net::shmipc::ShmipcHelper::none()
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    struct CapabilityReader {
+        data: Bytes,
+        pos: usize,
+        max_read_sizes: VecDeque<usize>,
+        is_shmipc: bool,
+        read_sizes: Arc<Mutex<Vec<usize>>>,
+        capability_calls: Arc<AtomicUsize>,
+        helper_calls: Arc<AtomicUsize>,
+    }
+
+    #[cfg(feature = "shmipc")]
+    impl CapabilityReader {
+        fn new(data: Bytes, is_shmipc: bool, max_read_sizes: impl Into<VecDeque<usize>>) -> Self {
+            Self {
+                data,
+                pos: 0,
+                max_read_sizes: max_read_sizes.into(),
+                is_shmipc,
+                read_sizes: Arc::default(),
+                capability_calls: Arc::default(),
+                helper_calls: Arc::default(),
+            }
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    impl AsyncRead for CapabilityReader {
+        fn poll_read(
+            self: Pin<&mut Self>,
+            _cx: &mut Context<'_>,
+            buf: &mut ReadBuf<'_>,
+        ) -> Poll<io::Result<()>> {
+            let this = self.get_mut();
+            this.read_sizes.lock().unwrap().push(buf.remaining());
+
+            if this.pos == this.data.len() {
+                return Poll::Ready(Ok(()));
+            }
+
+            let max_read_size = this.max_read_sizes.pop_front().unwrap_or(usize::MAX);
+            let read_size = max_read_size
+                .min(buf.remaining())
+                .min(this.data.len() - this.pos);
+            assert!(read_size > 0);
+            buf.put_slice(&this.data[this.pos..this.pos + read_size]);
+            this.pos += read_size;
+            Poll::Ready(Ok(()))
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    impl volo::net::ext::AsyncExt for CapabilityReader {
+        async fn ready(&self, _interest: tokio::io::Interest) -> io::Result<tokio::io::Ready> {
+            Ok(tokio::io::Ready::READABLE | tokio::io::Ready::WRITABLE)
+        }
+
+        fn is_shmipc(&self) -> bool {
+            self.capability_calls.fetch_add(1, Ordering::Relaxed);
+            self.is_shmipc
+        }
+
+        fn shmipc_helper(&self) -> volo::net::shmipc::ShmipcHelper {
+            self.helper_calls.fetch_add(1, Ordering::Relaxed);
+            volo::net::shmipc::ShmipcHelper::none()
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    struct LargeProbeDecoder;
+
+    #[cfg(feature = "shmipc")]
+    impl ZeroCopyDecoder for LargeProbeDecoder {
+        fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
+            &mut self,
+            _cx: &mut Cx,
+            _bytes: &mut Bytes,
+        ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
+            Ok(None)
+        }
+
+        async fn decode_async<
+            Msg: Send + EntryMessage,
+            Cx: ThriftContext,
+            R: AsyncRead + Unpin + Send + Sync,
+        >(
+            &mut self,
+            _cx: &mut Cx,
+            reader: &mut BufReader<R>,
+        ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
+            let buf = reader
+                .fill_buf_at_least(SHMIPC_DECODE_BUFFER_CAPACITY + 1)
+                .await?;
+            assert_eq!(buf.len(), SHMIPC_DECODE_BUFFER_CAPACITY + 1);
+            assert!(buf.iter().all(|byte| *byte == 0x5a));
+            Ok(None)
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[derive(Clone)]
+    struct MakeLargeProbeCodec;
+
+    #[cfg(feature = "shmipc")]
+    impl MakeZeroCopyCodec for MakeLargeProbeCodec {
+        type Encoder = thrift::ThriftCodec;
+        type Decoder = LargeProbeDecoder;
+
+        fn make_codec(&self) -> (Self::Encoder, Self::Decoder) {
+            let (encoder, _) = thrift::MakeThriftCodec::default().make_codec();
+            (encoder, LargeProbeDecoder)
         }
     }
 
@@ -696,6 +839,126 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "shmipc")]
+    async fn encode_ttheader_frames(payloads: &[Bytes]) -> Bytes {
+        let encoded = Arc::<Mutex<Vec<u8>>>::default();
+        let writer = RecordingWriter(encoded.clone());
+        let (mut encoder, _) = DefaultMakeCodec::default()
+            .make_codec(CapabilityReader::new(Bytes::new(), false, []), writer);
+
+        for (index, payload) in payloads.iter().enumerate() {
+            let mut cx = crate::context::ClientContext::new(
+                index as i32 + 1,
+                RpcInfo::with_role(volo::context::Role::Client),
+                pilota::thrift::TMessageType::Call,
+            );
+            let msg = ThriftMessage::mk_client_msg(&cx, payload.clone());
+            encoder.encode(&mut cx, msg).await.unwrap();
+        }
+
+        let encoded = encoded.lock().unwrap().clone();
+        Bytes::from(encoded)
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[tokio::test]
+    async fn test_make_codec_selects_reader_capacity_without_helper_probe() {
+        for (is_shmipc, expected_capacity) in
+            [(true, SHMIPC_DECODE_BUFFER_CAPACITY), (false, 8 * 1024)]
+        {
+            let reader = CapabilityReader::new(Bytes::new(), is_shmipc, []);
+            let read_sizes = reader.read_sizes.clone();
+            let capability_calls = reader.capability_calls.clone();
+            let helper_calls = reader.helper_calls.clone();
+
+            let (_, mut decoder) =
+                DefaultMakeCodec::buffered().make_codec(reader, RecordingWriter::default());
+
+            assert_eq!(capability_calls.load(Ordering::Relaxed), 1);
+            assert_eq!(helper_calls.load(Ordering::Relaxed), 0);
+            assert!(decoder.reader.fill_buf().await.unwrap().is_empty());
+            assert_eq!(*read_sizes.lock().unwrap(), [expected_capacity]);
+            assert_eq!(helper_calls.load(Ordering::Relaxed), 0);
+        }
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[test]
+    fn test_shmipc_capacity_covers_builtin_codec_probes() {
+        let max_probe = [
+            thrift::HEADER_DETECT_LENGTH,
+            framed::HEADER_DETECT_LENGTH,
+            ttheader::HEADER_DETECT_LENGTH,
+        ]
+        .into_iter()
+        .max()
+        .unwrap();
+        assert!(max_probe <= SHMIPC_DECODE_BUFFER_CAPACITY);
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[tokio::test]
+    async fn test_shmipc_reader_can_fill_its_full_capacity() {
+        let data = Bytes::from(vec![0x5a; SHMIPC_DECODE_BUFFER_CAPACITY]);
+        let reader = CapabilityReader::new(data.clone(), true, []);
+        let read_sizes = reader.read_sizes.clone();
+        let (_, mut decoder) =
+            DefaultMakeCodec::buffered().make_codec(reader, RecordingWriter::default());
+
+        let buffered = decoder
+            .reader
+            .fill_buf_at_least(SHMIPC_DECODE_BUFFER_CAPACITY)
+            .await
+            .unwrap();
+        assert_eq!(buffered, data);
+        assert_eq!(*read_sizes.lock().unwrap(), [SHMIPC_DECODE_BUFFER_CAPACITY]);
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[tokio::test]
+    async fn test_custom_decoder_can_probe_beyond_shmipc_initial_capacity() {
+        let data = Bytes::from(vec![0x5a; SHMIPC_DECODE_BUFFER_CAPACITY + 1]);
+        let reader = CapabilityReader::new(data, true, []);
+        let (_, mut decoder) = DefaultMakeCodec::new(MakeLargeProbeCodec)
+            .make_codec(reader, RecordingWriter::default());
+        let mut cx = crate::context::ServerContext::default();
+
+        let decoded: Result<Option<ThriftMessage<Bytes>>, _> = decoder.decode(&mut cx).await;
+        assert!(decoded.unwrap().is_none());
+    }
+
+    #[cfg(feature = "shmipc")]
+    #[tokio::test]
+    async fn test_shmipc_capacity_uses_cache_then_direct_read_for_ttheader_frames() {
+        metainfo::METAINFO
+            .scope(RefCell::new(metainfo::MetaInfo::default()), async {
+                let payloads = [Bytes::from(vec![0x31; 2048]), Bytes::from(vec![0x72; 1024])];
+                let encoded = encode_ttheader_frames(&payloads).await;
+                let reader = CapabilityReader::new(encoded, true, [3, 2, 1]);
+                let read_sizes = reader.read_sizes.clone();
+                let helper_calls = reader.helper_calls.clone();
+                let (_, mut decoder) =
+                    DefaultMakeCodec::default().make_codec(reader, RecordingWriter::default());
+
+                for expected in payloads {
+                    let mut cx = crate::context::ServerContext::default();
+                    let decoded: ThriftMessage<Bytes> =
+                        decoder.decode(&mut cx).await.unwrap().unwrap();
+                    assert_eq!(decoded.data.unwrap(), expected);
+                }
+
+                let read_sizes = read_sizes.lock().unwrap();
+                assert_eq!(read_sizes[0], SHMIPC_DECODE_BUFFER_CAPACITY);
+                assert!(
+                    read_sizes
+                        .iter()
+                        .any(|size| *size > SHMIPC_DECODE_BUFFER_CAPACITY)
+                );
+                assert_eq!(helper_calls.load(Ordering::Relaxed), 0);
+            })
+            .await;
+    }
+
     #[tokio::test]
     async fn test_decode_empty_buffer_returns_none() {
         let reader = MockReader {
@@ -744,17 +1007,26 @@ mod tests {
     }
 
     #[cfg(feature = "shmipc")]
+    static SHMIPC_TEST_COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    #[cfg(feature = "shmipc")]
     struct ShmipcTestEnv {
         path: std::path::PathBuf,
     }
 
     #[cfg(feature = "shmipc")]
     impl ShmipcTestEnv {
+        fn next_socket_path() -> std::path::PathBuf {
+            let id = SHMIPC_TEST_COUNTER.fetch_add(1, Ordering::Relaxed);
+            std::env::temp_dir().join(format!(
+                "volo_shmipc_test_{}_{}.sock",
+                std::process::id(),
+                id
+            ))
+        }
+
         async fn new() -> (Self, volo::net::shmipc::Stream) {
-            use std::{
-                os::unix::net::SocketAddr,
-                sync::atomic::{AtomicUsize, Ordering},
-            };
+            use std::os::unix::net::SocketAddr;
 
             use motore::service::UnaryService;
             use volo::net::shmipc::{
@@ -762,29 +1034,16 @@ mod tests {
                 addr::{Address, ShmipcMakeTransport},
             };
 
-            static COUNTER: AtomicUsize = AtomicUsize::new(0);
-            let id = COUNTER.fetch_add(1, Ordering::Relaxed);
-
-            let dir = std::env::temp_dir();
-            let path = dir.join(format!(
-                "volo_shmipc_test_{}_{}.sock",
-                std::process::id(),
-                id
-            ));
+            let path = Self::next_socket_path();
             let _ = std::fs::remove_file(&path);
 
             let addr_val = SocketAddr::from_pathname(&path).expect("failed to create socket addr");
             let addr = Address::from(addr_val);
-            let addr_clone = addr.clone();
+            let mut listener = Listener::listen(addr.clone(), None)
+                .await
+                .expect("failed to listen on shmipc socket");
 
-            tokio::spawn(async move {
-                if let Ok(mut listener) = Listener::listen(addr_clone, None).await {
-                    while let Ok(_stream) = listener.accept().await {}
-                }
-            });
-
-            // Give listener time to start
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            tokio::spawn(async move { while let Ok(_stream) = listener.accept().await {} });
 
             let svc = ShmipcMakeTransport::new();
             let stream = svc
@@ -794,6 +1053,71 @@ mod tests {
 
             (Self { path }, stream)
         }
+
+        async fn new_with_data(
+            data: Bytes,
+            write_sizes: Vec<usize>,
+        ) -> (
+            Self,
+            volo::net::shmipc::Stream,
+            tokio::task::JoinHandle<io::Result<()>>,
+        ) {
+            use std::os::unix::net::SocketAddr;
+
+            use motore::service::UnaryService;
+            use volo::net::shmipc::{
+                Listener,
+                addr::{Address, ShmipcMakeTransport},
+            };
+
+            let path = Self::next_socket_path();
+            let _ = std::fs::remove_file(&path);
+
+            let addr_val = SocketAddr::from_pathname(&path).expect("failed to create socket addr");
+            let addr = Address::from(addr_val);
+            let mut listener = Listener::listen(addr.clone(), None)
+                .await
+                .expect("failed to listen on shmipc socket");
+
+            let server = tokio::spawn(async move {
+                let mut stream = listener.accept().await?;
+                let mut open_marker = [0; 1];
+                stream.read_exact(&mut open_marker).await?;
+                let mut offset = 0;
+                for write_size in write_sizes {
+                    let end = (offset + write_size).min(data.len());
+                    if end == offset {
+                        continue;
+                    }
+                    stream.write_all(&data[offset..end]).await?;
+                    stream.flush().await?;
+                    offset = end;
+                    tokio::task::yield_now().await;
+                }
+                if offset < data.len() {
+                    stream.write_all(&data[offset..]).await?;
+                    stream.flush().await?;
+                }
+                stream.shutdown().await?;
+                Ok(())
+            });
+
+            let svc = ShmipcMakeTransport::new();
+            let mut stream = svc
+                .call(addr)
+                .await
+                .expect("failed to connect to shmipc listener");
+            stream
+                .write_all(&[0])
+                .await
+                .expect("failed to open shmipc stream");
+            stream
+                .flush()
+                .await
+                .expect("failed to flush shmipc stream open marker");
+
+            (Self { path }, stream, server)
+        }
     }
 
     #[cfg(feature = "shmipc")]
@@ -801,6 +1125,63 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_file(&self.path);
         }
+    }
+
+    #[cfg(all(feature = "shmipc", target_os = "linux"))]
+    #[tokio::test]
+    async fn test_builtin_shmipc_capability_propagates_through_split_and_bufreader() {
+        let (_env, stream) = ShmipcTestEnv::new().await;
+        let conn: volo::net::conn::Conn = stream.into();
+
+        assert!(conn.is_shmipc());
+        assert!(conn.shmipc_helper().available());
+
+        let (reader, writer) = conn.stream.into_split();
+        assert!(reader.is_shmipc());
+        assert!(writer.is_shmipc());
+
+        let reader = BufReader::new(reader);
+        assert!(reader.is_shmipc());
+        assert!(reader.shmipc_helper().available());
+    }
+
+    #[cfg(all(feature = "shmipc", target_os = "linux"))]
+    #[tokio::test]
+    async fn test_real_shmipc_decodes_consecutive_ttheader_frames_without_pinning_slices() {
+        metainfo::METAINFO
+            .scope(RefCell::new(metainfo::MetaInfo::default()), async {
+                tokio::time::timeout(std::time::Duration::from_secs(5), async {
+                    let payloads = [Bytes::from(vec![0x19; 2048]), Bytes::from(vec![0xa7; 1024])];
+                    let encoded = encode_ttheader_frames(&payloads).await;
+                    let (_env, stream, server) =
+                        ShmipcTestEnv::new_with_data(encoded, vec![3, 2, 1, 700, 17]).await;
+
+                    let conn: volo::net::conn::Conn = stream.into();
+                    assert!(conn.is_shmipc());
+                    let (reader, writer) = conn.stream.into_split();
+                    let (_encoder, mut decoder) =
+                        DefaultMakeCodec::default().make_codec(reader, writer);
+                    let helper = decoder.shmipc_helper();
+                    assert!(helper.available());
+
+                    let mut decoded_payloads = Vec::new();
+                    for expected in &payloads {
+                        let mut cx = crate::context::ServerContext::default();
+                        let decoded: ThriftMessage<Bytes> =
+                            decoder.decode(&mut cx).await.unwrap().unwrap();
+                        let decoded = decoded.data.unwrap();
+                        assert_eq!(&decoded, expected);
+                        decoded_payloads.push(decoded);
+                    }
+
+                    server.await.unwrap().unwrap();
+                    helper.release_read_and_reuse();
+                    assert_eq!(decoded_payloads, payloads);
+                })
+                .await
+                .expect("real shmipc decode timed out");
+            })
+            .await;
     }
 
     #[cfg(all(feature = "shmipc", target_os = "linux"))]

@@ -1,8 +1,10 @@
+pub mod dial;
 pub(crate) mod incoming;
 #[cfg(feature = "multiplex")]
 pub mod multiplex;
 pub mod pingpong;
 pub mod pool;
+pub use dial::{DialPlan, SelectedTransport};
 use pilota::thrift::ThriftException;
 pub use pool::Config;
 

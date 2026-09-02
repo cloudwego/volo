@@ -64,6 +64,13 @@ pub struct ShmipcCloseGuard {
     inner: Option<Box<Stream>>,
 }
 
+impl ShmipcCloseGuard {
+    /// Prevent the guard from closing the stream after it has been explicitly recycled.
+    pub fn disarm(mut self) {
+        self.inner = None;
+    }
+}
+
 impl Drop for ShmipcCloseGuard {
     fn drop(&mut self) {
         if let Some(mut stream) = self.inner.take() {
