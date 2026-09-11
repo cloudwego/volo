@@ -32,6 +32,7 @@ where
     S: Stream<Item = Result<T, Status>> + Send + 'static,
     T: Message + 'static,
 {
+    let compression_encoding = compression_encoding.filter(CompressionEncoding::is_enabled);
     Box::pin(EncodeStream {
         source: Some(source),
         compression_encoding,
@@ -419,19 +420,24 @@ pub mod tests {
     #[tokio::test]
     async fn test_encode() {
         use super::*;
-        let source = async_stream::stream! {
-            yield Ok(EchoRequest { message: "Volo".into() });
-        };
 
-        let mut stream = encode(source, None);
-        // frame
-        let frame = stream.next().await.unwrap().unwrap();
-        assert!(frame.is_data());
-        let data = frame.data_ref().unwrap();
-        assert_eq!(&data[..PREFIX_LEN], b"\x00\x00\x00\x00\x06");
-        assert_eq!(&data[PREFIX_LEN..], b"\x0a\x04Volo");
+        for compression in [None, Some(CompressionEncoding::Identity)] {
+            let source = async_stream::stream! {
+                yield Ok(EchoRequest { message: "Volo".into() });
+            };
 
-        assert!(stream.next().await.is_none());
+            let mut stream = encode(source, compression);
+            let frame = stream
+                .next()
+                .await
+                .expect("encoded frame is present")
+                .expect("message encodes successfully");
+            let data = frame.data_ref().expect("encoded frame contains data");
+            assert_eq!(&data[..PREFIX_LEN], b"\x00\x00\x00\x00\x06");
+            assert_eq!(&data[PREFIX_LEN..], b"\x0a\x04Volo");
+
+            assert!(stream.next().await.is_none());
+        }
     }
 
     #[cfg(feature = "gzip")]

@@ -255,7 +255,7 @@ impl CompressionEncoding {
         matches!(self, CompressionEncoding::Zstd(_))
     }
 
-    const fn is_enabled(&self) -> bool {
+    pub(crate) const fn is_enabled(&self) -> bool {
         #[allow(unreachable_patterns)]
         match self {
             #[cfg(feature = "gzip")]
@@ -276,6 +276,12 @@ pub(crate) fn compress(
     dest_buf: &mut BytesMut,
 ) -> Result<(), io::Error> {
     let len = src_buf.len();
+    if matches!(encoding, CompressionEncoding::Identity) {
+        dest_buf.extend_from_slice(src_buf);
+        src_buf.advance(len);
+        return Ok(());
+    }
+
     let capacity = ((len / BUFFER_SIZE) + 1) * BUFFER_SIZE;
 
     dest_buf.reserve(capacity);
@@ -317,6 +323,12 @@ pub(crate) fn decompress(
     dest_buf: &mut BytesMut,
 ) -> Result<(), io::Error> {
     let len = src_buf.len();
+    if matches!(encoding, CompressionEncoding::Identity) {
+        dest_buf.extend_from_slice(src_buf);
+        src_buf.advance(len);
+        return Ok(());
+    }
+
     let estimate_decompressed_len = len * 2;
     let capacity = ((estimate_decompressed_len / BUFFER_SIZE) + 1) * BUFFER_SIZE;
 
@@ -357,18 +369,11 @@ mod tests {
     use crate::codec::compression::ZlibConfig;
     #[cfg(feature = "zstd")]
     use crate::codec::compression::ZstdConfig;
-    use crate::codec::{
-        BUFFER_SIZE,
-        compression::{CompressionEncoding, compress, decompress},
-    };
+    use crate::codec::compression::{CompressionEncoding, compress, decompress};
 
     #[test]
     fn test_consistency_for_compression() {
-        let mut src = BytesMut::with_capacity(BUFFER_SIZE);
-        let mut compress_buf = BytesMut::new();
-        let mut de_data = BytesMut::with_capacity(BUFFER_SIZE);
         let test_data = &b"test compression"[..];
-        src.extend_from_slice(test_data);
 
         let encodings = [
             #[cfg(feature = "gzip")]
@@ -387,9 +392,13 @@ mod tests {
         ];
 
         for encoding in encodings {
-            compress_buf.clear();
-            compress(encoding, &mut src, &mut compress_buf).expect("compress failed:");
-            decompress(encoding, &mut compress_buf, &mut de_data).expect("decompress failed:");
+            let mut src = BytesMut::from(test_data);
+            let mut compress_buf = BytesMut::new();
+            let mut de_data = BytesMut::new();
+            compress(encoding, &mut src, &mut compress_buf).expect("compress failed");
+            assert!(src.is_empty());
+            decompress(encoding, &mut compress_buf, &mut de_data).expect("decompress failed");
+            assert!(compress_buf.is_empty());
             assert_eq!(test_data, de_data.as_ref());
         }
     }
