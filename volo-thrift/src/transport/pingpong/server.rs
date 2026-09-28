@@ -74,13 +74,9 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                 #[cfg(feature = "shmipc")]
                 helper.release_read_and_reuse();
 
-                // it is promised safe here, because span only reads cx before handling polling
-                let tracing_cx = unsafe {
-                    std::mem::transmute::<
-                        &crate::context::ServerContext,
-                        &crate::context::ServerContext,
-                    >(&cx)
-                };
+                // Create the span before constructing the future. Keeping a large future live
+                // across on_serve's unwind edge can prevent the compiler from eliminating copies.
+                let serve_span = span_provider.on_serve(&cx);
 
                 let result = async {
                     match msg {
@@ -105,12 +101,13 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                     &cx,
                                     resp.map_err(server_error_to_application_exception),
                                 );
+                                let encode_span = span_provider.on_encode(&cx);
                                 if let Err(e) = async {
                                     let result = encoder.encode(&mut cx, msg).await;
                                     span_provider.leave_encode(&cx);
                                     result
                                 }
-                                .instrument(span_provider.on_encode(tracing_cx))
+                                .instrument(encode_span)
                                 .await
                                 {
                                     if should_log(&e) {
@@ -186,7 +183,7 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     });
                     Ok(())
                 }
-                .instrument(span_provider.on_serve(tracing_cx))
+                .instrument(serve_span)
                 .await;
                 if result.is_err() {
                     break;
@@ -195,3 +192,6 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
         })
         .await;
 }
+
+#[cfg(test)]
+mod tests;
