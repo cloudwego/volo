@@ -49,6 +49,9 @@ tokio = { workspace = true, features = [
 ] }
 tracing.workspace = true
 
+[dev-dependencies]
+tracing-subscriber.workspace = true
+
 [features]
 default = []
 # multiplex is unstable and we don't provide backward compatibility
