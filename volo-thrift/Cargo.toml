@@ -51,6 +51,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 tracing-subscriber.workspace = true
+volo-gen = { path = "../examples/volo-gen" }
 
 [features]
 default = []

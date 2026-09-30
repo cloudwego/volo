@@ -695,9 +695,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 type Error = ::volo_thrift::ServerError;
 
                 async fn call<'s, 'cx>(&'s self, cx: &'cx mut ::volo_thrift::context::ServerContext, payload: ::volo_thrift::Bytes) -> ::std::result::Result<Self::Response, Self::Error> {{
-                    use ::pilota::{{Buf, BufMut}};
                     use ::volo::context::Context;
-                    use ::pilota::thrift::{{TInputProtocol, TLengthProtocol, TOutputProtocol}};
 
                     // Reconstruct TMessageIdentifier from context (zero-copy, message header already parsed)
                     let msg_ident = ::pilota::thrift::TMessageIdentifier::new(
@@ -706,67 +704,23 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                         cx.seq_id.unwrap_or(0),
                     );
 
-                    // Check protocol from context extensions (set by ThriftCodec during decode)
+                    // Protocol detected by ThriftCodec and recorded in context extensions.
                     let use_compact = cx.extensions().contains::<::volo_thrift::ProtocolApacheCompact>();
 
-                    // Decode the payload using the detected protocol
                     let mut payload = payload;
-                    let req = if use_compact {{
-                        let mut protocol = ::pilota::thrift::compact::TCompactInputProtocol::new(&mut payload);
-                        <{req_recv_name} as ::volo_thrift::EntryMessage>::decode(&mut protocol, &msg_ident)?
-                    }} else {{
-                        // Use unsafe binary protocol for better performance
-                        let mut protocol = unsafe {{
-                            ::pilota::thrift::binary_unsafe::TBinaryUnsafeInputProtocol::new(&mut payload)
-                        }};
-                        let req = <{req_recv_name} as ::volo_thrift::EntryMessage>::decode(&mut protocol, &msg_ident)?;
-                        let index = protocol.index();
-                        protocol.buf().advance(index);
-                        req
-                    }};
+                    let req = ::volo_thrift::codec::default::multiservice::decode_entry::<{req_recv_name}>(
+                        &mut payload,
+                        &msg_ident,
+                        use_compact,
+                    )?;
 
                     // Call the typed service
                     let resp = <Self as ::volo::service::Service<_, {req_recv_name}>>::call(self, cx, req).await?;
 
-                    // Encode the response using the same protocol with LinkedBytes for better performance
-                    let mut linked_bytes = ::volo_thrift::LinkedBytes::new();
-                    if use_compact {{
-                        let mut size_protocol = ::pilota::thrift::compact::TCompactOutputProtocol::new((), true);
-                        let real_size = <{res_send_name} as ::volo_thrift::EntryMessage>::size(&resp, &mut size_protocol);
-                        let malloc_size = real_size - size_protocol.zero_copy_len();
-                        linked_bytes.reserve(malloc_size);
-                        let mut protocol = ::pilota::thrift::compact::TCompactOutputProtocol::new(&mut linked_bytes, true);
-                        <{res_send_name} as ::volo_thrift::EntryMessage>::encode(&resp, &mut protocol)?;
-                    }} else {{
-                        // Calculate size first
-                        let mut size_protocol = ::pilota::thrift::binary::TBinaryProtocol::new((), true);
-                        let real_size = <{res_send_name} as ::volo_thrift::EntryMessage>::size(&resp, &mut size_protocol);
-                        let malloc_size = real_size - size_protocol.zero_copy_len();
-                        linked_bytes.reserve(malloc_size);
-
-                        // Use unsafe binary protocol for encoding
-                        let buf = unsafe {{
-                            let l = linked_bytes.bytes_mut().len();
-                            ::std::slice::from_raw_parts_mut(
-                                linked_bytes.bytes_mut().as_mut_ptr().add(l),
-                                linked_bytes.bytes_mut().capacity() - l,
-                            )
-                        }};
-                        let mut protocol = unsafe {{
-                            ::pilota::thrift::binary_unsafe::TBinaryUnsafeOutputProtocol::new(
-                                &mut linked_bytes,
-                                buf,
-                                true,
-                            )
-                        }};
-                        <{res_send_name} as ::volo_thrift::EntryMessage>::encode(&resp, &mut protocol)?;
-                        let index = protocol.index();
-                        unsafe {{
-                            protocol.buf_mut().bytes_mut().advance_mut(index);
-                        }}
-                    }};
-
-                    Ok(linked_bytes.into_bytes_mut().freeze())
+                    // Encode the response using the same protocol
+                    ::std::result::Result::Ok(
+                        ::volo_thrift::codec::default::multiservice::encode_entry(&resp, use_compact)?,
+                    )
                 }}
             }}"#
         );
