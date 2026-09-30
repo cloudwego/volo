@@ -19,29 +19,46 @@ First, add `volo-build` to your `Cargo.toml`:
 volo-build = "*" # make sure you use a compatible version with `volo`
 ```
 
-Second, creates a `build.rs` file:
+Second, create a `build.rs` file:
 
 ```rust,ignore
 fn main() {
-    volo_build::Builder::default().write().unwrap();
+    volo_build::ConfigBuilder::default().write().unwrap();
 }
 ```
 
-Third, creates a `volo.yml` file in the same directory of `build.rs` with the following layout:
+Third, create a `volo.yml` file in the same directory as `build.rs` with the following layout:
 
 ```yaml
 ---
-idls:
-  - source: local
-    path: path/to/your/idl.thrift
-  - source: local
-    path: path/to/your/protobuf/idl.proto
-    includes:
-    - path/to/your/protobuf/
-  - source: git
-    repo: git@github.com:cloudwego/volo.git
-    ref: main
-    path: path/in/repo/idl.thrift
+entries:
+  thrift:
+    filename: thrift_gen.rs
+    protocol: thrift
+    repos:
+      volo:
+        url: https://github.com/cloudwego/volo.git
+        ref: main
+        lock: 58a9eebc4941eb2090c8a07ea142bf073f3527c9
+    services:
+      - idl:
+          source: local
+          path: path/to/your/idl.thrift
+      - idl:
+          source: git
+          repo: volo
+          path: path/in/repo/idl.thrift
+  protobuf:
+    filename: protobuf_gen.rs
+    protocol: protobuf
+    services:
+      - idl:
+          source: local
+          path: path/to/your/protobuf/idl.proto
+          includes:
+            - path/to/your/protobuf
 ```
+
+See the [configuration file format guide](https://www.cloudwego.io/docs/volo/guide/config/) for all available options.
 
 That's it!
