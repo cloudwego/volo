@@ -1,9 +1,12 @@
 use std::{convert::Infallible, error::Error};
 
+use bytes::Bytes;
+use faststr::FastStr;
 use http::{
     header::{HeaderMap, HeaderValue, IntoHeaderName},
     status::StatusCode,
 };
+use linkedbytes::LinkedBytes;
 
 use crate::{body::Body, response::Response};
 
@@ -52,15 +55,28 @@ where
     }
 }
 
+/// Opt into the blanket [`IntoResponse`] impl for a type convertible into a [`Body`].
+pub trait TryIntoResponseBody: TryInto<Body> {}
+
 impl IntoResponse for Infallible {
     fn into_response(self) -> Response {
-        StatusCode::INTERNAL_SERVER_ERROR.into_response()
+        match self {}
     }
 }
 
+// The built-in types that can be converted into a `Body`.
+impl TryIntoResponseBody for () {}
+impl TryIntoResponseBody for &'static str {}
+impl TryIntoResponseBody for String {}
+impl TryIntoResponseBody for Vec<u8> {}
+impl TryIntoResponseBody for Bytes {}
+impl TryIntoResponseBody for FastStr {}
+impl TryIntoResponseBody for LinkedBytes {}
+impl TryIntoResponseBody for Body {}
+
 impl<T> IntoResponse for T
 where
-    T: TryInto<Body>,
+    T: TryIntoResponseBody,
     T::Error: IntoResponse,
 {
     fn into_response(self) -> Response {
