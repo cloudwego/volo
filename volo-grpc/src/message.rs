@@ -13,7 +13,6 @@ pub trait SendEntryMessage {
     ) -> crate::BoxStream<'static, Result<Frame<Bytes>, crate::Status>>;
 }
 
-#[allow(clippy::result_large_err)]
 pub trait RecvEntryMessage: Sized {
     fn from_body(
         method: Option<&str>,
