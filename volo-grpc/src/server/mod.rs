@@ -179,6 +179,16 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
         self
     }
 
+    /// Sets the max number of remotely-reset streams pending acceptance
+    /// across the lifetime of the connection.
+    ///
+    /// If the remote peer exceeds this limit, the connection will be
+    /// closed. If not set, will default from underlying transport.
+    pub fn http2_max_pending_accept_reset_streams(mut self, max: impl Into<Option<usize>>) -> Self {
+        self.http2_config.max_pending_accept_reset_streams = max.into();
+        self
+    }
+
     /// Allow this server to accept http1 requests.
     ///
     /// Accepting http1 requests is only useful when developing `grpc-web`
@@ -418,7 +428,10 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
                         .keep_alive_timeout(self.http2_config.http2_keepalive_timeout)
                         .max_frame_size(self.http2_config.max_frame_size)
                         .max_send_buf_size(self.http2_config.max_send_buf_size)
-                        .max_header_list_size(self.http2_config.max_header_list_size);
+                        .max_header_list_size(self.http2_config.max_header_list_size)
+                        .max_pending_accept_reset_streams(
+                            self.http2_config.max_pending_accept_reset_streams,
+                        );
 
                     let mut watch = rx.clone();
                     spawn(async move {
@@ -510,6 +523,7 @@ pub struct Http2Config {
     pub(crate) max_frame_size: Option<u32>,
     pub(crate) max_send_buf_size: usize,
     pub(crate) max_header_list_size: u32,
+    pub(crate) max_pending_accept_reset_streams: Option<usize>,
     pub(crate) accept_http1: bool,
 }
 
@@ -525,7 +539,28 @@ impl Default for Http2Config {
             max_frame_size: None,
             max_send_buf_size: DEFAULT_MAX_SEND_BUF_SIZE,
             max_header_list_size: DEFAULT_SETTINGS_MAX_HEADER_LIST_SIZE,
+            max_pending_accept_reset_streams: None,
             accept_http1: false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn http2_max_pending_accept_reset_streams_defaults_to_none() {
+        let server = Server::new();
+        assert_eq!(server.http2_config.max_pending_accept_reset_streams, None);
+    }
+
+    #[test]
+    fn http2_max_pending_accept_reset_streams_sets_value() {
+        let server = Server::new().http2_max_pending_accept_reset_streams(64);
+        assert_eq!(
+            server.http2_config.max_pending_accept_reset_streams,
+            Some(64)
+        );
     }
 }
