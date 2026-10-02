@@ -32,6 +32,7 @@ dashmap.workspace = true
 faststr.workspace = true
 futures.workspace = true
 libc.workspace = true
+linked-hash-map.workspace = true
 metainfo.workspace = true
 mur3.workspace = true
 nix = { workspace = true, features = [

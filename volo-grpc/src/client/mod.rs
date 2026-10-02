@@ -37,6 +37,25 @@ use crate::{
 };
 pub mod layer;
 
+/// Tag type for overriding the HTTP/2 `:authority` of a call.
+///
+/// By default the authority is derived from the client configuration (the TLS server name, else
+/// the service name, else the callee address). When the server has to be addressed by a name
+/// that differs from all of those -- a mesh sidecar routing on a cluster name, say -- set the
+/// value on the callee [`Endpoint`]'s `faststr_tags` under this type, per call through
+/// [`CallOpt::callee_faststr_tags`] or per client from a layer:
+///
+/// ```rust,ignore
+/// let mut opt = CallOpt::new();
+/// opt.callee_faststr_tags
+///     .insert::<Authority>(FastStr::from_static_str("users.mesh.local:50051"));
+/// client.clone().with_opt(opt).get_user(req).await?;
+/// ```
+///
+/// The value must be a valid HTTP authority (`host[:port]`, no scheme, path or userinfo);
+/// anything else is ignored in favour of the derived default.
+pub struct Authority;
+
 /// [`ClientBuilder`] provides a builder-like interface to construct a [`Client`].
 pub struct ClientBuilder<IL, OL, C, LB, T, U> {
     http2_config: Http2Config,
@@ -66,6 +85,12 @@ impl<C, T, U>
     >
 {
     /// Creates a new [`ClientBuilder`].
+    ///
+    /// With the default [`DnsResolver`] the `service_name` is the `host[:port]` to resolve and
+    /// connect to. It is also what the client sends as the HTTP/2 `:authority` (unless TLS is
+    /// configured, in which case the TLS server name is used, see [`Self::tls_config`]), so a
+    /// proxy or ingress in front of the server sees the same host name the client was
+    /// configured with. See [`Authority`] to override it.
     pub fn new(service_client: C, service_name: impl AsRef<str>) -> Self {
         Self {
             http2_config: Default::default(),
@@ -465,6 +490,11 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     }
 
     /// Sets the [`ClientTlsConfig`][ClientTlsConfig] for the client.
+    ///
+    /// Besides being used as the TLS SNI, the `server_name` of the config is sent as the HTTP/2
+    /// `:authority` of every call (with the port of the callee address appended unless it is
+    /// 443), so a TLS-terminating proxy that routes on the virtual host sees the same name it
+    /// presented a certificate for. See [`Authority`] to override it.
     ///
     /// [ClientTlsConfig]: volo::net::tls::ClientTlsConfig
     #[cfg(feature = "__tls")]
