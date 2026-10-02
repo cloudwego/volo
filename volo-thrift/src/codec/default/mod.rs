@@ -40,6 +40,7 @@ use super::{Decoder, Encoder, MakeCodec};
 use crate::{EntryMessage, ThriftMessage, context::ThriftContext};
 
 pub mod framed;
+pub mod multiservice;
 pub mod thrift;
 pub mod ttheader;
 
