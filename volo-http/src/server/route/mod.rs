@@ -20,7 +20,10 @@ pub mod method_router;
 pub mod router;
 mod utils;
 
-pub use self::{method_router::*, router::Router};
+pub use self::{
+    method_router::*,
+    router::{MatchedPath, Router},
+};
 
 /// The route service used for [`Router`].
 pub struct Route<B = Body, E = Infallible> {
