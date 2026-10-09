@@ -9,8 +9,10 @@
 
 use std::{collections::HashMap, convert::Infallible};
 
+use faststr::FastStr;
 use http::status::StatusCode;
 use motore::{ServiceExt, layer::Layer, service::Service};
+use volo::context::Context;
 
 use super::{
     Fallback, Route,
@@ -30,6 +32,9 @@ use crate::{
 pub struct Router<B = Body, E = Infallible> {
     matcher: Matcher,
     routes: HashMap<RouteId, Endpoint<B, E>>,
+    /// Pattern reported as [`MatchedPath`] for each route: the registered uri, or the prefix for
+    /// nested routes.
+    patterns: HashMap<RouteId, FastStr>,
     fallback: Fallback<B, E>,
     is_default_fallback: bool,
 }
@@ -57,6 +62,7 @@ where
         Self {
             matcher: Default::default(),
             routes: Default::default(),
+            patterns: Default::default(),
             fallback: Fallback::from_status_code(StatusCode::NOT_FOUND),
             is_default_fallback: true,
         }
@@ -169,6 +175,7 @@ where
             .insert(uri.as_ref())
             .expect("Insert routing rule failed");
 
+        self.patterns.insert(route_id, FastStr::new(uri.as_ref()));
         self.routes
             .insert(route_id, Endpoint::MethodRouter(method_router));
 
@@ -251,6 +258,8 @@ where
             .matcher
             .insert(prefix.clone())
             .expect("Insert routing rule failed");
+        self.patterns
+            .insert(route_id, FastStr::new(prefix.trim_end_matches('/')));
 
         // If user uses `router.nest("/user", another)`, `/user`, `/user/`, `/user/{*catch}` should
         // be inserted. But if user uses `/user/`, we will insert `/user/` and `/user/{*catch}`
@@ -345,6 +354,7 @@ where
         let Router {
             mut matcher,
             mut routes,
+            mut patterns,
             fallback,
             is_default_fallback,
         } = other;
@@ -358,6 +368,9 @@ where
             if self.routes.insert(route_id, method_router).is_some() {
                 unreachable!()
             }
+        }
+        for (route_id, pattern) in patterns.drain() {
+            self.patterns.insert(route_id, pattern);
         }
 
         match (self.is_default_fallback, is_default_fallback) {
@@ -398,6 +411,7 @@ where
         Router {
             matcher: self.matcher,
             routes,
+            patterns: self.patterns,
             fallback,
             is_default_fallback: self.is_default_fallback,
         }
@@ -422,11 +436,76 @@ where
                 if !matched.params.is_empty() {
                     cx.params_mut().extend(matched.params);
                 }
+                if let Some(pattern) = self.patterns.get(matched.value) {
+                    MatchedPath::record(cx, pattern);
+                }
                 return route.call(cx, req).await;
             }
         }
 
+        // No route handles this request. An outer router may already have recorded its prefix
+        // before delegating here, so clear it: a fallback is not a route.
+        cx.extensions_mut().remove::<MatchedPath>();
         self.fallback.call(cx, req).await
+    }
+}
+
+/// The route pattern that matched the current request, e.g. `/users/{id}`.
+///
+/// [`Router`] stores it in the [`ServerContext`] extensions when a route matches, so layers that
+/// run around the router (metrics, logging) can label a request by its route instead of by the
+/// concrete path. Unlike the path, the set of patterns is bounded by the registered routes, which
+/// keeps metric tag cardinality under control.
+///
+/// For nested routers the prefixes are prepended, e.g. `/api/{version}/users/{id}`. For
+/// [`Router::nest_service`] only the prefix is recorded. It is absent when the request was handled
+/// by a fallback.
+///
+/// ```
+/// use volo::context::Context;
+/// use volo_http::{context::ServerContext, server::route::MatchedPath};
+///
+/// fn route_of(cx: &ServerContext) -> Option<&str> {
+///     cx.extensions()
+///         .get::<MatchedPath>()
+///         .map(MatchedPath::as_str)
+/// }
+/// ```
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MatchedPath(FastStr);
+
+impl MatchedPath {
+    /// The pattern as a string slice.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the value and return the pattern.
+    pub fn into_inner(self) -> FastStr {
+        self.0
+    }
+
+    fn record(cx: &mut ServerContext, pattern: &FastStr) {
+        let extensions = cx.extensions_mut();
+        match extensions.get_mut::<MatchedPath>() {
+            // Called from a nested router: the outer router recorded its prefix already.
+            Some(outer) => outer.0 = FastStr::from_string(outer.0.to_string() + pattern),
+            None => extensions.insert(MatchedPath(pattern.clone())),
+        }
+    }
+}
+
+impl std::ops::Deref for MatchedPath {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl AsRef<str> for MatchedPath {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
@@ -491,12 +570,18 @@ where
 mod router_tests {
     use faststr::FastStr;
     use http::{method::Method, status::StatusCode, uri::Uri};
+    use motore::service::Service;
+    use volo::context::Context;
 
-    use super::Router;
+    use super::{MatchedPath, Router};
     use crate::{
         body::{Body, BodyConversion},
+        request::Request,
         server::{
-            Server, param::PathParamsVec, route::method_router::any, test_helpers::TestServer,
+            Server,
+            param::PathParamsVec,
+            route::method_router::any,
+            test_helpers::{TestServer, empty_cx},
         },
     };
 
@@ -537,6 +622,65 @@ mod router_tests {
         assert!(!is_ok(&server, "/catch/11/another/45/again/14/").await);
         assert!(!is_ok(&server, "/catch_all").await);
         assert!(!is_ok(&server, "/catch_all/").await);
+    }
+
+    #[tokio::test]
+    async fn matched_path() {
+        async fn matched_path_of(router: &Router<Option<Body>>, uri: &str) -> Option<String> {
+            let mut cx = empty_cx();
+            let req = Request::builder()
+                .method(Method::GET)
+                .uri(uri)
+                .body(None)
+                .unwrap();
+            let _ = router.call(&mut cx, req).await;
+            cx.extensions()
+                .get::<MatchedPath>()
+                .map(|path| path.as_str().to_owned())
+        }
+
+        let router: Router<Option<Body>> = Router::new()
+            .route("/", any(always_ok))
+            .route("/users/{id}", any(always_ok))
+            .route("/files/{*path}", any(always_ok))
+            .nest(
+                "/api/{version}",
+                Router::new().route("/items/{id}", any(always_ok)),
+            )
+            .nest("/legacy/", Router::new().route("/", any(always_ok)))
+            .merge(Router::new().route("/merged/{id}", any(always_ok)));
+
+        assert_eq!(matched_path_of(&router, "/").await.as_deref(), Some("/"));
+        // Different values, same route, same pattern.
+        assert_eq!(
+            matched_path_of(&router, "/users/42").await.as_deref(),
+            Some("/users/{id}")
+        );
+        assert_eq!(
+            matched_path_of(&router, "/users/43").await.as_deref(),
+            Some("/users/{id}")
+        );
+        assert_eq!(
+            matched_path_of(&router, "/files/a/b/c").await.as_deref(),
+            Some("/files/{*path}")
+        );
+        // Nested routers prepend their prefix.
+        assert_eq!(
+            matched_path_of(&router, "/api/v2/items/7").await.as_deref(),
+            Some("/api/{version}/items/{id}")
+        );
+        assert_eq!(
+            matched_path_of(&router, "/legacy/").await.as_deref(),
+            Some("/legacy/")
+        );
+        // Merged routers keep their patterns.
+        assert_eq!(
+            matched_path_of(&router, "/merged/1").await.as_deref(),
+            Some("/merged/{id}")
+        );
+        // Fallbacks, top-level or inside a nested router, record nothing.
+        assert_eq!(matched_path_of(&router, "/nope").await, None);
+        assert_eq!(matched_path_of(&router, "/api/v2/nope").await, None);
     }
 
     #[tokio::test]
