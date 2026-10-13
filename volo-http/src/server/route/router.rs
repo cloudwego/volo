@@ -32,10 +32,9 @@ use crate::{
 #[must_use]
 pub struct Router<B = Body, E = Infallible> {
     matcher: Matcher,
-    routes: HashMap<RouteId, Endpoint<B, E>>,
-    /// Pattern reported as [`MatchedPath`] for each route: the registered uri, or the prefix for
-    /// nested routes.
-    patterns: HashMap<RouteId, FastStr>,
+    /// Each route with the pattern reported as [`MatchedPath`]: the registered uri, or the prefix
+    /// for nested routes.
+    routes: HashMap<RouteId, (Endpoint<B, E>, FastStr)>,
     fallback: Fallback<B, E>,
     is_default_fallback: bool,
 }
@@ -63,7 +62,6 @@ where
         Self {
             matcher: Default::default(),
             routes: Default::default(),
-            patterns: Default::default(),
             fallback: Fallback::from_status_code(StatusCode::NOT_FOUND),
             is_default_fallback: true,
         }
@@ -176,9 +174,13 @@ where
             .insert(uri.as_ref())
             .expect("Insert routing rule failed");
 
-        self.patterns.insert(route_id, FastStr::new(uri.as_ref()));
-        self.routes
-            .insert(route_id, Endpoint::MethodRouter(method_router));
+        self.routes.insert(
+            route_id,
+            (
+                Endpoint::MethodRouter(method_router),
+                FastStr::new(uri.as_ref()),
+            ),
+        );
 
         self
     }
@@ -259,8 +261,7 @@ where
             .matcher
             .insert(prefix.clone())
             .expect("Insert routing rule failed");
-        self.patterns
-            .insert(route_id, FastStr::new(prefix.trim_end_matches('/')));
+        let pattern = FastStr::new(prefix.trim_end_matches('/'));
 
         // If user uses `router.nest("/user", another)`, `/user`, `/user/`, `/user/{*catch}` should
         // be inserted. But if user uses `/user/`, we will insert `/user/` and `/user/{*catch}`
@@ -278,7 +279,10 @@ where
 
         self.routes.insert(
             route_id,
-            Endpoint::Service(Route::new(StripPrefixLayer.layer(route))),
+            (
+                Endpoint::Service(Route::new(StripPrefixLayer.layer(route))),
+                pattern,
+            ),
         );
 
         self
@@ -355,7 +359,6 @@ where
         let Router {
             mut matcher,
             mut routes,
-            mut patterns,
             fallback,
             is_default_fallback,
         } = other;
@@ -365,13 +368,10 @@ where
                 .insert_with_id(path, route_id)
                 .expect("Insert routing rule failed during merging router");
         }
-        for (route_id, method_router) in routes.drain() {
-            if self.routes.insert(route_id, method_router).is_some() {
+        for (route_id, route) in routes.drain() {
+            if self.routes.insert(route_id, route).is_some() {
                 unreachable!()
             }
-        }
-        for (route_id, pattern) in patterns.drain() {
-            self.patterns.insert(route_id, pattern);
         }
 
         match (self.is_default_fallback, is_default_fallback) {
@@ -401,9 +401,9 @@ where
         let routes = self
             .routes
             .into_iter()
-            .map(|(id, route)| {
+            .map(|(id, (route, pattern))| {
                 let route = route.layer(l.clone());
-                (id, route)
+                (id, (route, pattern))
             })
             .collect();
 
@@ -412,7 +412,6 @@ where
         Router {
             matcher: self.matcher,
             routes,
-            patterns: self.patterns,
             fallback,
             is_default_fallback: self.is_default_fallback,
         }
@@ -433,13 +432,11 @@ where
         req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
         if let Ok(matched) = self.matcher.at(req.uri().clone().path()) {
-            if let Some(route) = self.routes.get(matched.value) {
+            if let Some((route, pattern)) = self.routes.get(matched.value) {
                 if !matched.params.is_empty() {
                     cx.params_mut().extend(matched.params);
                 }
-                if let Some(pattern) = self.patterns.get(matched.value) {
-                    MatchedPath::record(cx, pattern);
-                }
+                MatchedPath::record(cx, pattern);
                 return route.call(cx, req).await;
             }
         }
@@ -662,6 +659,10 @@ mod router_tests {
                 Router::new().route("/items/{id}", any(always_ok)),
             )
             .nest("/legacy/", Router::new().route("/", any(always_ok)))
+            .nest(
+                "/v/{ver}",
+                Router::new().nest("/deep", Router::new().route("/leaf/{id}", any(always_ok))),
+            )
             .merge(Router::new().route("/merged/{id}", any(always_ok)));
 
         assert_eq!(matched_path_of(&router, "/").await.as_deref(), Some("/"));
@@ -686,6 +687,13 @@ mod router_tests {
         assert_eq!(
             matched_path_of(&router, "/legacy/").await.as_deref(),
             Some("/legacy/")
+        );
+        // Two levels of nesting: every prefix is composed, not only the innermost one.
+        assert_eq!(
+            matched_path_of(&router, "/v/3/deep/leaf/9")
+                .await
+                .as_deref(),
+            Some("/v/{ver}/deep/leaf/{id}")
         );
         // Merged routers keep their patterns.
         assert_eq!(
