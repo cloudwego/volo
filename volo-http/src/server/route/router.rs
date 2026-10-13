@@ -11,6 +11,7 @@ use std::{collections::HashMap, convert::Infallible};
 
 use faststr::FastStr;
 use http::status::StatusCode;
+use metainfo::METAINFO;
 use motore::{ServiceExt, layer::Layer, service::Service};
 use volo::context::Context;
 
@@ -446,20 +447,26 @@ where
         // No route handles this request. An outer router may already have recorded its prefix
         // before delegating here, so clear it: a fallback is not a route.
         cx.extensions_mut().remove::<MatchedPath>();
+        let _ = METAINFO.try_with(|mi| mi.borrow_mut().remove_faststr::<MatchedPath>());
+
         self.fallback.call(cx, req).await
     }
 }
 
 /// The route pattern that matched the current request, e.g. `/users/{id}`.
 ///
-/// [`Router`] stores it in the [`ServerContext`] extensions when a route matches, so layers that
-/// run around the router (metrics, logging) can label a request by its route instead of by the
-/// concrete path. Unlike the path, the set of patterns is bounded by the registered routes, which
-/// keeps metric tag cardinality under control.
+/// Stored in [`ServerContext`] extensions for logging and metrics, this provides
+/// a stable route label instead of the concrete request path, keeping metric
+/// tag cardinality bounded.
 ///
-/// For nested routers the prefixes are prepended, e.g. `/api/{version}/users/{id}`. For
-/// [`Router::nest_service`] only the prefix is recorded. It is absent when the request was handled
-/// by a fallback.
+/// For nested routers, the pattern combines each matched prefix with the inner
+/// route pattern. For [`Router::nest_service`], only the prefix is recorded.
+/// No pattern is recorded for requests handled by a fallback.
+///
+/// The same pattern is also stored in the request's [`METAINFO`] when one is in scope (the server
+/// always provides one), as a plain [`FastStr`] keyed by this type, so observers without access to
+/// the context, such as a future wrapper measuring the request from outside the router, can read it
+/// with `METAINFO.with(|mi| mi.borrow().get_faststr::<MatchedPath>().cloned())`.
 ///
 /// ```
 /// use volo::context::Context;
@@ -487,11 +494,18 @@ impl MatchedPath {
 
     fn record(cx: &mut ServerContext, pattern: &FastStr) {
         let extensions = cx.extensions_mut();
-        match extensions.get_mut::<MatchedPath>() {
+        let matched = match extensions.get_mut::<MatchedPath>() {
             // Called from a nested router: the outer router recorded its prefix already.
-            Some(outer) => outer.0 = FastStr::from_string(outer.0.to_string() + pattern),
-            None => extensions.insert(MatchedPath(pattern.clone())),
-        }
+            Some(outer) => {
+                outer.0 = FastStr::from_string(outer.0.to_string() + pattern);
+                outer.0.clone()
+            }
+            None => {
+                extensions.insert(MatchedPath(pattern.clone()));
+                pattern.clone()
+            }
+        };
+        let _ = METAINFO.try_with(|mi| mi.borrow_mut().insert_faststr::<MatchedPath>(matched));
     }
 }
 
@@ -681,6 +695,146 @@ mod router_tests {
         // Fallbacks, top-level or inside a nested router, record nothing.
         assert_eq!(matched_path_of(&router, "/nope").await, None);
         assert_eq!(matched_path_of(&router, "/api/v2/nope").await, None);
+    }
+
+    #[tokio::test]
+    async fn matched_path_is_mirrored_into_metainfo() {
+        use std::cell::RefCell;
+
+        use metainfo::{METAINFO, MetaInfo};
+
+        // (from the context, from METAINFO) after one request
+        async fn both(
+            router: &Router<Option<Body>>,
+            uri: &str,
+        ) -> (Option<String>, Option<String>) {
+            METAINFO
+                .scope(RefCell::new(MetaInfo::default()), async {
+                    let mut cx = empty_cx();
+                    let req = Request::builder()
+                        .method(Method::GET)
+                        .uri(uri)
+                        .body(None)
+                        .unwrap();
+                    let _ = router.call(&mut cx, req).await;
+                    let from_cx = cx
+                        .extensions()
+                        .get::<MatchedPath>()
+                        .map(|p| p.as_str().to_owned());
+                    let from_mi = METAINFO.with(|mi| {
+                        mi.borrow()
+                            .get_faststr::<MatchedPath>()
+                            .map(|p| p.as_str().to_owned())
+                    });
+                    (from_cx, from_mi)
+                })
+                .await
+        }
+
+        let router: Router<Option<Body>> = Router::new().route("/users/{id}", any(always_ok)).nest(
+            "/api/{version}",
+            Router::new().route("/items/{id}", any(always_ok)),
+        );
+
+        let (cx, mi) = both(&router, "/users/42").await;
+        assert_eq!(cx.as_deref(), Some("/users/{id}"));
+        assert_eq!(mi, cx);
+
+        // Nested: METAINFO holds the composed pattern, not just the outer prefix.
+        let (cx, mi) = both(&router, "/api/v2/items/7").await;
+        assert_eq!(cx.as_deref(), Some("/api/{version}/items/{id}"));
+        assert_eq!(mi, cx);
+
+        // Cleared in both places on fallback, including after a nested prefix matched.
+        assert_eq!(both(&router, "/nope").await, (None, None));
+        assert_eq!(both(&router, "/api/v2/nope").await, (None, None));
+    }
+
+    #[tokio::test]
+    async fn matched_path_is_visible_mid_request() {
+        use std::cell::RefCell;
+
+        use metainfo::{METAINFO, MetaInfo};
+
+        use crate::{
+            context::ServerContext,
+            response::Response,
+            server::{
+                IntoResponse,
+                middleware::{Next, from_fn},
+            },
+        };
+
+        fn current() -> Option<String> {
+            METAINFO.with(|mi| {
+                mi.borrow()
+                    .get_faststr::<MatchedPath>()
+                    .map(|p| p.as_str().to_owned())
+            })
+        }
+
+        // A handler runs after the innermost match, so it must see the complete pattern.
+        async fn echo_matched_path() -> String {
+            current().unwrap_or_default()
+        }
+
+        // What a layer applied to the outer router sees at the start and at the end of its call.
+        struct Seen {
+            start: Option<String>,
+            end: Option<String>,
+        }
+
+        async fn probe(
+            cx: &mut ServerContext,
+            req: Request<Option<Body>>,
+            next: Next<Option<Body>>,
+        ) -> Response {
+            let start = current();
+            let resp = next.run(cx, req).await.into_response();
+            cx.extensions_mut().insert(Seen {
+                start,
+                end: current(),
+            });
+            resp
+        }
+
+        async fn run(router: &Router<Option<Body>>, uri: &str) -> (String, Seen) {
+            METAINFO
+                .scope(RefCell::new(MetaInfo::default()), async {
+                    let mut cx = empty_cx();
+                    let req = Request::builder()
+                        .method(Method::GET)
+                        .uri(uri)
+                        .body(None)
+                        .unwrap();
+                    let resp = router.call(&mut cx, req).await.unwrap();
+                    let body = resp.into_body().into_string().await.unwrap();
+                    let seen = cx.extensions_mut().remove::<Seen>().unwrap();
+                    (body, seen)
+                })
+                .await
+        }
+
+        let router: Router<Option<Body>> = Router::new()
+            .route("/users/{id}", any(echo_matched_path))
+            .nest(
+                "/api/{version}",
+                Router::new().route("/items/{id}", any(echo_matched_path)),
+            )
+            .layer(from_fn(probe));
+
+        // Plain route: the layer wraps the leaf, so the pattern is complete from the start.
+        let (body, seen) = run(&router, "/users/42").await;
+        assert_eq!(body, "/users/{id}");
+        assert_eq!(seen.start.as_deref(), Some("/users/{id}"));
+        assert_eq!(seen.end.as_deref(), Some("/users/{id}"));
+
+        // Nested route: the layer wraps the nested endpoint, so when its call starts only the
+        // prefix has matched; the handler and the end of the call see the complete pattern.
+        let (body, seen) = run(&router, "/api/v2/items/7").await;
+        assert_eq!(body, "/api/{version}/items/{id}");
+        assert_eq!(seen.start.as_deref(), Some("/api/{version}"));
+        assert_eq!(seen.end.as_deref(), Some("/api/{version}/items/{id}"));
     }
 
     #[tokio::test]
