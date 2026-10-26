@@ -992,10 +992,10 @@ mod tests {
 
     use metainfo::{METAINFO, MetaInfo};
     use pilota::thrift::TMessageType;
-    use volo::context::RpcInfo;
+    use volo::context::{RpcCx, RpcInfo};
 
     use super::*;
-    use crate::context::{ClientContext, ServerContext};
+    use crate::context::{ClientContext, ServerContext, ServerCxInner};
 
     #[test]
     fn test_idl_service_name_constant() {
@@ -1010,8 +1010,13 @@ mod tests {
         METAINFO
             .scope(RefCell::new(MetaInfo::default()), async {
                 for with_extra in [false, true] {
-                    let mut cx = ServerContext::default();
-                    cx.msg_type = Some(TMessageType::Exception);
+                    let mut cx = ServerContext(RpcCx::new(
+                        RpcInfo::with_role(Role::Server),
+                        ServerCxInner {
+                            msg_type: Some(TMessageType::Exception),
+                            ..Default::default()
+                        },
+                    ));
                     let mut err = BizError::new(500, FastStr::from_static_str("request failed"));
                     if with_extra {
                         let mut extra = ahash::AHashMap::default();
