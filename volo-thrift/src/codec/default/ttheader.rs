@@ -597,7 +597,9 @@ pub(crate) fn encode_size<Cx: ThriftContext>(cx: &mut Cx) -> Result<usize, Thrif
                     || thrift_cx.idl_service_name().is_some()
             }
             Role::Server => {
-                metainfo.get_all_backward_transients().is_some() || thrift_cx.encode_conn_reset()
+                metainfo.get_all_backward_transients().is_some()
+                    || thrift_cx.encode_conn_reset()
+                    || thrift_cx.stats().biz_error().is_some()
             }
         };
 
@@ -986,10 +988,66 @@ fn set_biz_error_header<Cx: ThriftContext>(
 
 #[cfg(test)]
 mod tests {
+    use std::cell::RefCell;
+
+    use metainfo::{METAINFO, MetaInfo};
+    use pilota::thrift::TMessageType;
+    use volo::context::RpcInfo;
+
     use super::*;
+    use crate::context::{ClientContext, ServerContext};
 
     #[test]
     fn test_idl_service_name_constant() {
         assert_eq!(HEADER_IDL_SERVICE_NAME, "isn");
+    }
+
+    /// Regression test: when a biz error is the only string KV content, `encode_size` used to
+    /// skip the whole string KV section (it only looked at backward metainfo and connection
+    /// reset), under-reporting the size that `encode` then wrote.
+    #[tokio::test]
+    async fn encode_size_counts_biz_error_headers_on_their_own() {
+        METAINFO
+            .scope(RefCell::new(MetaInfo::default()), async {
+                for with_extra in [false, true] {
+                    let mut cx = ServerContext::default();
+                    cx.msg_type = Some(TMessageType::Exception);
+                    let mut err = BizError::new(500, FastStr::from_static_str("request failed"));
+                    if with_extra {
+                        let mut extra = ahash::AHashMap::default();
+                        extra.insert(FastStr::from_static_str("k"), FastStr::from_static_str("v"));
+                        err.extra = Some(extra);
+                    }
+                    cx.stats_mut().set_biz_error(err);
+
+                    let size = encode_size(&mut cx).unwrap();
+                    let mut dst = BytesMut::new();
+                    encode(&mut cx, &mut dst, 0).unwrap();
+                    assert_eq!(size, dst.len(), "with_extra = {with_extra}");
+
+                    // The header must still carry the biz error to the client.
+                    let mut bytes = dst.freeze();
+                    let _len = bytes.get_u32();
+                    let mut client =
+                        ClientContext::new(1, RpcInfo::with_role(Role::Client), TMessageType::Call);
+                    decode(&mut client, &mut bytes).unwrap();
+                    assert!(bytes.is_empty());
+                    let biz = client
+                        .stats()
+                        .biz_error()
+                        .as_ref()
+                        .expect("biz error decoded");
+                    assert_eq!(biz.status_code, 500);
+                    assert_eq!(biz.status_message.as_str(), "request failed");
+                    assert_eq!(
+                        biz.extra
+                            .as_ref()
+                            .and_then(|e| e.get("k"))
+                            .map(|v| v.as_str()),
+                        with_extra.then_some("v")
+                    );
+                }
+            })
+            .await;
     }
 }
