@@ -4,4 +4,7 @@ mod into_response;
 mod redirect;
 pub mod sse;
 
-pub use self::{into_response::IntoResponse, redirect::Redirect};
+pub use self::{
+    into_response::{IntoResponse, TryIntoResponseBody},
+    redirect::Redirect,
+};
