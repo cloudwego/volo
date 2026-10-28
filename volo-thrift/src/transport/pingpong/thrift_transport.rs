@@ -8,7 +8,7 @@ use crate::{
     ClientError, EntryMessage, ThriftMessage,
     codec::{Decoder, Encoder, MakeCodec},
     context::{ClientContext, ThriftContext},
-    transport::{TransportFallback, pool::Poolable, should_log},
+    transport::{pool::Poolable, should_log},
 };
 
 static TRANSPORT_ID_COUNTER: LazyLock<AtomicUsize> = LazyLock::new(|| AtomicUsize::new(0));
@@ -77,10 +77,10 @@ where
         // waiting for the reply (the RPC timeout) still leaves it in the context. The caller
         // records the final request-or-response state once the reply is in.
         #[cfg(feature = "shmipc")]
-        let payload_fallback = self.shmipc_helper.fallback_state();
-        #[cfg(not(feature = "shmipc"))]
-        let payload_fallback = false;
-        TransportFallback::record(cx, payload_fallback);
+        if self.shmipc_helper.fallback_state() {
+            cx.extensions
+                .insert(crate::transport::ShmipcPayloadFallback);
+        }
         if oneway {
             return Ok(None);
         }
