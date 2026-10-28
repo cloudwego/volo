@@ -80,10 +80,8 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                 let req_fallback = helper.fallback_state();
                 #[cfg(feature = "shmipc")]
                 if req_fallback {
-                    cx.extensions.insert(crate::transport::TransportFallback {
-                        connection: false,
-                        payload: true,
-                    });
+                    cx.extensions
+                        .insert(crate::transport::ShmipcPayloadFallback);
                 }
                 #[cfg(feature = "shmipc")]
                 helper.release_read_and_reuse();
@@ -126,10 +124,8 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                 // Either direction falling back marks the RPC as fallen back.
                                 #[cfg(feature = "shmipc")]
                                 if req_fallback || helper.fallback_state() {
-                                    cx.extensions.insert(crate::transport::TransportFallback {
-                                        connection: false,
-                                        payload: true,
-                                    });
+                                    cx.extensions
+                                        .insert(crate::transport::ShmipcPayloadFallback);
                                 }
                                 if let Err(e) = encoded {
                                     if should_log(&e) {
@@ -187,10 +183,8 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                             }
                             #[cfg(feature = "shmipc")]
                             if req_fallback || helper.fallback_state() {
-                                cx.extensions.insert(crate::transport::TransportFallback {
-                                    connection: false,
-                                    payload: true,
-                                });
+                                cx.extensions
+                                    .insert(crate::transport::ShmipcPayloadFallback);
                             }
                             stat_tracer.iter().for_each(|f| f(&cx));
                             return Err(());
