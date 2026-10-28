@@ -4164,7 +4164,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "volo"
-version = "0.12.4"
+version = "0.12.5"
 dependencies = [
  "arc-swap",
  "async-broadcast",
@@ -4369,7 +4369,7 @@ version = "0.12.0"
 
 [[package]]
 name = "volo-thrift"
-version = "0.12.7"
+version = "0.12.8"
 dependencies = [
  "ahash",
  "anyhow",

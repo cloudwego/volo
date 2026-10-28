@@ -9,6 +9,7 @@ use crate::{
     context::ClientContext,
     protocol::TMessageType,
     transport::{
+        TransportFallback,
         dial::TransportAcquirer,
         pingpong::thrift_transport::ThriftTransport,
         pool::{Config, Ver},
@@ -111,6 +112,8 @@ where
         req: ThriftMessage<Req>,
     ) -> Result<Self::Response, Self::Error> {
         let oneway = cx.message_type == TMessageType::OneWay;
+        // A retried context must not report the previous attempt's fallback state.
+        cx.extensions.remove::<TransportFallback>();
         // Acquire happens before `send`; the candidate walk and stats live in the acquirer.
         let mut acquired = self.acquirer.acquire(cx, Ver::PingPong).await?;
         // `send` may be cancelled by an outer timeout. Keep a clone of the shmipc stream in a
@@ -134,6 +137,14 @@ where
                 ));
             }
         }
+        // Read the shmipc payload flag before `reuse()` below resets it, then record the final
+        // request-or-response fallback state (`ThriftTransport::send` recorded the request side
+        // as soon as the request was written, in case the reply never arrives).
+        #[cfg(feature = "shmipc")]
+        let payload_fallback = acquired.transport().shmipc_helper().fallback_state();
+        #[cfg(not(feature = "shmipc"))]
+        let payload_fallback = false;
+        TransportFallback::record(cx, payload_fallback);
         // Shmipc manages its own stream pool; recycle only completed calls.
         #[cfg(feature = "shmipc")]
         {
