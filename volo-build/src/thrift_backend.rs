@@ -491,9 +491,9 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
             let result_path = self.method_result_path(&service_name, m, true);
             let oneway = m.oneway;
             let none = if m.oneway {
-                "None => { ::std::result::Result::Ok(()) }"
+                "::std::option::Option::None => { ::std::result::Result::Ok(()) }"
             } else {
-                "None => unreachable!()"
+                "::std::option::Option::None => unreachable!()"
             };
             let req_field_names = m.args.iter().map(|a| self.cx().rust_name(a.def_id)).join(","); // use the rust name as string format which will escape the keyword
             let anonymous_args_send_name = self.method_args_path(&service_name, m, true);
@@ -510,7 +510,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 match &*e {
                     rir::Item::Enum(e) => e.variants.iter().map(|v| {
                         let name = self.cx().rust_name(v.did);
-                        format!("Some({res_recv_name}::{enum_variant}({result_path}::{name}(ex))) => ::std::result::Result::Ok(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))),")
+                        format!("::std::option::Option::Some({res_recv_name}::{enum_variant}({result_path}::{name}(ex))) => ::std::result::Result::Ok(::volo_thrift::MaybeException::Exception({exception}::{name}(ex))),")
                     }).collect::<Vec<_>>(),
                     _ => panic!()
                 }
@@ -535,7 +535,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     ::volo_thrift::context::ThriftContext::set_idl_service_name(&mut cx, ::volo::FastStr::from_static_str("{idl_service_name}"));
                     #[allow(unreachable_patterns)]
                     let resp = match ::volo::service::Service::call(&self.0, &mut cx, req).await? {{
-                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => {resp_str},{convert_exceptions}
+                        ::std::option::Option::Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => {resp_str},{convert_exceptions}
                         {none},
                         _ => unreachable!()
                     }};
@@ -559,7 +559,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     ::volo_thrift::context::ThriftContext::set_idl_service_name(&mut cx, ::volo::FastStr::from_static_str("{idl_service_name}"));
                     #[allow(unreachable_patterns)]
                     let resp = match ::volo::client::OneShotService::call(self.0, &mut cx, req).await? {{
-                        Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => {resp_str},{convert_exceptions}
+                        ::std::option::Option::Some({res_recv_name}::{enum_variant}({result_path}::Ok(resp))) => {resp_str},{convert_exceptions}
                         {none},
                         _ => unreachable!()
                     }};
@@ -909,7 +909,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         format!(
             r#"async fn {name}(&self, {args}) -> ::core::result::Result<{ret_ty}, ::volo_thrift::ServerError>
             {{
-                ::std::result::Result::Ok(Default::default())
+                ::std::result::Result::Ok(::std::default::Default::default())
             }}"#
         )
     }
@@ -1087,7 +1087,11 @@ mod tests {
     "#;
 
     fn codegen_service_impl(split: bool) -> (String, TempDir) {
-        let (cx, dir) = build_test_context(SERVICE_IMPL_IDL, split);
+        codegen_service_impl_for(SERVICE_IMPL_IDL, split)
+    }
+
+    fn codegen_service_impl_for(idl: &str, split: bool) -> (String, TempDir) {
+        let (cx, dir) = build_test_context(idl, split);
         let (def_id, service) = find_first_service(&cx);
 
         let backend = VoloThriftBackend {
@@ -1130,6 +1134,83 @@ mod tests {
             "stream: {stream}"
         );
         assert!(!stream.contains("include!("), "stream: {stream}");
+    }
+
+    /// IDL types named like prelude variants shadow them inside the generated module:
+    /// pilota turns `enum ERR` into `pub struct Err(i32);`. Every template therefore has
+    /// to spell the prelude names out in full.
+    const PRELUDE_SHADOW_IDL: &str = r#"
+        enum SOME { ONE = 1; }
+        enum NONE { ZERO = 0; }
+        enum OK { FINE = 0; }
+        enum ERR { FAILED = 1; }
+        exception BizError {
+            1: string message;
+        }
+        struct Req {
+            1: SOME s;
+            2: NONE n;
+            3: OK o;
+            4: ERR e;
+        }
+        struct Resp {
+            1: string greeting;
+        }
+        service Greeter {
+            Resp SayHello(1: Req req);
+            Resp SayHelloEx(1: Req req) throws (1: BizError err);
+            oneway void Fire(1: Req req);
+        }
+    "#;
+
+    #[test]
+    fn test_service_codegen_spells_out_prelude_names() {
+        let (stream, _dir) = codegen_service_impl_for(PRELUDE_SHADOW_IDL, false);
+
+        // Client response matches: the `Some(..)` arm, the oneway `None` arm and the
+        // `unreachable!` `None` arm.
+        assert!(
+            stream.contains("::std::option::Option::Some(GreeterResponseRecv::SayHello("),
+            "stream: {stream}"
+        );
+        assert!(
+            stream.contains("::std::option::Option::None => { ::std::result::Result::Ok(()) }"),
+            "stream: {stream}"
+        );
+        assert!(
+            stream.contains("::std::option::Option::None => unreachable!()"),
+            "stream: {stream}"
+        );
+        assert_eq!(
+            crate::test_util::bare_prelude_names(&stream),
+            Vec::<String>::new(),
+            "stream: {stream}"
+        );
+
+        // Default server method bodies.
+        let (cx, _dir) = build_test_context(PRELUDE_SHADOW_IDL, false);
+        let (svc_def_id, _) = find_first_service(&cx);
+        let backend = VoloThriftBackend {
+            inner: ThriftBackend::new(cx.clone()),
+        };
+        for m in cx.service_methods(svc_def_id).iter() {
+            let body = CONTEXT.set(&cx, || {
+                <VoloThriftBackend as pilota_build::CodegenBackend>::codegen_service_method_with_global_path(
+                    &backend,
+                    svc_def_id,
+                    m,
+                )
+            });
+            assert!(
+                body.contains("::std::result::Result::Ok(::std::default::Default::default())"),
+                "method body: {body}"
+            );
+            assert_eq!(
+                crate::test_util::bare_prelude_names(&body),
+                Vec::<String>::new(),
+                "method body: {body}"
+            );
+        }
     }
 
     #[test]
