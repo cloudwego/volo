@@ -73,6 +73,14 @@ where
         oneway: bool,
     ) -> Result<Option<ThriftMessage<Resp>>, ClientError> {
         self.write_half.send(cx, msg).await?;
+        // The request is on the wire: record its fallback state now, so that a cancellation while
+        // waiting for the reply (the RPC timeout) still leaves it in the context. The caller
+        // records the final request-or-response state once the reply is in.
+        #[cfg(feature = "shmipc")]
+        if self.shmipc_helper.fallback_state() {
+            cx.extensions
+                .insert(crate::transport::ShmipcPayloadFallback);
+        }
         if oneway {
             return Ok(None);
         }
