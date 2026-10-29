@@ -76,6 +76,7 @@ All built on the `motore` crate's `Service<Cx, Request>` and `Layer<S>` traits.
 
 - **Service Discovery**: `Discover` trait (volo) -- `StaticDiscover`, `WeightedStaticDiscover`
 - **Load Balancing**: `LoadBalance` trait (volo) -- weighted random, consistent hashing
+- **Transport Pool**: `volo::pool::Pool<K, T: Poolable>` -- unique or shared (multiplexed) transports per peer; used by volo-grpc
 
 ## Design Patterns
 
