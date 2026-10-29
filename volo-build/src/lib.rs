@@ -220,3 +220,35 @@ macro_rules! join_multi_strs {
 
 pub(crate) use join_multi_strs;
 use volo::FastStr;
+
+#[cfg(test)]
+pub(crate) mod test_util {
+    /// Returns every bare `Some(`, `None`, `Ok(`, `Err(` or `Default::default` in `code`,
+    /// each with the line it sits on.
+    ///
+    /// Generated code lives in the user's module. An IDL type named `SOME`, `NONE`, `OK`,
+    /// `ERR` or `Default` becomes a Rust item with the prelude's name there and shadows
+    /// it, so every template has to spell the prelude names out in full.
+    pub(crate) fn bare_prelude_names(code: &str) -> Vec<String> {
+        const NAMES: [&str; 5] = ["Some(", "None", "Ok(", "Err(", "Default::default"];
+        let bytes = code.as_bytes();
+        let is_ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+        let mut found = Vec::new();
+        for name in NAMES {
+            for (pos, _) in code.match_indices(name) {
+                let end = pos + name.len();
+                let qualified = pos > 0 && (bytes[pos - 1] == b':' || is_ident(bytes[pos - 1]));
+                let longer = name.ends_with(|c: char| c.is_ascii_alphanumeric())
+                    && end < bytes.len()
+                    && is_ident(bytes[end]);
+                if qualified || longer {
+                    continue;
+                }
+                let start = code[..pos].rfind('\n').map_or(0, |i| i + 1);
+                let stop = code[end..].find('\n').map_or(code.len(), |i| end + i);
+                found.push(code[start..stop].trim().to_owned());
+            }
+        }
+        found
+    }
+}

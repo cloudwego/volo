@@ -96,11 +96,11 @@ impl VoloGrpcBackend {
         if streaming {
             r#"
 					use ::volo_grpc::codegen::StreamExt;
-					let repeat = std::iter::repeat(Default::default());
+					let repeat = std::iter::repeat(::std::default::Default::default());
 					let mut resp = ::volo_grpc::codegen::iter(repeat);
 					let (tx, rx) = ::volo_grpc::codegen::mpsc::channel(64);
 					tokio::spawn(async move {
-						while let Some(resp) = resp.next().await {
+						while let ::std::option::Option::Some(resp) = resp.next().await {
 							match tx.send(::std::result::Result::<_, ::volo_grpc::Status>::Ok(resp)).await {
 								::std::result::Result::Ok(_) => {}
 								::std::result::Result::Err(_) => {
@@ -113,7 +113,7 @@ impl VoloGrpcBackend {
 				"#
             .into()
         } else {
-            "::std::result::Result::Ok(::volo_grpc::Response::new(Default::default()))".into()
+            "::std::result::Result::Ok(::volo_grpc::Response::new(::std::default::Default::default()))".into()
         }
     }
 
@@ -195,7 +195,7 @@ impl VoloGrpcBackend {
                         status
                     }})?
                     .ok_or_else(|| ::volo_grpc::Status::new(::volo_grpc::Code::Internal, "Missing response message."))?;
-                if let Some(trailers) = message_stream.trailers().await? {{
+                if let ::std::option::Option::Some(trailers) = message_stream.trailers().await? {{
                     metadata.merge(trailers);
                 }}
                 ::std::result::Result::Ok(::volo_grpc::Response::from_parts(metadata, extensions, message))"#
@@ -230,7 +230,7 @@ impl VoloGrpcBackend {
                 let message = ::volo_grpc::codegen::StreamExt::try_next(&mut message_stream)
                     .await?
                     .ok_or_else(|| ::volo_grpc::Status::new(::volo_grpc::Code::Internal, "Missing request message."))?;
-                if let Some(trailers) = message_stream.trailers().await? {{
+                if let ::std::option::Option::Some(trailers) = message_stream.trailers().await? {{
                     metadata.merge(trailers);
                 }}
                 let req = ::volo_grpc::Request::from_parts(metadata, extensions, message);"#
@@ -467,7 +467,7 @@ impl CodegenBackend for VoloGrpcBackend {
 
         let req_recv_from_body = crate::join_multi_strs!(
             "",
-            |paths, enum_variant_names| -> "Some(\"{paths}\") => {{
+            |paths, enum_variant_names| -> "::std::option::Option::Some(\"{paths}\") => {{
                 ::std::result::Result::Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind,compression_encoding)))
             }},"
         );
@@ -481,7 +481,7 @@ impl CodegenBackend for VoloGrpcBackend {
 
         let resp_recv_from_body = crate::join_multi_strs!(
             "",
-            |paths, enum_variant_names| -> "Some(\"{paths}\") => {{
+            |paths, enum_variant_names| -> "::std::option::Option::Some(\"{paths}\") => {{
                 ::std::result::Result::Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind, compression_encoding)))
             }}"
         );
@@ -998,5 +998,78 @@ mod tests {
             2,
             "streaming server request passthrough: ClientStream + BidiStream\nstream: {stream}"
         );
+    }
+
+    /// A proto enum or message named `Some`, `None`, `Ok`, `Err` or `Default` shadows the
+    /// prelude inside the generated module, so every template has to spell the prelude
+    /// names out in full.
+    #[test]
+    fn test_service_codegen_spells_out_prelude_names() {
+        let cx = build_test_context(
+            r#"
+            syntax = "proto3";
+            package test.v1;
+
+            message Req { string name = 1; }
+            message Resp { string greeting = 1; }
+
+            service Greeter {
+                rpc Unary(Req) returns (Resp);
+                rpc ServerStream(Req) returns (stream Resp);
+                rpc ClientStream(stream Req) returns (Resp);
+                rpc BidiStream(stream Req) returns (stream Resp);
+            }
+            "#,
+        );
+
+        let (def_id, service) = find_first_service(&cx);
+        let backend = VoloGrpcBackend {
+            inner: pilota_build::codegen::pb::ProtobufBackend::new(cx.clone()),
+        };
+
+        let mut stream = String::new();
+        CONTEXT.set(&cx, || {
+            CUR_ITEM.set(&def_id, || {
+                <VoloGrpcBackend as CodegenBackend>::codegen_service_impl(
+                    &backend,
+                    def_id,
+                    &mut stream,
+                    &service,
+                )
+            })
+        });
+
+        // Body decoding matches on the path, and non-streaming sides read trailers.
+        assert!(
+            stream.contains("::std::option::Option::Some(\"/test.v1.Greeter/Unary\") =>"),
+            "stream: {stream}"
+        );
+        assert!(
+            stream.contains("if let ::std::option::Option::Some(trailers) = message_stream"),
+            "stream: {stream}"
+        );
+        assert_eq!(
+            crate::test_util::bare_prelude_names(&stream),
+            Vec::<String>::new(),
+            "stream: {stream}"
+        );
+
+        // Default server method bodies, unary and streaming.
+        for m in cx.service_methods(def_id).iter() {
+            let body = CONTEXT.set(&cx, || {
+                <VoloGrpcBackend as CodegenBackend>::codegen_service_method_with_global_path(
+                    &backend, def_id, m,
+                )
+            });
+            assert!(
+                body.contains("::std::default::Default::default()"),
+                "method body: {body}"
+            );
+            assert_eq!(
+                crate::test_util::bare_prelude_names(&body),
+                Vec::<String>::new(),
+                "method body: {body}"
+            );
+        }
     }
 }
