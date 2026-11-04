@@ -14,7 +14,23 @@ pub use default::DefaultMakeCodec;
 /// Returning an Ok(None) indicates the EOF has been reached.
 ///
 /// Note: [`Decoder`] should be designed to be ready for reuse.
+/// Owned TTStream input; boxing moves the existing BufReader without wrapping its inner R.
+pub trait StreamRead: AsyncRead + Unpin + Send + Sync + 'static {}
+impl<T: AsyncRead + Unpin + Send + Sync + 'static> StreamRead for T {}
+pub trait StreamWrite: AsyncWrite + Unpin + Send + Sync + 'static {}
+impl<T: AsyncWrite + Unpin + Send + Sync + 'static> StreamWrite for T {}
+
 pub trait Decoder: Send + Sync + 'static {
+    fn probe_ttstream(&mut self) -> impl Future<Output = Result<bool, std::io::Error>> + Send {
+        async { Ok(false) }
+    }
+    fn into_stream_reader(self) -> Result<Box<dyn StreamRead>, Self>
+    where
+        Self: Sized,
+    {
+        Err(self)
+    }
+
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -34,6 +50,13 @@ pub trait Decoder: Send + Sync + 'static {
 ///
 /// Note: [`Encoder`] should be designed to be ready for reuse.
 pub trait Encoder: Send + Sync + 'static {
+    fn into_stream_writer(self) -> Result<Box<dyn StreamWrite>, Self>
+    where
+        Self: Sized,
+    {
+        Err(self)
+    }
+
     fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -67,6 +90,10 @@ where
 {
     type Encoder: Encoder;
     type Decoder: Decoder;
+
+    fn supports_streaming(&self) -> bool {
+        false
+    }
 
     fn make_codec(&self, reader: R, writer: W) -> (Self::Encoder, Self::Decoder);
 }

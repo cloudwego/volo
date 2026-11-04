@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "kitex-streaming-interop"
+version = "0.1.0"
+description = "Versioned Kitex/Volo TTHeader streaming interoperability tools"
+requires-python = ">=3.7"
+dependencies = ["tomli>=2.0,<2.1; python_version<'3.11'"]
+
+[tool.setuptools.packages.find]
+where = ["python"]
+
+[tool.setuptools.package-data]
+kitex_streaming_interop = ["data/*.json"]

@@ -1,0 +1,1 @@
+[{"code":12004,"error":"[ttstream error, code=12004] EOF peer close","name":"netpoll-peer-close","source_is_io_eof":false,"source_is_netpoll_eof":true},{"code":null,"error":"EOF","name":"io-eof","source_is_io_eof":true,"source_is_netpoll_eof":false}]

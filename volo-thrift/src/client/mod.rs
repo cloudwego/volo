@@ -48,6 +48,7 @@ pub mod layer;
 
 pub struct ClientBuilder<IL, OL, MkClient, Req, Resp, MkT, MkC, LB> {
     config: Config,
+    streaming_options: crate::streaming::open::OpenOptions,
     pool: Option<pool::Config>,
     callee_name: FastStr,
     caller_name: FastStr,
@@ -82,6 +83,7 @@ impl<C, Req, Resp>
     pub fn new(service_name: impl AsRef<str>, service_client: C) -> Self {
         ClientBuilder {
             config: Default::default(),
+            streaming_options: Default::default(),
             pool: None,
             caller_name: "".into(),
             callee_name: FastStr::new(service_name),
@@ -112,6 +114,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
     ) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LbConfig<NLB, DISC>> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -138,6 +141,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
     ) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LbConfig<LB, NDISC>> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -166,6 +170,83 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB, DISC>
 }
 
 impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB> {
+    pub fn streaming_hook(mut self, hook: Arc<dyn crate::streaming::StreamHook>) -> Self {
+        self.streaming_options
+            .hooks
+            .get_or_insert_with(Default::default)
+            .push(hook);
+        self
+    }
+    /// Enables the streaming transport. Generated streaming services call this automatically.
+    /// Handwritten and generic clients must opt in explicitly before building.
+    pub fn streaming_protocol(mut self, _protocol: crate::streaming::StreamingProtocol) -> Self {
+        self.streaming_options.enabled = true;
+        self
+    }
+    /// Whether a generated streaming method or an explicit protocol/service enabled streaming.
+    /// Hooks, layers and configuration alone do not enable the additional transport stack.
+    pub fn streaming_enabled(&self) -> bool {
+        self.streaming_options.enabled
+    }
+    /// Configures streaming without enabling it for a pure unary client.
+    pub fn streaming_config(mut self, config: crate::streaming::StreamConfig) -> Self {
+        self.streaming_options.config = config;
+        self
+    }
+    pub fn streaming_hooks(mut self, hooks: crate::streaming::HookChain) -> Self {
+        self.streaming_options.hooks = (!hooks.is_empty()).then_some(hooks);
+        self
+    }
+    /// Installs a custom open service and enables streaming.
+    pub fn streaming_service<Svc>(mut self, service: Svc) -> Self
+    where
+        Svc: Service<
+                crate::streaming::StreamContext,
+                crate::streaming::OpenStream,
+                Response = crate::streaming::OpenedStream,
+                Error = crate::streaming::StreamError,
+            > + Send
+            + Sync
+            + 'static,
+    {
+        self.streaming_options.enabled = true;
+        self.streaming_options.service = Some(crate::streaming::OpenService::new(service));
+        self
+    }
+    pub fn streaming_layer<L>(mut self, layer: L) -> Self
+    where
+        L: Layer<crate::streaming::OpenService> + Send + 'static,
+        L::Service: Service<
+                crate::streaming::StreamContext,
+                crate::streaming::OpenStream,
+                Response = crate::streaming::OpenedStream,
+                Error = crate::streaming::StreamError,
+            > + Send
+            + Sync
+            + 'static,
+    {
+        self.streaming_options.layer(layer);
+        self
+    }
+
+    /// Prepends an opening layer: with `foo -> bar`, adding `baz` gives
+    /// `baz -> foo -> bar`. This does not wrap message send/receive operations.
+    pub fn streaming_layer_front<L>(mut self, layer: L) -> Self
+    where
+        L: Layer<crate::streaming::OpenService> + Send + 'static,
+        L::Service: Service<
+                crate::streaming::StreamContext,
+                crate::streaming::OpenStream,
+                Response = crate::streaming::OpenedStream,
+                Error = crate::streaming::StreamError,
+            > + Send
+            + Sync
+            + 'static,
+    {
+        self.streaming_options.layer_front(layer);
+        self
+    }
+
     /// Sets the rpc timeout for the client.
     ///
     /// The default value is 1 second.
@@ -173,6 +254,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     /// Users can set this to `None` to disable the timeout.
     pub fn rpc_timeout(mut self, timeout: Option<Duration>) -> Self {
         self.config.set_rpc_timeout(timeout);
+        self.streaming_options.config.deadline = timeout;
         self
     }
 
@@ -222,6 +304,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, NLB> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -256,6 +339,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MakeCodec, LB> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -284,6 +368,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ) -> ClientBuilder<IL, OL, C, Req, Resp, MakeTransport, MkC, LB> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -333,6 +418,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ) -> ClientBuilder<Stack<Inner, IL>, OL, C, Req, Resp, MkT, MkC, LB> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -372,6 +458,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ) -> ClientBuilder<Stack<IL, Inner>, OL, C, Req, Resp, MkT, MkC, LB> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -411,6 +498,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ) -> ClientBuilder<IL, Stack<Outer, OL>, C, Req, Resp, MkT, MkC, LB> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -450,6 +538,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     ) -> ClientBuilder<IL, Stack<OL, Outer>, C, Req, Resp, MkT, MkC, LB> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -476,6 +565,7 @@ impl<IL, OL, C, Req, Resp, MkT, MkC, LB> ClientBuilder<IL, OL, C, Req, Resp, MkT
     pub fn multiplex(self, multiplex: bool) -> ClientBuilder<IL, OL, C, Req, Resp, MkT, MkC, LB> {
         ClientBuilder {
             config: self.config,
+            streaming_options: self.streaming_options,
             pool: self.pool,
             caller_name: self.caller_name,
             callee_name: self.callee_name,
@@ -589,6 +679,15 @@ where
         if let Some(timeout) = self.config.read_write_timeout() {
             self.make_transport.set_write_timeout(Some(timeout));
         }
+        let (lb_layer, streaming) = if self.streaming_options.enabled {
+            let (layer, resolver) = self.mk_lb.make_with_resolver();
+            let streaming = self
+                .streaming_options
+                .build(self.make_transport.clone(), resolver);
+            (layer, Some(streaming))
+        } else {
+            (self.mk_lb.make(), None)
+        };
         let msg_svc = MessageService {
             #[cfg(not(feature = "multiplex"))]
             inner: pingpong::Client::new(self.make_transport, self.pool, self.make_codec),
@@ -611,11 +710,11 @@ where
 
         let transport = if !self.disable_timeout_layer {
             BoxCloneService::new(self.outer_layer.layer(BoxCloneService::new(
-                TimeoutLayer::new().layer(self.mk_lb.make().layer(self.inner_layer.layer(msg_svc))),
+                TimeoutLayer::new().layer(lb_layer.layer(self.inner_layer.layer(msg_svc))),
             )))
         } else {
             BoxCloneService::new(self.outer_layer.layer(BoxCloneService::new(
-                self.mk_lb.make().layer(self.inner_layer.layer(msg_svc)),
+                lb_layer.layer(self.inner_layer.layer(msg_svc)),
             )))
         };
 
@@ -623,6 +722,7 @@ where
             inner: Arc::new(ClientInner {
                 callee_name: self.callee_name,
                 config: self.config,
+                streaming,
                 address: self.address,
                 caller_name: self.caller_name,
                 seq_id: AtomicI32::new(0),
@@ -646,6 +746,7 @@ pub struct Client<S> {
 // unsafe impl<Req, Resp> Sync for Client<Req, Resp> {}
 
 struct ClientInner {
+    streaming: Option<crate::streaming::OpenService>,
     callee_name: FastStr,
     caller_name: FastStr,
     config: Config,
@@ -654,6 +755,85 @@ struct ClientInner {
 }
 
 impl<S> Client<S> {
+    pub async fn open_stream(
+        &self,
+        service: &str,
+        method: &str,
+    ) -> Result<crate::streaming::OpenedStream, crate::streaming::StreamError> {
+        self.open_stream_with_mode(service, method, crate::streaming::StreamMode::Raw)
+            .await
+    }
+    pub async fn open_stream_with_mode(
+        &self,
+        service: &str,
+        method: &str,
+        mode: crate::streaming::StreamMode,
+    ) -> Result<crate::streaming::OpenedStream, crate::streaming::StreamError> {
+        if !cfg!(feature = "ttstream") {
+            return Err(crate::streaming::StreamError::configuration(
+                "ttstream feature is disabled",
+            ));
+        }
+        if self.inner.streaming.is_none() {
+            return Err(crate::streaming::StreamError::configuration(
+                "streaming is not enabled; configure streaming_protocol(TtHeader)",
+            ));
+        }
+        let mut cx = crate::streaming::StreamContext::new(
+            crate::transport::ttstream::connection::next_id(),
+            service,
+            method,
+            Role::Client,
+        );
+        cx.set_mode(mode);
+        cx.update_rpc_info(|rpc| *rpc = self.make_rpc_info(method));
+        open_stream_context(&self.inner, cx).await
+    }
+
+    /// Consumes an ordinary unary CallOpt before entering the streaming open
+    /// stack. The option and its non-Clone endpoint tags are moved exactly once.
+    pub async fn open_stream_with_callopt(
+        self,
+        service: &str,
+        method: &str,
+        mode: crate::streaming::StreamMode,
+    ) -> Result<crate::streaming::OpenedStream, crate::streaming::StreamError>
+    where
+        S: volo::client::Apply<ClientContext, Error = ClientError>,
+    {
+        if !cfg!(feature = "ttstream") {
+            return Err(crate::streaming::StreamError::configuration(
+                "ttstream feature is disabled",
+            ));
+        }
+        if self.inner.streaming.is_none() {
+            return Err(crate::streaming::StreamError::configuration(
+                "streaming is not enabled; configure streaming_protocol(TtHeader)",
+            ));
+        }
+        let mut cx = crate::streaming::StreamContext::new(
+            crate::transport::ttstream::connection::next_id(),
+            service,
+            method,
+            Role::Client,
+        );
+        cx.set_mode(mode);
+        let mut call = self.make_cx(method, false);
+        if let Some(timeout) =
+            <S as volo::client::Apply<ClientContext>>::rpc_timeout(&self.transport)
+        {
+            cx.set_deadline(Some(cx.started_at() + timeout));
+        }
+        if let Err(error) = self.transport.apply(&mut call) {
+            // The outer open guard still owns failure observation and one finish.
+            cx.cancel(crate::streaming::StreamError::configuration(
+                error.to_string(),
+            ));
+        }
+        cx.update_rpc_info(|rpc| std::mem::swap(rpc, call.rpc_info_mut()));
+        open_stream_context(&self.inner, cx).await
+    }
+
     pub fn make_cx(&self, method: &str, oneway: bool) -> ClientContext {
         CLIENT_CONTEXT_CACHE.with(|cache| {
             let mut cache = cache.borrow_mut();
@@ -719,6 +899,41 @@ impl<S> Client<S> {
             inner: self.inner,
         }
     }
+}
+
+async fn open_stream_context(
+    inner: &ClientInner,
+    mut cx: crate::streaming::StreamContext,
+) -> Result<crate::streaming::OpenedStream, crate::streaming::StreamError> {
+    let _ = crate::streaming::STREAM_CONTEXT.try_with(|parent| parent.attach_child(&cx));
+    if crate::streaming::STREAM_CONTEXT
+        .try_with(|parent| {
+            parent.with_metainfo(|info| {
+                cx.update_metainfo(|target| crate::streaming::copy_outgoing_metainfo(info, target))
+            })
+        })
+        .is_err()
+    {
+        let _ = metainfo::METAINFO.try_with(|info| {
+            cx.update_metainfo(|target| {
+                crate::streaming::copy_outgoing_metainfo(&info.borrow(), target)
+            })
+        });
+    }
+    let request = crate::streaming::OpenStream {
+        address: cx.with_rpc_info(|rpc| rpc.callee().address()),
+        metadata: Default::default(),
+    };
+    inner
+        .streaming
+        .as_ref()
+        .ok_or_else(|| {
+            crate::streaming::StreamError::configuration(
+                "streaming is not enabled; configure streaming_protocol(TtHeader)",
+            )
+        })?
+        .call(&mut cx, request)
+        .await
 }
 
 macro_rules! impl_client {
@@ -787,3 +1002,67 @@ impl_client!((self, &mut cx, req) => async move {
             .await
     }
 });
+
+#[cfg(test)]
+mod streaming_activation_tests {
+    use bytes::Bytes;
+
+    use super::*;
+    struct Make;
+    impl<S> volo::client::MkClient<Client<S>> for Make {
+        type Target = Client<S>;
+        fn mk_client(&self, service: Client<S>) -> Client<S> {
+            service
+        }
+    }
+    #[tokio::test]
+    async fn legacy_builder_and_configuration_only_do_not_construct_streaming_stack() {
+        let builder = ClientBuilder::<_, _, _, Bytes, Bytes, _, _, _>::new("Unary", Make)
+            .streaming_config(Default::default())
+            .streaming_hooks(Default::default())
+            .streaming_layer(volo::layer::Identity::new());
+        assert!(!builder.streaming_enabled());
+        let client = builder.build();
+        assert!(client.inner.streaming.is_none());
+        assert!(matches!(
+            client.open_stream("Unary", "Unknown").await,
+            Err(crate::streaming::StreamError::Configuration(_))
+        ));
+    }
+    #[tokio::test]
+    async fn custom_open_service_is_an_explicit_activation() {
+        struct Custom;
+        impl Service<crate::streaming::StreamContext, crate::streaming::OpenStream> for Custom {
+            type Response = crate::streaming::OpenedStream;
+            type Error = crate::streaming::StreamError;
+            async fn call(
+                &self,
+                _: &mut crate::streaming::StreamContext,
+                _: crate::streaming::OpenStream,
+            ) -> Result<Self::Response, Self::Error> {
+                Err(crate::streaming::StreamError::Configuration(
+                    "custom open reached".into(),
+                ))
+            }
+        }
+        let builder = ClientBuilder::<_, _, _, Bytes, Bytes, _, _, _>::new("Raw", Make)
+            .streaming_service(Custom);
+        assert!(builder.streaming_enabled());
+        let client = builder.build();
+        assert!(client.inner.streaming.is_some());
+        let error = client.open_stream("Raw", "Bidi").await.err().unwrap();
+        if cfg!(feature = "ttstream") {
+            assert!(error.to_string().contains("custom open reached"));
+        } else {
+            assert!(error.to_string().contains("feature is disabled"));
+        }
+    }
+    #[tokio::test]
+    async fn explicit_protocol_enables_raw_after_configuration() {
+        let builder = ClientBuilder::<_, _, _, Bytes, Bytes, _, _, _>::new("Raw", Make)
+            .streaming_layer(volo::layer::Identity::new())
+            .streaming_protocol(crate::streaming::StreamingProtocol::TtHeader);
+        assert!(builder.streaming_enabled());
+        assert!(builder.build().inner.streaming.is_some());
+    }
+}

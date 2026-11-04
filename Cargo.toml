@@ -12,6 +12,7 @@ members = [
   "examples/volo-gen",
   "benchmark",
   "tests/code-generation",
+  "tests/ttstream-codegen",
 ]
 resolver = "3"
 
@@ -25,7 +26,7 @@ rust-version = "1.85.0"
 
 [workspace.dependencies]
 pilota = "0.13"
-pilota-build = "0.13"
+pilota-build = "0.14.0-alpha.1"
 pilota-thrift-parser = "0.13"
 pilota-thrift-reflect = "0.2"
 pilota-thrift-fieldmask = "0.2"
@@ -141,7 +142,7 @@ tokio-native-tls = "0.3"
 tungstenite = "0.28"
 tokio-tungstenite = "0.28"
 
-shmipc = "0.2.1"
+shmipc = "0.2.2"
 
 [profile.release]
 opt-level = 3

@@ -14,3 +14,5 @@ fn should_log(e: &ThriftException) -> bool {
             && !volo::util::remote_error::remote_closed_error_log_enabled()
     )
 }
+
+pub mod ttstream;

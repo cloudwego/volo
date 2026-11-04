@@ -1,0 +1,422 @@
+{
+  "schemaVersion": 1,
+  "kitex_module": "github.com/cloudwego/kitex@v0.16.4",
+  "cases": [
+    {
+      "name": "mode_none",
+      "style": "streamx",
+      "idl_sha256": "fca16774e386fed010ddc0f8ceff30ba94ff08a439f3279302edfe28c4336a9d",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mode_none",
+      "style": "legacy",
+      "idl_sha256": "fca16774e386fed010ddc0f8ceff30ba94ff08a439f3279302edfe28c4336a9d",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mode_unary",
+      "style": "streamx",
+      "idl_sha256": "8a8fa5f0cf31b1f2cd1fb1805274f8397902a855781bf7ea6c3dc8ddb771516a",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mode_unary",
+      "style": "legacy",
+      "idl_sha256": "8a8fa5f0cf31b1f2cd1fb1805274f8397902a855781bf7ea6c3dc8ddb771516a",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "undefined: streaming"
+    },
+    {
+      "name": "mode_client",
+      "style": "streamx",
+      "idl_sha256": "128d53166f36060c540b20ab6eb835c76b1750d8b137c90c3ece1500b0cf8b3e",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mode_client",
+      "style": "legacy",
+      "idl_sha256": "128d53166f36060c540b20ab6eb835c76b1750d8b137c90c3ece1500b0cf8b3e",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mode_server",
+      "style": "streamx",
+      "idl_sha256": "89545dac68a8a0768d853c61eaa96385d0a63e11085dc379facfc5bfc07f323c",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mode_server",
+      "style": "legacy",
+      "idl_sha256": "89545dac68a8a0768d853c61eaa96385d0a63e11085dc379facfc5bfc07f323c",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mode_bidirectional",
+      "style": "streamx",
+      "idl_sha256": "161d36e57c0030d9076ad44a365273091b484aa44ac8d215a21a9b065a01425e",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mode_bidirectional",
+      "style": "legacy",
+      "idl_sha256": "161d36e57c0030d9076ad44a365273091b484aa44ac8d215a21a9b065a01425e",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mode_invalid",
+      "style": "streamx",
+      "idl_sha256": "51bec6a0d4a5c992670dbb1c1adbcfe826845a87c0f2d2a818a60c504e57f879",
+      "outcome": "rejected",
+      "diagnostic_contains": "invalid value"
+    },
+    {
+      "name": "mode_invalid",
+      "style": "legacy",
+      "idl_sha256": "51bec6a0d4a5c992670dbb1c1adbcfe826845a87c0f2d2a818a60c504e57f879",
+      "outcome": "rejected",
+      "diagnostic_contains": "invalid value"
+    },
+    {
+      "name": "mode_empty",
+      "style": "streamx",
+      "idl_sha256": "7236df3b9062c5956f7c5b539f9f1a69fade1945b248e6b9356332449674798d",
+      "outcome": "rejected",
+      "diagnostic_contains": "invalid value"
+    },
+    {
+      "name": "mode_empty",
+      "style": "legacy",
+      "idl_sha256": "7236df3b9062c5956f7c5b539f9f1a69fade1945b248e6b9356332449674798d",
+      "outcome": "rejected",
+      "diagnostic_contains": "invalid value"
+    },
+    {
+      "name": "empty_args",
+      "style": "streamx",
+      "idl_sha256": "93a277e6ece55edb6ea2c01ca7a58d99f5e03858327b8291c12dd87c16e40037",
+      "outcome": "rejected",
+      "diagnostic_contains": "exactly 1 argument"
+    },
+    {
+      "name": "empty_args",
+      "style": "legacy",
+      "idl_sha256": "93a277e6ece55edb6ea2c01ca7a58d99f5e03858327b8291c12dd87c16e40037",
+      "outcome": "rejected",
+      "diagnostic_contains": "exactly 1 argument"
+    },
+    {
+      "name": "multiple_args",
+      "style": "streamx",
+      "idl_sha256": "532c8e0a4be5a853a176052a556cd9bcde5611ef207d5af9d2c2f8146d31abf6",
+      "outcome": "rejected",
+      "diagnostic_contains": "exactly 1 argument"
+    },
+    {
+      "name": "multiple_args",
+      "style": "legacy",
+      "idl_sha256": "532c8e0a4be5a853a176052a556cd9bcde5611ef207d5af9d2c2f8146d31abf6",
+      "outcome": "rejected",
+      "diagnostic_contains": "exactly 1 argument"
+    },
+    {
+      "name": "void",
+      "style": "streamx",
+      "idl_sha256": "ded3209a1dbe4305d7650e15cdb69445445590f633d409ee913f4f36cc7320ec",
+      "outcome": "rejected",
+      "diagnostic_contains": ".Resp.Type"
+    },
+    {
+      "name": "void",
+      "style": "legacy",
+      "idl_sha256": "ded3209a1dbe4305d7650e15cdb69445445590f633d409ee913f4f36cc7320ec",
+      "outcome": "rejected",
+      "diagnostic_contains": ".Resp.Type"
+    },
+    {
+      "name": "oneway",
+      "style": "streamx",
+      "idl_sha256": "1ac73db3e688a7122352b161afe4b31f24a46802a1c4af6fe3af807687c3914d",
+      "outcome": "rejected",
+      "diagnostic_contains": ".Resp.Type"
+    },
+    {
+      "name": "oneway",
+      "style": "legacy",
+      "idl_sha256": "1ac73db3e688a7122352b161afe4b31f24a46802a1c4af6fe3af807687c3914d",
+      "outcome": "rejected",
+      "diagnostic_contains": ".Resp.Type"
+    },
+    {
+      "name": "throws",
+      "style": "streamx",
+      "idl_sha256": "cadff6a58aae6597781f0c39af897154792ff5d2d60029cd8a6fc4ba01a14cda",
+      "outcome": "accepted"
+    },
+    {
+      "name": "throws",
+      "style": "legacy",
+      "idl_sha256": "cadff6a58aae6597781f0c39af897154792ff5d2d60029cd8a6fc4ba01a14cda",
+      "outcome": "accepted"
+    },
+    {
+      "name": "scalar_arg",
+      "style": "streamx",
+      "idl_sha256": "f19fd2c7adc8daf78c465aa02a49e2f748f6bd0d3f51ecf62e5cfe44ad911d71",
+      "outcome": "accepted"
+    },
+    {
+      "name": "scalar_arg",
+      "style": "legacy",
+      "idl_sha256": "f19fd2c7adc8daf78c465aa02a49e2f748f6bd0d3f51ecf62e5cfe44ad911d71",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "cannot use m"
+    },
+    {
+      "name": "scalar_return",
+      "style": "streamx",
+      "idl_sha256": "c9238cd33f379a641c90fc467592a7248c57f528b1c3c95f20c52bec7b26a067",
+      "outcome": "accepted"
+    },
+    {
+      "name": "scalar_return",
+      "style": "legacy",
+      "idl_sha256": "c9238cd33f379a641c90fc467592a7248c57f528b1c3c95f20c52bec7b26a067",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "cannot use m"
+    },
+    {
+      "name": "list_arg",
+      "style": "streamx",
+      "idl_sha256": "8cac7d821eece9fea206eabc8b06981a64dccb7a8a8849a258d6b8a3626a912d",
+      "outcome": "accepted"
+    },
+    {
+      "name": "list_arg",
+      "style": "legacy",
+      "idl_sha256": "8cac7d821eece9fea206eabc8b06981a64dccb7a8a8849a258d6b8a3626a912d",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "cannot use m"
+    },
+    {
+      "name": "list_return",
+      "style": "streamx",
+      "idl_sha256": "bb9428e2b01eba70125586aa4a753c668b9849f4b00563fca6eb2b166d573110",
+      "outcome": "accepted"
+    },
+    {
+      "name": "list_return",
+      "style": "legacy",
+      "idl_sha256": "bb9428e2b01eba70125586aa4a753c668b9849f4b00563fca6eb2b166d573110",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "cannot use m"
+    },
+    {
+      "name": "map_arg",
+      "style": "streamx",
+      "idl_sha256": "f09e6c112c4625a7628cb3576e47aaf3d908c2cb360f94611264d1259ee38ff7",
+      "outcome": "accepted"
+    },
+    {
+      "name": "map_arg",
+      "style": "legacy",
+      "idl_sha256": "f09e6c112c4625a7628cb3576e47aaf3d908c2cb360f94611264d1259ee38ff7",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "cannot use m"
+    },
+    {
+      "name": "map_return",
+      "style": "streamx",
+      "idl_sha256": "9b91f302b6ef1adb9829ee118f7eef2584d6ec8f015240de2d259e8a8aea0624",
+      "outcome": "accepted"
+    },
+    {
+      "name": "map_return",
+      "style": "legacy",
+      "idl_sha256": "9b91f302b6ef1adb9829ee118f7eef2584d6ec8f015240de2d259e8a8aea0624",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "cannot use m"
+    },
+    {
+      "name": "set_arg",
+      "style": "streamx",
+      "idl_sha256": "bd1bacfa599114830d58346ee3429510c00e5919d5ffba2b93c6cd0eebda3994",
+      "outcome": "accepted"
+    },
+    {
+      "name": "set_arg",
+      "style": "legacy",
+      "idl_sha256": "bd1bacfa599114830d58346ee3429510c00e5919d5ffba2b93c6cd0eebda3994",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "cannot use m"
+    },
+    {
+      "name": "set_return",
+      "style": "streamx",
+      "idl_sha256": "2d91cb3a03daa8c57268daf235f3f72880abe0cecd1e06e10ad0c23c49ee90c0",
+      "outcome": "accepted"
+    },
+    {
+      "name": "set_return",
+      "style": "legacy",
+      "idl_sha256": "2d91cb3a03daa8c57268daf235f3f72880abe0cecd1e06e10ad0c23c49ee90c0",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "cannot use m"
+    },
+    {
+      "name": "typedef",
+      "style": "streamx",
+      "idl_sha256": "6e84551a0a058d07c66f94992666e3f9829c5344ac1f77c6b1018d2490f7cd9f",
+      "outcome": "accepted"
+    },
+    {
+      "name": "typedef",
+      "style": "legacy",
+      "idl_sha256": "6e84551a0a058d07c66f94992666e3f9829c5344ac1f77c6b1018d2490f7cd9f",
+      "outcome": "accepted"
+    },
+    {
+      "name": "duplicate_same",
+      "style": "streamx",
+      "idl_sha256": "aa5a0637e3690b0705fef0734221025ab5d98f65fd48a36fc0c57cfcafc15260",
+      "outcome": "rejected",
+      "diagnostic_contains": "multiple values for annotation streaming.mode"
+    },
+    {
+      "name": "duplicate_same",
+      "style": "legacy",
+      "idl_sha256": "aa5a0637e3690b0705fef0734221025ab5d98f65fd48a36fc0c57cfcafc15260",
+      "outcome": "rejected",
+      "diagnostic_contains": "multiple values for annotation streaming.mode"
+    },
+    {
+      "name": "duplicate_different",
+      "style": "streamx",
+      "idl_sha256": "1d895470739089528ed76798da5f54a4fac16e56accf2c33a9f6aaff044058c9",
+      "outcome": "rejected",
+      "diagnostic_contains": "multiple values for annotation streaming.mode"
+    },
+    {
+      "name": "duplicate_different",
+      "style": "legacy",
+      "idl_sha256": "1d895470739089528ed76798da5f54a4fac16e56accf2c33a9f6aaff044058c9",
+      "outcome": "rejected",
+      "diagnostic_contains": "multiple values for annotation streaming.mode"
+    },
+    {
+      "name": "duplicate_keys",
+      "style": "streamx",
+      "idl_sha256": "1d895470739089528ed76798da5f54a4fac16e56accf2c33a9f6aaff044058c9",
+      "outcome": "rejected",
+      "diagnostic_contains": "multiple values for annotation streaming.mode"
+    },
+    {
+      "name": "duplicate_keys",
+      "style": "legacy",
+      "idl_sha256": "1d895470739089528ed76798da5f54a4fac16e56accf2c33a9f6aaff044058c9",
+      "outcome": "rejected",
+      "diagnostic_contains": "multiple values for annotation streaming.mode"
+    },
+    {
+      "name": "unary_empty_args",
+      "style": "streamx",
+      "idl_sha256": "f267053ec32d9aff27e1cc4d0d5f10818c4181de67e520cd2b7ef6910ba37c42",
+      "outcome": "rejected",
+      "diagnostic_contains": "exactly 1 argument"
+    },
+    {
+      "name": "unary_empty_args",
+      "style": "legacy",
+      "idl_sha256": "f267053ec32d9aff27e1cc4d0d5f10818c4181de67e520cd2b7ef6910ba37c42",
+      "outcome": "rejected",
+      "diagnostic_contains": "exactly 1 argument"
+    },
+    {
+      "name": "unary_multiple_args",
+      "style": "streamx",
+      "idl_sha256": "d8aa6123263c02cb8ecb42be6843ce863b54320819a8958a2ba6592180c878e8",
+      "outcome": "rejected",
+      "diagnostic_contains": "exactly 1 argument"
+    },
+    {
+      "name": "unary_multiple_args",
+      "style": "legacy",
+      "idl_sha256": "d8aa6123263c02cb8ecb42be6843ce863b54320819a8958a2ba6592180c878e8",
+      "outcome": "rejected",
+      "diagnostic_contains": "exactly 1 argument"
+    },
+    {
+      "name": "unary_throws",
+      "style": "streamx",
+      "idl_sha256": "45cbdc92a39aea1454d4a2f9fdb42df26969fa90a62978a66b46e30a29c1fb67",
+      "outcome": "accepted"
+    },
+    {
+      "name": "unary_throws",
+      "style": "legacy",
+      "idl_sha256": "45cbdc92a39aea1454d4a2f9fdb42df26969fa90a62978a66b46e30a29c1fb67",
+      "outcome": "compile_failure",
+      "diagnostic_contains": "undefined: streaming"
+    },
+    {
+      "name": "mixed",
+      "style": "streamx",
+      "idl_sha256": "44e05d1707bb2975538623a335b2ad7c8dc3c84f5489c6cd1c91d453f2591f4d",
+      "outcome": "accepted"
+    },
+    {
+      "name": "mixed",
+      "style": "legacy",
+      "idl_sha256": "44e05d1707bb2975538623a335b2ad7c8dc3c84f5489c6cd1c91d453f2591f4d",
+      "outcome": "accepted"
+    },
+    {
+      "name": "all_services_throws",
+      "style": "streamx",
+      "idl_sha256": "3cb6929538bd5186a78977889d18b259cdc9b5c941d0761be17c6d054cc8c8cf",
+      "outcome": "accepted"
+    },
+    {
+      "name": "all_services_throws",
+      "style": "legacy",
+      "idl_sha256": "3cb6929538bd5186a78977889d18b259cdc9b5c941d0761be17c6d054cc8c8cf",
+      "outcome": "accepted"
+    },
+    {
+      "name": "external_codec",
+      "style": "streamx",
+      "idl_sha256": "97f0a82127c8a0c8a479faca944e2fc8720f524995f2ea62bce3daf4c91f9d8e",
+      "outcome": "accepted"
+    },
+    {
+      "name": "external_codec",
+      "style": "legacy",
+      "idl_sha256": "97f0a82127c8a0c8a479faca944e2fc8720f524995f2ea62bce3daf4c91f9d8e",
+      "outcome": "accepted"
+    },
+    {
+      "name": "external_extended",
+      "style": "streamx",
+      "idl_sha256": "049504e6ac00df1c02655acfff66ecf0f720e838ca3d0ad41ae103c45f0d98f3",
+      "outcome": "accepted"
+    },
+    {
+      "name": "external_extended",
+      "style": "legacy",
+      "idl_sha256": "049504e6ac00df1c02655acfff66ecf0f720e838ca3d0ad41ae103c45f0d98f3",
+      "outcome": "accepted"
+    },
+    {
+      "name": "external_typing",
+      "style": "streamx",
+      "idl_sha256": "5fb5d6b8521a0723688de54894f811ecee74ccb626903c7ae1d3520fac613e27",
+      "outcome": "accepted"
+    },
+    {
+      "name": "external_typing",
+      "style": "legacy",
+      "idl_sha256": "5fb5d6b8521a0723688de54894f811ecee74ccb626903c7ae1d3520fac613e27",
+      "outcome": "accepted"
+    }
+  ]
+}

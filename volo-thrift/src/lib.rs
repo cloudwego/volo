@@ -24,3 +24,5 @@ pub use linkedbytes::LinkedBytes;
 pub use message::{EntryMessage, Message};
 pub use message_wrapper::*;
 pub use server::{NamedService, Router};
+
+pub mod streaming;

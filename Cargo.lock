@@ -282,7 +282,7 @@ dependencies = [
  "governor",
  "metainfo",
  "motore",
- "pilota",
+ "pilota 0.13.0",
  "serde",
  "sysinfo",
  "tokio",
@@ -439,7 +439,7 @@ dependencies = [
 name = "code-generation"
 version = "0.0.0"
 dependencies = [
- "pilota",
+ "pilota 0.13.0",
  "volo",
  "volo-build",
  "volo-grpc",
@@ -458,7 +458,7 @@ version = "3.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fde0e0ec90c9dfb3b4b1a0891a7dcd0e2bffde2f7efed5fe7c9bb00e5bfb915e"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -810,9 +810,9 @@ dependencies = [
  "metainfo",
  "mime",
  "motore",
- "pilota",
+ "pilota 0.13.0",
  "pilota-thrift-fieldmask",
- "pilota-thrift-reflect",
+ "pilota-thrift-reflect 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "tempfile",
  "tokio",
@@ -1375,7 +1375,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -2294,10 +2294,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "pilota"
+version = "0.13.1"
+dependencies = [
+ "ahash",
+ "anyhow",
+ "async-recursion",
+ "bytes",
+ "faststr",
+ "integer-encoding",
+ "lazy_static",
+ "linkedbytes",
+ "ordered-float",
+ "paste",
+ "protobuf",
+ "serde",
+ "smallvec",
+ "thiserror 2.0.17",
+ "tokio",
+]
+
+[[package]]
 name = "pilota-build"
-version = "0.13.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceebd29ea5f8cb7d9fa72325fbb9a19bc165be2c0103e3bbaac0158880dd6072"
+version = "0.14.0-alpha.1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2312,9 +2331,9 @@ dependencies = [
  "paste",
  "petgraph",
  "phf",
- "pilota",
+ "pilota 0.13.1",
  "pilota-thrift-parser",
- "pilota-thrift-reflect",
+ "pilota-thrift-reflect 0.2.0",
  "proc-macro2",
  "protobuf",
  "protobuf-parse",
@@ -2343,18 +2362,16 @@ dependencies = [
  "ariadne",
  "chumsky",
  "faststr",
- "pilota",
+ "pilota 0.13.0",
  "pilota-thrift-parser",
- "pilota-thrift-reflect",
+ "pilota-thrift-reflect 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "serde",
  "thiserror 2.0.17",
 ]
 
 [[package]]
 name = "pilota-thrift-parser"
-version = "0.13.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a446cfb1c72ce1717620d5a0a49430aae965ca1a873922280d39c161b97e8370"
+version = "0.13.8"
 dependencies = [
  "anyhow",
  "ariadne",
@@ -2362,6 +2379,21 @@ dependencies = [
  "chumsky",
  "faststr",
  "thiserror 2.0.17",
+]
+
+[[package]]
+name = "pilota-thrift-reflect"
+version = "0.2.0"
+dependencies = [
+ "ahash",
+ "bytes",
+ "chumsky",
+ "dashmap",
+ "faststr",
+ "pilota 0.13.1",
+ "pilota-thrift-parser",
+ "thiserror 2.0.17",
+ "tracing",
 ]
 
 [[package]]
@@ -2375,7 +2407,7 @@ dependencies = [
  "chumsky",
  "dashmap",
  "faststr",
- "pilota",
+ "pilota 0.13.0",
  "pilota-thrift-parser",
  "thiserror 2.0.17",
 ]
@@ -2612,7 +2644,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -2649,7 +2681,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -3282,9 +3314,7 @@ checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
 
 [[package]]
 name = "shmipc"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e46b66b2fbc3ed49e95bd15d9ff81017cabe482b0ef9de4591df0e9bb2430a53"
+version = "0.2.2"
 dependencies = [
  "anyhow",
  "arc-swap",
@@ -3993,6 +4023,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
+name = "ttstream-codegen"
+version = "0.0.0"
+dependencies = [
+ "metainfo",
+ "pilota 0.13.0",
+ "shmipc",
+ "sonic-rs",
+ "tempfile",
+ "tokio",
+ "volo",
+ "volo-build",
+ "volo-thrift",
+]
+
+[[package]]
 name = "tungstenite"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4197,7 +4242,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.12.4"
+version = "0.13.0-alpha.1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4252,9 +4297,9 @@ name = "volo-gen"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "pilota",
+ "pilota 0.13.0",
  "pilota-thrift-fieldmask",
- "pilota-thrift-reflect",
+ "pilota-thrift-reflect 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "tokio",
  "volo",
  "volo-build",
@@ -4291,7 +4336,7 @@ dependencies = [
  "motore",
  "paste",
  "percent-encoding",
- "pilota",
+ "pilota 0.13.0",
  "pin-project",
  "rustc-hash 2.1.1",
  "tokio",
@@ -4376,6 +4421,7 @@ dependencies = [
  "bytes",
  "chrono",
  "futures",
+ "hex",
  "itoa",
  "linked-hash-map",
  "linkedbytes",
@@ -4384,10 +4430,11 @@ dependencies = [
  "num_enum",
  "parking_lot",
  "paste",
- "pilota",
+ "pilota 0.13.0",
  "pin-project",
  "rustc-hash 2.1.1",
  "scopeguard",
+ "serde_json",
  "sonic-rs",
  "thiserror 2.0.17",
  "tokio",
@@ -4558,7 +4605,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

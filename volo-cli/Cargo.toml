@@ -23,7 +23,7 @@ keywords = ["thrift", "grpc", "protobuf", "volo", "cli"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo-build = { version = "0.12", path = "../volo-build" }
+volo-build = { version = "0.13.0-alpha.1", path = "../volo-build" }
 pilota-thrift-parser.workspace = true
 faststr.workspace = true
 

@@ -50,6 +50,8 @@ tokio = { workspace = true, features = [
 tracing.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
+hex.workspace = true
 tracing-subscriber.workspace = true
 volo-gen = { path = "../examples/volo-gen" }
 
@@ -64,3 +66,6 @@ unsafe-codec = []
 unsafe_unchecked = ["volo/unsafe_unchecked"]
 
 shmipc = ["volo/shmipc"]
+
+# TTHeader streaming transport; protocol-neutral API types are always available.
+ttstream = []
