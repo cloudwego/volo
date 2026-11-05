@@ -25,6 +25,8 @@ volo/src/
 │   ├── random.rs       # WeightedRandomBalance
 │   └── consistent_hash.rs  # ConsistentHashBalance (requires RequestHash)
 │
+├── pool/               # Generic transport pool (Pool, Poolable, Mode::{Unique, Shared}); used by volo-grpc
+│
 ├── net/                # Network transport layer
 │   ├── mod.rs          # Address enum (Ip, Unix, Shmipc)
 │   ├── conn.rs         # ConnStream, Conn, OwnedReadHalf/OwnedWriteHalf
@@ -58,6 +60,10 @@ volo/src/
 ### Network (`net`)
 
 Unified transport abstraction. `Address` enum supports TCP (`Ip`), Unix sockets (`Unix`), and shared memory (`Shmipc`). `ConnStream` enum wraps all connection types.
+
+### Transport Pool (`pool`)
+
+`Pool<K, T: Poolable>` keyed by peer (usually `net::Address`). `Mode::Unique` transports are checked out exclusively and handed back with `Pooled::reuse`; `Mode::Shared` (multiplexed, e.g. HTTP/2) keeps one transport per key, hands out clones, and dedupes concurrent connects. New transports come from a `UnaryService<K>`; errors surface as `pool::Error<E>`. Idle eviction runs in a task started lazily on first `get`. Currently used by `volo-grpc`; `volo-thrift` and `volo-http` still carry their own copies of the same design and are to be migrated.
 
 ### Hot Restart (`hotrestart`, Unix only)
 
