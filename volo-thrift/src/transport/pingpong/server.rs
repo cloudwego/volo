@@ -71,6 +71,18 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     cx,
                     peer_addr
                 );
+                // Read the fallback state before the stream is recycled.
+                // The flag is sticky for a server stream (shmipc only clears it in
+                // `Stream::reset()`, which `release_read_and_reuse()` does not call), so once a
+                // connection has fallen back every later RPC on it reports `true`. That matches
+                // the transport, which keeps sending later responses over the socket.
+                #[cfg(feature = "shmipc")]
+                let req_fallback = helper.fallback_state();
+                #[cfg(feature = "shmipc")]
+                if req_fallback {
+                    cx.extensions
+                        .insert(crate::transport::ShmipcPayloadFallback);
+                }
                 #[cfg(feature = "shmipc")]
                 helper.release_read_and_reuse();
 
@@ -102,14 +114,20 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                     resp.map_err(server_error_to_application_exception),
                                 );
                                 let encode_span = span_provider.on_encode(&cx);
-                                if let Err(e) = async {
+                                let encoded = async {
                                     let result = encoder.encode(&mut cx, msg).await;
                                     span_provider.leave_encode(&cx);
                                     result
                                 }
                                 .instrument(encode_span)
-                                .await
-                                {
+                                .await;
+                                // Either direction falling back marks the RPC as fallen back.
+                                #[cfg(feature = "shmipc")]
+                                if req_fallback || helper.fallback_state() {
+                                    cx.extensions
+                                        .insert(crate::transport::ShmipcPayloadFallback);
+                                }
+                                if let Err(e) = encoded {
                                     if should_log(&e) {
                                         error!(
                                             "[VOLO] server send response error: {:?}, cx: {:?}, \
@@ -162,6 +180,11 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                                         );
                                     }
                                 }
+                            }
+                            #[cfg(feature = "shmipc")]
+                            if req_fallback || helper.fallback_state() {
+                                cx.extensions
+                                    .insert(crate::transport::ShmipcPayloadFallback);
                             }
                             stat_tracer.iter().for_each(|f| f(&cx));
                             return Err(());
