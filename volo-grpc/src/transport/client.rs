@@ -1,4 +1,4 @@
-use std::{io, marker::PhantomData};
+use std::{io, marker::PhantomData, mem};
 
 use bytes::Bytes;
 use http::{
@@ -171,7 +171,7 @@ where
         }
         cx.stats.record_make_transport_start_at();
 
-        let resp = http_client
+        let mut resp = http_client
             .ready()
             .await
             .map_err(|err| Status::from_error(err.into()))?
@@ -182,10 +182,10 @@ where
         cx.stats.record_make_transport_end_at();
 
         let status_code = resp.status();
-        let headers = resp.headers();
 
-        if let Some(status) = Status::from_header_map(headers) {
+        if let Some(mut status) = Status::from_header_map_without_metadata(resp.headers()) {
             if status.code() != Code::Ok {
+                status.set_metadata(mem::take(resp.headers_mut()));
                 return Err(status);
             }
         }
@@ -197,7 +197,7 @@ where
         #[cfg(feature = "compress")]
         let accept_compression =
             crate::codec::compression::CompressionEncoding::from_encoding_header(
-                headers,
+                resp.headers(),
                 &rpc_config.accept_compressions,
             )?;
 
