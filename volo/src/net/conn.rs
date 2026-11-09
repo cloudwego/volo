@@ -12,6 +12,9 @@ use tokio::{
     net::{TcpStream, tcp},
 };
 
+#[cfg(feature = "named-pipe")]
+use tokio::net::windows::named_pipe::{NamedPipeClient, NamedPipeServer};
+
 use super::Address;
 
 #[derive(Clone)]
@@ -28,6 +31,10 @@ pub enum ConnStream {
     Tls(#[pin] super::tls::TlsStream),
     #[cfg(feature = "shmipc")]
     Shmipc(#[pin] super::shmipc::Stream),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeClient(#[pin] NamedPipeClient),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeServer(#[pin] NamedPipeServer),
 }
 
 impl ConnStream {
@@ -50,6 +57,11 @@ impl ConnStream {
         matches!(self, Self::Shmipc(_))
     }
 
+    #[cfg(feature = "named-pipe")]
+    pub fn is_named_pipe(&self) -> bool {
+        matches!(self, Self::NamedPipeClient(_) | Self::NamedPipeServer(_))
+    }
+
     pub fn into_tcp(self) -> Option<TcpStream> {
         match self {
             Self::Tcp(stream) => Some(stream),
@@ -59,6 +71,8 @@ impl ConnStream {
             Self::Tls(_) => None,
             #[cfg(feature = "shmipc")]
             Self::Shmipc(_) => None,
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeClient(_) | Self::NamedPipeServer(_) => None,
         }
     }
 
@@ -96,6 +110,10 @@ pub enum OwnedWriteHalf {
     Tls(#[pin] super::tls::OwnedWriteHalf),
     #[cfg(feature = "shmipc")]
     Shmipc(#[pin] super::shmipc::WriteHalf),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeClient(#[pin] tokio::io::WriteHalf<NamedPipeClient>),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeServer(#[pin] tokio::io::WriteHalf<NamedPipeServer>),
 }
 
 impl AsyncWrite for OwnedWriteHalf {
@@ -113,6 +131,10 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Tls(half) => half.poll_write(cx, buf),
             #[cfg(feature = "shmipc")]
             OwnedWriteHalfProj::Shmipc(half) => half.poll_write(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeClient(half) => half.poll_write(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeServer(half) => half.poll_write(cx, buf),
         }
     }
 
@@ -126,6 +148,10 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Tls(half) => half.poll_flush(cx),
             #[cfg(feature = "shmipc")]
             OwnedWriteHalfProj::Shmipc(half) => half.poll_flush(cx),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeClient(half) => half.poll_flush(cx),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeServer(half) => half.poll_flush(cx),
         }
     }
 
@@ -139,6 +165,10 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Tls(half) => half.poll_shutdown(cx),
             #[cfg(feature = "shmipc")]
             OwnedWriteHalfProj::Shmipc(half) => half.poll_shutdown(cx),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeClient(half) => half.poll_shutdown(cx),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeServer(half) => half.poll_shutdown(cx),
         }
     }
 
@@ -156,6 +186,10 @@ impl AsyncWrite for OwnedWriteHalf {
             OwnedWriteHalfProj::Tls(half) => half.poll_write_vectored(cx, bufs),
             #[cfg(feature = "shmipc")]
             OwnedWriteHalfProj::Shmipc(half) => half.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeClient(half) => half.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "named-pipe")]
+            OwnedWriteHalfProj::NamedPipeServer(half) => half.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -169,6 +203,10 @@ impl AsyncWrite for OwnedWriteHalf {
             Self::Tls(half) => half.is_write_vectored(),
             #[cfg(feature = "shmipc")]
             Self::Shmipc(half) => half.is_write_vectored(),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeClient(half) => half.is_write_vectored(),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeServer(half) => half.is_write_vectored(),
         }
     }
 }
@@ -182,6 +220,10 @@ pub enum OwnedReadHalf {
     Tls(#[pin] super::tls::OwnedReadHalf),
     #[cfg(feature = "shmipc")]
     Shmipc(#[pin] super::shmipc::ReadHalf),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeClient(#[pin] tokio::io::ReadHalf<NamedPipeClient>),
+    #[cfg(feature = "named-pipe")]
+    NamedPipeServer(#[pin] tokio::io::ReadHalf<NamedPipeServer>),
 }
 
 impl OwnedReadHalf {
@@ -209,6 +251,10 @@ impl AsyncRead for OwnedReadHalf {
             OwnedReadHalfProj::Tls(half) => half.poll_read(cx, buf),
             #[cfg(feature = "shmipc")]
             OwnedReadHalfProj::Shmipc(half) => half.poll_read(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            OwnedReadHalfProj::NamedPipeClient(half) => half.poll_read(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            OwnedReadHalfProj::NamedPipeServer(half) => half.poll_read(cx, buf),
         }
     }
 }
@@ -234,6 +280,16 @@ impl ConnStream {
             Self::Shmipc(stream) => {
                 let (rh, wh) = stream.into_split();
                 (OwnedReadHalf::Shmipc(rh), OwnedWriteHalf::Shmipc(wh))
+            }
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeClient(stream) => {
+                let (rh, wh) = tokio::io::split(stream);
+                (OwnedReadHalf::NamedPipeClient(rh), OwnedWriteHalf::NamedPipeClient(wh))
+            }
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeServer(stream) => {
+                let (rh, wh) = tokio::io::split(stream);
+                (OwnedReadHalf::NamedPipeServer(rh), OwnedWriteHalf::NamedPipeServer(wh))
             }
         }
     }
@@ -282,6 +338,22 @@ impl From<super::shmipc::Stream> for ConnStream {
     }
 }
 
+#[cfg(feature = "named-pipe")]
+impl From<NamedPipeClient> for ConnStream {
+    #[inline]
+    fn from(value: NamedPipeClient) -> Self {
+        Self::NamedPipeClient(value)
+    }
+}
+
+#[cfg(feature = "named-pipe")]
+impl From<NamedPipeServer> for ConnStream {
+    #[inline]
+    fn from(value: NamedPipeServer) -> Self {
+        Self::NamedPipeServer(value)
+    }
+}
+
 impl AsyncRead for ConnStream {
     #[inline]
     fn poll_read(
@@ -297,6 +369,10 @@ impl AsyncRead for ConnStream {
             IoStreamProj::Tls(s) => s.poll_read(cx, buf),
             #[cfg(feature = "shmipc")]
             IoStreamProj::Shmipc(s) => s.poll_read(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_read(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_read(cx, buf),
         }
     }
 }
@@ -316,6 +392,10 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Tls(s) => s.poll_write(cx, buf),
             #[cfg(feature = "shmipc")]
             IoStreamProj::Shmipc(s) => s.poll_write(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_write(cx, buf),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_write(cx, buf),
         }
     }
 
@@ -329,6 +409,10 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Tls(s) => s.poll_flush(cx),
             #[cfg(feature = "shmipc")]
             IoStreamProj::Shmipc(s) => s.poll_flush(cx),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_flush(cx),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_flush(cx),
         }
     }
 
@@ -342,6 +426,10 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Tls(s) => s.poll_shutdown(cx),
             #[cfg(feature = "shmipc")]
             IoStreamProj::Shmipc(s) => s.poll_shutdown(cx),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_shutdown(cx),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_shutdown(cx),
         }
     }
 
@@ -359,6 +447,10 @@ impl AsyncWrite for ConnStream {
             IoStreamProj::Tls(s) => s.poll_write_vectored(cx, bufs),
             #[cfg(feature = "shmipc")]
             IoStreamProj::Shmipc(s) => s.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeClient(s) => s.poll_write_vectored(cx, bufs),
+            #[cfg(feature = "named-pipe")]
+            IoStreamProj::NamedPipeServer(s) => s.poll_write_vectored(cx, bufs),
         }
     }
 
@@ -372,6 +464,10 @@ impl AsyncWrite for ConnStream {
             Self::Tls(s) => s.is_write_vectored(),
             #[cfg(feature = "shmipc")]
             Self::Shmipc(s) => s.is_write_vectored(),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeClient(s) => s.is_write_vectored(),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeServer(s) => s.is_write_vectored(),
         }
     }
 }
@@ -387,6 +483,8 @@ impl ConnStream {
             Self::Tls(s) => s.peer_addr().map(Address::from).ok(),
             #[cfg(feature = "shmipc")]
             Self::Shmipc(s) => Some(Address::from(s.peer_addr())),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipeClient(_) | Self::NamedPipeServer(_) => None,
         }
     }
 }

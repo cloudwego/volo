@@ -33,6 +33,8 @@ pub enum Address {
     Unix(StdUnixSocketAddr),
     #[cfg(feature = "shmipc")]
     Shmipc(crate::net::shmipc::Address),
+    #[cfg(feature = "named-pipe")]
+    NamedPipe(String),
 }
 
 impl Address {
@@ -50,6 +52,11 @@ impl Address {
         matches!(self, Self::Shmipc(_))
     }
 
+    #[cfg(feature = "named-pipe")]
+    pub const fn is_named_pipe(&self) -> bool {
+        matches!(self, Self::NamedPipe(_))
+    }
+
     pub const fn ip_addr(&self) -> Option<&SocketAddr> {
         match self {
             Self::Ip(ip) => Some(ip),
@@ -57,6 +64,8 @@ impl Address {
             Self::Unix(_) => None,
             #[cfg(feature = "shmipc")]
             Self::Shmipc(_) => None,
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipe(_) => None,
         }
     }
 
@@ -67,6 +76,8 @@ impl Address {
             Self::Unix(unix) => Some(unix),
             #[cfg(feature = "shmipc")]
             Self::Shmipc(_) => None,
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipe(_) => None,
         }
     }
 
@@ -78,6 +89,21 @@ impl Address {
             Self::Unix(_) => None,
             #[cfg(feature = "shmipc")]
             Self::Shmipc(addr) => Some(addr),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipe(_) => None,
+        }
+    }
+
+    #[cfg(feature = "named-pipe")]
+    pub const fn named_pipe_addr(&self) -> Option<&String> {
+        match self {
+            Self::Ip(_) => None,
+            #[cfg(target_family = "unix")]
+            Self::Unix(_) => None,
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(_) => None,
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipe(pipe) => Some(pipe),
         }
     }
 }
@@ -105,7 +131,9 @@ impl PartialEq for Address {
             #[cfg(feature = "shmipc")]
             // There should only be one shmipc connection, just treat them as the same.
             (Self::Shmipc(self_shmipc), Self::Shmipc(other_shmipc)) => self_shmipc.eq(other_shmipc),
-            #[cfg(any(target_family = "unix", feature = "shmipc"))]
+            #[cfg(feature = "named-pipe")]
+            (Self::NamedPipe(self_pipe), Self::NamedPipe(other_pipe)) => self_pipe == other_pipe,
+            #[cfg(any(target_family = "unix", feature = "shmipc", feature = "named-pipe"))]
             _ => false,
         }
     }
@@ -140,6 +168,11 @@ impl Hash for Address {
                 state.write_u8(4);
                 Hash::hash(addr, state);
             }
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipe(pipe) => {
+                state.write_u8(5);
+                Hash::hash(pipe, state);
+            }
         }
     }
 }
@@ -155,6 +188,8 @@ impl Address {
                 }
             }
             #[cfg(target_family = "unix")]
+            _ => self,
+            #[cfg(feature = "named-pipe")]
             _ => self,
         }
     }
@@ -183,6 +218,8 @@ impl fmt::Display for Address {
             }
             #[cfg(feature = "shmipc")]
             Self::Shmipc(addr) => write!(f, "shmipc: {addr}"),
+            #[cfg(feature = "named-pipe")]
+            Self::NamedPipe(pipe) => write!(f, "namedpipe: {}", pipe),
         }
     }
 }
@@ -230,5 +267,19 @@ where
 impl From<self::shmipc::Address> for Address {
     fn from(value: self::shmipc::Address) -> Self {
         Address::Shmipc(value)
+    }
+}
+
+#[cfg(feature = "named-pipe")]
+impl From<String> for Address {
+    fn from(pipe: String) -> Self {
+        Address::NamedPipe(pipe)
+    }
+}
+
+#[cfg(feature = "named-pipe")]
+impl From<&str> for Address {
+    fn from(pipe: &str) -> Self {
+        Address::NamedPipe(pipe.to_string())
     }
 }
