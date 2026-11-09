@@ -21,6 +21,7 @@ maintenance = { status = "actively-developed" }
 volo = { version = "0.12", path = "../volo" }
 
 pilota-build.workspace = true
+pilota-thrift-reflect.workspace = true
 
 ahash.workspace = true
 anyhow.workspace = true

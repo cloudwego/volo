@@ -5,7 +5,10 @@ use motore::{
     service::Service,
 };
 
-use super::NamedService;
+use super::{
+    NamedService,
+    policy::{HttpRequestInfo, ResponsePolicy, validate_content_type, validate_request_info},
+};
 use crate::{
     Request, Response, Status,
     body::{Body, BoxBody, boxed},
@@ -14,7 +17,7 @@ use crate::{
         decode::Kind,
     },
     context::{Config, ServerContext},
-    message::{RecvEntryMessage, SendEntryMessage},
+    message::{CodecOptions, RecvEntryMessage, SendEntryMessage},
     metadata::MetadataValue,
 };
 
@@ -36,6 +39,19 @@ impl<S> ServiceBuilder<S, Identity> {
 }
 
 impl<S, L> ServiceBuilder<S, L> {
+    pub fn stream_hook(mut self, factory: impl crate::streaming::StreamHookFactory) -> Self {
+        let next = crate::streaming::HookFactory(std::sync::Arc::new(factory));
+        self.rpc_config.stream_hook = Some(match self.rpc_config.stream_hook.take() {
+            Some(previous) => previous.append(next),
+            None => next,
+        });
+        self
+    }
+
+    pub fn codec_limits(mut self, limits: crate::codec::CodecLimits) -> Self {
+        self.rpc_config.codec_limits = Some(limits);
+        self
+    }
     /// Sets the send compression encodings for the request, and will self-adaptive with config of
     /// the client.
     ///
@@ -126,7 +142,27 @@ where
         cx: &mut ServerContext,
         req: Request<BoxBody>,
     ) -> Result<Self::Response, Self::Error> {
-        let (metadata, extensions, body) = req.into_parts();
+        let (metadata, extensions, mut body) = req.into_parts();
+        if let Some(stream) = extensions.get::<crate::streaming::StreamContext>() {
+            body = crate::streaming::lifecycle_body::request(body, stream.clone());
+        }
+        let payload = T::payload_kind();
+        if payload == crate::message::PayloadKind::Thrift
+            || cx.extensions.get::<ResponsePolicy>().is_some()
+        {
+            cx.extensions.insert(ResponsePolicy {
+                payload,
+                http_status: None,
+            });
+        }
+        validate_content_type(metadata.headers(), payload, cx)?;
+        validate_request_info(extensions.get::<HttpRequestInfo>(), payload, cx)?;
+        let options = CodecOptions::new(
+            self.rpc_config
+                .codec_limits
+                .unwrap_or_else(|| payload.default_limits()),
+        )
+        .with_context(extensions.get::<crate::streaming::StreamContext>().cloned());
         #[cfg(not(feature = "compress"))]
         let send_compression = None;
         #[cfg(feature = "compress")]
@@ -135,31 +171,53 @@ where
             &self.rpc_config.send_compressions,
         );
 
-        #[cfg(not(feature = "compress"))]
-        let recv_compression = None;
-        #[cfg(feature = "compress")]
-        let recv_compression = CompressionEncoding::from_encoding_header(
-            metadata.headers(),
-            &self.rpc_config.accept_compressions,
-        )?;
+        let recv_compression = if payload == crate::message::PayloadKind::Thrift {
+            CompressionEncoding::from_encoding_header_strict(
+                metadata.headers(),
+                &self.rpc_config.accept_compressions,
+            )?
+        } else {
+            #[cfg(feature = "compress")]
+            {
+                CompressionEncoding::from_encoding_header(
+                    metadata.headers(),
+                    &self.rpc_config.accept_compressions,
+                )?
+            }
+            #[cfg(not(feature = "compress"))]
+            {
+                None
+            }
+        };
 
-        let message = T::from_body(
+        let message = T::from_body_with_options(
             Some(cx.rpc_info.method().as_str()),
             body,
             Kind::Request,
             recv_compression,
+            options.clone(),
         )?;
 
         let volo_req = Request::from_parts(metadata, extensions, message);
 
         cx.stats.record_process_start_at();
 
-        let volo_resp = self.inner.call(cx, volo_req).await.map_err(Into::into)?;
+        let volo_resp = self.inner.call(cx, volo_req).await.map_err(|error| {
+            let status: Status = error.into();
+            if payload == crate::message::PayloadKind::Thrift && status.code() == crate::Code::Ok {
+                Status::internal("Thrift handler returned OK as an error")
+            } else {
+                status
+            }
+        })?;
 
         cx.stats.record_process_end_at();
 
-        let mut resp =
-            volo_resp.map(|message| boxed(Body::new(message.into_body(send_compression))));
+        let mut resp = volo_resp.map(|message| {
+            boxed(Body::new(
+                message.into_body_with_options(send_compression, options),
+            ))
+        });
 
         if let Some(encoding) = send_compression {
             resp.metadata_mut().insert(
@@ -173,5 +231,17 @@ where
 }
 
 impl<S: NamedService, T, U> NamedService for CodecService<S, T, U> {
+    fn stream_hook_factory(
+        &self,
+    ) -> Option<std::sync::Arc<dyn crate::streaming::StreamHookFactory>> {
+        self.rpc_config
+            .stream_hook
+            .as_ref()
+            .map(|factory| factory.0.clone())
+    }
     const NAME: &'static str = S::NAME;
+
+    fn descriptor() -> Option<crate::message::ServiceDescriptor> {
+        S::descriptor()
+    }
 }

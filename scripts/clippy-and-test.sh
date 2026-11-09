@@ -38,6 +38,8 @@ run_clippy() {
 		echo_command cargo clippy -p volo-thrift --no-default-features --features ttstream,shmipc,multiplex --all-targets -- --deny warnings
 	fi
 	echo_command cargo clippy -p volo-grpc --no-default-features -- --deny warnings
+	echo_command cargo clippy -p volo-grpc --no-default-features --features thrift --all-targets -- --deny warnings
+	echo_command cargo clippy -p thrift-grpc-codegen --all-targets -- --deny warnings
 	echo_command cargo clippy -p volo-grpc --no-default-features --features rustls -- --deny warnings
 	echo_command cargo clippy -p volo-grpc --no-default-features --features native-tls -- --deny warnings
 	echo_command cargo clippy -p volo-grpc --no-default-features --features native-tls-vendored -- --deny warnings
@@ -66,6 +68,9 @@ run_test() {
 		echo_command cargo test -p volo-thrift --features ttstream,shmipc,multiplex --no-run
 	fi
 	echo_command cargo test -p volo-grpc --features rustls
+	echo_command cargo test -p volo-grpc --no-default-features
+	echo_command cargo test -p volo-grpc --features thrift
+	echo_command cargo test -p thrift-grpc-codegen
 	echo_command cargo test -p volo-http --features client,server,http1,query,form,json,tls,cookie,multipart,ws
 	echo_command cargo test -p volo-http --features client,server,http2,query,form,json,tls,cookie,multipart,ws
 	echo_command cargo test -p volo-http --features full

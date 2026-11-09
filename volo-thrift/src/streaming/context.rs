@@ -1,15 +1,8 @@
-use std::{
-    cell::RefCell,
-    future::Future,
-    sync::Arc,
-    task::{Context, Poll},
-    thread::ThreadId,
-};
+use std::{future::Future, sync::Arc};
 
-use parking_lot::{Condvar, Mutex};
-use pin_project::pin_project;
+use parking_lot::Mutex;
 use tokio::sync::Notify;
-use volo::context::{Endpoint, Extensions, Role, RpcInfo};
+use volo::context::{Endpoint, Extensions, MetaInfoScope as SharedMetainfo, Role, RpcInfo};
 
 use super::{Metadata, StreamError, StreamStatus};
 use crate::context::Config;
@@ -93,44 +86,10 @@ impl StreamContext {
         }
     }
     pub fn with_metainfo<T>(&self, f: impl FnOnce(&metainfo::MetaInfo) -> T) -> T {
-        if self.is_current_owner() {
-            return metainfo::METAINFO.with(|info| f(&info.borrow()));
-        }
-        let mut state = self.inner.metainfo.state.lock();
-        while state.value.is_none() {
-            self.inner.metainfo.ready.wait(&mut state);
-        }
-        f(state.value.as_ref().expect("available metainfo"))
+        self.inner.metainfo.with(f)
     }
     pub fn update_metainfo<T>(&self, f: impl FnOnce(&mut metainfo::MetaInfo) -> T) -> T {
-        if self.is_current_owner() {
-            return metainfo::METAINFO.with(|info| f(&mut info.borrow_mut()));
-        }
-        let mut state = self.inner.metainfo.state.lock();
-        while state.value.is_none() {
-            self.inner.metainfo.ready.wait(&mut state);
-        }
-        f(state.value.as_mut().expect("available metainfo"))
-    }
-    fn is_current_owner(&self) -> bool {
-        STREAM_CONTEXT
-            .try_with(|cx| Arc::ptr_eq(&cx.inner, &self.inner))
-            .unwrap_or(false)
-            && self.inner.metainfo.state.lock().owner == Some(std::thread::current().id())
-    }
-    fn take_metainfo(&self) -> metainfo::MetaInfo {
-        let mut state = self.inner.metainfo.state.lock();
-        while state.value.is_none() {
-            self.inner.metainfo.ready.wait(&mut state);
-        }
-        state.owner = Some(std::thread::current().id());
-        state.value.take().expect("available metainfo")
-    }
-    fn put_metainfo(&self, value: metainfo::MetaInfo) {
-        let mut state = self.inner.metainfo.state.lock();
-        state.value = Some(value);
-        state.owner = None;
-        self.inner.metainfo.ready.notify_all();
+        self.inner.metainfo.update(f)
     }
     pub fn mode(&self) -> super::StreamMode {
         use super::StreamMode;
@@ -323,26 +282,14 @@ impl StreamContext {
     }
     /// Runs a synchronous extension against the authoritative task-local view.
     pub fn sync_scope<R>(&self, operation: impl FnOnce() -> R) -> R {
-        let future = HandlerScope {
-            cx: self.clone(),
-            future: async move { operation() },
-        };
-        futures::pin_mut!(future);
-        let mut task = Context::from_waker(futures::task::noop_waker_ref());
-        match future.poll(&mut task) {
-            Poll::Ready(value) => value,
-            Poll::Pending => unreachable!("synchronous operation"),
-        }
+        STREAM_CONTEXT.sync_scope(self.clone(), || self.inner.metainfo.sync_scope(operation))
     }
     /// Polls the future with this context and its metainfo in task-local scope.
-    /// This does not cancel or abort the future. Spawned tasks that need to stop
-    /// on cancellation must also poll [`Self::cancelled`] or be explicitly aborted.
+    /// This does not cancel the future. Spawned tasks must also listen for cancellation.
     pub async fn scope<F: Future>(&self, future: F) -> F::Output {
-        HandlerScope {
-            cx: self.clone(),
-            future,
-        }
-        .await
+        STREAM_CONTEXT
+            .scope(self.clone(), self.inner.metainfo.scope(future))
+            .await
     }
     pub(crate) fn finish(&self, status: StreamStatus) -> bool {
         let mut slot = self.inner.status.lock();
@@ -356,85 +303,6 @@ impl StreamContext {
         self.wake_driver();
         self.cancel_children(Self::child_terminal_error(terminal_error));
         true
-    }
-}
-
-pub(crate) struct SharedMetainfo {
-    state: Mutex<MetaState>,
-    ready: Condvar,
-}
-struct MetaState {
-    value: Option<metainfo::MetaInfo>,
-    owner: Option<ThreadId>,
-}
-impl Default for SharedMetainfo {
-    fn default() -> Self {
-        Self {
-            state: Mutex::new(MetaState {
-                value: Some(metainfo::MetaInfo::default()),
-                owner: None,
-            }),
-            ready: Condvar::new(),
-        }
-    }
-}
-impl std::fmt::Debug for SharedMetainfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("SharedMetainfo { .. }")
-    }
-}
-
-// A scope lends the single MetaInfo value to the existing task-local only during
-// poll. No lock is held while polling user code or while a future is Pending.
-// Access through the explicit context reuses this owner when called reentrantly.
-#[pin_project]
-struct HandlerScope<F> {
-    cx: StreamContext,
-    #[pin]
-    future: F,
-}
-struct ReturnOwner(StreamContext);
-impl Drop for ReturnOwner {
-    fn drop(&mut self) {
-        metainfo::METAINFO
-            .with(|slot| self.0.put_metainfo(std::mem::take(&mut *slot.borrow_mut())));
-    }
-}
-struct ResumeParent(Option<StreamContext>);
-impl Drop for ResumeParent {
-    fn drop(&mut self) {
-        if let Some(parent) = &self.0 {
-            let value = parent.take_metainfo();
-            metainfo::METAINFO.with(|slot| *slot.borrow_mut() = value);
-        }
-    }
-}
-impl<F: Future> Future for HandlerScope<F> {
-    type Output = F::Output;
-    fn poll(self: std::pin::Pin<&mut Self>, task: &mut Context<'_>) -> Poll<Self::Output> {
-        let this = self.project();
-        if this.cx.is_current_owner() {
-            return this.future.poll(task);
-        }
-        // Suspending the outer owner also makes explicit accesses to that
-        // context from a nested scope safe; the outer task-local stays empty
-        // until the inner scope restores it through ResumeParent.
-        let parent = STREAM_CONTEXT
-            .try_with(Clone::clone)
-            .ok()
-            .filter(|cx| cx.is_current_owner());
-        if let Some(parent) = &parent {
-            metainfo::METAINFO
-                .with(|slot| parent.put_metainfo(std::mem::take(&mut *slot.borrow_mut())));
-        }
-        let _resume = ResumeParent(parent);
-        let value = this.cx.take_metainfo();
-        STREAM_CONTEXT.sync_scope(this.cx.clone(), || {
-            metainfo::METAINFO.sync_scope(RefCell::new(value), || {
-                let _return_owner = ReturnOwner(this.cx.clone());
-                this.future.poll(task)
-            })
-        })
     }
 }
 

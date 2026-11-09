@@ -33,6 +33,7 @@ faststr.workspace = true
 futures.workspace = true
 libc.workspace = true
 metainfo.workspace = true
+parking_lot.workspace = true
 mur3.workspace = true
 nix = { workspace = true, features = [
     "uio",

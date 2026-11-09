@@ -5,7 +5,33 @@ use paste::paste;
 pub use volo::context::*;
 use volo::newtype_impl_context;
 
-use crate::codec::compression::CompressionEncoding;
+use crate::codec::{CodecLimits, compression::CompressionEncoding};
+
+/// An absolute RPC deadline on the local monotonic clock.
+///
+/// Store this in request extensions when a relative timeout is received, so
+/// middleware and downstream calls cannot restart the budget after queueing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Deadline(tokio::time::Instant);
+
+impl Deadline {
+    pub fn new(instant: tokio::time::Instant) -> Self {
+        Self(instant)
+    }
+
+    pub fn instant(self) -> tokio::time::Instant {
+        self.0
+    }
+
+    pub fn remaining(self) -> Duration {
+        self.0
+            .saturating_duration_since(tokio::time::Instant::now())
+    }
+
+    pub fn is_expired(self) -> bool {
+        self.0 <= tokio::time::Instant::now()
+    }
+}
 
 macro_rules! stat_impl {
     ($t: ident) => {
@@ -157,6 +183,8 @@ pub struct Config {
 
     pub(crate) accept_compressions: Option<Vec<CompressionEncoding>>,
     pub(crate) send_compressions: Option<Vec<CompressionEncoding>>,
+    pub(crate) codec_limits: Option<CodecLimits>,
+    pub(crate) stream_hook: Option<crate::streaming::HookFactory>,
 }
 
 impl Reusable for Config {
@@ -165,6 +193,8 @@ impl Reusable for Config {
         self.connect_timeout = None;
         self.read_timeout = None;
         self.write_timeout = None;
+        self.codec_limits = None;
+        self.stream_hook = None;
         if let Some(v) = self.accept_compressions.as_mut() {
             v.clear();
         }
@@ -176,6 +206,12 @@ impl Reusable for Config {
 
 impl Config {
     pub fn merge(&mut self, other: Self) {
+        if other.stream_hook.is_some() {
+            self.stream_hook = other.stream_hook;
+        }
+        if let Some(limits) = other.codec_limits {
+            self.codec_limits = Some(limits);
+        }
         if let Some(t) = other.rpc_timeout {
             self.rpc_timeout = Some(t);
         }
@@ -199,6 +235,14 @@ impl Config {
     #[inline]
     pub fn rpc_timeout(&self) -> Option<Duration> {
         self.rpc_timeout
+    }
+
+    pub fn codec_limits(&self) -> Option<CodecLimits> {
+        self.codec_limits
+    }
+
+    pub fn set_codec_limits(&mut self, limits: Option<CodecLimits>) {
+        self.codec_limits = limits;
     }
 
     /// Sets the rpc timeout.

@@ -36,8 +36,8 @@ edition = "2024"
 [workspace.dependencies]
 # we recommend to use the latest framework version for new features and bug fixes
 volo = "*"
-volo-build = "*"
-volo-grpc = "*"
+volo-build = {build_dependency}
+volo-grpc = {grpc_dependency}
 pilota = "*"
 
 anyhow = "1"

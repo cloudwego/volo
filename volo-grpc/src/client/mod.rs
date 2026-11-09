@@ -130,6 +130,38 @@ impl<IL, OL, C, LB, T, U, DISC> ClientBuilder<IL, OL, C, LbConfig<LB, DISC>, T, 
 }
 
 impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
+    pub fn stream_hook(mut self, factory: impl crate::streaming::StreamHookFactory) -> Self {
+        let next = crate::streaming::HookFactory(std::sync::Arc::new(factory));
+        self.rpc_config.stream_hook = Some(match self.rpc_config.stream_hook.take() {
+            Some(previous) => previous.append(next),
+            None => next,
+        });
+        self
+    }
+
+    /// Prepend a metadata/framework integration before existing observers.
+    pub fn stream_hook_front(mut self, factory: impl crate::streaming::StreamHookFactory) -> Self {
+        let next = crate::streaming::HookFactory(std::sync::Arc::new(factory));
+        self.rpc_config.stream_hook = Some(match self.rpc_config.stream_hook.take() {
+            Some(previous) => next.append(previous),
+            None => next,
+        });
+        self
+    }
+
+    pub fn codec_limits(mut self, limits: crate::codec::CodecLimits) -> Self {
+        self.rpc_config.set_codec_limits(Some(limits));
+        self
+    }
+
+    /// Bound the connections and queued stream opens used by lifecycle-managed
+    /// calls. A busy long stream can share a connection or cause another to open
+    /// up to the configured endpoint limit. No submitted call is replayed.
+    pub fn stream_pool_config(mut self, config: StreamPoolConfig) -> Self {
+        config.validate();
+        self.http2_config.stream_pool = config;
+        self
+    }
     /// Sets the rpc timeout for the client.
     ///
     /// The default value is 1 second.
@@ -173,6 +205,13 @@ impl<IL, OL, C, LB, T, U> ClientBuilder<IL, OL, C, LB, T, U> {
     /// Default is `16KB`.
     pub fn http2_max_frame_size(mut self, sz: impl Into<u32>) -> Self {
         self.http2_config.max_frame_size = sz.into();
+        self
+    }
+
+    /// Limits the size of a received HTTP/2 header list, including trailers.
+    /// The default is 16 KiB for both client transports.
+    pub fn http2_max_header_list_size(mut self, max: impl Into<u32>) -> Self {
+        self.http2_config.max_header_list_size = max.into();
         self
     }
 
@@ -658,6 +697,7 @@ const DEFAULT_MAX_FRAME_SIZE: u32 = 1024 * 16; // 16KB
 const DEFAULT_MAX_SEND_BUF_SIZE: usize = 1024 * 1024; // 1MB
 const DEFAULT_KEEPALIVE_TIMEOUT_SECS: Duration = Duration::from_secs(20); // 20s
 const DEFAULT_MAX_CONCURRENT_RESET_STREAMS: usize = 10;
+const DEFAULT_MAX_HEADER_LIST_SIZE: u32 = 16 * 1024;
 
 /// Configuration for the underlying h2 connection.
 #[derive(Debug, Clone, Copy)]
@@ -666,11 +706,76 @@ pub struct Http2Config {
     pub(crate) init_connection_window_size: u32,
     pub(crate) adaptive_window: bool,
     pub(crate) max_frame_size: u32,
+    pub(crate) max_header_list_size: u32,
     pub(crate) http2_keepalive_interval: Option<Duration>,
     pub(crate) http2_keepalive_timeout: Duration,
     pub(crate) http2_keepalive_while_idle: bool,
     pub(crate) max_concurrent_reset_streams: usize,
     pub(crate) max_send_buf_size: usize,
+    pub(crate) stream_pool: StreamPoolConfig,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub struct StreamPoolConfig {
+    pub max_connections_per_endpoint: usize,
+    pub max_pending_requests: usize,
+    pub max_endpoints: usize,
+    pub idle_timeout: Duration,
+}
+impl Default for StreamPoolConfig {
+    fn default() -> Self {
+        Self {
+            max_connections_per_endpoint: 4,
+            max_pending_requests: 128,
+            max_endpoints: 4096,
+            idle_timeout: Duration::from_secs(90),
+        }
+    }
+}
+impl StreamPoolConfig {
+    fn validate(self) {
+        assert!(
+            self.max_connections_per_endpoint > 0,
+            "stream pool connection limit must be nonzero"
+        );
+        assert!(
+            self.max_pending_requests > 0
+                && self.max_pending_requests <= tokio::sync::Semaphore::MAX_PERMITS,
+            "invalid stream pool pending limit"
+        );
+        assert!(
+            self.max_endpoints > 0 && !self.idle_timeout.is_zero(),
+            "invalid stream pool endpoint/idle limit"
+        );
+    }
+}
+impl Http2Config {
+    /// Limits the size of received HTTP/2 headers or trailers.
+    pub fn with_max_header_list_size(mut self, max: u32) -> Self {
+        self.max_header_list_size = max;
+        self
+    }
+
+    /// Configure PINGs for callers constructing a transport directly. The
+    /// generated client builder exposes the same three keepalive settings.
+    pub fn with_keepalive(
+        mut self,
+        interval: Option<Duration>,
+        timeout: Duration,
+        while_idle: bool,
+    ) -> Self {
+        self.http2_keepalive_interval = interval;
+        self.http2_keepalive_timeout = timeout;
+        self.http2_keepalive_while_idle = while_idle;
+        self
+    }
+
+    pub fn with_stream_pool_config(mut self, config: StreamPoolConfig) -> Self {
+        config.validate();
+        self.stream_pool = config;
+        self
+    }
 }
 
 impl Default for Http2Config {
@@ -680,11 +785,13 @@ impl Default for Http2Config {
             init_connection_window_size: DEFAULT_CONN_WINDOW_SIZE,
             adaptive_window: false,
             max_frame_size: DEFAULT_MAX_FRAME_SIZE,
+            max_header_list_size: DEFAULT_MAX_HEADER_LIST_SIZE,
             http2_keepalive_interval: None,
             http2_keepalive_timeout: DEFAULT_KEEPALIVE_TIMEOUT_SECS,
             http2_keepalive_while_idle: false,
             max_concurrent_reset_streams: DEFAULT_MAX_CONCURRENT_RESET_STREAMS,
             max_send_buf_size: DEFAULT_MAX_SEND_BUF_SIZE,
+            stream_pool: StreamPoolConfig::default(),
         }
     }
 }

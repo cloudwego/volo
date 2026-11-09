@@ -1,6 +1,5 @@
 use std::task::{Context, Poll};
 
-use hyper::body::Incoming;
 use volo::net::Address;
 
 use crate::{
@@ -20,9 +19,11 @@ impl<S> IncomingService<S> {
     }
 }
 
-impl<S> tower::Service<hyper::Request<Incoming>> for IncomingService<S>
+impl<S, B> tower::Service<hyper::Request<B>> for IncomingService<S>
 where
     S: tower::Service<hyper::Request<BoxBody>>,
+    B: http_body::Body<Data = bytes::Bytes> + Send + 'static,
+    B::Error: Into<crate::BoxError>,
 {
     type Response = S::Response;
 
@@ -34,7 +35,7 @@ where
         self.inner.poll_ready(cx)
     }
 
-    fn call(&mut self, mut req: hyper::Request<Incoming>) -> Self::Future {
+    fn call(&mut self, mut req: hyper::Request<B>) -> Self::Future {
         if !req.headers().contains_key(HEADER_TRANS_REMOTE_ADDR) {
             if let Some(addr) = &self.peer_addr {
                 if let Ok(addr) = addr.to_string().parse() {

@@ -17,10 +17,17 @@ pub struct ConfigBuilder {
     filename: PathBuf,
     plugins: Vec<BoxClonePlugin>,
     out_dir: Option<PathBuf>,
+    thrift_grpc_runtime: Option<String>,
 }
 
 #[allow(clippy::large_enum_variant)]
 pub enum InnerBuilder {
+    ThriftGrpc(
+        crate::Builder<
+            crate::thrift_grpc_backend::MkThriftGrpcBackend,
+            pilota_build::parser::ThriftParser,
+        >,
+    ),
     Protobuf(
         crate::Builder<crate::grpc_backend::MkGrpcBackend, pilota_build::parser::ProtobufParser>,
     ),
@@ -30,6 +37,23 @@ pub enum InnerBuilder {
 }
 
 impl InnerBuilder {
+    fn for_entry(entry: &Entry, runtime: Option<&str>) -> anyhow::Result<Self> {
+        match entry.protocol {
+            model::IdlProtocol::Thrift => match model::thrift_grpc_options(&entry.services)? {
+                Some(mut options) => {
+                    if let Some(runtime) = runtime {
+                        options.runtime_crate = Some(runtime.to_owned());
+                    }
+                    Ok(Self::ThriftGrpc(
+                        crate::Builder::thrift_grpc().thrift_grpc_options(options),
+                    ))
+                }
+                None => Ok(Self::thrift()),
+            },
+            model::IdlProtocol::Protobuf => Ok(Self::protobuf()),
+        }
+    }
+
     fn thrift() -> Self {
         InnerBuilder::Thrift(crate::Builder::thrift())
     }
@@ -38,10 +62,28 @@ impl InnerBuilder {
         InnerBuilder::Protobuf(crate::Builder::protobuf())
     }
 
+    fn service_configs(
+        mut self,
+        services: &[model::Service],
+        repos: &std::collections::HashMap<FastStr, PathBuf>,
+    ) -> Self {
+        for service in services {
+            let (path, _) = crate::util::get_idl_build_path_and_includes(&service.idl, repos);
+            let config = service.codegen_option.config.clone();
+            self = match self {
+                Self::Protobuf(inner) => Self::Protobuf(inner.service_config(path, config)),
+                Self::Thrift(inner) => Self::Thrift(inner.service_config(path, config)),
+                Self::ThriftGrpc(inner) => Self::ThriftGrpc(inner.service_config(path, config)),
+            };
+        }
+        self
+    }
+
     fn plugin<P: pilota_build::Plugin + 'static>(self, p: P) -> Self {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.plugin(p)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.plugin(p)),
+            InnerBuilder::ThriftGrpc(inner) => InnerBuilder::ThriftGrpc(inner.plugin(p)),
         }
     }
 
@@ -49,6 +91,7 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => inner.write(),
             InnerBuilder::Thrift(inner) => inner.write(),
+            InnerBuilder::ThriftGrpc(inner) => inner.write(),
         }
     }
 
@@ -56,6 +99,7 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => inner.init_service(),
             InnerBuilder::Thrift(inner) => inner.init_service(),
+            InnerBuilder::ThriftGrpc(inner) => inner.init_service(),
         }
     }
 
@@ -63,6 +107,7 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.filename(filename)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.filename(filename)),
+            InnerBuilder::ThriftGrpc(inner) => InnerBuilder::ThriftGrpc(inner.filename(filename)),
         }
     }
 
@@ -70,6 +115,9 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.include_dirs(includes)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.include_dirs(includes)),
+            InnerBuilder::ThriftGrpc(inner) => {
+                InnerBuilder::ThriftGrpc(inner.include_dirs(includes))
+            }
         }
     }
 
@@ -77,6 +125,7 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.out_dir(&out_dir)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.out_dir(&out_dir)),
+            InnerBuilder::ThriftGrpc(inner) => InnerBuilder::ThriftGrpc(inner.out_dir(&out_dir)),
         }
     }
 
@@ -87,6 +136,7 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.add_service(path)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.add_service(path)),
+            InnerBuilder::ThriftGrpc(inner) => InnerBuilder::ThriftGrpc(inner.add_service(path)),
         }
     }
 
@@ -113,6 +163,7 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.touch(items)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.touch(items)),
+            InnerBuilder::ThriftGrpc(inner) => InnerBuilder::ThriftGrpc(inner.touch(items)),
         }
     }
 
@@ -122,6 +173,9 @@ impl InnerBuilder {
                 InnerBuilder::Protobuf(inner.ignore_unused(ignore_unused))
             }
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.ignore_unused(ignore_unused)),
+            InnerBuilder::ThriftGrpc(inner) => {
+                InnerBuilder::ThriftGrpc(inner.ignore_unused(ignore_unused))
+            }
         }
     }
 
@@ -129,6 +183,7 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.touch_files(paths)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.touch_files(paths)),
+            InnerBuilder::ThriftGrpc(inner) => InnerBuilder::ThriftGrpc(inner.touch_files(paths)),
         }
     }
 
@@ -138,6 +193,9 @@ impl InnerBuilder {
                 InnerBuilder::Protobuf(inner.keep_unknown_fields(keep))
             }
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.keep_unknown_fields(keep)),
+            InnerBuilder::ThriftGrpc(inner) => {
+                InnerBuilder::ThriftGrpc(inner.keep_unknown_fields(keep))
+            }
         }
     }
 
@@ -149,6 +207,9 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => {
                 InnerBuilder::Thrift(inner.split_generated_files(split_generated_files))
             }
+            InnerBuilder::ThriftGrpc(inner) => {
+                InnerBuilder::ThriftGrpc(inner.split_generated_files(split_generated_files))
+            }
         }
     }
 
@@ -156,6 +217,9 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.common_crate_name(name)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.common_crate_name(name)),
+            InnerBuilder::ThriftGrpc(inner) => {
+                InnerBuilder::ThriftGrpc(inner.common_crate_name(name))
+            }
         }
     }
 
@@ -163,6 +227,9 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.special_namings(namings)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.special_namings(namings)),
+            InnerBuilder::ThriftGrpc(inner) => {
+                InnerBuilder::ThriftGrpc(inner.special_namings(namings))
+            }
         }
     }
 
@@ -170,6 +237,7 @@ impl InnerBuilder {
         match self {
             InnerBuilder::Protobuf(inner) => InnerBuilder::Protobuf(inner.dedup(dedup_list)),
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.dedup(dedup_list)),
+            InnerBuilder::ThriftGrpc(inner) => InnerBuilder::ThriftGrpc(inner.dedup(dedup_list)),
         }
     }
 
@@ -180,6 +248,9 @@ impl InnerBuilder {
             }
             InnerBuilder::Thrift(inner) => {
                 InnerBuilder::Thrift(inner.with_descriptor(with_descriptor))
+            }
+            InnerBuilder::ThriftGrpc(inner) => {
+                InnerBuilder::ThriftGrpc(inner.with_descriptor(with_descriptor))
             }
         }
     }
@@ -192,6 +263,9 @@ impl InnerBuilder {
             InnerBuilder::Thrift(inner) => {
                 InnerBuilder::Thrift(inner.with_field_mask(with_field_mask))
             }
+            InnerBuilder::ThriftGrpc(inner) => {
+                InnerBuilder::ThriftGrpc(inner.with_field_mask(with_field_mask))
+            }
         }
     }
 
@@ -201,6 +275,9 @@ impl InnerBuilder {
                 InnerBuilder::Protobuf(inner.with_comments(with_comments))
             }
             InnerBuilder::Thrift(inner) => InnerBuilder::Thrift(inner.with_comments(with_comments)),
+            InnerBuilder::ThriftGrpc(inner) => {
+                InnerBuilder::ThriftGrpc(inner.with_comments(with_comments))
+            }
         }
     }
 }
@@ -211,7 +288,15 @@ impl ConfigBuilder {
             filename,
             plugins: Vec::new(),
             out_dir: None,
+            thrift_grpc_runtime: None,
         }
+    }
+
+    /// Select a runtime facade for gRPC Thrift entries. Other entries retain
+    /// their existing backend and dependency paths.
+    pub fn thrift_grpc_runtime_crate(mut self, runtime: impl Into<String>) -> Self {
+        self.thrift_grpc_runtime = Some(runtime.into());
+        self
     }
 
     pub fn plugin<P: pilota_build::ClonePlugin + 'static>(mut self, p: P) -> Self {
@@ -250,12 +335,10 @@ impl ConfigBuilder {
             .entries
             .into_iter()
             .try_for_each(|(entry_name, entry)| {
-                let mut builder = match entry.protocol {
-                    model::IdlProtocol::Thrift => InnerBuilder::thrift(),
-                    model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
-                }
-                .filename(entry.filename.clone())
-                .out_dir(&out_dir);
+                let mut builder =
+                    InnerBuilder::for_entry(&entry, self.thrift_grpc_runtime.as_deref())?
+                        .filename(entry.filename.clone())
+                        .out_dir(&out_dir);
 
                 for p in self.plugins.iter() {
                     builder = builder.plugin(p.clone());
@@ -273,7 +356,9 @@ impl ConfigBuilder {
                     get_service_builders_from_services(&entry.services, &repo_dir_map);
 
                 // add build options to the builder and build
-                let mut builder = builder.add_services(service_builders);
+                let mut builder = builder
+                    .add_services(service_builders)
+                    .service_configs(&entry.services, &repo_dir_map);
                 if !no_service_paths.is_empty() {
                     builder = builder.touch_files(no_service_paths);
                 }
@@ -378,11 +463,7 @@ impl InitBuilder {
     }
 
     pub fn init(self) -> anyhow::Result<(String, String)> {
-        let mut builder = match self.entry.protocol {
-            model::IdlProtocol::Thrift => InnerBuilder::thrift(),
-            model::IdlProtocol::Protobuf => InnerBuilder::protobuf(),
-        }
-        .filename(self.entry.filename);
+        let mut builder = InnerBuilder::for_entry(&self.entry, None)?.filename(self.entry.filename);
 
         // download repos and get the repo paths
         let temp_target_dir = tempfile::TempDir::new()?;
@@ -395,7 +476,9 @@ impl InitBuilder {
         let idl_builders = get_service_builders_from_services(&self.entry.services, &repo_dir_map);
 
         // add services to the builder
-        builder = builder.add_services(idl_builders);
+        builder = builder
+            .add_services(idl_builders)
+            .service_configs(&self.entry.services, &repo_dir_map);
         if !no_service_paths.is_empty() {
             builder = builder.touch_files(no_service_paths);
         }

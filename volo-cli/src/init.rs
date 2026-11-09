@@ -15,6 +15,8 @@ use crate::command::CliCommand;
 #[derive(Parser, Debug)]
 #[command(about = "init your thrift or grpc project")]
 pub struct Init {
+    #[arg(long, value_parser = ["grpc"], help = "Generate explicit Thrift-over-gRPC services for a .thrift IDL")]
+    pub rpc_transport: Option<String>,
     #[arg(help = "The name of project")]
     pub name: String,
     #[arg(
@@ -54,6 +56,9 @@ pub struct Init {
 
 impl Init {
     pub fn is_grpc_project(&self) -> bool {
+        if self.rpc_transport.as_deref() == Some("grpc") {
+            return true;
+        }
         if let Some(ext) = self.idl.extension() {
             ext == "proto"
         } else {
@@ -78,7 +83,17 @@ impl Init {
             folder,
             "templates/grpc/cargo_toml",
             "Cargo.toml",
-            name = &name
+            name = &name,
+            build_dependency = if self.rpc_transport.is_some() {
+                "\"0.13.0-alpha.1\""
+            } else {
+                "\"*\""
+            },
+            grpc_dependency = if self.idl.extension().is_some_and(|ext| ext == "thrift") {
+                "{ version = \"*\", features = [\"thrift\"] }"
+            } else {
+                "\"*\""
+            }
         );
 
         // src dirs
@@ -197,6 +212,10 @@ impl Init {
 impl CliCommand for Init {
     fn run(&self, cx: crate::context::Context) -> anyhow::Result<()> {
         self.check_config_files()?;
+        anyhow::ensure!(
+            self.rpc_transport.is_none() || self.idl.extension().is_some_and(|ext| ext == "thrift"),
+            "--rpc-transport grpc requires a .thrift IDL"
+        );
 
         volo_build::util::with_config(|config| {
             let mut repos = HashMap::new();
@@ -215,6 +234,11 @@ impl CliCommand for Init {
                 services: vec![service.clone()],
                 common_option: Default::default(),
             };
+
+            if self.rpc_transport.as_deref() == Some("grpc") {
+                service.codegen_option.config = serde_yaml::from_str("rpc_transport: grpc")?;
+                entry.services = vec![service.clone()];
+            }
 
             if self.is_grpc_project() {
                 self.copy_grpc_template(entry.clone())?;

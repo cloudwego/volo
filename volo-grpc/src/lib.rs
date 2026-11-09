@@ -18,6 +18,9 @@ pub mod request;
 pub mod response;
 pub mod server;
 pub mod status;
+pub mod streaming;
+#[cfg(feature = "thrift")]
+pub mod thrift;
 pub mod tracing;
 pub mod transport;
 

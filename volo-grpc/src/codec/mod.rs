@@ -6,6 +6,8 @@
 pub mod compression;
 pub mod decode;
 pub mod encode;
+#[cfg(feature = "thrift")]
+pub mod thrift;
 
 use std::{io, marker::PhantomData, mem::size_of};
 
@@ -17,8 +19,58 @@ use crate::{Status, status::Code::Internal};
 const PREFIX_LEN: usize = size_of::<u32>() + size_of::<u8>();
 const BUFFER_SIZE: usize = 8 * 1024;
 
+/// Per-message wire and decoded size budgets, independent of HTTP/2 windows.
+#[derive(Clone, Copy, Debug)]
+pub struct CodecLimits {
+    pub max_send_message_size: usize,
+    pub max_receive_message_size: usize,
+    pub max_decompressed_message_size: usize,
+}
+
+impl CodecLimits {
+    /// Preserve the size range of the original Protobuf entry points.
+    pub const fn legacy() -> Self {
+        Self {
+            max_send_message_size: u32::MAX as usize,
+            max_receive_message_size: u32::MAX as usize,
+            max_decompressed_message_size: usize::MAX,
+        }
+    }
+}
+
+impl Default for CodecLimits {
+    fn default() -> Self {
+        const MAX: usize = 16 * 1024 * 1024;
+        Self {
+            max_send_message_size: MAX,
+            max_receive_message_size: MAX,
+            max_decompressed_message_size: MAX,
+        }
+    }
+}
+
 /// Encoder for gRPC messages.
 pub trait Encoder {
+    /// Encode one payload subject to a size budget. Codecs that know its size
+    /// can reject before reserving memory; other encoders retain their old API.
+    fn encode_with_limit(
+        &mut self,
+        item: Self::Item,
+        dst: &mut LinkedBytes,
+        max_size: usize,
+    ) -> Result<(), Status>
+    where
+        Self::Error: Into<Status>,
+    {
+        let start = dst.len();
+        self.encode(item, dst).map_err(Into::into)?;
+        if dst.len().saturating_sub(start) > max_size {
+            return Err(Status::resource_exhausted(
+                "encoded message exceeds size limit",
+            ));
+        }
+        Ok(())
+    }
     /// The type that is encoded.
     type Item;
 

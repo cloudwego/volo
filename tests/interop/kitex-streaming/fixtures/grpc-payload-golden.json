@@ -1,0 +1,297 @@
+{
+  "schemaVersion": 1,
+  "producer": "kitex-grpc-codec",
+  "codec": "github.com/cloudwego/kitex/pkg/remote/codec/grpc.NewGRPCCodec",
+  "modules": {
+    "github.com/cloudwego/kitex": "v0.16.4",
+    "github.com/cloudwego/thriftgo": "v0.4.5"
+  },
+  "services": [
+    {
+      "generator_version": "v0.16.3",
+      "method": "Bidi",
+      "mode": 6,
+      "package": "api",
+      "path": "/api.Interop/Bidi",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Client",
+      "mode": 2,
+      "package": "api",
+      "path": "/api.Interop/Client",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Container",
+      "mode": 0,
+      "package": "api",
+      "path": "/api.Interop/Container",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "ExplicitUnary",
+      "mode": 0,
+      "package": "api",
+      "path": "/api.Interop/ExplicitUnary",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Inherited",
+      "mode": 4,
+      "package": "api",
+      "path": "/api.Interop/Inherited",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Multi",
+      "mode": 0,
+      "package": "api",
+      "path": "/api.Interop/Multi",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Server",
+      "mode": 4,
+      "package": "api",
+      "path": "/api.Interop/Server",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Throw",
+      "mode": 0,
+      "package": "api",
+      "path": "/api.Interop/Throw",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Unary",
+      "mode": 0,
+      "package": "api",
+      "path": "/api.Interop/Unary",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "VoidThrow",
+      "mode": 0,
+      "package": "api",
+      "path": "/api.Interop/VoidThrow",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Zero",
+      "mode": 0,
+      "package": "api",
+      "path": "/api.Interop/Zero",
+      "service": "Interop"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Inherited",
+      "mode": 4,
+      "package": "parent",
+      "path": "/parent.Parent/Inherited",
+      "service": "Parent"
+    },
+    {
+      "generator_version": "v0.16.3",
+      "method": "Echo",
+      "mode": 0,
+      "package": "grpc_no_namespace",
+      "path": "/grpc_no_namespace.Global/Echo",
+      "service": "Global"
+    }
+  ],
+  "apis": [
+    {
+      "methods": [
+        "Bidi",
+        "Client",
+        "Container",
+        "ExplicitUnary",
+        "Inherited",
+        "Multi",
+        "Server",
+        "Throw",
+        "Unary",
+        "VoidThrow",
+        "Zero"
+      ],
+      "name": "streamx.Client"
+    },
+    {
+      "methods": [
+        "Container",
+        "Multi",
+        "Throw",
+        "Unary",
+        "VoidThrow",
+        "Zero"
+      ],
+      "name": "legacy.Client"
+    },
+    {
+      "methods": [
+        "Bidi",
+        "Client",
+        "ExplicitUnary",
+        "Inherited",
+        "Server"
+      ],
+      "name": "legacy.StreamClient"
+    }
+  ],
+  "cases": [
+    {
+      "name": "streaming-raw",
+      "type": "Message",
+      "hex": "0a000280000000000000000b00010000000c68656c6c6f00e4b8ade6968700",
+      "frame_hex": "000000001f0a000280000000000000000b00010000000c68656c6c6f00e4b8ade6968700"
+    },
+    {
+      "name": "empty-stop",
+      "type": "Empty",
+      "hex": "00",
+      "frame_hex": "000000000100"
+    },
+    {
+      "name": "unary-args",
+      "type": "InteropUnaryArgs",
+      "hex": "0c00010a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000",
+      "frame_hex": "00000000230c00010a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000"
+    },
+    {
+      "name": "explicit-unary-args",
+      "type": "InteropExplicitUnaryArgs",
+      "hex": "0c00010a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000",
+      "frame_hex": "00000000230c00010a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000"
+    },
+    {
+      "name": "unary-result",
+      "type": "InteropUnaryResult",
+      "hex": "0c00000a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000",
+      "frame_hex": "00000000230c00000a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000"
+    },
+    {
+      "name": "explicit-unary-result",
+      "type": "InteropExplicitUnaryResult",
+      "hex": "0c00000a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000",
+      "frame_hex": "00000000230c00000a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000"
+    },
+    {
+      "name": "zero-args",
+      "type": "InteropZeroArgs",
+      "hex": "00",
+      "frame_hex": "000000000100"
+    },
+    {
+      "name": "void-result",
+      "type": "InteropZeroResult",
+      "hex": "00",
+      "frame_hex": "000000000100"
+    },
+    {
+      "name": "multi-args-non-default-ids",
+      "type": "InteropMultiArgs",
+      "hex": "080002800000000a00097fffffffffffffff00",
+      "frame_hex": "0000000013080002800000000a00097fffffffffffffff00"
+    },
+    {
+      "name": "scalar-result",
+      "type": "InteropMultiResult",
+      "hex": "0a00007fffffffffffffff00",
+      "frame_hex": "000000000c0a00007fffffffffffffff00"
+    },
+    {
+      "name": "container-args",
+      "type": "InteropContainerArgs",
+      "hex": "0f00070a00000003ffffffffffffffff00000000000000007fffffffffffffff00",
+      "frame_hex": "00000000210f00070a00000003ffffffffffffffff00000000000000007fffffffffffffff00"
+    },
+    {
+      "name": "container-result",
+      "type": "InteropContainerResult",
+      "hex": "0f00000a00000003ffffffffffffffff00000000000000007fffffffffffffff00",
+      "frame_hex": "00000000210f00000a00000003ffffffffffffffff00000000000000007fffffffffffffff00"
+    },
+    {
+      "name": "throws-args",
+      "type": "InteropThrowArgs",
+      "hex": "0c00010a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000",
+      "frame_hex": "00000000230c00010a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000"
+    },
+    {
+      "name": "throws-success",
+      "type": "InteropThrowResult",
+      "hex": "0c00000a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000",
+      "frame_hex": "00000000230c00000a000280000000000000000b00010000000c68656c6c6f00e4b8ade696870000"
+    },
+    {
+      "name": "throws-failure-id-2",
+      "type": "InteropThrowResult",
+      "hex": "0c00020b000100000009e99499e8afaf225c0a0000",
+      "frame_hex": "00000000150c00020b000100000009e99499e8afaf225c0a0000"
+    },
+    {
+      "name": "throws-other-id-7",
+      "type": "InteropThrowResult",
+      "hex": "0c00070800010000002a0000",
+      "frame_hex": "000000000c0c00070800010000002a0000"
+    },
+    {
+      "name": "void-throws-args",
+      "type": "InteropVoidThrowArgs",
+      "hex": "00",
+      "frame_hex": "000000000100"
+    },
+    {
+      "name": "void-throws-success",
+      "type": "InteropVoidThrowResult",
+      "hex": "00",
+      "frame_hex": "000000000100"
+    },
+    {
+      "name": "void-throws-failure-id-4",
+      "type": "InteropVoidThrowResult",
+      "hex": "0c00040b0001000000076661696c7572650000",
+      "frame_hex": "00000000130c00040b0001000000076661696c7572650000"
+    }
+  ],
+  "boundary": [
+    {
+      "accepted": false,
+      "error": "bufiox: no remaining data left caught in skipThriftStruct",
+      "hex": "",
+      "name": "zero-bytes",
+      "type": "Empty"
+    },
+    {
+      "accepted": true,
+      "hex": "00",
+      "name": "empty-result-without-success",
+      "type": "InteropUnaryResult"
+    },
+    {
+      "accepted": true,
+      "hex": "0c00000a000280000000000000000b00010000000c68656c6c6f00e4b8ade69687000c00070800010000002a0000",
+      "name": "multiple-result-fields",
+      "type": "InteropThrowResult"
+    },
+    {
+      "accepted": true,
+      "hex": "00a1b2",
+      "name": "valid-stop-with-suffix",
+      "type": "Empty"
+    }
+  ]
+}

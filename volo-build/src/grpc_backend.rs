@@ -272,10 +272,7 @@ impl CodegenBackend for VoloGrpcBackend {
     fn codegen_service_impl(&self, def_id: DefId, stream: &mut String, s: &rir::Service) {
         let service_name = self.cx().rust_name(def_id);
         let server_name = format!("{service_name}Server");
-        let client_builder_name = format!("{service_name}ClientBuilder");
-        let generic_client_name = format!("{service_name}GenericClient");
         let client_name = format!("{service_name}Client");
-        let oneshot_client_name = format!("{service_name}OneShotClient");
 
         let file_id = self.cx().node(def_id).unwrap().file_id;
         let file = self.cx().file(file_id).unwrap();
@@ -433,8 +430,6 @@ impl CodegenBackend for VoloGrpcBackend {
             );
         });
 
-        let mk_client_name = format!("Mk{generic_client_name}");
-
         let client_methods = client_methods.join("\n");
         let oneshot_client_methods = oneshot_client_methods.join("\n");
 
@@ -551,51 +546,12 @@ impl CodegenBackend for VoloGrpcBackend {
             }}"#
         );
 
-        let client_impl = format!(
-            r#"
-            pub struct {client_builder_name} {{}}
-            impl {client_builder_name} {{
-                pub fn new(
-                    service_name: impl AsRef<str>,
-                ) -> ::volo_grpc::client::ClientBuilder<
-                    ::volo::layer::Identity,
-                    ::volo::layer::Identity,
-                    {mk_client_name},
-                    ::volo_grpc::layer::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<(::volo::FastStr)>, ::volo_grpc::client::dns::DnsResolver>,
-                    {req_enum_name_send},
-                    {resp_enum_name_recv},
-                > {{
-                    ::volo_grpc::client::ClientBuilder::new({mk_client_name}, service_name)
-                }}
-            }}
-
-            pub struct {mk_client_name};
-
-            pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, ::volo_grpc::Response<{resp_enum_name_recv}>, ::volo_grpc::Status>>;
-
-            impl<S> ::volo::client::MkClient<::volo_grpc::Client<S>> for {mk_client_name} {{
-                type Target = {generic_client_name}<S>;
-                fn mk_client(&self, service: ::volo_grpc::Client<S>) -> Self::Target {{
-                    {generic_client_name}(service)
-                }}
-            }}
-
-            #[derive(Clone)]
-            pub struct {generic_client_name}<S>(pub ::volo_grpc::Client<S>);
-
-            pub struct {oneshot_client_name}<S>(pub ::volo_grpc::Client<S>);
-
-            impl<S> {generic_client_name}<S> where S: ::volo::service::Service<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + Sync + Send + 'static {{
-                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_grpc::context::ClientContext>>(self, opt: Opt) -> {oneshot_client_name}<::volo::client::WithOptService<S, Opt>> {{
-                    {oneshot_client_name}(self.0.with_opt(opt))
-                }}
-
-                {client_methods}
-            }}
-
-            impl<S: ::volo::client::OneShotService<::volo_grpc::context::ClientContext,::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + Send + Sync + 'static> {oneshot_client_name}<S> {{
-                {oneshot_client_methods}
-            }}"#
+        let client_impl = client_code(
+            &service_name,
+            &req_enum_name_send,
+            &resp_enum_name_recv,
+            &client_methods,
+            &oneshot_client_methods,
         );
 
         let server_impl = format!(
@@ -853,6 +809,68 @@ impl CodegenBackend for VoloGrpcBackend {
     fn codegen_impl_enum_message(&self, name: &str) -> String {
         self.inner.codegen_impl_enum_message(name)
     }
+}
+
+/// Shared client/layer plumbing for the Protobuf and Thrift service generators.
+/// Payload-specific method adapters stay in their respective backends.
+pub(crate) fn client_code(
+    service_name: &str,
+    req_enum_name_send: &str,
+    resp_enum_name_recv: &str,
+    client_methods: &str,
+    oneshot_client_methods: &str,
+) -> String {
+    let client_builder_name = format!("{service_name}ClientBuilder");
+    let generic_client_name = format!("{service_name}GenericClient");
+    let client_name = format!("{service_name}Client");
+    let oneshot_client_name = format!("{service_name}OneShotClient");
+    let mk_client_name = format!("Mk{generic_client_name}");
+    format!(
+        r#"
+            pub struct {client_builder_name} {{}}
+            impl {client_builder_name} {{
+                pub fn new(
+                    service_name: impl AsRef<str>,
+                ) -> ::volo_grpc::client::ClientBuilder<
+                    ::volo::layer::Identity,
+                    ::volo::layer::Identity,
+                    {mk_client_name},
+                    ::volo_grpc::layer::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<(::volo::FastStr)>, ::volo_grpc::client::dns::DnsResolver>,
+                    {req_enum_name_send},
+                    {resp_enum_name_recv},
+                > {{
+                    ::volo_grpc::client::ClientBuilder::new({mk_client_name}, service_name)
+                }}
+            }}
+
+            pub struct {mk_client_name};
+
+            pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, ::volo_grpc::Response<{resp_enum_name_recv}>, ::volo_grpc::Status>>;
+
+            impl<S> ::volo::client::MkClient<::volo_grpc::Client<S>> for {mk_client_name} {{
+                type Target = {generic_client_name}<S>;
+                fn mk_client(&self, service: ::volo_grpc::Client<S>) -> Self::Target {{
+                    {generic_client_name}(service)
+                }}
+            }}
+
+            #[derive(Clone)]
+            pub struct {generic_client_name}<S>(pub ::volo_grpc::Client<S>);
+
+            pub struct {oneshot_client_name}<S>(pub ::volo_grpc::Client<S>);
+
+            impl<S> {generic_client_name}<S> where S: ::volo::service::Service<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + ::core::marker::Sync + ::core::marker::Send + 'static {{
+                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_grpc::context::ClientContext>>(self, opt: Opt) -> {oneshot_client_name}<::volo::client::WithOptService<S, Opt>> {{
+                    {oneshot_client_name}(self.0.with_opt(opt))
+                }}
+
+                {client_methods}
+            }}
+
+            impl<S: ::volo::client::OneShotService<::volo_grpc::context::ClientContext,::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + ::core::marker::Send + ::core::marker::Sync + 'static> {oneshot_client_name}<S> {{
+                {oneshot_client_methods}
+            }}"#
+    )
 }
 
 #[cfg(test)]

@@ -11,7 +11,11 @@ use motore::{Service, layer::Layer};
 use pin_project::pin_project;
 use tokio::time::{self, Sleep};
 
-use crate::{Request, context::ServerContext, status::Status};
+use crate::{
+    Request,
+    context::{Deadline, ServerContext},
+    status::Status,
+};
 
 #[derive(Debug, Clone)]
 pub struct Timeout<S> {
@@ -51,24 +55,33 @@ where
 
     async fn call(
         &self,
-        _cx: &mut ServerContext,
+        cx: &mut ServerContext,
         req: Request<T>,
     ) -> Result<Self::Response, Self::Error> {
-        let client_timeout =
-            grpc_timeout_to_duration(req.metadata().headers()).unwrap_or_else(|_| {
-                tracing::trace!("Failed to parse grpc-timeout header");
-                None
-            });
+        let deadline = req.extensions().get::<Deadline>().copied().or_else(|| {
+            let timeout =
+                grpc_timeout_to_duration(req.metadata().headers()).unwrap_or_else(|_| {
+                    tracing::trace!("Failed to parse grpc-timeout header");
+                    None
+                })?;
+            time::Instant::now().checked_add(timeout).map(Deadline::new)
+        });
+        if deadline.is_some_and(Deadline::is_expired) {
+            return Err(Status::deadline_exceeded("timeout"));
+        }
 
-        // insert duration from header (if any) into METAINFO
-        if let Some(timeout_val) = client_timeout {
+        // Keep the relative value for existing middleware. New callers use the
+        // absolute deadline so time spent in middleware is deducted only once.
+        if let Some(deadline) = deadline {
             METAINFO.with(|mi| {
-                mi.borrow_mut().insert::<Duration>(timeout_val);
+                let mut mi = mi.borrow_mut();
+                mi.insert::<Duration>(deadline.remaining());
+                mi.insert::<Deadline>(deadline);
             });
         }
 
-        let sleep = client_timeout.map(time::sleep);
-        let inner = self.inner.call(_cx, req);
+        let sleep = deadline.map(|deadline| time::sleep_until(deadline.instant()));
+        let inner = self.inner.call(cx, req);
 
         ResponseFuture {
             inner,
@@ -85,7 +98,7 @@ where
 ///  Ok(Some(duration)) => if parse success.
 ///  Ok(None)           => if no success field.
 ///  Err(&HeaderValue)  => if parse timeout failed or wrong format.
-fn grpc_timeout_to_duration(
+pub(crate) fn grpc_timeout_to_duration(
     headers: &HeaderMap<HeaderValue>,
 ) -> Result<Option<Duration>, &HeaderValue> {
     const SECONDS_HOUR: u64 = 60 * 60;
@@ -94,11 +107,15 @@ fn grpc_timeout_to_duration(
     match headers.get(crate::metadata::GRPC_TIMEOUT_HEADER) {
         Some(val) => {
             // parse the value and unit
-            let (timeout_value, timeout_unit) = val
-                .to_str()
-                .map_err(|_| val)
-                .and_then(|s| if s.is_empty() { Err(val) } else { Ok(s) })?
-                .split_at(val.len() - 1);
+            let text = val.to_str().map_err(|_| val)?;
+            // The wire grammar permits 1..=8 ASCII digits and one ASCII unit.
+            if !(2..=9).contains(&text.len()) || !text.is_ascii() {
+                return Err(val);
+            }
+            let (timeout_value, timeout_unit) = text.split_at(text.len() - 1);
+            if !timeout_value.bytes().all(|byte| byte.is_ascii_digit()) {
+                return Err(val);
+            }
             let timeout_value = timeout_value.parse::<u64>().map_err(|_| val)?;
             // match the unit with Hour | Minute | Second | Milliseconds | Microsecond | Nanosecond
             let duration = match timeout_unit {
@@ -142,17 +159,15 @@ where
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let this = self.project();
 
-        if let Poll::Ready(res) = this.inner.poll(cx) {
-            return Poll::Ready(res);
-        }
-
         if let OptionPinProj::Some(sleep) = this.sleep.project() {
-            futures_util::ready!(sleep.poll(cx));
-            let err = Status::deadline_exceeded("timeout");
-            return Poll::Ready(Err(err));
+            // Check the instant as well as the timer: a newly created zero-time
+            // Sleep need not have received its timer-wheel notification yet.
+            if sleep.deadline() <= time::Instant::now() || sleep.poll(cx).is_ready() {
+                return Poll::Ready(Err(Status::deadline_exceeded("timeout")));
+            }
         }
 
-        Poll::Pending
+        this.inner.poll(cx)
     }
 }
 
@@ -161,6 +176,21 @@ mod tests {
 
     use super::*;
     use crate::metadata::GRPC_TIMEOUT_HEADER;
+
+    #[tokio::test]
+    async fn expired_deadline_does_not_poll_handler() {
+        let called = std::cell::Cell::new(false);
+        let response = ResponseFuture {
+            inner: async {
+                called.set(true);
+                Ok(())
+            },
+            sleep: OptionPin::Some(time::sleep(Duration::ZERO)),
+        }
+        .await;
+        assert_eq!(response.unwrap_err().code(), crate::Code::DeadlineExceeded);
+        assert!(!called.get());
+    }
 
     // init config in testing
     fn try_set_up(val: Option<&str>) -> Result<Option<Duration>, HeaderValue> {
@@ -218,6 +248,26 @@ mod tests {
         // error digit
         let r = HeaderValue::from_str("abcH").unwrap();
         assert_eq!(try_set_up(Some("abcH")), Err(r));
+
+        // Peer-controlled values cannot overflow multiplication or split a
+        // multibyte character at an invalid UTF-8 boundary.
+        for value in [
+            "",
+            "1",
+            "1é",
+            "+1S",
+            "-1S",
+            "100000000S",
+            "18446744073709551615H",
+        ] {
+            assert!(try_set_up(Some(value)).is_err(), "{value}");
+        }
+        assert_eq!(try_set_up(Some("0n")), Ok(Some(Duration::ZERO)));
+        assert_eq!(try_set_up(None), Ok(None));
+        assert_eq!(
+            try_set_up(Some("99999999H")),
+            Ok(Some(Duration::from_secs(99999999 * 3600)))
+        );
     }
 }
 

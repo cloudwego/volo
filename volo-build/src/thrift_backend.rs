@@ -83,7 +83,9 @@ impl VoloThriftBackend {
             ),
         };
         Some(if global {
-            format!("async fn {name}(&self,{args})->::core::result::Result<{result},::volo_thrift::streaming::StreamError>{{::std::result::Result::Err(::volo_thrift::streaming::StreamError::configuration(\"handler not implemented\"))}}")
+            format!(
+                "async fn {name}(&self,{args})->::core::result::Result<{result},::volo_thrift::streaming::StreamError>{{::std::result::Result::Err(::volo_thrift::streaming::StreamError::configuration(\"handler not implemented\"))}}"
+            )
         } else {
             format!(
                 "fn {name}(&self,{args})->impl \
@@ -850,10 +852,16 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 };
                 let req = self.stream_type(method, true, false);
                 let resp = self.stream_type(method, false, false);
-                let body=match self.cx().thrift_streaming_mode(method.def_id){
-                    ThriftStreamingMode::Client=>format!("let(input,mut output)=stream.into_server::<{req},{resp}>();let response=inner.{name}(cx,input).await?;output.send(&response).await?;::std::result::Result::Ok(())"),
-                    ThriftStreamingMode::Server=>format!("let(mut input,output)=stream.into_server::<{req},{resp}>();let req=input.recv().await?.ok_or_else(||::volo_thrift::streaming::StreamError::Application(::pilota::thrift::ApplicationException::new(::pilota::thrift::ApplicationExceptionKind::INTERNAL_ERROR,\"EOF\")))?;drop(input);inner.{name}(cx,req,output).await"),
-                    _=>format!("let(input,output)=stream.into_server::<{req},{resp}>();inner.{name}(cx,input,output).await"),
+                let body = match self.cx().thrift_streaming_mode(method.def_id) {
+                    ThriftStreamingMode::Client => format!(
+                        "let(input,mut output)=stream.into_server::<{req},{resp}>();let response=inner.{name}(cx,input).await?;output.send(&response).await?;::std::result::Result::Ok(())"
+                    ),
+                    ThriftStreamingMode::Server => format!(
+                        "let(mut input,output)=stream.into_server::<{req},{resp}>();let req=input.recv().await?.ok_or_else(||::volo_thrift::streaming::StreamError::Application(::pilota::thrift::ApplicationException::new(::pilota::thrift::ApplicationExceptionKind::INTERNAL_ERROR,\"EOF\")))?;drop(input);inner.{name}(cx,req,output).await"
+                    ),
+                    _ => format!(
+                        "let(input,output)=stream.into_server::<{req},{resp}>();inner.{name}(cx,input,output).await"
+                    ),
                 };
                 registrations.push_str(&format!(
                     "{{let inner=self.inner.clone();router.add_mode(\"{idl_service_name}\",\"\
@@ -1127,6 +1135,21 @@ pub struct MkThriftBackend;
 
 impl pilota_build::MakeBackend for MkThriftBackend {
     type Target = VoloThriftBackend;
+
+    fn validate(&self, cx: &Context) -> anyhow::Result<()> {
+        if crate::model::resolve_thrift_grpc_configs(
+            cx.source.services.iter().map(|service| &service.config),
+            false,
+        )?
+        .is_some()
+        {
+            anyhow::bail!(
+                "rpc_transport: grpc requires Builder::thrift_grpc(); the thrift builder uses \
+                 TTHeader"
+            );
+        }
+        Ok(())
+    }
 
     fn make_backend(self, context: Context) -> Self::Target {
         VoloThriftBackend {

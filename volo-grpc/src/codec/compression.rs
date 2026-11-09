@@ -8,13 +8,11 @@ use bytes::{Buf, BytesMut};
 #[cfg(feature = "compress")]
 pub use flate2::Compression as Level;
 #[cfg(feature = "gzip")]
-use flate2::bufread::{GzDecoder, GzEncoder};
+use flate2::{bufread::GzDecoder, write::GzEncoder};
 #[cfg(feature = "zlib")]
-use flate2::bufread::{ZlibDecoder, ZlibEncoder};
+use flate2::{bufread::ZlibDecoder, write::ZlibEncoder};
 use http::HeaderValue;
 
-use super::BUFFER_SIZE;
-#[cfg(feature = "compress")]
 use crate::Status;
 
 pub const ENCODING_HEADER: &str = "grpc-encoding";
@@ -121,6 +119,52 @@ fn is_enabled(encoding: CompressionEncoding, encodings: &[CompressionEncoding]) 
 }
 
 impl CompressionEncoding {
+    /// Validate an explicitly selected payload backend even when compression
+    /// support is not compiled in. Existing Protobuf paths keep their policy.
+    #[allow(clippy::result_large_err)]
+    pub fn from_encoding_header_strict(
+        headers: &http::HeaderMap,
+        config: &Option<Vec<Self>>,
+    ) -> Result<Option<Self>, Status> {
+        let Some(value) = headers.get(ENCODING_HEADER) else {
+            return Ok(None);
+        };
+        let value = value
+            .to_str()
+            .map_err(|_| Status::unimplemented("invalid grpc-encoding"))?;
+        match value {
+            "identity" => Ok(None),
+            #[cfg(feature = "gzip")]
+            "gzip"
+                if config
+                    .as_ref()
+                    .is_some_and(|list| list.contains(&Self::Gzip(None))) =>
+            {
+                Ok(Some(Self::Gzip(None)))
+            }
+            #[cfg(feature = "zlib")]
+            "zlib"
+                if config
+                    .as_ref()
+                    .is_some_and(|list| list.contains(&Self::Zlib(None))) =>
+            {
+                Ok(Some(Self::Zlib(None)))
+            }
+            #[cfg(feature = "zstd")]
+            "zstd"
+                if config
+                    .as_ref()
+                    .is_some_and(|list| list.contains(&Self::Zstd(None))) =>
+            {
+                Ok(Some(Self::Zstd(None)))
+            }
+            _ => {
+                let _ = config;
+                Err(Status::unimplemented("unsupported grpc-encoding"))
+            }
+        }
+    }
+
     /// make the compression encoding into a [HeaderValue]
     pub fn into_header_value(self) -> HeaderValue {
         match self {
@@ -270,80 +314,135 @@ impl CompressionEncoding {
     }
 }
 
-/// Compress `len` bytes from `src_buf` into `dest_buf`.
+/// Compress the encoded payload segments into a single compression stream.
 pub(crate) fn compress(
     encoding: CompressionEncoding,
-    src_buf: &mut BytesMut,
+    chunks: impl IntoIterator<Item: AsRef<[u8]>>,
     dest_buf: &mut BytesMut,
 ) -> Result<(), io::Error> {
-    let len = src_buf.len();
-    let capacity = ((len / BUFFER_SIZE) + 1) * BUFFER_SIZE;
-
-    dest_buf.reserve(capacity);
-
     match encoding {
         #[cfg(feature = "gzip")]
-        CompressionEncoding::Gzip(Some(config)) => {
-            let mut gz_encoder = GzEncoder::new(&src_buf[0..len], config.level);
-            io::copy(&mut gz_encoder, &mut dest_buf.writer())?;
+        CompressionEncoding::Gzip(config) => {
+            let mut encoder = GzEncoder::new(dest_buf.writer(), config.unwrap_or_default().level);
+            write_chunks(&mut encoder, chunks)?;
+            encoder.try_finish()?;
         }
         #[cfg(feature = "zlib")]
-        CompressionEncoding::Zlib(Some(config)) => {
-            let mut zlib_encoder = ZlibEncoder::new(&src_buf[0..len], config.level);
-            io::copy(&mut zlib_encoder, &mut dest_buf.writer())?;
+        CompressionEncoding::Zlib(config) => {
+            let mut encoder = ZlibEncoder::new(dest_buf.writer(), config.unwrap_or_default().level);
+            write_chunks(&mut encoder, chunks)?;
+            encoder.try_finish()?;
         }
         #[cfg(feature = "zstd")]
-        CompressionEncoding::Zstd(Some(config)) => {
-            let level = config.level.level();
+        CompressionEncoding::Zstd(config) => {
+            let level = config.unwrap_or_default().level.level();
             let zstd_level = if level == 0 {
                 zstd::DEFAULT_COMPRESSION_LEVEL
             } else {
                 level as i32
             };
             let mut zstd_encoder = zstd::Encoder::new(dest_buf.writer(), zstd_level)?;
-            io::copy(&mut &src_buf[0..len], &mut zstd_encoder)?;
+            write_chunks(&mut zstd_encoder, chunks)?;
             zstd_encoder.finish()?;
         }
-        _ => {}
+        CompressionEncoding::Identity => {
+            for chunk in chunks {
+                dest_buf.extend_from_slice(chunk.as_ref());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "compress")]
+fn write_chunks(
+    writer: &mut impl io::Write,
+    chunks: impl IntoIterator<Item: AsRef<[u8]>>,
+) -> io::Result<()> {
+    for chunk in chunks {
+        writer.write_all(chunk.as_ref())?;
+    }
+    Ok(())
+}
+
+/// Decompress `len` bytes from `src_buf` into `dest_buf`.
+#[cfg(test)]
+pub(crate) fn decompress(
+    encoding: CompressionEncoding,
+    src_buf: &mut BytesMut,
+    dest_buf: &mut BytesMut,
+) -> Result<(), io::Error> {
+    decompress_with_limit(encoding, src_buf, dest_buf, usize::MAX)
+}
+
+pub(crate) fn decompress_with_limit(
+    encoding: CompressionEncoding,
+    src_buf: &mut BytesMut,
+    dest_buf: &mut BytesMut,
+    limit: usize,
+) -> Result<(), io::Error> {
+    let len = src_buf.len();
+    // Do not reserve the peer's claimed decompressed size or grow without a
+    // bound for compressed bombs. The writer checks each output chunk.
+    #[cfg(feature = "compress")]
+    let mut writer = LimitedWriter {
+        dest: dest_buf,
+        limit,
+    };
+
+    match encoding {
+        #[cfg(feature = "gzip")]
+        CompressionEncoding::Gzip(_) => {
+            let mut gz_decoder = GzDecoder::new(&src_buf[0..len]);
+            io::copy(&mut gz_decoder, &mut writer)?;
+        }
+        #[cfg(feature = "zlib")]
+        CompressionEncoding::Zlib(_) => {
+            let mut zlib_decoder = ZlibDecoder::new(&src_buf[0..len]);
+            io::copy(&mut zlib_decoder, &mut writer)?;
+        }
+        #[cfg(feature = "zstd")]
+        CompressionEncoding::Zstd(_) => {
+            let mut zstd_decoder = zstd::Decoder::new(&src_buf[0..len])?;
+            io::copy(&mut zstd_decoder, &mut writer)?;
+        }
+        CompressionEncoding::Identity => {
+            if dest_buf.len().saturating_add(len) > limit {
+                return Err(io::Error::new(
+                    io::ErrorKind::FileTooLarge,
+                    "decompressed message exceeds size limit",
+                ));
+            }
+            dest_buf.extend_from_slice(src_buf);
+        }
     };
 
     src_buf.advance(len);
     Ok(())
 }
 
-/// Decompress `len` bytes from `src_buf` into `dest_buf`.
-pub(crate) fn decompress(
-    encoding: CompressionEncoding,
-    src_buf: &mut BytesMut,
-    dest_buf: &mut BytesMut,
-) -> Result<(), io::Error> {
-    let len = src_buf.len();
-    let estimate_decompressed_len = len * 2;
-    let capacity = ((estimate_decompressed_len / BUFFER_SIZE) + 1) * BUFFER_SIZE;
+#[cfg(feature = "compress")]
+struct LimitedWriter<'a> {
+    dest: &'a mut BytesMut,
+    limit: usize,
+}
 
-    dest_buf.reserve(capacity);
+#[cfg(feature = "compress")]
+impl io::Write for LimitedWriter<'_> {
+    fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
+        if self.dest.len().saturating_add(bytes.len()) > self.limit {
+            return Err(io::Error::new(
+                io::ErrorKind::FileTooLarge,
+                "decompressed message exceeds size limit",
+            ));
+        }
+        self.dest.extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
 
-    match encoding {
-        #[cfg(feature = "gzip")]
-        CompressionEncoding::Gzip(_) => {
-            let mut gz_decoder = GzDecoder::new(&src_buf[0..len]);
-            io::copy(&mut gz_decoder, &mut dest_buf.writer())?;
-        }
-        #[cfg(feature = "zlib")]
-        CompressionEncoding::Zlib(_) => {
-            let mut zlib_decoder = ZlibDecoder::new(&src_buf[0..len]);
-            io::copy(&mut zlib_decoder, &mut dest_buf.writer())?;
-        }
-        #[cfg(feature = "zstd")]
-        CompressionEncoding::Zstd(_) => {
-            let mut zstd_decoder = zstd::Decoder::new(&src_buf[0..len])?;
-            io::copy(&mut zstd_decoder, &mut dest_buf.writer())?;
-        }
-        _ => {}
-    };
-
-    src_buf.advance(len);
-    Ok(())
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -358,18 +457,13 @@ mod tests {
     use crate::codec::compression::ZlibConfig;
     #[cfg(feature = "zstd")]
     use crate::codec::compression::ZstdConfig;
-    use crate::codec::{
-        BUFFER_SIZE,
-        compression::{CompressionEncoding, compress, decompress},
-    };
+    use crate::codec::compression::{CompressionEncoding, compress, decompress};
 
     #[test]
     fn test_consistency_for_compression() {
-        let mut src = BytesMut::with_capacity(BUFFER_SIZE);
         let mut compress_buf = BytesMut::new();
-        let mut de_data = BytesMut::with_capacity(BUFFER_SIZE);
-        let test_data = &b"test compression"[..];
-        src.extend_from_slice(test_data);
+        let mut de_data = BytesMut::new();
+        let chunks: [&[u8]; 3] = [b"test ", b"", b"compression"];
 
         let encodings = [
             #[cfg(feature = "gzip")]
@@ -389,9 +483,10 @@ mod tests {
 
         for encoding in encodings {
             compress_buf.clear();
-            compress(encoding, &mut src, &mut compress_buf).expect("compress failed:");
+            de_data.clear();
+            compress(encoding, chunks, &mut compress_buf).expect("compress failed:");
             decompress(encoding, &mut compress_buf, &mut de_data).expect("decompress failed:");
-            assert_eq!(test_data, de_data.as_ref());
+            assert_eq!(b"test compression", de_data.as_ref());
         }
     }
 }

@@ -10,6 +10,12 @@ from . import SCHEMA_VERSION, __version__
 from .idl import matrix
 from .network import basic
 from .codec import golden
+from .grpc_payload import golden as grpc_payload_golden
+from .grpc_network import basic as grpc_network_basic
+from .grpc_lifecycle import lifecycle as grpc_lifecycle
+from .grpc_boundaries import boundaries as grpc_boundaries
+from .grpc_load import load as grpc_load
+from .grpc_keepalive import keepalive as grpc_keepalive
 from .wire import boundaries
 from .idle import idle_unary
 from .metainfo import multihop
@@ -71,6 +77,7 @@ def main() -> int:
     parser.add_argument('--version', action='version', version=__version__)
     parser.add_argument('--profile', default='upstream')
     parser.add_argument('--suite', default='all')
+    parser.add_argument('--case-filter', help='grpc-thrift-boundaries: request/name or response/name, comma separated')
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--idl-root', type=Path, default=Path('tests/interop/kitex-codec'))
     parser.add_argument('--fixture-root', type=Path)
@@ -80,6 +87,11 @@ def main() -> int:
     parser.add_argument('--rust-bytes', type=Path)
     parser.add_argument('--timeout', type=float, default=180)
     parser.add_argument('--idle-seconds', type=float, default=300)
+    parser.add_argument('--load-seconds', type=int, default=10)
+    parser.add_argument('--load-concurrency', type=int, default=16)
+    parser.add_argument('--load-payload-bytes', type=int, default=128)
+    parser.add_argument('--load-cooldown-seconds', type=int, default=0)
+    parser.add_argument('--load-compression', choices=['identity', 'gzip'], default='identity')
     parser.add_argument('--regenerate', action='store_true')
     parser.add_argument('--generation-only', action='store_true', help='record unverified generation; never counts as full acceptance')
     parser.add_argument('--protocol', default='ttstream')
@@ -112,15 +124,20 @@ def main() -> int:
             profile_name = profile_config['name']
     else:
         parser.error('non-upstream --profile must be an existing profile.toml')
-    if args.protocol != 'ttstream':
-        parser.error('only --protocol ttstream is supported')
+    if args.protocol not in ('ttstream', 'grpc-thrift'):
+        parser.error('--protocol must be ttstream or grpc-thrift')
+    selected_suites = args.suite.split(',')
+    if args.protocol == 'grpc-thrift' and args.suite == 'all':
+        selected_suites = ['grpc-thrift-codec', 'grpc-thrift-basic', 'grpc-thrift-gzip', 'grpc-thrift-legacy', 'grpc-thrift-metadata-values', 'grpc-thrift-boundaries', 'grpc-thrift-lifecycle', 'grpc-thrift-multihop']
+    if any(suite.startswith('grpc-thrift-') != (args.protocol == 'grpc-thrift') for suite in selected_suites):
+        parser.error('suite and --protocol differ; gRPC suites cannot run TTStream scenarios')
     try:
         env_overrides, environment_contract = validated_environment(profile_config, args.env_profile, os.environ)
     except ValueError as error:
         parser.error(str(error))
     child_environment = os.environ.copy()
     child_environment.update(env_overrides)
-    for suite in args.suite.split(','):
+    for suite in selected_suites:
         if suite == 'idl-matrix':
             if not args.kitex_bin or not args.kitex_bin.is_file():
                 results.append({'suite': suite, 'status': 'BLOCKED', 'reason': '--kitex-bin must identify the fixed-version built generator'})
@@ -132,11 +149,48 @@ def main() -> int:
             results.append({'suite': suite, 'status': 'FAIL' if 'FAIL' in statuses else 'INCOMPLETE' if 'INCOMPLETE' in statuses else 'PASS',
                             'report': str(args.out / suite / 'report.json'), 'cases': len(report['cases']),
                             'meaning': 'fixed generator/compile outcome regression; Rust alignment is a separate gate'})
-        elif suite == 'codec-golden':
+        elif suite in ('grpc-thrift-basic', 'grpc-thrift-gzip', 'grpc-thrift-legacy', 'grpc-thrift-metadata-values', 'grpc-thrift-lifecycle', 'grpc-thrift-multihop', 'grpc-thrift-boundaries', 'grpc-thrift-load', 'grpc-thrift-keepalive'):
+            if not args.go_bin or not args.rust_bin or not args.go_bin.is_file() or not args.rust_bin.is_file():
+                results.append({'suite': suite, 'status': 'BLOCKED', 'reason': 'built --go-bin and --rust-bin are required'})
+                continue
+            function = {
+                'grpc-thrift-basic': grpc_network_basic,
+                'grpc-thrift-gzip': grpc_network_basic,
+                'grpc-thrift-legacy': grpc_network_basic,
+                'grpc-thrift-metadata-values': grpc_network_basic,
+                'grpc-thrift-lifecycle': grpc_lifecycle,
+                'grpc-thrift-multihop': grpc_lifecycle,
+                'grpc-thrift-boundaries': grpc_boundaries,
+                'grpc-thrift-load': grpc_load,
+                'grpc-thrift-keepalive': grpc_keepalive,
+            }[suite]
+            grpc_options = {}
+            if suite == 'grpc-thrift-legacy':
+                grpc_options['legacy'] = True
+            elif suite == 'grpc-thrift-metadata-values':
+                grpc_options['metadata_values'] = True
+            elif suite == 'grpc-thrift-gzip':
+                grpc_options['compression'] = 'gzip'
+            elif suite == 'grpc-thrift-multihop':
+                grpc_options['multihop'] = True
+            elif suite == 'grpc-thrift-boundaries':
+                grpc_options['case_filter'] = args.case_filter
+            elif suite == 'grpc-thrift-load':
+                grpc_options.update(duration=args.load_seconds, concurrency=args.load_concurrency,
+                                    payload_bytes=args.load_payload_bytes, cooldown=args.load_cooldown_seconds,
+                                    compression=args.load_compression)
+            report = function(go=args.go_bin.resolve(), rust=args.rust_bin.resolve(),
+                                        output=(args.out / suite).resolve(), timeout=args.timeout,
+                                        transports=args.transport.split(','), direction=args.direction,
+                                        env=child_environment, **grpc_options)
+            results.append({'suite': suite, 'status': report['status'], 'cases': len(report['cases']),
+                            'report': str(args.out / suite / 'report.json')})
+        elif suite in ('codec-golden', 'grpc-thrift-codec'):
             if not args.go_bin or not args.go_bin.is_file():
                 results.append({'suite': suite, 'status': 'BLOCKED', 'reason': '--go-bin oracle must exist'})
                 continue
-            results.append(golden(oracle=args.go_bin.resolve(), fixture_root=(args.fixture_root or args.idl_root).resolve(),
+            golden_function = grpc_payload_golden if suite == 'grpc-thrift-codec' else golden
+            results.append(golden_function(oracle=args.go_bin.resolve(), fixture_root=(args.fixture_root or args.idl_root).resolve(),
                                   output=args.out / suite, regenerate=args.regenerate,
                                   rust_bytes=args.rust_bytes.resolve() if args.rust_bytes else None, timeout=args.timeout,
                                   env=child_environment))
@@ -194,7 +248,7 @@ def main() -> int:
                             'report': str(args.out / suite / 'report.json'), 'cases': len(report['cases'])})
         else:
             results.append({'suite': suite, 'status': 'INCOMPLETE', 'reason': 'suite is not implemented yet'})
-    report = {'schemaVersion': SCHEMA_VERSION, 'tool_version': __version__, 'profile': args.profile,
+    report = {'schemaVersion': SCHEMA_VERSION, 'tool_version': __version__, 'profile': args.profile, 'protocol': args.protocol,
               'command': sys.argv, 'environment_contract': environment_contract, 'results': results}
     (args.out / 'summary.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report))

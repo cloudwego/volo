@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"os"
 	"time"
+
+	"github.com/cloudwego/kitex/pkg/remote/trans/nphttp2/grpc"
+	"github.com/cloudwego/kitex/server"
 )
 
 func writeJSON(path string, value any) error {
@@ -36,6 +39,10 @@ func Main(profile Profile) {
 	recvDelay := flag.Duration("recv-delay", 0, "error-client only: intentional application delay before first Recv")
 	messages := flag.Int("messages", 3, "number of requests or server responses")
 	payloadBytes := flag.Int("payload-bytes", 1024, "budget-client message payload bytes")
+	benchmarkSeconds := flag.Int("duration-secs", 3, "bounded gRPC benchmark duration")
+	benchmarkConcurrency := flag.Int("concurrency", 1, "gRPC benchmark concurrent RPCs")
+	compression := flag.String("compression", "identity", "identity or gzip for gRPC fixtures")
+	phaseLatency := flag.String("phase-latency", "off", "optional gRPC benchmark phase timing: off or on")
 	timeout := flag.Duration("timeout", 15*time.Second, "whole call deadline")
 	idle := flag.Duration("idle", 5*time.Minute, "unary idle interval before first and reused requests")
 	scenario := flag.String("scenario", "echo", "server fixture: echo, metainfo, cascade, errors")
@@ -54,6 +61,58 @@ func Main(profile Profile) {
 		os.Exit(2)
 	}
 	switch *role {
+	case "grpc-thrift-server":
+		err = serveGRPCThrift(profile, *addr, *forward, *compression, false)
+	case "grpc-thrift-client":
+		err = callGRPCThrift(profile, *addr, *report, *timeout, *compression, false)
+	case "grpc-thrift-metadata-values-client":
+		err = grpcMetadataValuesClient(profile, *addr, *report)
+	case "grpc-thrift-metadata-values-server":
+		err = serveGRPCMetadataValues(profile, *addr)
+	case "grpc-thrift-benchmark-client":
+		if *phaseLatency != "off" && *phaseLatency != "on" {
+			err = fmt.Errorf("invalid phase-latency option")
+			break
+		}
+		err = grpcBenchmark(profile, *addr, *mode, *compression, *report, *benchmarkSeconds, *benchmarkConcurrency, *payloadBytes, *phaseLatency == "on")
+	case "grpc-thrift-legacy-server":
+		err = serveGRPCThrift(profile, *addr, *forward, *compression, true)
+	case "grpc-thrift-legacy-client":
+		err = callGRPCThrift(profile, *addr, *report, *timeout, *compression, true)
+	case "grpc-thrift-fallback-server":
+		err = serveGRPCThrift(profile, *addr, "", "identity", false,
+			server.WithGRPCUnknownServiceHandler(grpcUnknownRoute))
+	case "grpc-thrift-keepalive-server":
+		minimum := 80 * time.Millisecond
+		if *scenario == "excessive" {
+			minimum = time.Second
+		} else if *scenario != "valid" {
+			err = fmt.Errorf("unknown keepalive scenario %q", *scenario)
+			break
+		}
+		err = serveGRPCThrift(profile, *addr, "", "identity", false,
+			server.WithGRPCKeepaliveEnforcementPolicy(grpc.EnforcementPolicy{MinTime: minimum}))
+	case "grpc-thrift-lifecycle-client":
+		err = grpcLifecycleCall(profile, *addr, *scenario, *lifecycleID, *report, time.Duration(*recvTimeoutMS)*time.Millisecond)
+	case "grpc-thrift-wire":
+		err = grpcWire(*addr, *input, *report)
+	case "grpc-thrift-raw-response-server":
+		err = grpcRawResponse(*addr, *input)
+	case "grpc-thrift-response-client":
+		err = grpcResponseProbe(profile, *addr, *mode, *report)
+	case "grpc-thrift-metadata-client":
+		err = grpcMetadataProbe(profile, *addr, *scenario, *report)
+	case "grpc-thrift-golden":
+		var result grpcPayloadFile
+		result, err = grpcPayloadGolden()
+		if err == nil {
+			err = writeJSON(*report, result)
+		}
+	case "grpc-thrift-codec-verify":
+		err = grpcVerifyPayload(*input)
+		if err == nil {
+			err = writeJSON(*report, map[string]any{"schemaVersion": 1, "event": "result", "status": "PASS"})
+		}
 	case "inherited-server":
 		err = serveInherited(profile, *addr)
 	case "inherited-client":

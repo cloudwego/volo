@@ -9,7 +9,6 @@ use std::{
 };
 
 use anyhow::anyhow;
-use itertools::Itertools;
 use pilota_build::{IdlService, parser::Parser};
 
 pub mod config_builder;
@@ -17,6 +16,7 @@ pub mod grpc_backend;
 pub mod legacy;
 pub mod model;
 pub mod thrift_backend;
+pub mod thrift_grpc_backend;
 pub mod util;
 pub mod workspace;
 
@@ -27,7 +27,7 @@ pub use pilota_build::{
 
 pub struct Builder<MkB, P> {
     pilota_builder: pilota_build::Builder<MkB, P>,
-    idls: Vec<PathBuf>,
+    idls: Vec<IdlService>,
     out_dir: Option<PathBuf>,
     filename: PathBuf,
     config_file_path: PathBuf,
@@ -58,13 +58,44 @@ impl Builder<grpc_backend::MkGrpcBackend, parser::ProtobufParser> {
     }
 }
 
+impl Builder<thrift_grpc_backend::MkThriftGrpcBackend, parser::ThriftParser> {
+    /// Generate one gRPC client/server for all unary and streaming Thrift methods.
+    pub fn thrift_grpc() -> Self {
+        Builder {
+            pilota_builder: pilota_build::Builder::thrift()
+                .with_backend(thrift_grpc_backend::MkThriftGrpcBackend::default()),
+            out_dir: None,
+            filename: "volo_gen.rs".into(),
+            idls: Vec::new(),
+            config_file_path: "volo.yml".into(),
+        }
+    }
+
+    pub fn thrift_grpc_options(mut self, options: thrift_grpc_backend::Options) -> Self {
+        self.pilota_builder = self
+            .pilota_builder
+            .with_backend(thrift_grpc_backend::MkThriftGrpcBackend(options));
+        self
+    }
+}
+
 impl<MkB, Parser> Builder<MkB, Parser> {
     pub fn add_service<P>(mut self, path: P) -> Self
     where
         P: AsRef<Path>,
     {
-        self.idls.push(path.as_ref().into());
+        self.idls
+            .push(IdlService::from_path(path.as_ref().to_path_buf()));
 
+        self
+    }
+
+    pub fn service_config(mut self, path: impl AsRef<Path>, config: serde_yaml::Value) -> Self {
+        for service in &mut self.idls {
+            if service.path == path.as_ref() {
+                service.config = config.clone();
+            }
+        }
         self
     }
 
@@ -188,10 +219,7 @@ where
         }
 
         self.pilota_builder.try_compile_with_config(
-            self.idls
-                .into_iter()
-                .map(IdlService::from_path)
-                .collect_vec(),
+            self.idls,
             pilota_build::Output::File(out_dir.join(self.filename)),
         )?;
         Ok(())
@@ -199,13 +227,8 @@ where
 
     pub fn init_service(self) -> anyhow::Result<(String, String)> {
         assert_eq!(self.idls.len(), 1);
-        self.pilota_builder.init_service(
-            self.idls
-                .into_iter()
-                .map(IdlService::from_path)
-                .next()
-                .unwrap(),
-        )
+        self.pilota_builder
+            .init_service(self.idls.into_iter().next().unwrap())
     }
 }
 

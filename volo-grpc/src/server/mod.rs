@@ -2,13 +2,16 @@
 //!
 //! This module contains the low level component to build a gRPC server.
 
+mod h2;
 mod incoming;
 mod meta;
+mod policy;
 mod router;
 mod service;
 
 use std::{fmt, io, time::Duration};
 
+use futures_util::{StreamExt, stream::FuturesUnordered};
 use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
 use incoming::IncomingService;
 pub use meta::MetaService;
@@ -18,6 +21,7 @@ use motore::{
     service::Service,
 };
 pub use service::ServiceBuilder;
+use tokio_util::task::AbortOnDropHandle;
 use tower::util::BoxCloneService;
 #[cfg(feature = "__tls")]
 use volo::net::tls::ServerTlsConfig;
@@ -38,10 +42,21 @@ use crate::{
 /// A trait to provide a static reference to the service's
 /// name. This is used for routing service's within the router.
 pub trait NamedService {
+    fn stream_hook_factory(
+        &self,
+    ) -> Option<std::sync::Arc<dyn crate::streaming::StreamHookFactory>> {
+        None
+    }
     /// The `Service-Name` as described [here].
     ///
     /// [here]: https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
     const NAME: &'static str;
+
+    /// New payload backends supply a descriptor. Existing Protobuf services
+    /// retain their original routing and content-type acceptance behavior.
+    fn descriptor() -> Option<crate::message::ServiceDescriptor> {
+        None
+    }
 }
 
 /// A server for a gRPC service.
@@ -52,6 +67,7 @@ pub struct Server<IL = Identity, OL = tower::layer::util::Identity, SP = Default
     http2_config: Http2Config,
     router: Router,
     span_provider: SP,
+    shutdown_timeout: Duration,
 
     #[cfg(feature = "__tls")]
     tls_config: Option<ServerTlsConfig>,
@@ -72,6 +88,7 @@ impl Server<Identity, tower::layer::util::Identity, DefaultProvider> {
             http2_config: Http2Config::default(),
             router: Router::new(),
             span_provider: DefaultProvider,
+            shutdown_timeout: Duration::from_secs(30),
 
             #[cfg(feature = "__tls")]
             tls_config: None,
@@ -80,6 +97,33 @@ impl Server<Identity, tower::layer::util::Identity, DefaultProvider> {
 }
 
 impl<IL, OL, SP> Server<IL, OL, SP> {
+    /// Register a whole-call hook factory. Repeated registrations compose in
+    /// order; factories can filter static descriptors before context allocation.
+    pub fn stream_hook(mut self, factory: impl crate::streaming::StreamHookFactory) -> Self {
+        self.router = self.router.with_stream_hook(
+            crate::streaming::HookFactory(std::sync::Arc::new(factory)),
+            false,
+        );
+        self
+    }
+
+    pub fn stream_hook_front(mut self, factory: impl crate::streaming::StreamHookFactory) -> Self {
+        self.router = self.router.with_stream_hook(
+            crate::streaming::HookFactory(std::sync::Arc::new(factory)),
+            true,
+        );
+        self
+    }
+    /// Limits how long existing connections may drain after shutdown starts.
+    ///
+    /// The server stops accepting connections immediately and sends HTTP/2
+    /// GOAWAY. At the deadline it closes remaining connections. Default: 30s.
+    /// A zero duration forces immediate connection teardown.
+    pub fn graceful_shutdown_timeout(mut self, timeout: Duration) -> Self {
+        self.shutdown_timeout = timeout;
+        self
+    }
+
     #[cfg(feature = "__tls")]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     /// Sets the TLS configuration for the server.
@@ -213,6 +257,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             http2_config: self.http2_config,
             router: self.router,
             span_provider: self.span_provider,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -239,6 +284,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             http2_config: self.http2_config,
             router: self.router,
             span_provider: self.span_provider,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -268,6 +314,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             http2_config: self.http2_config,
             router: self.router,
             span_provider: self.span_provider,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -289,6 +336,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             http2_config: self.http2_config,
             router: self.router.add_service(s),
             span_provider: self.span_provider,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -302,6 +350,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             http2_config: self.http2_config,
             router: self.router,
             span_provider: provider,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -344,58 +393,41 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
 
-        let service = self
-            .outer_layer
-            .layer(BoxCloneService::new(MetaService::new(
-                self.inner_layer.layer(self.router),
-                self.span_provider,
-            )));
+        let managed_transport = self.router.requires_managed_transport();
+        let response_payloads = self.router.response_payloads();
+        let service = self.outer_layer.layer(BoxCloneService::new(
+            MetaService::new(self.inner_layer.layer(self.router), self.span_provider)
+                .with_response_payloads(response_payloads),
+        ));
 
         tokio::pin!(signal);
         let (tx, rx) = tokio::sync::watch::channel(());
+        let mut connections = FuturesUnordered::<AbortOnDropHandle<()>>::new();
+        let mut accept_error = None;
 
         loop {
             tokio::select! {
+                biased;
                 _ = &mut signal => {
-                    drop(rx);
                     tracing::info!("[VOLO] graceful shutdown");
-                    let _ = tx.send(());
-                    // Waits for receivers to drop.
-                    tx.closed().await;
-                    return Ok(());
+                    break;
+                },
+                Some(result) = connections.next(), if !connections.is_empty() => {
+                    if let Err(error) = result {
+                        tracing::debug!("[VOLO] connection task ended: {error}");
+                    }
                 },
                 conn = incoming.accept() => {
-                    let conn: Conn = match conn? {
-                        Some(c) => c,
-                        None => return Ok(()),
-                    };
-                    #[cfg(feature = "__tls")]
-                    let conn = {
-                        let Conn {
-                            stream,
-                            info,
-                        } = conn;
-                        // Only perform TLS handshake if either rustls or native-tls is configured
-                        match (stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
-                            (volo::net::conn::ConnStream::Tcp(tcp), Some(tls_acceptor)) => {
-                                let stream = match tls_acceptor.accept(tcp).await {
-                                    Ok(stream) => stream,
-                                    Err(err) => {
-                                        tracing::debug!("[VOLO] TLS handshake error: {:?}", err);
-                                        continue;
-                                    },
-                                };
-                                Conn {
-                                    stream,
-                                    info,
-                                }
-                            },
-                            (stream, _) => Conn {
-                                stream,
-                                info
-                            },
+                    let conn: Conn = match conn {
+                        Ok(Some(c)) => c,
+                        Ok(None) => break,
+                        Err(error) => {
+                            accept_error = Some(error);
+                            break;
                         }
                     };
+                    #[cfg(feature = "__tls")]
+                    let tls_config = self.tls_config.clone();
 
                     tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
                     let peer_addr = conn.info.peer_addr.clone();
@@ -421,7 +453,33 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
                         .max_header_list_size(self.http2_config.max_header_list_size);
 
                     let mut watch = rx.clone();
-                    spawn(async move {
+                    let http2_config = self.http2_config;
+                    connections.push(AbortOnDropHandle::new(spawn(async move {
+                        #[cfg(feature = "__tls")]
+                        let conn = {
+                            let Conn { stream, info } = conn;
+                            match (stream, tls_config.as_ref().map(|config| &config.acceptor)) {
+                                (volo::net::conn::ConnStream::Tcp(tcp), Some(acceptor)) => {
+                                    let result = tokio::select! {
+                                        result = acceptor.accept(tcp) => result,
+                                        _ = watch.changed() => return,
+                                    };
+                                    let stream = match result {
+                                        Ok(stream) => stream,
+                                        Err(error) => {
+                                            tracing::debug!("[VOLO] TLS handshake error: {error}");
+                                            return;
+                                        }
+                                    };
+                                    Conn { stream, info }
+                                },
+                                (stream, _) => Conn { stream, info },
+                            }
+                        };
+                        if managed_transport {
+                            h2::serve(conn, service, http2_config, watch).await;
+                            return;
+                        }
                         let mut http_conn = std::pin::pin!(server.serve_connection(
                             TokioIo::new(conn),
                             hyper::service::service_fn(move |req| {
@@ -431,9 +489,11 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
                                 }
                             })
                         ));
+                        let mut draining = false;
                         loop {
                             tokio::select! {
-                                _ = watch.changed() => {
+                                _ = watch.changed(), if !draining => {
+                                    draining = true;
                                     tracing::trace!("[VOLO] closing a pending connection");
                                     // Graceful shutdown.
                                     http_conn.as_mut().graceful_shutdown();
@@ -446,9 +506,32 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
                                 },
                             }
                         }
-                    });
+                    })));
                 },
             }
+        }
+
+        // Accept has stopped. Every connection, including an incomplete TLS
+        // handshake, is registered until its owner exits.
+        drop(rx);
+        let _ = tx.send(());
+        if tokio::time::timeout(self.shutdown_timeout, tx.closed())
+            .await
+            .is_err()
+        {
+            tracing::debug!("[VOLO] drain deadline reached; closing remaining connections");
+            for connection in connections.iter() {
+                connection.abort();
+            }
+        }
+        while let Some(result) = connections.next().await {
+            if let Err(error) = result {
+                tracing::debug!("[VOLO] connection task ended during shutdown: {error}");
+            }
+        }
+        match accept_error {
+            Some(error) => Err(error.into()),
+            None => Ok(()),
         }
     }
 

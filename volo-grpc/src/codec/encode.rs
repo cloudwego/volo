@@ -4,7 +4,7 @@ use http_body::Frame;
 use linkedbytes::Node;
 use pilota::{LinkedBytes, pb::Message};
 
-use super::{DefaultEncoder, PREFIX_LEN};
+use super::{CodecLimits, DefaultEncoder, PREFIX_LEN};
 use crate::{
     BoxStream, Status,
     codec::{
@@ -21,55 +21,186 @@ where
     S: Stream<Item = Result<T, Status>> + Send + 'static,
     T: Message + 'static,
 {
-    Box::pin(async_stream::stream! {
+    encode_with_encoder(source, compression_encoding, DefaultEncoder::<T>::default())
+}
+
+/// Encode using one codec instance for the whole stream.
+pub fn encode_with_encoder<T, S, E>(
+    source: S,
+    compression_encoding: Option<CompressionEncoding>,
+    encoder: E,
+) -> BoxStream<'static, Result<Frame<Bytes>, Status>>
+where
+    S: Stream<Item = Result<T, Status>> + Send + 'static,
+    E: Encoder<Item = T> + Send + 'static,
+    E::Error: Into<Status>,
+    T: Send + 'static,
+{
+    encode_with_options(source, compression_encoding, encoder, CodecLimits::legacy())
+}
+
+/// Encode with explicit per-message limits. Codec state is never recreated for
+/// a subsequent message, including on the compressed path.
+pub fn encode_with_options<T, S, E>(
+    source: S,
+    compression: Option<CompressionEncoding>,
+    encoder: E,
+    limits: CodecLimits,
+) -> BoxStream<'static, Result<Frame<Bytes>, Status>>
+where
+    S: Stream<Item = Result<T, Status>> + Send + 'static,
+    E: Encoder<Item = T> + Send + 'static,
+    E::Error: Into<Status>,
+    T: Send + 'static,
+{
+    Box::pin(encode_inner(
+        source,
+        compression,
+        encoder,
+        limits,
+        Unobserved,
+    ))
+}
+
+/// The context-free branch keeps a static zero-sized observer. Registered RPC
+/// state is scoped around producer polls without adding a box per message.
+pub fn encode_with_context<T, S, E>(
+    source: S,
+    compression: Option<CompressionEncoding>,
+    encoder: E,
+    limits: CodecLimits,
+    context: Option<crate::streaming::StreamContext>,
+    exception_classifier: Option<fn(&T) -> bool>,
+) -> BoxStream<'static, Result<Frame<Bytes>, Status>>
+where
+    S: Stream<Item = Result<T, Status>> + Send + 'static,
+    E: Encoder<Item = T> + Send + 'static,
+    E::Error: Into<Status>,
+    T: Send + 'static,
+{
+    match context {
+        Some(context) => Box::pin(ScopedEncoding {
+            inner: encode_inner(
+                source,
+                compression,
+                encoder,
+                limits,
+                Observed {
+                    context: context.clone(),
+                    exception_classifier,
+                },
+            ),
+            context,
+        }),
+        None => encode_with_options(source, compression, encoder, limits),
+    }
+}
+
+trait EncodeObserver<T>: Send + 'static {
+    fn before_encode(&self, _value: &T) {}
+    fn on_send(&self, _size: usize) {}
+}
+struct Unobserved;
+impl<T> EncodeObserver<T> for Unobserved {}
+struct Observed<T> {
+    context: crate::streaming::StreamContext,
+    exception_classifier: Option<fn(&T) -> bool>,
+}
+impl<T: 'static> EncodeObserver<T> for Observed<T> {
+    fn before_encode(&self, value: &T) {
+        if self
+            .exception_classifier
+            .is_some_and(|classify| classify(value))
+        {
+            self.context.record_declared_exception();
+        }
+    }
+    fn on_send(&self, size: usize) {
+        self.context.on_send(size);
+    }
+}
+
+#[pin_project::pin_project]
+struct ScopedEncoding<S> {
+    #[pin]
+    inner: S,
+    context: crate::streaming::StreamContext,
+}
+impl<S: Stream> Stream for ScopedEncoding<S> {
+    type Item = S::Item;
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        task: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Option<Self::Item>> {
+        let this = self.project();
+        this.context.sync_scope(|| this.inner.poll_next(task))
+    }
+}
+
+fn encode_inner<T, S, E, O: EncodeObserver<T>>(
+    source: S,
+    compression_encoding: Option<CompressionEncoding>,
+    mut encoder: E,
+    limits: CodecLimits,
+    observer: O,
+) -> impl Stream<Item = Result<Frame<Bytes>, Status>> + Send + 'static
+where
+    S: Stream<Item = Result<T, Status>> + Send + 'static,
+    E: Encoder<Item = T> + Send + 'static,
+    E::Error: Into<Status>,
+    T: Send + 'static,
+{
+    let compression_encoding = compression_encoding.filter(|c| *c != CompressionEncoding::Identity);
+    async_stream::stream! {
         futures_util::pin_mut!(source);
 
         loop {
             match source.next().await {
                 Some(Ok(item)) => {
+                    observer.before_encode(&item);
                     let mut buf = LinkedBytes::with_capacity(BUFFER_SIZE);
-                    let mut compressed_buf = if compression_encoding.is_some() {
-                        LinkedBytes::with_capacity(BUFFER_SIZE)
-                    } else {
-                        LinkedBytes::new()
-                    };
-
                     buf.reserve(PREFIX_LEN);
-                    unsafe {
-                        buf.advance_mut(PREFIX_LEN);
-                    }
+                    buf.put_slice(&[0; PREFIX_LEN]);
 
-                    let mut encoder=DefaultEncoder::default();
-
+                    let encoded_size;
                     if let Some(config)=compression_encoding{
-                        encoder.encode(item, &mut compressed_buf)
-                            .map_err(|err| Status::internal(format!("Error encoding: {err}")))?;
-                        compress(config,&mut compressed_buf.concat(), buf.bytes_mut())
+                        let mut payload = LinkedBytes::with_capacity(BUFFER_SIZE);
+                        encoder.encode_with_limit(item, &mut payload, limits.max_send_message_size)?;
+                        encoded_size = payload.len();
+                        if encoded_size > limits.max_send_message_size {
+                            Err(Status::resource_exhausted("encoded message exceeds size limit"))?;
+                        }
+                        compress(config, payload.into_iter_list(), buf.bytes_mut())
                             .map_err(|err| Status::internal(format!("Error compressing: {err}")))?;
                     } else {
-                        encoder.encode(item, &mut buf)
-                            .map_err(|err| Status::internal(format!("Error encoding: {err}")))?;
+                        encoder.encode_with_limit(item, &mut buf, limits.max_send_message_size)?;
+                        encoded_size = buf.len() - PREFIX_LEN;
                     }
 
                     let len = buf.len() - PREFIX_LEN;
-                    assert!(len <= u32::MAX as usize);
+                    if len > limits.max_send_message_size {
+                        Err(Status::resource_exhausted("encoded message exceeds size limit"))?;
+                    }
+                    let wire_len = u32::try_from(len)
+                        .map_err(|_| Status::resource_exhausted("encoded message exceeds gRPC length range"))?;
                     {
                         if let Some(node) = buf.get_list_mut(0) {
                             match node {
                                 linkedbytes::Node::BytesMut(bytes_mut) => {
                                     let mut dest = &mut bytes_mut[..PREFIX_LEN];
                                     dest.put_u8(compression_encoding.is_some() as u8);
-                                    dest.put_u32(len as u32);
+                                    dest.put_u32(wire_len);
                                 }
                                 _ => unreachable!("reserve_node_idx is not a bytesmut"),
                             };
                         } else {
                             let mut dest = &mut buf.bytes_mut()[..PREFIX_LEN];
                             dest.put_u8(compression_encoding.is_some() as u8);
-                            dest.put_u32(len as u32);
+                            dest.put_u32(wire_len);
                         }
                     }
 
+                    observer.on_send(encoded_size);
                     // send each node in linked bytes as a separate frame
                     for node in buf.into_iter_list() {
                         let bytes = match node {
@@ -82,11 +213,14 @@ where
                         }
                     }
                 },
-                Some(Err(status)) => yield Err(status),
+                Some(Err(status)) => {
+                    yield Err(status);
+                    break;
+                },
                 None => break,
             }
         }
-    })
+    }
 }
 
 pub mod tests {

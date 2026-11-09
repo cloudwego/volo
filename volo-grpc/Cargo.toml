@@ -56,11 +56,13 @@ hyper-util = { workspace = true, features = [
 linkedbytes.workspace = true
 matchit.workspace = true
 paste.workspace = true
+parking_lot.workspace = true
 percent-encoding.workspace = true
 pin-project.workspace = true
+serde_json = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["time", "rt", "net", "sync", "signal"] }
 tokio-stream.workspace = true
-tokio-util = { workspace = true, features = ["codec", "compat"] }
+tokio-util = { workspace = true, features = ["codec", "compat", "rt"] }
 tonic = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 tonic-web = { workspace = true, optional = true }
@@ -79,12 +81,14 @@ tokio-native-tls = { workspace = true, optional = true }
 zstd = { workspace = true, optional = true }
 
 [dev-dependencies]
+tempfile.workspace = true
 tracing-subscriber.workspace = true
 
 [features]
 default = ["gzip", "zlib"]
-gzip = ["compress"]
-zlib = ["compress"]
+thrift = ["dep:serde_json"]
+gzip = ["compress", "flate2/zlib-rs"]
+zlib = ["compress", "flate2/zlib-rs"]
 zstd = ["dep:zstd", "compress"]
 compress = ["dep:flate2"]
 
