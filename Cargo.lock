@@ -670,7 +670,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -758,7 +758,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -1375,7 +1375,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -1574,7 +1574,7 @@ checksum = "3640c1c38b8e4e43584d8df18be5fc6b0aa314ce6ebf51b53313d4306cca8e46"
 dependencies = [
  "hermit-abi",
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2003,7 +2003,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -2272,9 +2272,8 @@ dependencies = [
 
 [[package]]
 name = "pilota"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6b2b4411cfe7a943e5109deeaefe170f16b395e584917fb25c8d95d2b85695a"
+version = "0.13.1"
+source = "git+https://github.com/cloudwego/pilota.git?branch=feat%2Fttheader-streaming-20261105#91bd80e08baf53ca955ff8d3cf2c57e4727c1b53"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2295,9 +2294,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-build"
-version = "0.13.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceebd29ea5f8cb7d9fa72325fbb9a19bc165be2c0103e3bbaac0158880dd6072"
+version = "0.14.0-alpha.1"
+source = "git+https://github.com/cloudwego/pilota.git?branch=feat%2Fttheader-streaming-20261105#91bd80e08baf53ca955ff8d3cf2c57e4727c1b53"
 dependencies = [
  "ahash",
  "anyhow",
@@ -2335,9 +2333,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-thrift-fieldmask"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "345dd826efa7f7697bd33fc1a11569a543b36e6c9d37b7930b7c960ab4d46a3d"
+version = "0.2.1"
+source = "git+https://github.com/cloudwego/pilota.git?branch=feat%2Fttheader-streaming-20261105#91bd80e08baf53ca955ff8d3cf2c57e4727c1b53"
 dependencies = [
  "ahash",
  "ariadne",
@@ -2352,9 +2349,8 @@ dependencies = [
 
 [[package]]
 name = "pilota-thrift-parser"
-version = "0.13.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a446cfb1c72ce1717620d5a0a49430aae965ca1a873922280d39c161b97e8370"
+version = "0.13.8"
+source = "git+https://github.com/cloudwego/pilota.git?branch=feat%2Fttheader-streaming-20261105#91bd80e08baf53ca955ff8d3cf2c57e4727c1b53"
 dependencies = [
  "anyhow",
  "ariadne",
@@ -2367,8 +2363,7 @@ dependencies = [
 [[package]]
 name = "pilota-thrift-reflect"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23783143b2508a130f578f289ed0a0ddf5e4ed3a5b400408e0f866604e2240ae"
+source = "git+https://github.com/cloudwego/pilota.git?branch=feat%2Fttheader-streaming-20261105#91bd80e08baf53ca955ff8d3cf2c57e4727c1b53"
 dependencies = [
  "ahash",
  "bytes",
@@ -2378,6 +2373,7 @@ dependencies = [
  "pilota",
  "pilota-thrift-parser",
  "thiserror 2.0.17",
+ "tracing",
 ]
 
 [[package]]
@@ -2612,7 +2608,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.1",
  "rustls",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -2649,9 +2645,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.5.10",
+ "socket2 0.6.1",
  "tracing",
- "windows-sys 0.52.0",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -3003,7 +2999,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.11.0",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3168,7 +3164,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5b55fb86dfd3a2f5f76ea78310a88f96c4ea21a3031f8d212443d56123fd0521"
 dependencies = [
  "libc",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3530,7 +3526,7 @@ dependencies = [
  "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.3",
- "windows-sys 0.52.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3994,6 +3990,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
+name = "ttstream-codegen"
+version = "0.0.0"
+dependencies = [
+ "metainfo",
+ "pilota",
+ "shmipc",
+ "sonic-rs",
+ "tempfile",
+ "tokio",
+ "volo",
+ "volo-build",
+ "volo-thrift",
+]
+
+[[package]]
 name = "tungstenite"
 version = "0.28.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4198,7 +4209,7 @@ dependencies = [
 
 [[package]]
 name = "volo-build"
-version = "0.12.4"
+version = "0.13.0-alpha.1"
 dependencies = [
  "ahash",
  "anyhow",
@@ -4377,6 +4388,7 @@ dependencies = [
  "bytes",
  "chrono",
  "futures",
+ "hex",
  "itoa",
  "linked-hash-map",
  "linkedbytes",
@@ -4389,6 +4401,7 @@ dependencies = [
  "pin-project",
  "rustc-hash 2.1.1",
  "scopeguard",
+ "serde_json",
  "sonic-rs",
  "thiserror 2.0.17",
  "tokio",
@@ -4559,7 +4572,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.48.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -12,6 +12,7 @@ members = [
   "examples/volo-gen",
   "benchmark",
   "tests/code-generation",
+  "tests/ttstream-codegen",
 ]
 resolver = "3"
 
@@ -25,7 +26,7 @@ rust-version = "1.85.0"
 
 [workspace.dependencies]
 pilota = "0.13"
-pilota-build = "0.13"
+pilota-build = "0.14.0-alpha.1"
 pilota-thrift-parser = "0.13"
 pilota-thrift-reflect = "0.2"
 pilota-thrift-fieldmask = "0.2"
@@ -142,6 +143,15 @@ tungstenite = "0.28"
 tokio-tungstenite = "0.28"
 
 shmipc = "0.3"
+
+[patch.crates-io]
+# The streaming generator is not published yet. Select its companion branch;
+# Cargo.lock records the resolved commit for reproducible workspace builds.
+pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-thrift-reflect = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-thrift-fieldmask = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
 
 [profile.release]
 opt-level = 3

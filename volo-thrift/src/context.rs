@@ -511,6 +511,10 @@ impl Reusable for Config {
 impl ::volo::client::Apply<ClientContext> for CallOpt {
     type Error = crate::ClientError;
 
+    fn rpc_timeout(&self) -> Option<Duration> {
+        self.config.rpc_timeout()
+    }
+
     #[inline]
     fn apply(self, cx: &mut ClientContext) -> Result<(), Self::Error> {
         let caller = cx.rpc_info.caller_mut();

@@ -76,6 +76,11 @@ use crate::{
 pub trait NamedService {
     /// The service name as defined in the Thrift IDL.
     const NAME: &'static str;
+    /// All wire method names, including unary, for TTStream service lookup.
+    const METHODS: &'static [&'static str] = &[];
+    fn streaming_router(&self) -> Option<crate::transport::ttstream::connection::StreamRouter> {
+        None
+    }
 }
 
 type BoxedService = BoxCloneService<ServerContext, Bytes, Bytes, ServerError>;
@@ -103,6 +108,7 @@ type BoxedService = BoxCloneService<ServerContext, Bytes, Bytes, ServerError>;
 ///     .await?;
 /// ```
 pub struct Router {
+    streaming: crate::transport::ttstream::connection::StreamRouter,
     services: AHashMap<FastStr, BoxedService>,
     default_service: Option<BoxedService>,
 }
@@ -118,6 +124,7 @@ impl Clone for Router {
     #[inline]
     fn clone(&self) -> Self {
         Self {
+            streaming: self.streaming.clone(),
             services: self.services.clone(),
             default_service: self.default_service.clone(),
         }
@@ -125,9 +132,31 @@ impl Clone for Router {
 }
 
 impl Router {
+    pub fn streaming_router(&self) -> Option<crate::transport::ttstream::connection::StreamRouter> {
+        self.streaming
+            .has_streaming_methods()
+            .then(|| self.streaming.clone())
+    }
+
+    fn register_streaming_descriptors<S: NamedService>(&mut self, service: &S) {
+        if let Some(router) = service.streaming_router() {
+            self.streaming.merge(router);
+        } else {
+            let mut router = crate::transport::ttstream::connection::StreamRouter::new();
+            router.declare_service(S::NAME);
+            for method in S::METHODS {
+                router
+                    .add_unary_method(S::NAME, *method)
+                    .expect("unique generated method names");
+            }
+            self.streaming.merge(router);
+        }
+    }
+
     /// Creates a new empty router.
     pub fn new() -> Self {
         Self {
+            streaming: Default::default(),
             services: AHashMap::new(),
             default_service: None,
         }
@@ -150,6 +179,8 @@ impl Router {
             + 'static,
     {
         let name = FastStr::from_static_str(S::NAME);
+        self.register_streaming_descriptors(&service);
+        self.streaming.fallback(S::NAME);
         let boxed = BoxCloneService::new(service);
         self.default_service = Some(boxed.clone());
         self.services.insert(name, boxed);
@@ -170,6 +201,7 @@ impl Router {
             + 'static,
     {
         let name = FastStr::from_static_str(S::NAME);
+        self.register_streaming_descriptors(&service);
         self.services.insert(name, BoxCloneService::new(service));
         self
     }

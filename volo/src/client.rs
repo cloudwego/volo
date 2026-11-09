@@ -17,7 +17,25 @@ impl<S, Opt> WithOptService<S, Opt> {
 pub trait Apply<Cx> {
     type Error;
 
+    /// Explicit per-call RPC timeout, without applying a protocol's implicit default.
+    /// Consumers with a distinct call lifetime can use it before consuming the option.
+    fn rpc_timeout(&self) -> Option<std::time::Duration> {
+        None
+    }
+
     fn apply(self, cx: &mut Cx) -> Result<(), Self::Error>;
+}
+
+// Streaming opens consume the same per-call option while using their own
+// transport stack; the unary request wrapper remains source compatible.
+impl<S, Cx, Opt: Apply<Cx>> Apply<Cx> for WithOptService<S, Opt> {
+    type Error = Opt::Error;
+    fn rpc_timeout(&self) -> Option<std::time::Duration> {
+        <Opt as Apply<Cx>>::rpc_timeout(&self.opt)
+    }
+    fn apply(self, cx: &mut Cx) -> Result<(), Self::Error> {
+        self.opt.apply(cx)
+    }
 }
 
 pub trait OneShotService<Cx, Request> {

@@ -187,13 +187,13 @@ where
             return Ok(());
         }
 
-        self.pilota_builder.compile_with_config(
+        self.pilota_builder.try_compile_with_config(
             self.idls
                 .into_iter()
                 .map(IdlService::from_path)
                 .collect_vec(),
             pilota_build::Output::File(out_dir.join(self.filename)),
-        );
+        )?;
         Ok(())
     }
 

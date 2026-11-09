@@ -124,6 +124,10 @@ pub struct DefaultEncoder<E, W> {
 impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncExt + Unpin + Send + Sync + 'static> Encoder
     for DefaultEncoder<E, W>
 {
+    fn into_stream_writer(self) -> Result<Box<dyn super::StreamWrite>, Self> {
+        Ok(Box::new(self.writer))
+    }
+
     #[inline]
     async fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
@@ -228,6 +232,30 @@ pub struct DefaultDecoder<D, R> {
 impl<D: ZeroCopyDecoder, R: AsyncRead + AsyncExt + Unpin + Send + Sync + 'static> Decoder
     for DefaultDecoder<D, R>
 {
+    async fn probe_ttstream(&mut self) -> Result<bool, std::io::Error> {
+        let prefix = self.reader.fill_buf().await?;
+        if prefix.is_empty() {
+            return Ok(false);
+        }
+        // A known mismatch needs no more input. No bytes are consumed here.
+        if prefix.len() >= 6 && prefix[4..6] != [0x10, 0] {
+            return Ok(false);
+        }
+        match self.reader.fill_buf_at_least(8).await {
+            Ok(prefix) => Ok(crate::transport::ttstream::frame::matches_prefix(prefix)),
+            Err(error)
+                if error.kind() == std::io::ErrorKind::InvalidData
+                    || error.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                Ok(false)
+            }
+            Err(error) => Err(error),
+        }
+    }
+    fn into_stream_reader(self) -> Result<Box<dyn super::StreamRead>, Self> {
+        Ok(Box::new(self.reader))
+    }
+
     #[inline]
     async fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
@@ -342,6 +370,10 @@ where
     type Decoder = DefaultDecoder<MkZC::Decoder, R>;
 
     #[inline]
+    fn supports_streaming(&self) -> bool {
+        true
+    }
+
     fn make_codec(&self, reader: R, writer: W) -> (Self::Encoder, Self::Decoder) {
         let (encoder, decoder) = self.make_zero_copy_codec.make_codec();
 
