@@ -100,37 +100,42 @@ where
 /// This function chooses the largest possible time unit that evenly divides the duration
 /// (e.g., 3600 seconds becomes `"1H"`, 60 seconds becomes `"1M"`, 13 milliseconds becomes `"13m"`).
 ///
+/// The gRPC spec allows at most 8 digits for the value. If no unit represents the duration
+/// exactly within 8 digits (e.g., 1.5 seconds would be `"1500000000n"`), the smallest unit that
+/// fits is used and the value is rounded up (1.5 seconds becomes `"1500m"`).
+///
 /// # Parameters
 /// - `duration`: The `Duration` to convert.
 ///
 /// # Returns
 /// A `String` representing the gRPC timeout format.
 fn duration_to_grpc_timeout(duration: Duration) -> String {
-    let secs = duration.as_secs();
-    let nanos = duration.subsec_nanos();
+    const MAX_VALUE: u128 = 99_999_999;
+    const UNITS: [(u128, char); 6] = [
+        (3_600_000_000_000, 'H'),
+        (60_000_000_000, 'M'),
+        (1_000_000_000, 'S'),
+        (1_000_000, 'm'),
+        (1_000, 'u'),
+        (1, 'n'),
+    ];
 
-    if nanos == 0 {
-        if secs % 3600 == 0 {
-            let hrs = secs / 3600;
-            format!("{hrs}H")
-        } else if secs % 60 == 0 {
-            let mins = secs / 60;
-            format!("{mins}M")
-        } else {
-            format!("{secs}S")
+    let nanos = duration.as_nanos();
+
+    for (unit_nanos, unit) in UNITS {
+        if nanos % unit_nanos == 0 && nanos / unit_nanos <= MAX_VALUE {
+            return format!("{}{unit}", nanos / unit_nanos);
         }
-    } else if secs == 0 && nanos % 1_000_000 == 0 {
-        let millis = nanos / 1_000_000;
-        format!("{millis}m")
-    } else if secs == 0 && nanos % 1_000 == 0 {
-        let micros = nanos / 1_000;
-        format!("{micros}u")
-    } else if secs == 0 {
-        format!("{nanos}n")
-    } else {
-        let total_nanos = secs * 1_000_000_000 + nanos as u64;
-        format!("{total_nanos}n")
     }
+
+    for (unit_nanos, unit) in UNITS.into_iter().rev() {
+        let value = nanos.div_ceil(unit_nanos);
+        if value <= MAX_VALUE {
+            return format!("{value}{unit}");
+        }
+    }
+
+    format!("{MAX_VALUE}H")
 }
 
 #[pin_project]
@@ -208,5 +213,18 @@ mod tests {
     fn test_nanoseconds() {
         let converted_duration = duration_to_grpc_timeout(Duration::from_nanos(82));
         assert_eq!("82n", converted_duration);
+    }
+
+    #[test]
+    fn test_at_most_eight_digits() {
+        // 1.5s would be "1500000000n" (10 digits); the spec allows at most 8.
+        let converted_duration = duration_to_grpc_timeout(Duration::from_millis(1500));
+        assert_eq!("1500m", converted_duration);
+
+        let converted_duration = duration_to_grpc_timeout(Duration::from_nanos(2_000_000_001));
+        assert_eq!("2000001u", converted_duration);
+
+        let converted_duration = duration_to_grpc_timeout(Duration::from_secs(100_000_001));
+        assert_eq!("1666667M", converted_duration);
     }
 }
