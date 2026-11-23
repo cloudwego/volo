@@ -8,6 +8,7 @@ use std::{
 };
 
 use anyhow::{Context, bail};
+use itertools::Itertools;
 use mockall_double::double;
 use pilota_build::{Symbol, middle::context::Mode};
 use serde::de::Error;
@@ -96,9 +97,7 @@ pub fn download_files_from_git(task: Task) -> anyhow::Result<()> {
 pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
     let dir = target_dir.as_ref().join(get_git_path(repo.url.as_str())?);
 
-    // check if the repo is already downloaded
-    let lock_path = dir.join(repo.lock.as_str());
-    if dir.exists() && lock_path.exists() {
+    if checkout_cached_revision(&dir, &repo.lock)? {
         return Ok(dir);
     }
 
@@ -110,11 +109,37 @@ pub fn download_repo(repo: &Repo, target_dir: impl AsRef<Path>) -> anyhow::Resul
     );
     download_files_from_git(task).with_context(|| format!("download repo {}", repo.url))?;
 
-    // write lock file
-    File::create(lock_path.clone())
-        .with_context(|| format!("couldn't write to lock file: {:?}", lock_path.display()))?;
-
     Ok(dir)
+}
+
+fn checkout_cached_revision(dir: &Path, revision: &str) -> anyhow::Result<bool> {
+    if !dir.join(".git").exists() {
+        return Ok(false);
+    }
+
+    // A shared checkout can contain several locked commits. Only HEAD is checked out.
+    let output = Command::new("git")
+        .current_dir(dir)
+        .args([
+            "rev-parse",
+            "--revs-only",
+            "HEAD",
+            &format!("{revision}^{{commit}}"),
+            "--",
+        ])
+        .output()?;
+    if !output.status.success() {
+        return Ok(false);
+    }
+    let revisions = std::str::from_utf8(&output.stdout)?;
+    let (head, locked) = revisions
+        .lines()
+        .collect_tuple()
+        .context("expected HEAD and locked commit")?;
+    if head != locked {
+        git_reset(dir, locked)?;
+    }
+    Ok(true)
 }
 
 fn run_command(command: &mut Command) -> anyhow::Result<()> {
@@ -147,15 +172,16 @@ pub fn git_archive(repo: &str, revision: &str, dir: &Path) -> anyhow::Result<()>
             .current_dir(dir),
     )?;
 
+    git_reset(dir, revision)
+}
+
+fn git_reset(dir: &Path, revision: &str) -> anyhow::Result<()> {
+    // Older caches can contain a marker file named after the revision.
     run_command(
         Command::new("git")
-            .arg("reset")
-            .arg("--hard")
-            .arg(revision)
+            .args(["reset", "--hard", revision, "--"])
             .current_dir(dir),
-    )?;
-
-    Ok(())
+    )
 }
 
 pub fn get_git_path(git: &str) -> anyhow::Result<PathBuf> {
