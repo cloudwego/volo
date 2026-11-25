@@ -1,6 +1,11 @@
 //! These codes are copied from `tonic/src/status.rs` and may be modified by us.
 
-use std::{borrow::Cow, error::Error, fmt, sync::Arc};
+use std::{
+    borrow::Cow,
+    error::Error,
+    fmt,
+    sync::{Arc, LazyLock},
+};
 
 use base64::Engine;
 use bytes::Bytes;
@@ -50,7 +55,8 @@ pub struct Status {
     /// Custom metadata, found in the user-defined headers.
     /// If the metadata contains any headers with names reserved either by the gRPC spec
     /// or by `Status` fields above, they will be ignored.
-    metadata: MetadataMap,
+    // Keep metadata-free statuses small without allocating.
+    metadata: Option<Box<MetadataMap>>,
     /// Optional underlying error.
     source: Option<Arc<dyn Error + Send + Sync + 'static>>,
 }
@@ -174,7 +180,7 @@ impl Status {
             code,
             message: message.into(),
             details: Bytes::new(),
-            metadata: MetadataMap::new(),
+            metadata: None,
             source: None,
         }
     }
@@ -428,6 +434,13 @@ impl Status {
 
     /// Extract a `Status` from a hyper `HeaderMap`.
     pub fn from_header_map(header_map: &HeaderMap) -> Option<Self> {
+        let mut status = Self::from_header_map_without_metadata(header_map)?;
+        status.copy_metadata(header_map);
+        Some(status)
+    }
+
+    // Callers decide whether metadata must be copied or can be moved.
+    pub(crate) fn from_header_map_without_metadata(header_map: &HeaderMap) -> Option<Self> {
         header_map.get(GRPC_STATUS_HEADER_CODE).map(|code| {
             // the code from 'grpc-status'
             let code = Code::from_bytes(code.as_ref());
@@ -437,7 +450,7 @@ impl Status {
                 .map(|header| {
                     percent_decode(header.as_bytes())
                         .decode_utf8()
-                        .map(|cow| cow.to_string())
+                        .map(Cow::into_owned)
                 })
                 .unwrap_or_else(|| Ok(String::new()));
 
@@ -452,19 +465,13 @@ impl Status {
                 .map(Bytes::from)
                 .unwrap_or_default();
 
-            // must remove these redundant message from the header map
-            let mut other_headers = header_map.clone();
-            other_headers.remove(GRPC_STATUS_HEADER_CODE);
-            other_headers.remove(GRPC_STATUS_MESSAGE_HEADER);
-            other_headers.remove(GRPC_STATUS_DETAILS_HEADER);
-
             // the only error could happen here is the unicode parse error
             match error_message {
                 Ok(message) => Self {
                     code,
                     message,
                     details,
-                    metadata: MetadataMap::from_headers(other_headers),
+                    metadata: None,
                     source: None,
                 },
                 Err(err) => {
@@ -473,7 +480,7 @@ impl Status {
                         code: Code::Unknown,
                         message: format!("Error deserializing status message header: {err}"),
                         details,
-                        metadata: MetadataMap::from_headers(other_headers),
+                        metadata: None,
                         source: None,
                     }
                 }
@@ -481,17 +488,37 @@ impl Status {
         })
     }
 
+    fn copy_metadata(&mut self, header_map: &HeaderMap) {
+        if header_map.keys().all(|key| {
+            matches!(
+                key.as_str(),
+                GRPC_STATUS_HEADER_CODE | GRPC_STATUS_MESSAGE_HEADER | GRPC_STATUS_DETAILS_HEADER
+            )
+        }) {
+            return;
+        }
+
+        self.set_metadata(header_map.clone());
+    }
+
+    pub(crate) fn set_metadata(&mut self, mut headers: HeaderMap) {
+        headers.remove(GRPC_STATUS_HEADER_CODE);
+        headers.remove(GRPC_STATUS_MESSAGE_HEADER);
+        headers.remove(GRPC_STATUS_DETAILS_HEADER);
+        self.metadata = (!headers.is_empty()).then(|| Box::new(MetadataMap::from_headers(headers)));
+    }
+
     /// Take the `Status` value from `trailers' if it is available, else from 'status_code'.
-    #[allow(clippy::result_large_err)]
     pub fn infer_grpc_status(
         trailers: Option<&HeaderMap>,
         status_code: http::StatusCode,
     ) -> Result<(), Option<Self>> {
         if let Some(trailers) = trailers {
-            if let Some(status) = Self::from_header_map(trailers) {
+            if let Some(mut status) = Self::from_header_map_without_metadata(trailers) {
                 return if status.code() == Code::Ok {
                     Ok(())
                 } else {
+                    status.copy_metadata(trailers);
                     Err(status.into())
                 };
             }
@@ -540,26 +567,29 @@ impl Status {
 
     /// Get a reference to the custom metadata.
     pub fn metadata(&self) -> &MetadataMap {
-        &self.metadata
+        static EMPTY: LazyLock<MetadataMap> = LazyLock::new(MetadataMap::new);
+        self.metadata.as_deref().unwrap_or_else(|| &EMPTY)
     }
 
     /// Get a mutable reference to the custom metadata.
     pub fn metadata_mut(&mut self) -> &mut MetadataMap {
-        &mut self.metadata
+        self.metadata.get_or_insert_with(Default::default)
     }
 
     /// Convert to HeaderMap
-    #[allow(clippy::result_large_err)]
     pub fn to_header_map(&self) -> Result<HeaderMap, Self> {
-        let mut header_map = HeaderMap::with_capacity(3 + self.metadata.len());
+        let mut header_map = HeaderMap::with_capacity(
+            3 + self.metadata.as_ref().map_or(0, |metadata| metadata.len()),
+        );
         self.add_header(&mut header_map)?;
         Ok(header_map)
     }
 
     /// Insert the associated code, message, and binary details field into the `HeaderMap`.
-    #[allow(clippy::result_large_err)]
     pub(crate) fn add_header(&self, header_map: &mut HeaderMap) -> Result<(), Self> {
-        header_map.extend(self.metadata.clone().into_sanitized_headers());
+        if let Some(metadata) = &self.metadata {
+            header_map.extend(metadata.as_ref().clone().into_sanitized_headers());
+        }
 
         // add 'grpc-status'
         header_map.insert(GRPC_STATUS_HEADER_CODE, self.code.to_header_value());
@@ -611,7 +641,7 @@ impl Status {
             code,
             message: message.into(),
             details,
-            metadata,
+            metadata: (metadata.capacity() > 0).then(|| Box::new(metadata)),
             source: None,
         }
     }
@@ -671,8 +701,10 @@ impl fmt::Debug for Status {
             builder.field("details", &self.details);
         }
 
-        if !self.metadata.is_empty() {
-            builder.field("metadata", &self.metadata);
+        if let Some(metadata) = &self.metadata {
+            if !metadata.is_empty() {
+                builder.field("metadata", metadata);
+            }
         }
 
         builder.field("source", &self.source);
@@ -917,6 +949,98 @@ mod tests {
         fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
             Some(&*self.0)
         }
+    }
+
+    #[test]
+    fn metadata() {
+        let mut status = Status::ok("");
+        assert!(status.metadata().is_empty());
+
+        status
+            .metadata_mut()
+            .headers_mut()
+            .append("x-test", HeaderValue::from_static("one"));
+        let mut cloned = status.clone();
+        cloned
+            .metadata_mut()
+            .headers_mut()
+            .append("x-test", HeaderValue::from_static("two"));
+        assert_eq!(status.metadata().len(), 1);
+        assert_eq!(cloned.metadata().len(), 2);
+
+        let metadata = MetadataMap::with_capacity(8);
+        let capacity = metadata.capacity();
+        let status = Status::with_metadata(Code::Ok, "", metadata);
+        assert!(status.metadata().is_empty());
+        assert_eq!(status.metadata().capacity(), capacity);
+    }
+
+    #[test]
+    fn from_header_map() {
+        let mut headers = HeaderMap::new();
+        headers.insert(GRPC_STATUS_HEADER_CODE, HeaderValue::from_static("3"));
+        headers.insert(GRPC_STATUS_MESSAGE_HEADER, HeaderValue::from_static("bad"));
+        headers.insert(GRPC_STATUS_DETAILS_HEADER, HeaderValue::from_static("AQID"));
+        let mut value = HeaderValue::from_static("one");
+        value.set_sensitive(true);
+        headers.append("x-test", value);
+        headers.append("x-test", HeaderValue::from_static("two"));
+        headers.append("x-data-bin", HeaderValue::from_static("AQI"));
+        headers.insert("content-type", HeaderValue::from_static("application/grpc"));
+
+        let status = Status::from_header_map(&headers).expect("status header is present");
+        let metadata = status.metadata().headers();
+        assert_eq!(metadata.len(), 4);
+        assert_eq!(metadata.get_all("x-test"), headers.get_all("x-test"));
+        assert_eq!(metadata["x-data-bin"], headers["x-data-bin"]);
+        assert_eq!(metadata["content-type"], headers["content-type"]);
+
+        let mut owned =
+            Status::from_header_map_without_metadata(&headers).expect("status header is present");
+        owned.set_metadata(headers.clone());
+        assert_eq!(owned.metadata().headers(), metadata);
+        assert!(owned.metadata().headers()["x-test"].is_sensitive());
+
+        let serialized = status.to_header_map().expect("status headers are valid");
+        assert_eq!(
+            owned.to_header_map().expect("status headers are valid"),
+            serialized
+        );
+        headers.remove("content-type");
+        assert_eq!(serialized, headers);
+    }
+
+    #[test]
+    fn infer_grpc_status() {
+        let mut headers = HeaderMap::new();
+        headers.insert(GRPC_STATUS_HEADER_CODE, HeaderValue::from_static("0"));
+        headers.insert(
+            GRPC_STATUS_MESSAGE_HEADER,
+            HeaderValue::from_static("all%20good"),
+        );
+        headers.insert(GRPC_STATUS_DETAILS_HEADER, HeaderValue::from_static("AQID"));
+        headers.append("x-test", HeaderValue::from_static("one"));
+
+        let status =
+            Status::from_header_map_without_metadata(&headers).expect("status header is present");
+        assert_eq!(status.message(), "all good");
+        assert_eq!(status.details(), &[1, 2, 3]);
+        assert!(Status::infer_grpc_status(Some(&headers), http::StatusCode::OK).is_ok());
+        let complete = Status::from_header_map(&headers).expect("status header is present");
+        assert_eq!(complete.metadata().headers()["x-test"], "one");
+
+        headers.insert(GRPC_STATUS_MESSAGE_HEADER, HeaderValue::from_static("%FF"));
+        let error = Status::infer_grpc_status(Some(&headers), http::StatusCode::OK)
+            .expect_err("invalid UTF-8 must not be accepted as success")
+            .expect("malformed status produces an error");
+        assert_eq!(error.code(), Code::Unknown);
+        assert_eq!(error.metadata().headers()["x-test"], "one");
+
+        let mut owned =
+            Status::from_header_map_without_metadata(&headers).expect("status header is present");
+        owned.set_metadata(headers);
+        assert_eq!(owned.code(), error.code());
+        assert_eq!(owned.metadata().headers(), error.metadata().headers());
     }
 
     #[test]
