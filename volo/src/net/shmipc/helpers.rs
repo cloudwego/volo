@@ -22,6 +22,20 @@ impl ShmipcHelper {
         self.inner.is_some()
     }
 
+    /// Whether the stream is in shmipc's fallback mode, i.e. payloads go over the unix socket
+    /// instead of shared memory.
+    ///
+    /// The flag is set by shmipc when a send buffer could not come from shared memory or a
+    /// received message arrived over the socket, and it is only cleared by `Stream::reset()`,
+    /// which runs inside [`reuse`](Self::reuse). Client streams are reused after every call, so
+    /// the flag is per RPC there; server streams are never reused, so once set it stays set for
+    /// the rest of the connection.
+    pub fn fallback_state(&self) -> bool {
+        self.inner
+            .as_ref()
+            .is_some_and(|stream| stream.fallback_state())
+    }
+
     /// Close the current stream.
     ///
     /// NOTE: Server-side [`Stream`] MUST be closed after using it!
