@@ -39,7 +39,6 @@ faststr.workspace = true
 futures-util.workspace = true
 futures.workspace = true
 h2.workspace = true
-hex.workspace = true
 hickory-resolver.workspace = true
 http.workspace = true
 http-body.workspace = true
@@ -49,7 +48,6 @@ hyper-timeout.workspace = true
 hyper-util = { workspace = true, features = [
   "tokio",
   "client",
-  "client-legacy",
   "server",
   "http2",
 ] }

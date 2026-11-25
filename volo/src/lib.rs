@@ -12,6 +12,7 @@ pub mod context;
 pub mod discovery;
 pub mod loadbalance;
 pub mod net;
+pub mod pool;
 pub mod util;
 pub use hack::Unwrap;
 #[cfg(target_family = "unix")]
