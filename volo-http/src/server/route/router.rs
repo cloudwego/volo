@@ -431,14 +431,14 @@ where
         cx: &mut ServerContext,
         req: Request<B>,
     ) -> Result<Self::Response, Self::Error> {
-        if let Ok(matched) = self.matcher.at(req.uri().clone().path()) {
-            if let Some((route, pattern)) = self.routes.get(matched.value) {
-                if !matched.params.is_empty() {
-                    cx.params_mut().extend(matched.params);
-                }
-                MatchedPath::record(cx, pattern);
-                return route.call(cx, req).await;
+        if let Ok(matched) = self.matcher.at(req.uri().clone().path())
+            && let Some((route, pattern)) = self.routes.get(matched.value)
+        {
+            if !matched.params.is_empty() {
+                cx.params_mut().extend(matched.params);
             }
+            MatchedPath::record(cx, pattern);
+            return route.call(cx, req).await;
         }
 
         // No route handles this request. An outer router may already have recorded its prefix

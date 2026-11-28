@@ -1,0 +1,7 @@
+syntax = "proto3";
+option go_package = "github.com/cloudwego/volo/tests/interop/kitexstreaming/kitex_gen/streamx/name_edges/no_package";
+message Value { string text = 1; }
+service GlobalProto {
+    rpc match(Value) returns (Value);
+    rpc Watch(Value) returns (stream Value);
+}

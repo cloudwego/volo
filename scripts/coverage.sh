@@ -37,13 +37,21 @@ main() {
 
   # 2.run tests with coverage, align with scripts/clippy-and-test.sh
   run_nextest volo-thrift
-  run_nextest volo-grpc 'rustls'
+  run_nextest volo-thrift 'ttstream,multiplex'
+  run_nextest volo-grpc 'rustls,thrift'
   run_nextest volo-http 'client,server,http1,query,form,json,tls,cookie,multipart,ws'
   run_nextest volo-http 'client,server,http2,query,form,json,tls,cookie,multipart,ws'
   run_nextest volo-http 'full'
   run_nextest volo 'rustls'
   run_nextest volo-build
   run_nextest volo-cli
+
+  # Exercise generated bindings and the shared server with their transport regressions.
+  run_nextest volo-streamx 'rustls,multiplex'
+  run_nextest volo-streamx-build
+  run_nextest ttstream-codegen
+  run_nextest thrift-grpc-codegen
+  run_nextest streamx-codegen 'rustls,multiplex'
 
   # 3.generate coverage report
   report_all

@@ -1,6 +1,6 @@
-use std::{net::SocketAddr, str::FromStr};
+use std::net::SocketAddr;
 
-use metainfo::{Backward, Forward};
+use metainfo::Backward;
 use volo::{Service, context::Context};
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
     context::ClientContext,
     metadata::{
         DESTINATION_METHOD, DESTINATION_SERVICE, HEADER_TRANS_REMOTE_ADDR, KeyAndValueRef,
-        MetadataKey, SOURCE_SERVICE,
+        SOURCE_SERVICE,
     },
 };
 
@@ -40,25 +40,16 @@ where
         cx: &mut ClientContext,
         mut volo_req: Request<T>,
     ) -> Result<Self::Response, Self::Error> {
+        let logical_method = volo_req
+            .extensions()
+            .get::<crate::message::MethodDescriptor>()
+            .filter(|method| method.payload != crate::message::PayloadShape::ProtobufMessage)
+            .map(|method| method.name);
         let metadata = volo_req.metadata_mut();
-        _ = metainfo::METAINFO.with(|metainfo| {
+        metainfo::METAINFO.with(|metainfo| {
             let metainfo = metainfo.borrow_mut();
 
-            // persistents for multi-hops
-            if let Some(ap) = metainfo.get_all_persistents() {
-                for (key, value) in ap {
-                    let key = metainfo::HTTP_PREFIX_PERSISTENT.to_owned() + key;
-                    metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
-                }
-            }
-
-            // transients for one-hop
-            if let Some(at) = metainfo.get_all_transients() {
-                for (key, value) in at {
-                    let key = metainfo::HTTP_PREFIX_TRANSIENT.to_owned() + key;
-                    metadata.insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
-                }
-            }
+            crate::streaming::metadata::write_forward_fields(&metainfo, metadata.headers_mut())?;
 
             // caller
             metadata.insert(SOURCE_SERVICE, cx.rpc_info.caller().service_name().parse()?);
@@ -68,15 +59,20 @@ where
                 DESTINATION_SERVICE,
                 cx.rpc_info.callee().service_name().parse()?,
             );
-            metadata.insert(DESTINATION_METHOD, cx.rpc_info.method().parse()?);
+            metadata.insert(
+                DESTINATION_METHOD,
+                logical_method
+                    .unwrap_or_else(|| cx.rpc_info.method().as_str())
+                    .parse()?,
+            );
 
             Ok::<(), Status>(())
-        });
+        })?;
 
         let mut volo_resp = self.inner.call(cx, volo_req).await?;
 
         let metadata = volo_resp.metadata_mut();
-        _ = metainfo::METAINFO.with(|metainfo| {
+        metainfo::METAINFO.with(|metainfo| {
             let mut metainfo = metainfo.borrow_mut();
 
             // callee
@@ -95,13 +91,14 @@ where
                 match key_and_value {
                     KeyAndValueRef::Ascii(k, v) => {
                         let k = k.as_str();
-                        let v = v.to_str()?;
                         if k.starts_with(metainfo::HTTP_PREFIX_BACKWARD) {
+                            let v = std::str::from_utf8(v.as_bytes())
+                                .map_err(|_| Status::internal("invalid UTF-8 backward metainfo"))?;
                             vec.push(k.to_owned());
                             metainfo.strip_http_prefix_and_set_backward_downstream(k, v.to_owned());
                         }
                     }
-                    _ => unreachable!(),
+                    KeyAndValueRef::Binary(_, _) => {}
                 }
             }
             for k in vec {
@@ -109,7 +106,7 @@ where
             }
 
             Ok::<(), Status>(())
-        });
+        })?;
 
         Ok(volo_resp)
     }

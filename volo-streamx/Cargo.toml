@@ -1,0 +1,30 @@
+[package]
+name = "volo-streamx"
+version = "0.13.0"
+edition.workspace = true
+homepage.workspace = true
+repository.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version = "1.88.0"
+description = "Shared server bindings for Thrift, TTStream and gRPC."
+
+[dependencies]
+volo = { version = "0.13.0", path = "../volo" }
+volo-thrift = { version = "0.13.0", path = "../volo-thrift", features = ["ttstream"] }
+volo-grpc = { version = "0.13.0", path = "../volo-grpc", features = ["thrift"] }
+pilota.workspace = true
+futures.workspace = true
+http.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "signal", "sync", "time"] }
+tower.workspace = true
+tracing.workspace = true
+
+[features]
+default = []
+unsafe-codec = ["volo-thrift/unsafe-codec", "volo-grpc/unsafe-codec"]
+multiplex = ["volo-thrift/multiplex"]
+shmipc = ["volo-thrift/shmipc"]
+rustls = ["__tls", "volo/rustls", "volo-grpc/rustls"]
+native-tls = ["__tls", "volo/native-tls", "volo-grpc/native-tls"]
+__tls = []

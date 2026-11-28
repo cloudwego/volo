@@ -6,6 +6,10 @@ use pilota::thrift::{
     ProtocolException, TAsyncInputProtocol, TInputProtocol, TLengthProtocol, TMessageIdentifier,
     TOutputProtocol, ThriftException,
 };
+use tokio::io::AsyncRead;
+use volo::util::buf_reader::BufReader;
+
+use crate::{ThriftMessage, codec::default::thrift::Protocol, context::ThriftContext};
 
 pub trait EntryMessage: Sized + Send {
     fn encode<T: TOutputProtocol>(&self, protocol: &mut T) -> Result<(), ThriftException>;
@@ -21,6 +25,30 @@ pub trait EntryMessage: Sized + Send {
     ) -> impl Future<Output = Result<Self, ThriftException>> + Send;
 
     fn size<T: TLengthProtocol>(&self, protocol: &mut T) -> usize;
+
+    /// Context-aware decoding used by a shared, typed service directory.
+    #[doc(hidden)]
+    fn decode_with_context<Cx: ThriftContext>(
+        _bytes: &mut Bytes,
+        _protocol: Protocol,
+        _cx: &mut Cx,
+    ) -> Option<Result<ThriftMessage<Self>, ThriftException>> {
+        None
+    }
+
+    #[doc(hidden)]
+    fn decode_async_with_context<Cx: ThriftContext, R: AsyncRead + Unpin + Send>(
+        _reader: &mut BufReader<R>,
+        _protocol: Protocol,
+        _cx: &mut Cx,
+    ) -> impl Future<Output = Option<Result<ThriftMessage<Self>, ThriftException>>> + Send {
+        async { None }
+    }
+
+    #[doc(hidden)]
+    fn dynamic_encoder(&self) -> Option<&dyn crate::server::routed::MessageEncoder> {
+        None
+    }
 }
 
 impl<Message> EntryMessage for Arc<Message>

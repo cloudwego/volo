@@ -1,0 +1,37 @@
+[package]
+name = "streamx-codegen"
+version = "0.0.0"
+edition.workspace = true
+publish = false
+
+[features]
+multiplex = ["volo-streamx/multiplex"]
+shmipc = ["volo-streamx/shmipc"]
+rustls = ["volo-streamx/rustls", "dep:tokio-rustls", "dep:rustls-pemfile"]
+grpc-web = ["volo-grpc/grpc-web"]
+perf-alloc = []
+
+[dependencies]
+volo = { path = "../../volo" }
+volo-streamx = { path = "../../volo-streamx" }
+volo-grpc = { path = "../../volo-grpc", features = ["thrift"] }
+volo-thrift = { path = "../../volo-thrift", features = ["ttstream"] }
+pilota.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net", "io-util"] }
+futures.workspace = true
+metainfo.workspace = true
+serde_json.workspace = true
+bytes.workspace = true
+http.workspace = true
+h2.workspace = true
+http-body.workspace = true
+tokio-rustls = { workspace = true, optional = true }
+rustls-pemfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+flate2.workspace = true
+tempfile.workspace = true
+
+[build-dependencies]
+volo-build = { path = "../../volo-build" }
+volo-streamx-build = { path = "../../volo-streamx-build" }

@@ -64,14 +64,14 @@ impl std::error::Error for GatewayError {
 }
 
 fn parse_uri(uri: Uri) -> Option<Target> {
-    if let Some(scheme) = uri.scheme() {
-        if scheme != &Scheme::HTTP {
-            tracing::warn!(
-                "[Volo-HTTP] HttpProxy: `{uri}` is not a valid proxy url, only HTTP protocol is \
-                 supported"
-            );
-            return None;
-        }
+    if let Some(scheme) = uri.scheme()
+        && scheme != &Scheme::HTTP
+    {
+        tracing::warn!(
+            "[Volo-HTTP] HttpProxy: `{uri}` is not a valid proxy url, only HTTP protocol is \
+             supported"
+        );
+        return None;
     }
     let target = match Target::from_uri(&uri) {
         Ok(target) => target,
@@ -146,11 +146,11 @@ impl<S> HttpProxyService<S> {
             tracing::info!("[Volo-HTTP] HttpProxy only works for HTTP/1.1");
             return None;
         }
-        if let Some(scheme) = cx.target().scheme() {
-            if scheme != &Scheme::HTTP {
-                tracing::info!("[Volo-HTTP] HttpProxy only supports HTTP protocol");
-                return None;
-            }
+        if let Some(scheme) = cx.target().scheme()
+            && scheme != &Scheme::HTTP
+        {
+            tracing::info!("[Volo-HTTP] HttpProxy only supports HTTP protocol");
+            return None;
         }
 
         // Generate authority from the logical upstream target, then rewrite the HTTP/1.1

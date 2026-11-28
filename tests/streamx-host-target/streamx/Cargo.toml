@@ -1,0 +1,16 @@
+[package]
+name = "boundary-streamx"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+pilota.workspace = true
+volo.workspace = true
+volo-thrift.workspace = true
+volo-grpc.workspace = true
+volo-streamx.workspace = true
+
+[build-dependencies]
+volo-build.workspace = true
+volo-streamx-build.workspace = true

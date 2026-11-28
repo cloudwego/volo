@@ -222,15 +222,14 @@ impl<S> ClientIpService<S> {
             None => return ClientIp(None),
         };
 
-        if let Some(remote_ip) = &remote_ip {
-            if !self
+        if let Some(remote_ip) = &remote_ip
+            && !self
                 .config
                 .trusted_cidrs
                 .iter()
                 .any(|cidr| cidr.contains(remote_ip))
-            {
-                return ClientIp(None);
-            }
+        {
+            return ClientIp(None);
         }
 
         for remote_ip_header in self.config.remote_ip_headers.iter() {
@@ -239,15 +238,14 @@ impl<S> ClientIpService<S> {
                 continue;
             };
             for remote_ip in remote_ips.split(',').map(str::trim) {
-                if let Ok(remote_ip_addr) = IpAddr::from_str(remote_ip) {
-                    if self
+                if let Ok(remote_ip_addr) = IpAddr::from_str(remote_ip)
+                    && self
                         .config
                         .trusted_cidrs
                         .iter()
                         .any(|cidr| cidr.contains(&remote_ip_addr))
-                    {
-                        return ClientIp(Some(remote_ip_addr));
-                    }
+                {
+                    return ClientIp(Some(remote_ip_addr));
                 }
             }
         }

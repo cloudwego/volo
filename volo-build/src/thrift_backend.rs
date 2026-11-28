@@ -9,12 +9,163 @@ use pilota_build::{
     codegen::thrift::DecodeHelper,
     db::RirDatabase,
     rir::{self, Method},
-    tags::RustWrapperArc,
+    tags::{RustWrapperArc, thrift::ThriftStreamingMode},
 };
 use quote::format_ident;
 use volo::FastStr;
 
 use crate::util::{get_base_dir, write_file, write_item};
+
+/// Read the types after Pilota applies Arc/container/representation policy.
+pub(crate) fn lowered_method_ty(
+    cx: &Context,
+    service: DefId,
+    method: &Method,
+    suffix: &str,
+    argument: Option<usize>,
+) -> pilota_build::ty::Ty {
+    let owner = match method.source {
+        rir::MethodSource::Own => service,
+        rir::MethodSource::Extend(id) => id,
+    };
+    let ident = format!(
+        "{}{}{suffix}",
+        cx.rust_name(owner),
+        rust_name(cx, method.def_id)
+    );
+    let item = cx
+        .node(owner)
+        .unwrap()
+        .related_nodes
+        .iter()
+        .find_map(|did| (*cx.rust_name(*did) == ident).then(|| cx.expect_item(*did)))
+        .expect("lowered Thrift Args/Result");
+    match (&*item, argument) {
+        (rir::Item::Message(message), Some(index)) => message.fields[index].ty.clone(),
+        (rir::Item::Enum(result), None) => result
+            .variants
+            .iter()
+            .find(|variant| variant.id == Some(0))
+            .expect("Thrift success variant")
+            .fields[0]
+            .clone(),
+        _ => unreachable!("unexpected Thrift Args/Result shape"),
+    }
+}
+
+pub(crate) fn entry_message(
+    name: &str,
+    methods: &[String],
+    variants: &[String],
+    types: &[String],
+    response: bool,
+) -> String {
+    let fields = variants
+        .iter()
+        .zip(types)
+        .map(|(variant, ty)| format!("{variant}({ty}),"))
+        .join("");
+    let encode = variants
+        .iter()
+        .map(|variant| {
+            format!("Self::{variant}(value)=>::pilota::thrift::Message::encode(value,protocol),")
+        })
+        .join("");
+    let size = variants
+        .iter()
+        .map(|variant| {
+            format!("Self::{variant}(value)=>::pilota::thrift::Message::size(value,protocol),")
+        })
+        .join("");
+    let decode = |asynchronous: bool| {
+        let helper = DecodeHelper::new(asynchronous);
+        let exception = if response {
+            let value = helper
+                .codegen_item_decode("::pilota::thrift::ApplicationException".into())
+                .replace("__protocol", "protocol");
+            format!("if identifier.message_type==::pilota::thrift::TMessageType::Exception {{ return ::std::result::Result::Err(::pilota::thrift::ThriftException::Application({value})); }}")
+        } else {
+            String::new()
+        };
+        let arms = methods
+            .iter()
+            .zip(variants)
+            .zip(types)
+            .map(|((method, variant), ty)| {
+                let value = helper
+                    .codegen_item_decode(ty.clone().into())
+                    .replace("__protocol", "protocol");
+                format!("{method:?}=>::std::result::Result::Ok(Self::{variant}({value})),")
+            })
+            .join("");
+        format!("{exception} match identifier.name.as_str() {{{arms}_=>::std::result::Result::Err(::pilota::thrift::new_application_exception(::pilota::thrift::ApplicationExceptionKind::UNKNOWN_METHOD,\"unknown method\"))}}")
+    };
+    let sync = decode(false);
+    let asynchronous = decode(true);
+    let encode = if variants.is_empty() {
+        "_=>::core::unreachable!(),".into()
+    } else {
+        encode
+    };
+    let size = if variants.is_empty() {
+        "_=>::core::unreachable!(),".into()
+    } else {
+        size
+    };
+    format!(
+        r#"
+        #[derive(Debug)] pub enum {name}{{{fields}}}
+        impl ::volo_thrift::EntryMessage for {name}{{
+            fn encode<P: ::pilota::thrift::TOutputProtocol>(&self,protocol:&mut P)->::std::result::Result<(),::pilota::thrift::ThriftException>{{match self{{{encode}}}}}
+            fn decode<P: ::pilota::thrift::TInputProtocol>(protocol:&mut P,identifier:&::pilota::thrift::TMessageIdentifier)->::std::result::Result<Self,::pilota::thrift::ThriftException>{{{sync}}}
+            async fn decode_async<P: ::pilota::thrift::TAsyncInputProtocol>(protocol:&mut P,identifier:&::pilota::thrift::TMessageIdentifier)->::std::result::Result<Self,::pilota::thrift::ThriftException>{{{asynchronous}}}
+            fn size<P: ::pilota::thrift::TLengthProtocol>(&self,protocol:&mut P)->usize{{match self{{{size}}}}}
+        }}
+    "#
+    )
+}
+
+pub(crate) fn shared_streaming_signature(
+    name: &str,
+    mode: ThriftStreamingMode,
+    req: String,
+    resp: String,
+    global: bool,
+) -> String {
+    let (args, result) = match mode {
+        ThriftStreamingMode::Client => (
+            format!(
+                "cx: ::volo::streaming::StreamContext, input: \
+                 ::volo::streaming::RequestStream<{req}>"
+            ),
+            resp,
+        ),
+        ThriftStreamingMode::Server => (
+            format!(
+                "cx: ::volo::streaming::StreamContext, req: {req}, output: \
+                 ::volo::streaming::ResponseSender<{resp}>"
+            ),
+            "()".to_owned(),
+        ),
+        ThriftStreamingMode::Bidirectional => (
+            format!(
+                "cx: ::volo::streaming::StreamContext, input: \
+                 ::volo::streaming::RequestStream<{req}>, output: \
+                 ::volo::streaming::ResponseSender<{resp}>"
+            ),
+            "()".to_owned(),
+        ),
+        _ => unreachable!("streaming signature requires a streaming method"),
+    };
+    if global {
+        format!("async fn {name}(&self,{args})->::volo::streaming::RpcResult<{result}>{{::std::result::Result::Err(::volo::streaming::RpcError::Configuration(\"handler not implemented\".into()))}}")
+    } else {
+        format!(
+            "fn {name}(&self,{args})->impl \
+             ::std::future::Future<Output=::volo::streaming::RpcResult<{result}>>+::core::marker::Send;"
+        )
+    }
+}
 
 #[derive(Clone)]
 pub struct VoloThriftBackend {
@@ -22,9 +173,52 @@ pub struct VoloThriftBackend {
 }
 
 impl VoloThriftBackend {
+    fn stream_type(&self, method: &Method, request: bool, global: bool) -> String {
+        let ty = if request {
+            &method.args[0].ty
+        } else {
+            &method.ret
+        };
+        let path = self.cx().codegen_item_ty(ty.kind.clone());
+        let mut output = if global {
+            path.global_path("volo_gen").to_string()
+        } else {
+            crate::util::scoped_ty(self.cx(), &path)
+        };
+        let tags = if request {
+            method.args[0].tags_id
+        } else {
+            method.ret.tags_id
+        };
+        if self
+            .cx()
+            .tags(tags)
+            .as_ref()
+            .and_then(|t| t.get::<RustWrapperArc>())
+            .is_some_and(|v| v.0)
+        {
+            output = format!("::std::sync::Arc<{output}>");
+        }
+        output
+    }
+    fn streaming_signature(&self, method: &Method, global: bool) -> Option<String> {
+        let mode = self.cx().thrift_streaming_mode(method.def_id);
+        if !mode.is_streaming() {
+            return None;
+        }
+        let req = self.stream_type(method, true, global);
+        let resp = self.stream_type(method, false, global);
+        let name = self.cx().rust_name(method.def_id);
+        Some(shared_streaming_signature(&name, mode, req, resp, global))
+    }
+
     fn codegen_service_anonymous_type(&self, stream: &mut String, def_id: DefId, base_dir: &Path) {
         let service_name = self.cx().rust_name(def_id);
-        let methods = self.cx().service_methods(def_id);
+        let all_methods = self.cx().service_methods(def_id);
+        let methods = all_methods
+            .iter()
+            .filter(|m| !self.cx().thrift_streaming_mode(m.def_id).is_streaming())
+            .collect::<Vec<_>>();
         let methods_names = methods.iter().map(|m| &**m.name).collect::<Vec<_>>();
         let variant_names = methods
             .iter()
@@ -382,14 +576,9 @@ impl VoloThriftBackend {
     fn method_ty_path(&self, service_name: &Symbol, method: &Method, suffix: &str) -> FastStr {
         match method.source {
             rir::MethodSource::Extend(def_id) => {
-                let item = self.cx().expect_item(def_id);
-                let target_service = match &*item {
-                    rir::Item::Service(s) => s,
-                    _ => panic!("expected service"),
-                };
                 let ident = &*format!(
                     "{}{}{}",
-                    target_service.name,
+                    self.cx().rust_name(def_id),
                     rust_name(self.cx(), method.def_id),
                     suffix,
                 );
@@ -473,14 +662,24 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         all_methods.iter().for_each(|m| {
             let name = self.cx().rust_name(m.def_id);
-            let resp_type = self.cx().codegen_item_ty(m.ret.kind.clone());
-            let req_fields = m.args.iter().map(|a| {
+            let mode=self.cx().thrift_streaming_mode(m.def_id);
+            if mode.is_streaming(){
+                let req=self.stream_type(m,true,false);let resp=self.stream_type(m,false,false);let method=&*m.name;
+                let stream_mode = match mode { ThriftStreamingMode::Client => "Client", ThriftStreamingMode::Server => "Server", _ => "Bidirectional" };
+                let(args,result,body)=match mode{
+                    ThriftStreamingMode::Client=>(String::new(),format!("::volo_thrift::streaming::ClientStreaming<{req},{resp}>"),"::std::result::Result::Ok(stream.into_client())".to_string()),
+                    ThriftStreamingMode::Server=>(format!(", req: {req}"),format!("::volo_thrift::streaming::ServerStreaming<{resp}>"),format!("let (mut tx,rx)=stream.into_bidi::<{req},{resp}>().into_split();tx.send(&req).await?;tx.close_send().await?;::std::result::Result::Ok(rx)")),
+                    _=>(String::new(),format!("::volo_thrift::streaming::BidiStreaming<{req},{resp}>"),"::std::result::Result::Ok(stream.into_bidi())".to_string()),
+                };
+                client_methods.push(format!("pub async fn {name}(&self{args})->::std::result::Result<{result},::volo_thrift::streaming::StreamError>{{let stream=self.0.open_stream_with_mode(\"{idl_service_name}\",\"{method}\",::volo_thrift::streaming::StreamMode::{stream_mode}).await?;{body}}}"));
+                oneshot_client_methods.push(format!("pub async fn {name}(self{args})->::std::result::Result<{result},::volo_thrift::streaming::StreamError> where S: ::volo::client::Apply<::volo_thrift::context::ClientContext,Error=::volo_thrift::ClientError>{{let stream=self.0.open_stream_with_callopt(\"{idl_service_name}\",\"{method}\",::volo_thrift::streaming::StreamMode::{stream_mode}).await?;{body}}}"));
+                return;
+            }
+            let resp_type = crate::util::scoped_ty(self.cx(), &self.cx().codegen_item_ty(lowered_method_ty(self.cx(), def_id, m, "ResultRecv", None).kind));
+            let req_fields = m.args.iter().enumerate().map(|(index, a)| {
                 let name = self.cx().rust_name(a.def_id); // use the rust name as string format which will escape the keyword
-                let ty = self.cx().codegen_item_ty(a.ty.kind.clone());
-                let mut ty = format!("{ty}");
-                if let Some(RustWrapperArc(true)) = self.cx().tags(a.tags_id).as_ref().and_then(|tags| tags.get::<RustWrapperArc>()) {
-                    ty = format!("::std::sync::Arc<{ty}>");
-                }
+                let ty = self.cx().codegen_item_ty(lowered_method_ty(self.cx(), def_id, m, "ArgsSend", Some(index)).kind);
+                let mut ty = crate::util::scoped_ty(self.cx(), &ty);
                 if a.kind == rir::FieldKind::Optional{
                     ty = format!("::std::option::Option<{ty}>")
                 };
@@ -516,10 +715,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 }
             }).join("");
 
-            let mut resp_type_str = format!("{resp_type}");
-            if let Some(RustWrapperArc(true)) = self.cx().tags(m.ret.tags_id).as_ref().and_then(|tags| tags.get::<RustWrapperArc>()) {
-                resp_type_str = format!("::std::sync::Arc<{resp_type_str}>");
-            }
+            let mut resp_type_str = resp_type;
             let mut resp_str = "::std::result::Result::Ok(resp)";
             if !convert_exceptions.is_empty() {
                 resp_type_str = format!("::volo_thrift::MaybeException<{resp_type_str}, {exception}>");
@@ -576,11 +772,12 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         let variants = all_methods
             .iter()
+            .filter(|m| !self.cx().thrift_streaming_mode(m.def_id).is_streaming())
             .map(|m| rust_name(self.cx(), m.def_id))
             .collect_vec();
 
         let user_handler = all_methods
-            .iter()
+            .iter().filter(|m| !self.cx().thrift_streaming_mode(m.def_id).is_streaming())
             .map(|m| {
                 let name = self.cx().rust_name(m.def_id);
                 let args = m
@@ -642,10 +839,113 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         let mut mod_rs_stream = String::new();
 
+        let all_method_names = all_methods
+            .iter()
+            .map(|method| format!("{:?}", method.name.to_string()))
+            .join(",");
+        let streaming = self.cx().has_thrift_streaming_methods(def_id);
+        let registrations = if streaming {
+            let mut registrations = all_methods
+                .iter()
+                .filter(|method| {
+                    !self
+                        .cx()
+                        .thrift_streaming_mode(method.def_id)
+                        .is_streaming()
+                })
+                .map(|method| {
+                    format!(
+                        "router.add_unary_method({:?},{:?}).expect(\"generated unary \
+                         descriptor\");",
+                        idl_service_name.to_string(),
+                        method.name.to_string()
+                    )
+                })
+                .join("");
+            for method in all_methods
+                .iter()
+                .filter(|m| self.cx().thrift_streaming_mode(m.def_id).is_streaming())
+            {
+                let name = self.cx().rust_name(method.def_id);
+                let wire = &*method.name;
+                let stream_mode = match self.cx().thrift_streaming_mode(method.def_id) {
+                    ThriftStreamingMode::Client => "Client",
+                    ThriftStreamingMode::Server => "Server",
+                    _ => "Bidirectional",
+                };
+                let req = self.stream_type(method, true, false);
+                let resp = self.stream_type(method, false, false);
+                let body = match self.cx().thrift_streaming_mode(method.def_id) {
+                    ThriftStreamingMode::Client => format!(
+                        "let(input,mut output)=stream.into_shared::<{req},{resp}>();let \
+                         response=inner.{name}(cx.clone(),input).await?;output.send(&response).\
+                         await?;::volo::streaming::RpcResult::Ok(())"
+                    ),
+                    ThriftStreamingMode::Server => format!(
+                        "let(mut input,output)=stream.into_shared::<{req},{resp}>();let \
+                         req=input.recv().await?.\
+                         ok_or_else(||::volo::streaming::RpcError::Application{{kind: \
+                         ::pilota::thrift::ApplicationExceptionKind::INTERNAL_ERROR.as_i32(),\
+                         message:\"EOF\".into()}})?;drop(input);inner.{name}(cx.clone(),req,\
+                         output).await"
+                    ),
+                    _ => format!(
+                        "let(input,output)=stream.into_shared::<{req},{resp}>();inner.{name}(cx.\
+                         clone(),input,output).await"
+                    ),
+                };
+                registrations.push_str(&format!(
+                    "{{let inner=self.inner.clone();router.add_mode(\"{idl_service_name}\",\"\
+                     {wire}\",::volo_thrift::streaming::StreamMode::{stream_mode},move|cx,\
+                     stream|{{let inner=inner.clone();async move{{let \
+                     cx=cx.shared_context();cx.scope(async{{{body}}}).await.\
+                     map_err(::volo_thrift::streaming::StreamError::from)}}}}).expect(\"generated \
+                     streaming registration\");}}"
+                ));
+            }
+            registrations
+        } else {
+            String::new()
+        };
+        let handler_type = if streaming {
+            "::std::sync::Arc<S>"
+        } else {
+            "S"
+        };
+        let handler_init = if streaming {
+            "::std::sync::Arc::new(handler)"
+        } else {
+            "handler"
+        };
+        let clone_impl = if streaming {
+            format!(
+                "impl<S> ::std::clone::Clone for {server_name}<S> {{ fn clone(&self)->Self {{ \
+                 Self {{ inner:self.inner.clone() }} }} }}"
+            )
+        } else {
+            "#[derive(Clone)]".into()
+        };
+        let named_bounds = if streaming {
+            format!(": {service_name} + ::core::marker::Send + ::core::marker::Sync + 'static")
+        } else {
+            String::new()
+        };
+        let streaming_router = if streaming {
+            format!("fn streaming_router(&self)->::std::option::Option<::volo_thrift::transport::ttstream::connection::StreamRouter> {{ let mut router=::volo_thrift::transport::ttstream::connection::StreamRouter::new(); {registrations} ::std::option::Option::Some(router) }}")
+        } else {
+            String::new()
+        };
+        let server_init = if streaming {
+            "let service = Self::from_handler(inner); let router = \
+             ::volo_thrift::server::NamedService::streaming_router(&service).expect(\"streaming \
+             service\"); ::volo_thrift::server::Server::new(service).streaming_router(router)"
+        } else {
+            "::volo_thrift::server::Server::new(Self { inner })"
+        };
         let server_string = format!(
-            r#"#[derive(Clone)]
+            r#"{clone_impl}
             pub struct {server_name}<S> {{
-                inner: S, // handler
+                inner: {handler_type},
             }}
 
             impl<S> {server_name}<S> {{
@@ -655,7 +955,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 ///
                 /// [`Router`]: volo_thrift::server::Router
                 pub fn from_handler(handler: S) -> Self {{
-                    Self {{ inner: handler }}
+                    Self {{ inner: {handler_init} }}
                 }}
             }}
 
@@ -669,13 +969,11 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 /// [`from_handler`]: Self::from_handler
                 /// [`Router`]: volo_thrift::server::Router
                 pub fn new(inner: S) -> ::volo_thrift::server::Server<Self, ::volo::layer::Identity, {req_recv_name}, ::volo_thrift::codec::default::DefaultMakeCodec<::volo_thrift::codec::default::ttheader::MakeTTHeaderCodec<::volo_thrift::codec::default::framed::MakeFramedCodec<::volo_thrift::codec::default::thrift::MakeThriftCodec>>>, ::volo_thrift::tracing::DefaultProvider> {{
-                    ::volo_thrift::server::Server::new(Self {{
-                        inner,
-                    }})
+                    {server_init}
                 }}
             }}
 
-            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, {req_recv_name}> for {server_name}<T> where T: {service_name} + Send + Sync + 'static {{
+            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, {req_recv_name}> for {server_name}<T> where T: {service_name} + ::core::marker::Send + ::core::marker::Sync + 'static {{
                 type Response = {res_send_name};
                 type Error = ::volo_thrift::ServerError;
 
@@ -686,11 +984,13 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 }}
             }}
 
-            impl<S> ::volo_thrift::server::NamedService for {server_name}<S> {{
+            impl<S{named_bounds}> ::volo_thrift::server::NamedService for {server_name}<S> {{
+                {streaming_router}
                 const NAME: &'static str = "{idl_service_name}";
+                const METHODS: &'static [&'static str] = &[{all_method_names}];
             }}
 
-            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, ::volo_thrift::Bytes> for {server_name}<T> where T: {service_name} + Send + Sync + 'static {{
+            impl<T> ::volo::service::Service<::volo_thrift::context::ServerContext, ::volo_thrift::Bytes> for {server_name}<T> where T: {service_name} + ::core::marker::Send + ::core::marker::Sync + 'static {{
                 type Response = ::volo_thrift::Bytes;
                 type Error = ::volo_thrift::ServerError;
 
@@ -708,10 +1008,11 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     let use_compact = cx.extensions().contains::<::volo_thrift::ProtocolApacheCompact>();
 
                     let mut payload = payload;
-                    let req = ::volo_thrift::codec::default::multiservice::decode_entry::<{req_recv_name}>(
+                    let req = ::volo_thrift::codec::default::multiservice::decode_entry_with_config::<{req_recv_name}>(
                         &mut payload,
                         &msg_ident,
                         use_compact,
+                        cx.rpc_info.config().unsafe_codec(),
                     )?;
 
                     // Call the typed service
@@ -719,12 +1020,17 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
                     // Encode the response using the same protocol
                     ::std::result::Result::Ok(
-                        ::volo_thrift::codec::default::multiservice::encode_entry(&resp, use_compact)?,
+                        ::volo_thrift::codec::default::multiservice::encode_entry_with_config(&resp, use_compact, cx.rpc_info.config().unsafe_codec())?,
                     )
                 }}
             }}"#
         );
 
+        let streaming_builder = if self.cx().has_thrift_streaming_methods(def_id) {
+            ".streaming_protocol(::volo_thrift::streaming::StreamingProtocol::TtHeader)"
+        } else {
+            ""
+        };
         let client_string = format!(
             r#" pub struct {mk_client_name};
 
@@ -742,7 +1048,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
             pub struct {oneshot_client_name}<S>(pub ::volo_thrift::Client<S>);
 
-            impl<S: ::volo::service::Service<::volo_thrift::context::ClientContext, {req_send_name}, Response = ::std::option::Option<{res_recv_name}>, Error = ::volo_thrift::ClientError> + Send + Sync + 'static> {generic_client_name}<S> {{
+            impl<S: ::volo::service::Service<::volo_thrift::context::ClientContext, {req_send_name}, Response = ::std::option::Option<{res_recv_name}>, Error = ::volo_thrift::ClientError> + ::core::marker::Send + ::core::marker::Sync + 'static> {generic_client_name}<S> {{
                 pub fn with_callopt<Opt: ::volo::client::Apply<::volo_thrift::context::ClientContext>>(self, opt: Opt) -> {oneshot_client_name}<::volo::client::WithOptService<S, Opt>> {{
                     {oneshot_client_name}(self.0.with_opt(opt))
                 }}
@@ -750,7 +1056,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                 {client_methods}
             }}
 
-            impl<S: ::volo::client::OneShotService<::volo_thrift::context::ClientContext, {req_send_name}, Response = ::std::option::Option<{res_recv_name}>, Error = ::volo_thrift::ClientError> + Send + Sync + 'static> {oneshot_client_name}<S> {{
+            impl<S: ::volo::client::OneShotService<::volo_thrift::context::ClientContext, {req_send_name}, Response = ::std::option::Option<{res_recv_name}>, Error = ::volo_thrift::ClientError> + ::core::marker::Send + ::core::marker::Sync + 'static> {oneshot_client_name}<S> {{
                 {oneshot_client_methods}
             }}
 
@@ -769,7 +1075,7 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
                     ::volo::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<()>, ::volo::discovery::DummyDiscover>,
                 >
                 {{
-                    ::volo_thrift::client::ClientBuilder::new(service_name, {mk_client_name})
+                    ::volo_thrift::client::ClientBuilder::new(service_name, {mk_client_name}){streaming_builder}
                 }}
             }}"#
         );
@@ -811,34 +1117,25 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
         }
     }
 
-    fn codegen_service_method(&self, _service_def_id: DefId, method: &Method) -> String {
-        let name = self.cx().rust_name(method.def_id);
-        let ret_ty = self.inner.codegen_item_ty(method.ret.kind.clone());
-        let mut ret_ty = format!("{ret_ty}");
-        if let Some(RustWrapperArc(true)) = self
-            .cx()
-            .tags(method.ret.tags_id)
-            .as_ref()
-            .and_then(|tags| tags.get::<RustWrapperArc>())
-        {
-            ret_ty = format!("::std::sync::Arc<{ret_ty}>");
+    fn codegen_service_method(&self, service_def_id: DefId, method: &Method) -> String {
+        if let Some(signature) = self.streaming_signature(method, false) {
+            return signature;
         }
+        let name = self.cx().rust_name(method.def_id);
+        let ret_ty = self.inner.codegen_item_ty(
+            lowered_method_ty(self.cx(), service_def_id, method, "ResultSend", None).kind,
+        );
+        let mut ret_ty = format!("{ret_ty}");
         let args = method
             .args
             .iter()
-            .map(|a| {
-                let ty = self.inner.codegen_item_ty(a.ty.kind.clone());
-                let ident = self.cx().rust_name(a.def_id); // use the rust name as string format which will escape the keyword
-                let ty = if let Some(RustWrapperArc(true)) = self
-                    .cx()
-                    .tags(a.tags_id)
-                    .as_ref()
-                    .and_then(|tags| tags.get::<RustWrapperArc>())
-                {
-                    format!("::std::sync::Arc<{ty}>")
-                } else {
-                    ty.to_string()
-                };
+            .enumerate()
+            .map(|(index, a)| {
+                let ty = self.inner.codegen_item_ty(
+                    lowered_method_ty(self.cx(), service_def_id, method, "ArgsRecv", Some(index))
+                        .kind,
+                );
+                let ident = self.cx().rust_name(a.def_id);
                 let ty = if a.kind == rir::FieldKind::Optional {
                     format!("::std::option::Option<{ty}>")
                 } else {
@@ -855,48 +1152,51 @@ impl pilota_build::CodegenBackend for VoloThriftBackend {
 
         format!(
             "fn {name}(&self, {args}) -> impl ::std::future::Future<Output = \
-             ::core::result::Result<{ret_ty}, ::volo_thrift::ServerError>> + Send;"
+             ::core::result::Result<{ret_ty}, ::volo_thrift::ServerError>> + ::core::marker::Send;"
         )
     }
 
     fn codegen_service_method_with_global_path(
         &self,
-        _service_def_id: DefId,
+        service_def_id: DefId,
         method: &Method,
     ) -> String {
+        if let Some(signature) = self.streaming_signature(method, true) {
+            return signature;
+        }
         let name = self.cx().rust_name(method.def_id);
         let mut ret_ty = self
             .inner
-            .codegen_item_ty(method.ret.kind.clone())
+            .codegen_item_ty(
+                lowered_method_ty(self.cx(), service_def_id, method, "ResultSend", None).kind,
+            )
             .global_path("volo_gen")
             .to_string();
-        if let Some(RustWrapperArc(true)) = self
-            .cx()
-            .tags(method.ret.tags_id)
-            .as_ref()
-            .and_then(|tags| tags.get::<RustWrapperArc>())
-        {
-            ret_ty = format!("::std::sync::Arc<{ret_ty}>");
-        }
         let args = method
             .args
             .iter()
-            .map(|a| {
+            .enumerate()
+            .map(|(index, a)| {
                 let ty = self
                     .inner
-                    .codegen_item_ty(a.ty.kind.clone())
-                    .global_path("volo_gen");
-                let ty = if let Some(RustWrapperArc(true)) = self
-                    .cx()
-                    .tags(a.tags_id)
-                    .as_ref()
-                    .and_then(|tags| tags.get::<RustWrapperArc>())
-                {
-                    format!("::std::sync::Arc<{ty}>")
+                    .codegen_item_ty(
+                        lowered_method_ty(
+                            self.cx(),
+                            service_def_id,
+                            method,
+                            "ArgsRecv",
+                            Some(index),
+                        )
+                        .kind,
+                    )
+                    .global_path("volo_gen")
+                    .to_string();
+                let ty = if a.kind == rir::FieldKind::Optional {
+                    format!("::std::option::Option<{ty}>")
                 } else {
-                    ty.to_string()
+                    ty
                 };
-                let ident = self.cx().rust_name(a.def_id).0.field_ident(); // use the _{rust-style fieldname} without keyword escaping
+                let ident = self.cx().rust_name(a.def_id).0.field_ident();
                 format!("_{ident}: {ty}")
             })
             .join(",");
@@ -961,6 +1261,22 @@ pub struct MkThriftBackend;
 impl pilota_build::MakeBackend for MkThriftBackend {
     type Target = VoloThriftBackend;
 
+    fn validate(&self, cx: &Context) -> anyhow::Result<()> {
+        crate::util::validate_service_names(cx, rust_name)?;
+        if crate::model::resolve_thrift_grpc_configs(
+            cx.source.services.iter().map(|service| &service.config),
+            false,
+        )?
+        .is_some()
+        {
+            anyhow::bail!(
+                "rpc_transport: grpc requires Builder::thrift_grpc(); the thrift builder uses \
+                 TTHeader"
+            );
+        }
+        Ok(())
+    }
+
     fn make_backend(self, context: Context) -> Self::Target {
         VoloThriftBackend {
             inner: ThriftBackend::new(context),
@@ -1017,6 +1333,35 @@ mod tests {
             }
         }
         panic!("no service found in parsed thrift");
+    }
+
+    #[test]
+    fn method_variant_collisions_are_reported_before_emitting_rust() {
+        let (cx, _dir) =
+            build_test_context("service Collision { void foo_1(); void foo1(); }", false);
+        let error =
+            crate::util::validate_service_names(&cx, crate::util::camel_case_variant).unwrap_err();
+        assert!(error.to_string().contains("Foo1"));
+    }
+
+    #[test]
+    fn native_thrift_preserves_pilotas_disambiguated_variant_names() {
+        let (cx, _dir) =
+            build_test_context("service Collision { void Test(); void test(); }", false);
+        crate::util::validate_service_names(&cx, rust_name).unwrap();
+        assert!(crate::util::validate_service_names(&cx, crate::util::camel_case_variant).is_err());
+    }
+
+    #[test]
+    fn unary_envelopes_work_without_a_current_codegen_item() {
+        let (cx, _dir) = build_test_context(
+            "namespace rs sample service Echo { i32 f(1: i32 value) }",
+            false,
+        );
+        let (service, _) = find_first_service(&cx);
+        let envelopes = crate::streamx::unary_envelopes(&cx, service).unwrap();
+        assert_eq!(envelopes.methods.len(), 1);
+        assert!(envelopes.methods[0].result.ends_with("EchoFResultSend"));
     }
 
     #[test]

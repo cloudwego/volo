@@ -338,6 +338,36 @@ impl TlsConnector {
 }
 
 impl TlsAcceptor {
+    /// Checks advertised protocols when the backend exposes its configuration.
+    /// The connection owner also validates the negotiated ALPN for every session.
+    #[doc(hidden)]
+    pub fn validate_streamx(&self) -> io::Result<()> {
+        self.validate_alpn(&[b"h2"])
+    }
+
+    /// Reject advertised ALPN protocols unsupported by the accepting server.
+    pub fn validate_alpn(&self, allowed: &[&[u8]]) -> io::Result<()> {
+        let _ = allowed;
+        let incompatible = match self {
+            #[cfg(feature = "rustls")]
+            Self::Rustls(acceptor) => acceptor
+                .0
+                .config()
+                .alpn_protocols
+                .iter()
+                .any(|protocol| !allowed.contains(&protocol.as_slice())),
+            #[cfg(feature = "native-tls")]
+            Self::NativeTls(_) => false,
+        };
+        if incompatible {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "TLS advertises a protocol disabled by the accepting server",
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn accept(&self, tcp_stream: TcpStream) -> io::Result<ConnStream> {
         match self {
             #[cfg(feature = "rustls")]

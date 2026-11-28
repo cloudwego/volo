@@ -79,6 +79,21 @@ pub enum Protocol {
 pub struct ProtocolBinary;
 pub struct ProtocolApacheCompact;
 
+/// Effective bound supplied by the outer codec, including any smaller message limit.
+#[doc(hidden)]
+pub struct MessageReadLimit(pub usize);
+
+impl MessageReadLimit {
+    pub(crate) fn restrict<Cx: ThriftContext>(cx: &mut Cx, limit: i32) {
+        let limit = usize::try_from(limit).unwrap_or(0);
+        let limit = cx
+            .extensions()
+            .get::<Self>()
+            .map_or(limit, |old| old.0.min(limit));
+        cx.extensions_mut().insert(Self(limit));
+    }
+}
+
 /// 1-byte protocol id
 /// <https://github.com/apache/thrift/blob/master/doc/specs/thrift-rpc.md#compatibility>
 pub const HEADER_DETECT_LENGTH: usize = 1;
@@ -122,23 +137,36 @@ impl ZeroCopyDecoder for ThriftCodec {
         // detect protocol
         // TODO: support using protocol from TTHeader
         let protocol = detect(bytes)?;
+        if let Some(message) = Msg::decode_with_context(bytes, protocol, cx) {
+            match protocol {
+                Protocol::Binary => {
+                    cx.extensions_mut().insert(ProtocolBinary);
+                }
+                Protocol::ApacheCompact => {
+                    cx.extensions_mut().insert(ProtocolApacheCompact);
+                }
+                Protocol::FBThriftCompact => {}
+            }
+            return message.map(Some);
+        }
         // TODO: do we need to check the response protocol at client side?
         match protocol {
             Protocol::Binary => {
                 #[cfg(feature = "unsafe-codec")]
-                let mut p = unsafe {
-                    pilota::thrift::binary_unsafe::TBinaryUnsafeInputProtocol::new(bytes)
-                };
-                #[cfg(not(feature = "unsafe-codec"))]
-                let mut p = TBinaryProtocol::new(bytes, true);
-                let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
-                #[cfg(feature = "unsafe-codec")]
-                {
+                if cx.rpc_info().config().unsafe_codec() {
                     use bytes::Buf;
                     use pilota::thrift::TInputProtocol;
+                    let mut p = unsafe {
+                        pilota::thrift::binary_unsafe::TBinaryUnsafeInputProtocol::new(bytes)
+                    };
+                    let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
                     let index = p.index();
                     p.buf().advance(index);
+                    cx.extensions_mut().insert(ProtocolBinary);
+                    return Ok(Some(msg));
                 }
+                let mut p = TBinaryProtocol::new(bytes, true);
+                let msg = ThriftMessage::<Msg>::decode(&mut p, cx)?;
                 cx.extensions_mut().insert(ProtocolBinary);
                 Ok(Some(msg))
             }
@@ -180,6 +208,20 @@ impl ZeroCopyDecoder for ThriftCodec {
         let protocol = detect(buf).inspect_err(|_| {
             cx.stats_mut().record_read_end_at();
         })?;
+        cx.set_unframed();
+        if let Some(message) = Msg::decode_async_with_context(reader, protocol, cx).await {
+            match protocol {
+                Protocol::Binary => {
+                    cx.extensions_mut().insert(ProtocolBinary);
+                }
+                Protocol::ApacheCompact => {
+                    cx.extensions_mut().insert(ProtocolApacheCompact);
+                }
+                Protocol::FBThriftCompact => {}
+            }
+            cx.stats_mut().record_read_end_at();
+            return message.map(Some);
+        }
         // TODO: do we need to check the response protocol at client side?
         let res = match protocol {
             Protocol::Binary => {
@@ -237,37 +279,47 @@ impl ZeroCopyEncoder for ThriftCodec {
         } else if cx.extensions().contains::<ProtocolApacheCompact>() {
             protocol = Protocol::ApacheCompact;
         }
+        if let Ok(body) = &msg.data {
+            if let Some(encoder) = body.dynamic_encoder() {
+                return encoder.encode_with_config(
+                    &msg.identifier(),
+                    protocol,
+                    linked_bytes,
+                    cx.rpc_info().config().unsafe_codec(),
+                );
+            }
+        }
         match protocol {
             Protocol::Binary => {
                 #[cfg(feature = "unsafe-codec")]
-                let buf = unsafe {
-                    let l = linked_bytes.bytes_mut().len();
-                    std::slice::from_raw_parts_mut(
-                        linked_bytes.bytes_mut().as_mut_ptr().add(l),
-                        linked_bytes.bytes_mut().capacity() - l,
-                    )
-                };
-                #[cfg(feature = "unsafe-codec")]
-                let mut p = unsafe {
-                    pilota::thrift::binary_unsafe::TBinaryUnsafeOutputProtocol::new(
-                        linked_bytes,
-                        buf,
-                        true,
-                    )
-                };
-                #[cfg(not(feature = "unsafe-codec"))]
-                let mut p = TBinaryProtocol::new(linked_bytes, true);
-                msg.encode(&mut p)?;
-                #[cfg(feature = "unsafe-codec")]
-                {
-                    use bytes::BufMut;
-                    use pilota::thrift::TOutputProtocol;
-                    let index = p.index();
-                    unsafe {
-                        p.buf_mut().bytes_mut().advance_mut(index);
+                if cx.rpc_info().config().unsafe_codec() {
+                    let buf = unsafe {
+                        let l = linked_bytes.bytes_mut().len();
+                        std::slice::from_raw_parts_mut(
+                            linked_bytes.bytes_mut().as_mut_ptr().add(l),
+                            linked_bytes.bytes_mut().capacity() - l,
+                        )
+                    };
+                    let mut p = unsafe {
+                        pilota::thrift::binary_unsafe::TBinaryUnsafeOutputProtocol::new(
+                            linked_bytes,
+                            buf,
+                            true,
+                        )
+                    };
+                    msg.encode(&mut p)?;
+                    {
+                        use bytes::BufMut;
+                        use pilota::thrift::TOutputProtocol;
+                        let index = p.index();
+                        unsafe {
+                            p.buf_mut().bytes_mut().advance_mut(index);
+                        }
                     }
+                    return Ok(());
                 }
-                Ok(())
+                let mut p = TBinaryProtocol::new(linked_bytes, true);
+                msg.encode(&mut p)
             }
             Protocol::ApacheCompact => {
                 let mut p = TCompactOutputProtocol::new(linked_bytes, true);
@@ -294,6 +346,11 @@ impl ZeroCopyEncoder for ThriftCodec {
             protocol = Protocol::Binary;
         } else if cx.extensions().contains::<ProtocolApacheCompact>() {
             protocol = Protocol::ApacheCompact;
+        }
+        if let Ok(body) = &msg.data {
+            if let Some(encoder) = body.dynamic_encoder() {
+                return encoder.size(&msg.identifier(), protocol);
+            }
         }
         match protocol {
             Protocol::Binary => {

@@ -13,7 +13,7 @@ use faststr::FastStr;
 use hickory_resolver::{
     Resolver, TokioResolver,
     config::{LookupIpStrategy, ResolverConfig, ResolverOpts},
-    name_server::TokioConnectionProvider,
+    net::runtime::TokioRuntimeProvider,
 };
 use volo::{
     context::Endpoint,
@@ -53,9 +53,10 @@ impl DnsResolver {
     ///
     /// For using system config, you can create a new instance by `DnsResolver::default()`.
     pub fn new(config: ResolverConfig, options: ResolverOpts) -> Self {
-        let mut builder = Resolver::builder_with_config(config, TokioConnectionProvider::default());
-        builder.options_mut().clone_from(&options);
-        let resolver = builder.build();
+        let resolver = Resolver::builder_with_config(config, TokioRuntimeProvider::default())
+            .with_options(options)
+            .build()
+            .expect("[Volo-HTTP] DnsResolver: failed to build DNS resolver");
         Self { resolver }
     }
 
@@ -75,7 +76,7 @@ impl Default for DnsResolver {
             .name_servers()
             .first()
             .expect("[Volo-HTTP] DnsResolver: no nameserver found")
-            .socket_addr
+            .ip
             .is_ipv6()
         {
             // The default `LookupIpStrategy` is always `Ipv4thenIpv6`, it may not work in an IPv6

@@ -267,20 +267,20 @@ impl Target {
 
     /// Return the remote [`IpAddr`] if the [`Target`] is an IP address.
     pub fn remote_ip(&self) -> Option<&IpAddr> {
-        if let Self::Remote(rt) = &self {
-            if let RemoteHost::Ip(ip) = &rt.host {
-                return Some(ip);
-            }
+        if let Self::Remote(rt) = &self
+            && let RemoteHost::Ip(ip) = &rt.host
+        {
+            return Some(ip);
         }
         None
     }
 
     /// Return the remote host name if the [`Target`] is a host name.
     pub fn remote_host(&self) -> Option<&FastStr> {
-        if let Self::Remote(rt) = &self {
-            if let RemoteHost::Name(name) = &rt.host {
-                return Some(name);
-            }
+        if let Self::Remote(rt) = &self
+            && let RemoteHost::Name(name) = &rt.host
+        {
+            return Some(name);
         }
         None
     }

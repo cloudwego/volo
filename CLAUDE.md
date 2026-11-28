@@ -8,7 +8,7 @@ For detailed per-crate documentation, see the CLAUDE.md in each sub-crate direct
 
 - Rust Edition: 2024
 - MSRV: 1.85.0
-- Current Version: 0.12.x
+- Current Version: 0.13.0
 
 ## Workspace Structure
 

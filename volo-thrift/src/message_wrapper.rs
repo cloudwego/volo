@@ -52,6 +52,29 @@ impl EntryMessage for DummyMessage {
 }
 
 impl<M> ThriftMessage<M> {
+    #[doc(hidden)]
+    pub fn from_identifier(
+        ident: TMessageIdentifier,
+        data: Result<M, ApplicationException>,
+    ) -> Self {
+        Self {
+            data,
+            meta: MessageMeta {
+                msg_type: ident.message_type,
+                method: ident.name,
+                seq_id: ident.sequence_number,
+            },
+        }
+    }
+
+    pub(crate) fn identifier(&self) -> TMessageIdentifier {
+        TMessageIdentifier::new(
+            self.meta.method.clone(),
+            self.meta.msg_type,
+            self.meta.seq_id,
+        )
+    }
+
     #[inline]
     pub fn mk_client_msg(cx: &ClientContext, msg: M) -> Self {
         let meta = MessageMeta {

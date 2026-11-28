@@ -3,7 +3,7 @@
 //!
 //! The generated code must not construct the unsafe protocols itself: whether the
 //! unchecked binary codec is used is decided here by volo-thrift's own
-//! `unsafe-codec` feature, which is off by default.
+//! `unsafe-codec` feature and the per-instance runtime setting.
 
 use bytes::Bytes;
 use linkedbytes::LinkedBytes;
@@ -20,35 +20,40 @@ pub fn decode_entry<Msg: EntryMessage>(
     msg_ident: &TMessageIdentifier,
     use_compact: bool,
 ) -> Result<Msg, ThriftException> {
+    decode_entry_with_config(payload, msg_ident, use_compact, false)
+}
+
+pub fn decode_entry_with_config<Msg: EntryMessage>(
+    payload: &mut Bytes,
+    msg_ident: &TMessageIdentifier,
+    use_compact: bool,
+    _unsafe_codec: bool,
+) -> Result<Msg, ThriftException> {
     if use_compact {
         let mut protocol = TCompactInputProtocol::new(payload);
         return Msg::decode(&mut protocol, msg_ident);
     }
-    decode_binary(payload, msg_ident)
-}
-
-#[cfg(not(feature = "unsafe-codec"))]
-fn decode_binary<Msg: EntryMessage>(
-    payload: &mut Bytes,
-    msg_ident: &TMessageIdentifier,
-) -> Result<Msg, ThriftException> {
+    #[cfg(feature = "unsafe-codec")]
+    if _unsafe_codec {
+        let mut protocol =
+            unsafe { pilota::thrift::binary_unsafe::TBinaryUnsafeInputProtocol::new(payload) };
+        return Msg::decode(&mut protocol, msg_ident);
+    }
     let mut protocol = TBinaryProtocol::new(payload, true);
-    Msg::decode(&mut protocol, msg_ident)
-}
-
-#[cfg(feature = "unsafe-codec")]
-fn decode_binary<Msg: EntryMessage>(
-    payload: &mut Bytes,
-    msg_ident: &TMessageIdentifier,
-) -> Result<Msg, ThriftException> {
-    let mut protocol =
-        unsafe { pilota::thrift::binary_unsafe::TBinaryUnsafeInputProtocol::new(payload) };
     Msg::decode(&mut protocol, msg_ident)
 }
 
 pub fn encode_entry<Msg: EntryMessage>(
     msg: &Msg,
     use_compact: bool,
+) -> Result<Bytes, ThriftException> {
+    encode_entry_with_config(msg, use_compact, false)
+}
+
+pub fn encode_entry_with_config<Msg: EntryMessage>(
+    msg: &Msg,
+    use_compact: bool,
+    unsafe_codec: bool,
 ) -> Result<Bytes, ThriftException> {
     let mut linked_bytes = LinkedBytes::new();
     if use_compact {
@@ -58,16 +63,20 @@ pub fn encode_entry<Msg: EntryMessage>(
         let mut protocol = TCompactOutputProtocol::new(&mut linked_bytes, true);
         Msg::encode(msg, &mut protocol)?;
     } else {
-        encode_binary(msg, &mut linked_bytes)?;
+        encode_binary(msg, &mut linked_bytes, unsafe_codec)?;
     }
     Ok(linked_bytes.into_bytes_mut().freeze())
 }
 
-#[cfg(not(feature = "unsafe-codec"))]
 fn encode_binary<Msg: EntryMessage>(
     msg: &Msg,
     linked_bytes: &mut LinkedBytes,
+    _unsafe_codec: bool,
 ) -> Result<(), ThriftException> {
+    #[cfg(feature = "unsafe-codec")]
+    if _unsafe_codec {
+        return encode_binary_optimized(msg, linked_bytes);
+    }
     let mut size_protocol = TBinaryProtocol::new((), true);
     let real_size = Msg::size(msg, &mut size_protocol);
     linked_bytes.reserve(real_size - size_protocol.zero_copy_len());
@@ -76,7 +85,7 @@ fn encode_binary<Msg: EntryMessage>(
 }
 
 #[cfg(feature = "unsafe-codec")]
-fn encode_binary<Msg: EntryMessage>(
+fn encode_binary_optimized<Msg: EntryMessage>(
     msg: &Msg,
     linked_bytes: &mut LinkedBytes,
 ) -> Result<(), ThriftException> {

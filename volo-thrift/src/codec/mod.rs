@@ -2,6 +2,7 @@ use std::future::Future;
 
 use pilota::thrift::ThriftException;
 use tokio::io::{AsyncRead, AsyncWrite};
+use volo::util::buf_reader::BufReader;
 
 use crate::{EntryMessage, ThriftMessage, context::ThriftContext};
 
@@ -14,7 +15,23 @@ pub use default::DefaultMakeCodec;
 /// Returning an Ok(None) indicates the EOF has been reached.
 ///
 /// Note: [`Decoder`] should be designed to be ready for reuse.
+/// Owned TTStream input; boxing moves the existing BufReader without wrapping its inner R.
+pub trait StreamRead: AsyncRead + Unpin + Send + Sync + 'static {}
+impl<T: AsyncRead + Unpin + Send + Sync + 'static> StreamRead for T {}
+pub trait StreamWrite: AsyncWrite + Unpin + Send + Sync + 'static {}
+impl<T: AsyncWrite + Unpin + Send + Sync + 'static> StreamWrite for T {}
+
 pub trait Decoder: Send + Sync + 'static {
+    fn probe_ttstream(&mut self) -> impl Future<Output = Result<bool, std::io::Error>> + Send {
+        async { Ok(false) }
+    }
+    fn into_stream_reader(self) -> Result<Box<dyn StreamRead>, Self>
+    where
+        Self: Sized,
+    {
+        Err(self)
+    }
+
     fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -34,6 +51,13 @@ pub trait Decoder: Send + Sync + 'static {
 ///
 /// Note: [`Encoder`] should be designed to be ready for reuse.
 pub trait Encoder: Send + Sync + 'static {
+    fn into_stream_writer(self) -> Result<Box<dyn StreamWrite>, Self>
+    where
+        Self: Sized,
+    {
+        Err(self)
+    }
+
     fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
         cx: &mut Cx,
@@ -67,6 +91,29 @@ where
 {
     type Encoder: Encoder;
     type Decoder: Decoder;
+
+    fn supports_streaming(&self) -> bool {
+        false
+    }
+
+    /// Whether this factory can take ownership of a reader with buffered probe bytes.
+    /// Mixed-protocol servers validate this before creating a listener.
+    fn supports_buffered(&self) -> bool {
+        false
+    }
+
+    /// Creates the codec without discarding or wrapping an existing read buffer.
+    /// Explicit single-protocol servers continue to use [`Self::make_codec`].
+    fn make_codec_from_buffered(
+        &self,
+        _reader: BufReader<R>,
+        _writer: W,
+    ) -> Result<(Self::Encoder, Self::Decoder), std::io::Error> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "codec does not support a prebuffered connection",
+        ))
+    }
 
     fn make_codec(&self, reader: R, writer: W) -> (Self::Encoder, Self::Decoder);
 }

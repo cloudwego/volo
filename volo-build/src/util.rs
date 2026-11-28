@@ -16,6 +16,61 @@ use volo::FastStr;
 
 use crate::model::{GitSource, Idl, IdlProtocol, Repo, Service, SingleConfig, Source};
 
+pub(crate) fn scoped_ty(cx: &pilota_build::Context, ty: &pilota_build::ty::CodegenTy) -> String {
+    ty.qualified_path(&|did| {
+        let path = cx.cur_related_item_path(did);
+        if path.starts_with("::") || path.starts_with("super::") || path.starts_with("self::") {
+            path
+        } else {
+            format!("self::{path}").into()
+        }
+    })
+    .to_string()
+}
+
+pub(crate) fn camel_case_variant(cx: &pilota_build::Context, id: pilota_build::DefId) -> FastStr {
+    use pilota_build::IdentName;
+    cx.rust_name(id).0.upper_camel_ident()
+}
+
+pub(crate) fn validate_service_names(
+    cx: &pilota_build::Context,
+    variant: impl Fn(&pilota_build::Context, pilota_build::DefId) -> FastStr,
+) -> anyhow::Result<()> {
+    use pilota_build::{
+        db::RirDatabase,
+        rir::{Item, NodeKind},
+    };
+    for (id, node) in cx.nodes().iter() {
+        if !matches!(&node.kind, NodeKind::Item(item) if matches!(&**item, Item::Service(_))) {
+            continue;
+        }
+        validate_method_variants(cx, *id, &variant)?;
+    }
+    Ok(())
+}
+
+pub(crate) fn validate_method_variants(
+    cx: &pilota_build::Context,
+    service: pilota_build::DefId,
+    variant: impl Fn(&pilota_build::Context, pilota_build::DefId) -> FastStr,
+) -> anyhow::Result<()> {
+    use pilota_build::db::RirDatabase;
+
+    let mut variants = HashMap::new();
+    for method in cx.service_methods(service).iter() {
+        let variant = variant(cx, method.def_id);
+        if let Some(previous) = variants.insert(variant.clone(), method.name.to_string()) {
+            bail!(
+                "service {}: methods {previous} and {} generate the same Rust variant {variant}",
+                cx.rust_name(service),
+                method.name
+            );
+        }
+    }
+    Ok(())
+}
+
 pub static DEFAULT_DIR: LazyLock<PathBuf> = LazyLock::new(|| {
     std::path::Path::new(
         &std::env::var("OUT_DIR")

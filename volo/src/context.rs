@@ -1,7 +1,9 @@
 use std::fmt::Debug;
 
+mod metainfo_scope;
 pub use metainfo::MetaInfo;
 use metainfo::{FastStrMap, TypeMap};
+pub use metainfo_scope::MetaInfoScope;
 
 use super::net::Address;
 use crate::FastStr;

@@ -1,0 +1,672 @@
+{
+  "cases": [
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "1",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=0 ftype=1 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 0
+      },
+      "hex": "000000321000000200000000000a10000100010006637573746f6d0006e4b8ade69687100002001b0001310009000442696469000000",
+      "name": "frame-1-sid-0",
+      "spec": {
+        "sid": 0,
+        "kind": 1,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "2",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=0 ftype=2 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 0
+      },
+      "hex": "0000003e1000000200000000000d10000100020006637573746f6d0006e4b8ade69687000369736e0007496e7465726f70100002001b000132000900044269646900",
+      "name": "frame-2-sid-0",
+      "spec": {
+        "sid": 0,
+        "kind": 2,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "3",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=0 ftype=3 fmethod=Bidi]",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400",
+        "protocol_id": 16,
+        "sid": 0
+      },
+      "hex": "000000341000000200000000000510001000020009000442696469001b00013300000800020000002a0b0001000000077061796c6f616400",
+      "name": "frame-3-sid-0",
+      "spec": {
+        "sid": 0,
+        "kind": 3,
+        "method": "Bidi",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400"
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "4",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=0 ftype=4 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 0
+      },
+      "hex": "000000321000000200000000000a10000100010006637573746f6d0006e4b8ade69687100002001b0001340009000442696469000000",
+      "name": "frame-4-sid-0",
+      "spec": {
+        "sid": 0,
+        "kind": 4,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "5",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=0 ftype=5 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 0
+      },
+      "hex": "000000321000000200000000000a10000100010006637573746f6d0006e4b8ade69687100002001b0001350009000442696469000000",
+      "name": "frame-5-sid-0",
+      "spec": {
+        "sid": 0,
+        "kind": 5,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "1",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=1 ftype=1 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 1
+      },
+      "hex": "000000321000000200000001000a10000100010006637573746f6d0006e4b8ade69687100002001b0001310009000442696469000000",
+      "name": "frame-1-sid-1",
+      "spec": {
+        "sid": 1,
+        "kind": 1,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "2",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=1 ftype=2 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 1
+      },
+      "hex": "0000003e1000000200000001000d10000100020006637573746f6d0006e4b8ade69687000369736e0007496e7465726f70100002001b000132000900044269646900",
+      "name": "frame-2-sid-1",
+      "spec": {
+        "sid": 1,
+        "kind": 2,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "3",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=1 ftype=3 fmethod=Bidi]",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400",
+        "protocol_id": 16,
+        "sid": 1
+      },
+      "hex": "00000034100000020000000100051000100002001b000133000900044269646900000800020000002a0b0001000000077061796c6f616400",
+      "name": "frame-3-sid-1",
+      "spec": {
+        "sid": 1,
+        "kind": 3,
+        "method": "Bidi",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400"
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "4",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=1 ftype=4 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 1
+      },
+      "hex": "000000321000000200000001000a10000100010006637573746f6d0006e4b8ade69687100002001b0001340009000442696469000000",
+      "name": "frame-4-sid-1",
+      "spec": {
+        "sid": 1,
+        "kind": 4,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "5",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=1 ftype=5 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 1
+      },
+      "hex": "000000321000000200000001000a10000100010006637573746f6d0006e4b8ade69687100002001b0001350009000442696469000000",
+      "name": "frame-5-sid-1",
+      "spec": {
+        "sid": 1,
+        "kind": 5,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "1",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-1 ftype=1 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": -1
+      },
+      "hex": "0000003210000002ffffffff000a10000100010006637573746f6d0006e4b8ade69687100002001b0001310009000442696469000000",
+      "name": "frame-1-sid--1",
+      "spec": {
+        "sid": -1,
+        "kind": 1,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "2",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-1 ftype=2 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": -1
+      },
+      "hex": "0000003e10000002ffffffff000d10000100020006637573746f6d0006e4b8ade69687000369736e0007496e7465726f70100002001b000132000900044269646900",
+      "name": "frame-2-sid--1",
+      "spec": {
+        "sid": -1,
+        "kind": 2,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "3",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-1 ftype=3 fmethod=Bidi]",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400",
+        "protocol_id": 16,
+        "sid": -1
+      },
+      "hex": "0000003410000002ffffffff00051000100002001b000133000900044269646900000800020000002a0b0001000000077061796c6f616400",
+      "name": "frame-3-sid--1",
+      "spec": {
+        "sid": -1,
+        "kind": 3,
+        "method": "Bidi",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400"
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "4",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-1 ftype=4 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": -1
+      },
+      "hex": "0000003210000002ffffffff000a10000100010006637573746f6d0006e4b8ade69687100002001b0001340009000442696469000000",
+      "name": "frame-4-sid--1",
+      "spec": {
+        "sid": -1,
+        "kind": 4,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "5",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-1 ftype=5 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": -1
+      },
+      "hex": "0000003210000002ffffffff000a10000100010006637573746f6d0006e4b8ade69687100002001b0001350009000442696469000000",
+      "name": "frame-5-sid--1",
+      "spec": {
+        "sid": -1,
+        "kind": 5,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "1",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-2147483648 ftype=1 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": -2147483648
+      },
+      "hex": "000000321000000280000000000a10000100010006637573746f6d0006e4b8ade69687100002001b0001310009000442696469000000",
+      "name": "frame-1-sid--2147483648",
+      "spec": {
+        "sid": -2147483648,
+        "kind": 1,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "2",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-2147483648 ftype=2 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": -2147483648
+      },
+      "hex": "0000003e1000000280000000000d10000100020006637573746f6d0006e4b8ade69687000369736e0007496e7465726f70100002001b000132000900044269646900",
+      "name": "frame-2-sid--2147483648",
+      "spec": {
+        "sid": -2147483648,
+        "kind": 2,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "3",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-2147483648 ftype=3 fmethod=Bidi]",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400",
+        "protocol_id": 16,
+        "sid": -2147483648
+      },
+      "hex": "000000341000000280000000000510001000020009000442696469001b00013300000800020000002a0b0001000000077061796c6f616400",
+      "name": "frame-3-sid--2147483648",
+      "spec": {
+        "sid": -2147483648,
+        "kind": 3,
+        "method": "Bidi",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400"
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "4",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-2147483648 ftype=4 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": -2147483648
+      },
+      "hex": "000000321000000280000000000a10000100010006637573746f6d0006e4b8ade69687100002001b0001340009000442696469000000",
+      "name": "frame-4-sid--2147483648",
+      "spec": {
+        "sid": -2147483648,
+        "kind": 4,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "5",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=-2147483648 ftype=5 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": -2147483648
+      },
+      "hex": "000000321000000280000000000a10000100010006637573746f6d0006e4b8ade69687100002001b0001350009000442696469000000",
+      "name": "frame-5-sid--2147483648",
+      "spec": {
+        "sid": -2147483648,
+        "kind": 5,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "1",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=2147483647 ftype=1 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 2147483647
+      },
+      "hex": "00000032100000027fffffff000a10000100010006637573746f6d0006e4b8ade69687100002001b0001310009000442696469000000",
+      "name": "frame-1-sid-2147483647",
+      "spec": {
+        "sid": 2147483647,
+        "kind": 1,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "2",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=2147483647 ftype=2 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 2147483647
+      },
+      "hex": "0000003e100000027fffffff000d10000100020006637573746f6d0006e4b8ade69687000369736e0007496e7465726f70100002001b000132000900044269646900",
+      "name": "frame-2-sid-2147483647",
+      "spec": {
+        "sid": 2147483647,
+        "kind": 2,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文",
+          "isn": "Interop"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "3",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=2147483647 ftype=3 fmethod=Bidi]",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400",
+        "protocol_id": 16,
+        "sid": 2147483647
+      },
+      "hex": "00000034100000027fffffff000510001000020009000442696469001b00013300000800020000002a0b0001000000077061796c6f616400",
+      "name": "frame-3-sid-2147483647",
+      "spec": {
+        "sid": 2147483647,
+        "kind": 3,
+        "method": "Bidi",
+        "metadata": null,
+        "payload_hex": "0800020000002a0b0001000000077061796c6f616400"
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "4",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=2147483647 ftype=4 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 2147483647
+      },
+      "hex": "00000032100000027fffffff000a10000100010006637573746f6d0006e4b8ade69687100002001b0001340009000442696469000000",
+      "name": "frame-4-sid-2147483647",
+      "spec": {
+        "sid": 2147483647,
+        "kind": 4,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    },
+    {
+      "go_decode": {
+        "flags": 2,
+        "int_metadata": {
+          "27": "5",
+          "9": "Bidi"
+        },
+        "kitex_frame": "[sid=2147483647 ftype=5 fmethod=Bidi]",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": "",
+        "protocol_id": 16,
+        "sid": 2147483647
+      },
+      "hex": "00000032100000027fffffff000a10000100010006637573746f6d0006e4b8ade69687100002001b0001350009000442696469000000",
+      "name": "frame-5-sid-2147483647",
+      "spec": {
+        "sid": 2147483647,
+        "kind": 5,
+        "method": "Bidi",
+        "metadata": {
+          "custom": "中文"
+        },
+        "payload_hex": ""
+      }
+    }
+  ],
+  "kitex_module": "v0.16.4",
+  "schemaVersion": 1,
+  "suite": "frames"
+}

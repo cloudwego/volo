@@ -50,9 +50,98 @@ pub struct Status {
     /// Custom metadata, found in the user-defined headers.
     /// If the metadata contains any headers with names reserved either by the gRPC spec
     /// or by `Status` fields above, they will be ignored.
-    metadata: MetadataMap,
+    metadata: Option<Box<MetadataMap>>,
     /// Optional underlying error.
     source: Option<Arc<dyn Error + Send + Sync + 'static>>,
+    wire_code: Option<Bytes>,
+}
+
+impl From<Status> for volo::streaming::RpcError {
+    fn from(status: Status) -> Self {
+        let metadata = status
+            .metadata
+            .as_deref()
+            .map(crate::streaming::shared::metadata_to_shared)
+            .unwrap_or_default();
+        Self::GrpcStatus(Box::new(volo::streaming::GrpcStatus {
+            code: status.code.into(),
+            message: status.message,
+            details: status.details,
+            metadata,
+            raw_code: status.wire_code,
+            source: status.source,
+        }))
+    }
+}
+
+impl From<volo::streaming::RpcError> for Status {
+    fn from(error: volo::streaming::RpcError) -> Self {
+        use volo::streaming::{CancelCause, RpcError};
+
+        match error {
+            RpcError::GrpcStatus(status) => {
+                let metadata = match crate::streaming::shared::metadata_from_shared(status.metadata)
+                {
+                    Ok(metadata) => metadata,
+                    Err(error) => return error,
+                };
+                Self {
+                    code: Code::from_i32(status.code),
+                    message: status.message,
+                    details: status.details,
+                    metadata: boxed_metadata(metadata),
+                    source: status.source,
+                    wire_code: status.raw_code,
+                }
+            }
+            RpcError::Biz {
+                code,
+                message,
+                extra,
+            } => {
+                if code == 0 {
+                    return Self::invalid_argument("business error code must be nonzero");
+                }
+                let mut status = Self::internal(message);
+                status.metadata_mut().insert(
+                    "biz-status",
+                    code.to_string().parse().expect("integer is ASCII"),
+                );
+                if !extra.is_empty() {
+                    // JSON permits DEL unescaped, whereas HTTP field values do not.
+                    let json = serde_json::to_string(&extra)
+                        .expect("string map serializes to JSON")
+                        .replace('\u{7f}', "\\u007f");
+                    status.metadata_mut().insert(
+                        "biz-extra",
+                        crate::metadata::MetadataValue::try_from_bytes(json.as_bytes())
+                            .expect("JSON with escaped DEL is a valid HTTP field value"),
+                    );
+                }
+                status
+            }
+            error => {
+                let mut status = match &error {
+                    RpcError::Canceled {
+                        cause: CancelCause::Deadline,
+                        message,
+                        ..
+                    } => Self::deadline_exceeded(message.clone()),
+                    RpcError::Canceled { message, .. } => Self::cancelled(message.clone()),
+                    RpcError::ResourceExhausted { .. } => {
+                        Self::resource_exhausted(error.to_string())
+                    }
+                    RpcError::ServerDraining | RpcError::Transport { .. } => {
+                        Self::unavailable(error.to_string())
+                    }
+                    RpcError::RecvTimeout => Self::deadline_exceeded(error.to_string()),
+                    _ => Self::internal(error.to_string()),
+                };
+                status.source = Some(Arc::new(error));
+                status
+            }
+        }
+    }
 }
 
 /// gRPC status codes used by `Status`.
@@ -174,9 +263,17 @@ impl Status {
             code,
             message: message.into(),
             details: Bytes::new(),
-            metadata: MetadataMap::new(),
+            metadata: None,
             source: None,
+            wire_code: None,
         }
+    }
+
+    /// Original peer grpc-status bytes (at most 64 bytes), before unknown codes
+    /// are normalized. Absent on local errors. This is diagnostic state and is
+    /// never serialized as an extra header or replayed as a nonstandard code.
+    pub fn raw_grpc_code(&self) -> Option<&[u8]> {
+        self.wire_code.as_deref()
     }
 
     /// Not an error, returned on success.
@@ -428,9 +525,9 @@ impl Status {
 
     /// Extract a `Status` from a hyper `HeaderMap`.
     pub fn from_header_map(header_map: &HeaderMap) -> Option<Self> {
-        header_map.get(GRPC_STATUS_HEADER_CODE).map(|code| {
+        header_map.get(GRPC_STATUS_HEADER_CODE).map(|code_header| {
             // the code from 'grpc-status'
-            let code = Code::from_bytes(code.as_ref());
+            let code = Code::from_bytes(code_header.as_ref());
             // the message from 'grpc-message'
             let error_message = header_map
                 .get(GRPC_STATUS_MESSAGE_HEADER)
@@ -441,22 +538,35 @@ impl Status {
                 })
                 .unwrap_or_else(|| Ok(String::new()));
 
-            // the detail message from 'grpc-status-details-bin'
-            let details = header_map
-                .get(GRPC_STATUS_DETAILS_HEADER)
-                .map(|h| {
-                    BASE64_ENGINE
-                        .decode(h.as_bytes())
-                        .expect("Invalid status header, expected base64 encoded value")
-                })
-                .map(Bytes::from)
-                .unwrap_or_default();
-
             // must remove these redundant message from the header map
             let mut other_headers = header_map.clone();
             other_headers.remove(GRPC_STATUS_HEADER_CODE);
             other_headers.remove(GRPC_STATUS_MESSAGE_HEADER);
             other_headers.remove(GRPC_STATUS_DETAILS_HEADER);
+
+            let details = match header_map.get(GRPC_STATUS_DETAILS_HEADER) {
+                Some(value) => match BASE64_ENGINE.decode(value.as_bytes()) {
+                    Ok(details) => Bytes::from(details),
+                    Err(err) => {
+                        // Peer input must never panic, including an otherwise successful status.
+                        // Bound diagnostics and retain unrelated metadata without reflecting the
+                        // potentially large or sensitive details value into an error message.
+                        let raw_code = code_header.as_bytes();
+                        return Self {
+                            code: Code::Internal,
+                            message: format!(
+                                "invalid grpc-status-details-bin (grpc-status={:?}): {err}",
+                                &raw_code[..raw_code.len().min(64)]
+                            ),
+                            details: Bytes::new(),
+                            metadata: boxed_metadata(MetadataMap::from_headers(other_headers)),
+                            source: Some(Arc::new(err)),
+                            wire_code: Some(peer_code(raw_code)),
+                        };
+                    }
+                },
+                None => Bytes::new(),
+            };
 
             // the only error could happen here is the unicode parse error
             match error_message {
@@ -464,8 +574,9 @@ impl Status {
                     code,
                     message,
                     details,
-                    metadata: MetadataMap::from_headers(other_headers),
+                    metadata: boxed_metadata(MetadataMap::from_headers(other_headers)),
                     source: None,
+                    wire_code: Some(peer_code(code_header.as_bytes())),
                 },
                 Err(err) => {
                     warn!("[VOLO] Error deserializing status message header: {}", err);
@@ -473,8 +584,9 @@ impl Status {
                         code: Code::Unknown,
                         message: format!("Error deserializing status message header: {err}"),
                         details,
-                        metadata: MetadataMap::from_headers(other_headers),
+                        metadata: boxed_metadata(MetadataMap::from_headers(other_headers)),
                         source: None,
+                        wire_code: Some(peer_code(code_header.as_bytes())),
                     }
                 }
             }
@@ -487,14 +599,14 @@ impl Status {
         trailers: Option<&HeaderMap>,
         status_code: http::StatusCode,
     ) -> Result<(), Option<Self>> {
-        if let Some(trailers) = trailers {
-            if let Some(status) = Self::from_header_map(trailers) {
-                return if status.code() == Code::Ok {
-                    Ok(())
-                } else {
-                    Err(status.into())
-                };
-            }
+        if let Some(trailers) = trailers
+            && let Some(status) = Self::from_header_map(trailers)
+        {
+            return if status.code() == Code::Ok {
+                Ok(())
+            } else {
+                Err(status.into())
+            };
         }
         trace!("[VOLO] trailers missing grpc-status");
         let code = match status_code {
@@ -540,18 +652,32 @@ impl Status {
 
     /// Get a reference to the custom metadata.
     pub fn metadata(&self) -> &MetadataMap {
-        &self.metadata
+        static EMPTY: std::sync::LazyLock<MetadataMap> = std::sync::LazyLock::new(MetadataMap::new);
+        self.metadata.as_deref().unwrap_or(&EMPTY)
     }
 
     /// Get a mutable reference to the custom metadata.
     pub fn metadata_mut(&mut self) -> &mut MetadataMap {
-        &mut self.metadata
+        self.metadata.get_or_insert_with(Box::default)
+    }
+
+    // Trailer parsing cannot reconstruct a local error source. Keep it only
+    // while the committed status still describes the same error; body layers
+    // may have replaced its code, message or details.
+    pub(crate) fn retain_source(&mut self, original: &Self) {
+        if self.source.is_none()
+            && self.code == original.code
+            && self.message == original.message
+            && self.details == original.details
+        {
+            self.source.clone_from(&original.source);
+        }
     }
 
     /// Convert to HeaderMap
     #[allow(clippy::result_large_err)]
     pub fn to_header_map(&self) -> Result<HeaderMap, Self> {
-        let mut header_map = HeaderMap::with_capacity(3 + self.metadata.len());
+        let mut header_map = HeaderMap::with_capacity(3 + self.metadata().len());
         self.add_header(&mut header_map)?;
         Ok(header_map)
     }
@@ -559,7 +685,7 @@ impl Status {
     /// Insert the associated code, message, and binary details field into the `HeaderMap`.
     #[allow(clippy::result_large_err)]
     pub(crate) fn add_header(&self, header_map: &mut HeaderMap) -> Result<(), Self> {
-        header_map.extend(self.metadata.clone().into_sanitized_headers());
+        header_map.extend(self.metadata().clone().into_sanitized_headers());
 
         // add 'grpc-status'
         header_map.insert(GRPC_STATUS_HEADER_CODE, self.code.to_header_value());
@@ -611,8 +737,9 @@ impl Status {
             code,
             message: message.into(),
             details,
-            metadata,
+            metadata: boxed_metadata(metadata),
             source: None,
+            wire_code: None,
         }
     }
 
@@ -629,6 +756,36 @@ impl Status {
     }
 }
 
+fn boxed_metadata(metadata: MetadataMap) -> Option<Box<MetadataMap>> {
+    (!metadata.is_empty()).then(|| Box::new(metadata))
+}
+
+fn peer_code(raw: &[u8]) -> Bytes {
+    // Canonical gRPC codes and Kitex's nonstandard UnknownService code need
+    // no extra allocation. Retain a bounded diagnostic for other peer input.
+    match raw {
+        b"0" => Bytes::from_static(b"0"),
+        b"1" => Bytes::from_static(b"1"),
+        b"2" => Bytes::from_static(b"2"),
+        b"3" => Bytes::from_static(b"3"),
+        b"4" => Bytes::from_static(b"4"),
+        b"5" => Bytes::from_static(b"5"),
+        b"6" => Bytes::from_static(b"6"),
+        b"7" => Bytes::from_static(b"7"),
+        b"8" => Bytes::from_static(b"8"),
+        b"9" => Bytes::from_static(b"9"),
+        b"10" => Bytes::from_static(b"10"),
+        b"11" => Bytes::from_static(b"11"),
+        b"12" => Bytes::from_static(b"12"),
+        b"13" => Bytes::from_static(b"13"),
+        b"14" => Bytes::from_static(b"14"),
+        b"15" => Bytes::from_static(b"15"),
+        b"16" => Bytes::from_static(b"16"),
+        b"20" => Bytes::from_static(b"20"),
+        _ => Bytes::copy_from_slice(&raw[..raw.len().min(64)]),
+    }
+}
+
 fn find_status_in_source_chain(err: &(dyn Error + 'static)) -> Option<Status> {
     let mut source = Some(err);
 
@@ -640,6 +797,7 @@ fn find_status_in_source_chain(err: &(dyn Error + 'static)) -> Option<Status> {
                 details: status.details.clone(),
                 metadata: status.metadata.clone(),
                 source: None,
+                wire_code: status.wire_code.clone(),
             });
         }
 
@@ -671,8 +829,8 @@ impl fmt::Debug for Status {
             builder.field("details", &self.details);
         }
 
-        if !self.metadata.is_empty() {
-            builder.field("metadata", &self.metadata);
+        if !self.metadata().is_empty() {
+            builder.field("metadata", self.metadata());
         }
 
         builder.field("source", &self.source);
@@ -1030,5 +1188,55 @@ mod tests {
         let status = Status::from_header_map(&header_map).unwrap();
 
         assert_eq!(status.details(), DETAILS);
+    }
+
+    #[test]
+    fn invalid_details_are_a_status_error() {
+        for code in ["0", "1", "13", "20"] {
+            let mut headers = HeaderMap::new();
+            headers.insert(GRPC_STATUS_HEADER_CODE, code.parse().unwrap());
+            headers.insert(GRPC_STATUS_DETAILS_HEADER, HeaderValue::from_static("%%%"));
+            headers.insert("x-request-id", HeaderValue::from_static("request-1"));
+            let status = Status::from_header_map(&headers).unwrap();
+            assert_eq!(status.code(), Code::Internal);
+            assert!(status.message().contains("grpc-status-details-bin"));
+            assert!(status.details().is_empty());
+            assert_eq!(status.metadata().get("x-request-id").unwrap(), "request-1");
+            assert!(Status::infer_grpc_status(Some(&headers), http::StatusCode::OK).is_err());
+        }
+    }
+
+    #[test]
+    fn details_accept_both_padding_forms_and_do_not_poison_later_calls() {
+        for value in ["AQI=", "AQI"] {
+            let mut headers = Status::ok("").to_header_map().unwrap();
+            headers.insert(GRPC_STATUS_DETAILS_HEADER, value.parse().unwrap());
+            let status = Status::from_header_map(&headers).unwrap();
+            assert_eq!(status.code(), Code::Ok);
+            assert_eq!(status.details(), [1, 2]);
+        }
+        assert!(Status::from_header_map(&HeaderMap::new()).is_none());
+    }
+}
+
+#[cfg(test)]
+mod review_regressions {
+    use super::*;
+
+    #[test]
+    fn business_extra_del_round_trips_without_panicking() {
+        let extra = [("key\u{7f}".to_owned(), "value\u{7f}\n中文".to_owned())]
+            .into_iter()
+            .collect();
+        let status = Status::from(volo::streaming::RpcError::Biz {
+            code: 1,
+            message: "failure".into(),
+            extra,
+        });
+        let bytes = status.metadata().get("biz-extra").unwrap().as_bytes();
+        assert!(!bytes.contains(&0x7f));
+        let actual: std::collections::BTreeMap<String, String> =
+            serde_json::from_slice(bytes).unwrap();
+        assert_eq!(actual["key\u{7f}"], "value\u{7f}\n中文");
     }
 }

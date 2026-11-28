@@ -1,6 +1,6 @@
 [package]
 name = "volo"
-version = "0.12.5"
+version = "0.13.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -28,11 +28,13 @@ motore.workspace = true
 
 arc-swap.workspace = true
 async-broadcast.workspace = true
+bytes.workspace = true
 dashmap.workspace = true
 faststr.workspace = true
 futures.workspace = true
 libc.workspace = true
 metainfo.workspace = true
+parking_lot.workspace = true
 mur3.workspace = true
 nix = { workspace = true, features = [
     "uio",
@@ -44,6 +46,7 @@ nix = { workspace = true, features = [
 once_cell.workspace = true
 pin-project.workspace = true
 rand.workspace = true
+rustc-hash.workspace = true
 socket2 = { workspace = true, features = ["all"] }
 thiserror.workspace = true
 tokio = { workspace = true, features = ["net", "time", "sync", "io-util"] }
@@ -90,3 +93,6 @@ native-tls = [
 native-tls-vendored = ["native-tls", "tokio-native-tls/vendored"]
 
 shmipc = ["dep:shmipc"]
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread"] }

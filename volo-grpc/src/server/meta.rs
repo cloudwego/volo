@@ -1,33 +1,58 @@
-use std::{cell::RefCell, net::SocketAddr, str::FromStr, sync::Arc, task::Poll};
+use std::{cell::RefCell, net::SocketAddr, sync::Arc, task::Poll};
 
 use futures::{FutureExt, future::BoxFuture};
-use metainfo::{Backward, Forward};
+use http_body::Body as _;
+use metainfo::Forward;
 use tracing::Instrument;
 use volo::{FastStr, Service, context::Context};
 
+use super::policy::{HttpRequestInfo, ResponsePolicy, StrictGrpc, error_response};
 use crate::{
     Request, Response, Status,
     body::BoxBody,
-    context::ServerContext,
-    metadata::{
-        DESTINATION_SERVICE, HEADER_TRANS_REMOTE_ADDR, KeyAndValueRef, MetadataKey, SOURCE_SERVICE,
-    },
+    context::{Deadline, ServerContext},
+    message::PayloadKind,
+    metadata::{DESTINATION_SERVICE, HEADER_TRANS_REMOTE_ADDR, KeyAndValueRef, SOURCE_SERVICE},
     tracing::{DefaultProvider, SpanProvider},
 };
 
 macro_rules! status_to_http {
-    ($result:expr) => {
+    ($result:expr, $cx:expr) => {
         match $result {
             Ok(value) => value,
-            Err(status) => return Ok(status.to_http()),
+            Err(status) => return Ok(error_response(status, $cx)),
         }
     };
+}
+
+type PayloadLookup = dyn Fn(&str) -> Option<PayloadKind> + Send + Sync;
+
+#[derive(Clone)]
+pub(super) struct ResponsePayloads(Arc<PayloadLookup>);
+
+impl ResponsePayloads {
+    pub(super) fn new(
+        lookup: impl Fn(&str) -> Option<PayloadKind> + Send + Sync + 'static,
+    ) -> Self {
+        Self(Arc::new(lookup))
+    }
+
+    fn get(&self, path: &str) -> Option<PayloadKind> {
+        (self.0)(path)
+    }
+}
+
+impl std::fmt::Debug for ResponsePayloads {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("ResponsePayloads")
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct MetaService<S, SP = DefaultProvider> {
     inner: S,
     span_provider: SP,
+    response_payloads: Option<ResponsePayloads>,
 }
 
 impl<S, SP> MetaService<S, SP> {
@@ -35,7 +60,13 @@ impl<S, SP> MetaService<S, SP> {
         MetaService {
             inner,
             span_provider,
+            response_payloads: None,
         }
+    }
+
+    pub(super) fn with_response_payloads(mut self, payloads: Option<ResponsePayloads>) -> Self {
+        self.response_payloads = payloads;
+        self
     }
 }
 
@@ -59,17 +90,56 @@ where
         Poll::Ready(Ok(()))
     }
 
-    fn call(&mut self, req: hyper::Request<BoxBody>) -> Self::Future {
+    fn call(&mut self, mut req: hyper::Request<BoxBody>) -> Self::Future {
+        let deadline = super::layer::timeout::grpc_timeout_to_duration(req.headers())
+            .ok()
+            .flatten()
+            .and_then(|duration| tokio::time::Instant::now().checked_add(duration))
+            .map(Deadline::new);
         let inner = self.inner.clone();
         let span_provider = self.span_provider.clone();
+        let strict = req.extensions().get::<StrictGrpc>().is_some();
+        let owner = req.extensions().get::<super::h2::StreamOwner>().cloned();
+        // Select only the error response format from the registered service.
+        // Actual method/content-type validation stays after routing.
+        let payload = self
+            .response_payloads
+            .as_ref()
+            .and_then(|payloads| payloads.get(req.uri().path()));
+        if payload == Some(PayloadKind::Thrift) || strict {
+            let info = HttpRequestInfo {
+                method: req.method().clone(),
+                version: req.version(),
+            };
+            req.extensions_mut().insert(info);
+        }
         async move {
             let mut cx = ServerContext::default();
+            if let Some(owner) = owner {
+                cx.extensions.insert(owner);
+            }
+            if strict {
+                cx.extensions.insert(StrictGrpc);
+            }
+            if let Some(payload) = payload {
+                cx.extensions.insert(payload);
+                req.extensions_mut().insert(payload);
+                ResponsePolicy {
+                    payload,
+                    http_status: None,
+                }
+                .install(&mut cx);
+            }
 
             metainfo::METAINFO
                 .scope(RefCell::new(metainfo::MetaInfo::default()), async move {
                     cx.rpc_info.set_method(FastStr::new(req.uri().path()));
 
                     let mut volo_req = Request::from_http(req);
+                    if let Some(deadline) = deadline {
+                        volo_req.extensions_mut().insert(deadline);
+                        metainfo::METAINFO.with(|info| info.borrow_mut().insert(deadline));
+                    }
 
                     let metadata = volo_req.metadata_mut();
 
@@ -104,18 +174,29 @@ where
                             match key_and_value {
                                 KeyAndValueRef::Ascii(k, v) => {
                                     let k = k.as_str();
-                                    let v = v.to_str()?;
                                     if k.starts_with(metainfo::HTTP_PREFIX_PERSISTENT) {
+                                        let v =
+                                            std::str::from_utf8(v.as_bytes()).map_err(|_| {
+                                                Status::invalid_argument(
+                                                    "invalid UTF-8 persistent metainfo",
+                                                )
+                                            })?;
                                         vec.push(k.to_owned());
                                         metainfo
                                             .strip_http_prefix_and_set_persistent(k, v.to_owned());
                                     } else if k.starts_with(metainfo::HTTP_PREFIX_TRANSIENT) {
+                                        let v =
+                                            std::str::from_utf8(v.as_bytes()).map_err(|_| {
+                                                Status::invalid_argument(
+                                                    "invalid UTF-8 transient metainfo",
+                                                )
+                                            })?;
                                         vec.push(k.to_owned());
                                         metainfo
                                             .strip_http_prefix_and_set_upstream(k, v.to_owned());
                                     }
                                 }
-                                _ => unreachable!(),
+                                KeyAndValueRef::Binary(_, _) => {}
                             }
                         }
                         for k in vec {
@@ -124,42 +205,54 @@ where
 
                         Ok::<(), Status>(())
                     });
-                    status_to_http!(status);
+                    status_to_http!(status, &cx);
                     let span = span_provider.on_serve(&cx, metadata);
                     let volo_resp = match inner.call(&mut cx, volo_req).instrument(span).await {
                         Ok(resp) => resp,
                         Err(err) => {
                             span_provider.leave_serve(&cx);
-                            return Ok(err.into().to_http());
+                            return Ok(error_response(err.into(), &cx));
                         }
                     };
                     span_provider.leave_serve(&cx);
 
                     let (mut metadata, extensions, message) = volo_resp.into_parts();
 
-                    let status = metainfo::METAINFO.with(|metainfo| {
-                        let metainfo = metainfo.borrow_mut();
+                    let status = if let Some(stream) =
+                        cx.extensions.get::<crate::streaming::StreamContext>()
+                    {
+                        crate::streaming::metadata::write_backward(stream, metadata.headers_mut())
+                    } else {
+                        metainfo::METAINFO.with(|info| {
+                            crate::streaming::metadata::write_backward_fields(
+                                &info.borrow(),
+                                metadata.headers_mut(),
+                            )
+                        })
+                    };
+                    status_to_http!(status, &cx);
 
-                        // backward
-                        if let Some(at) = metainfo.get_all_backward_transients() {
-                            for (key, value) in at {
-                                let key = metainfo::HTTP_PREFIX_BACKWARD.to_owned() + key;
-                                metadata
-                                    .insert(MetadataKey::from_str(key.as_str())?, value.parse()?);
-                            }
+                    if let Some(stream) = cx.extensions.get::<crate::streaming::StreamContext>() {
+                        let mut defaults = stream.response_metadata(false);
+                        defaults.merge(metadata);
+                        metadata = defaults;
+                        stream.on_header(metadata.clone());
+                        if message.is_end_stream()
+                            && let Some(status) = Status::from_header_map(metadata.headers())
+                        {
+                            stream.on_trailer(metadata.clone());
+                            stream.finish(status);
                         }
-
-                        Ok::<(), Status>(())
-                    });
-                    status_to_http!(status);
+                    }
 
                     let mut resp = hyper::Response::new(message);
                     *resp.headers_mut() = metadata.into_headers();
                     *resp.extensions_mut() = extensions;
-                    resp.headers_mut().insert(
-                        http::header::CONTENT_TYPE,
-                        http::header::HeaderValue::from_static("application/grpc"),
-                    );
+                    cx.extensions
+                        .get::<ResponsePolicy>()
+                        .copied()
+                        .unwrap_or_default()
+                        .apply(&mut resp);
                     Ok(resp)
                 })
                 .await

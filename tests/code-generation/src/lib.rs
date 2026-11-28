@@ -94,7 +94,6 @@ mod tests {
             request_id: minimal.request_id.clone(),
             result: "success".into(),
             response_c: "response_from_c".into(),
-            ..Default::default()
         };
 
         let mut ctx = EncodeLengthContext::default();
@@ -129,7 +128,6 @@ mod tests {
             request_id: "resp-123".into(),
             result: "ok".into(),
             response_c: "from_c".into(),
-            ..Default::default()
         };
 
         let mut ctx = EncodeLengthContext::default();
@@ -195,10 +193,14 @@ mod tests {
         assert_eq!(nested.name(), "Nested");
 
         // Test top-level message types
+        #[expect(
+            deprecated,
+            reason = "verify that the IDL deprecation is emitted in Rust"
+        )]
         let outer_alt = descriptor::OuterAlt::get_descriptor_proto().unwrap();
         assert_eq!(outer_alt.name(), "OuterAlt");
         let opt = outer_alt.options.as_ref().unwrap(); // should be deprecated
-        assert_eq!(opt.deprecated.unwrap(), true);
+        assert!(opt.deprecated.unwrap());
         let service_ref = descriptor::ServiceReference::get_descriptor_proto().unwrap();
         assert_eq!(service_ref.name(), "ServiceReference");
         let request = descriptor::Request::get_descriptor_proto().unwrap();

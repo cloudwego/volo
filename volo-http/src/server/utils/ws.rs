@@ -333,11 +333,11 @@ impl<F> WebSocketUpgrade<F> {
         };
         resp.headers_mut()
             .insert(header::SEC_WEBSOCKET_ACCEPT, accept_key);
-        if let Some(protocol) = self.protocol {
-            if let Ok(protocol) = HeaderValue::from_bytes(protocol.as_bytes()) {
-                resp.headers_mut()
-                    .insert(header::SEC_WEBSOCKET_PROTOCOL, protocol);
-            }
+        if let Some(protocol) = self.protocol
+            && let Ok(protocol) = HeaderValue::from_bytes(protocol.as_bytes())
+        {
+            resp.headers_mut()
+                .insert(header::SEC_WEBSOCKET_PROTOCOL, protocol);
         }
 
         tokio::spawn(fut);

@@ -29,6 +29,10 @@ pub enum DefaultIncoming {
 impl MakeIncoming for DefaultIncoming {
     type Incoming = DefaultIncoming;
 
+    fn supports_tls(&self) -> Option<bool> {
+        Some(matches!(self, Self::Tcp(_)))
+    }
+
     async fn make_incoming(self) -> io::Result<Self::Incoming> {
         Ok(self)
     }
@@ -72,12 +76,32 @@ impl Incoming for DefaultIncoming {
 pub trait MakeIncoming {
     type Incoming: Incoming;
 
+    /// Whether every accepted connection can use the configured TCP TLS acceptor.
+    /// Custom factories default to runtime checking of each accepted connection.
+    fn supports_tls(&self) -> Option<bool> {
+        None
+    }
+
     fn make_incoming(self) -> impl Future<Output = io::Result<Self::Incoming>> + Send;
+}
+
+impl MakeIncoming for std::net::SocketAddr {
+    type Incoming = DefaultIncoming;
+    fn supports_tls(&self) -> Option<bool> {
+        Some(true)
+    }
+    async fn make_incoming(self) -> io::Result<Self::Incoming> {
+        Address::Ip(self).make_incoming().await
+    }
 }
 
 #[cfg(target_family = "unix")]
 impl MakeIncoming for Address {
     type Incoming = DefaultIncoming;
+
+    fn supports_tls(&self) -> Option<bool> {
+        Some(matches!(self, Self::Ip(_)))
+    }
 
     async fn make_incoming(self) -> io::Result<Self::Incoming> {
         match self {
@@ -108,6 +132,10 @@ impl MakeIncoming for Address {
 #[cfg(not(target_family = "unix"))]
 impl MakeIncoming for Address {
     type Incoming = DefaultIncoming;
+
+    fn supports_tls(&self) -> Option<bool> {
+        Some(matches!(self, Self::Ip(_)))
+    }
 
     async fn make_incoming(self) -> io::Result<Self::Incoming> {
         match self {

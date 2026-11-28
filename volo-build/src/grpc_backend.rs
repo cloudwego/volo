@@ -20,6 +20,10 @@ pub struct MkGrpcBackend;
 impl pilota_build::MakeBackend for MkGrpcBackend {
     type Target = VoloGrpcBackend;
 
+    fn validate(&self, cx: &Context) -> anyhow::Result<()> {
+        crate::util::validate_service_names(cx, crate::util::camel_case_variant)
+    }
+
     fn make_backend(self, context: Context) -> Self::Target {
         VoloGrpcBackend {
             inner: pilota_build::codegen::pb::ProtobufBackend::new(context),
@@ -33,6 +37,26 @@ pub struct VoloGrpcBackend {
 }
 
 impl VoloGrpcBackend {
+    fn method_descriptor(&self, method: &Method) -> String {
+        let client = self
+            .cx()
+            .node_contains_tag::<ClientStreaming>(method.def_id);
+        let server = self
+            .cx()
+            .node_contains_tag::<ServerStreaming>(method.def_id);
+        let mode = match (client, server) {
+            (false, false) => "Unary",
+            (true, false) => "ClientStreaming",
+            (false, true) => "ServerStreaming",
+            (true, true) => "Bidirectional",
+        };
+        format!(
+            "::volo_grpc::message::MethodDescriptor {{ name: {:?}, mode: \
+             ::volo_grpc::message::RpcMode::{mode}, payload: \
+             ::volo_grpc::message::PayloadShape::ProtobufMessage }}",
+            method.name.raw_str()
+        )
+    }
     fn is_wrapper_arc(&self, tags_id: pilota_build::TagId) -> bool {
         self.cx()
             .tags(tags_id)
@@ -123,6 +147,7 @@ impl VoloGrpcBackend {
             gen_ty = self.modify_ty_to_arc(gen_ty);
         }
 
+        let gen_ty = crate::util::scoped_ty(self.cx(), &gen_ty);
         if streaming {
             format!("impl ::volo_grpc::IntoStreamingRequest<Message = {gen_ty}>").into()
         } else {
@@ -137,6 +162,7 @@ impl VoloGrpcBackend {
             ret_ty = self.modify_ty_to_arc(ret_ty);
         }
 
+        let ret_ty = crate::util::scoped_ty(self.cx(), &ret_ty);
         if streaming {
             format!(
                 "::std::result::Result<::volo_grpc::Response<impl \
@@ -272,16 +298,17 @@ impl CodegenBackend for VoloGrpcBackend {
     fn codegen_service_impl(&self, def_id: DefId, stream: &mut String, s: &rir::Service) {
         let service_name = self.cx().rust_name(def_id);
         let server_name = format!("{service_name}Server");
-        let client_builder_name = format!("{service_name}ClientBuilder");
-        let generic_client_name = format!("{service_name}GenericClient");
         let client_name = format!("{service_name}Client");
-        let oneshot_client_name = format!("{service_name}OneShotClient");
 
         let file_id = self.cx().node(def_id).unwrap().file_id;
         let file = self.cx().file(file_id).unwrap();
 
         let package = file.package.iter().join(".");
-        let name = format!("{package}.{}", s.name);
+        let name = if package.is_empty() {
+            s.name.raw_str().to_string()
+        } else {
+            format!("{package}.{}", s.name.raw_str())
+        };
 
         let req_enum_name_send = format!("{service_name}RequestSend");
         let resp_enum_name_send = format!("{service_name}ResponseSend");
@@ -304,7 +331,7 @@ impl CodegenBackend for VoloGrpcBackend {
         let paths = s
             .methods
             .iter()
-            .map(|method| format!("/{package}.{}/{}", s.name, method.name))
+            .map(|method| format!("/{name}/{}", method.name.raw_str()))
             .collect::<Vec<_>>();
 
         let req_matches = s
@@ -312,7 +339,7 @@ impl CodegenBackend for VoloGrpcBackend {
             .iter()
             .map(|method| {
                 let variant_name = self.cx().rust_name(method.def_id).0.upper_camel_ident();
-                let path = format!("/{package}.{}/{}", s.name, method.name);
+                let path = format!("/{name}/{}", method.name.raw_str());
                 let client_streaming = self
                     .cx()
                     .node_contains_tag::<ClientStreaming>(method.def_id);
@@ -381,11 +408,17 @@ impl CodegenBackend for VoloGrpcBackend {
 
         let mut client_methods = Vec::new();
         let mut oneshot_client_methods = Vec::new();
+        let descriptors = s
+            .methods
+            .iter()
+            .map(|method| self.method_descriptor(method))
+            .join(",");
 
         s.methods.iter().for_each(|method| {
             let method_name = self.cx().rust_name(method.def_id);
+            let descriptor = self.method_descriptor(method);
 
-            let path = format!("/{package}.{}/{}", s.name, method.name);
+            let path = format!("/{name}/{}", method.name.raw_str());
             let input_ty = &method.args[0].ty;
             let client_streaming = self.cx().node_contains_tag::<ClientStreaming>(method.def_id);
             let req_ty = self.client_input_ty(input_ty.clone(), client_streaming);
@@ -407,7 +440,8 @@ impl CodegenBackend for VoloGrpcBackend {
                         &self,
                         requests: {req_ty},
                     ) -> {resp_ty} {{
-                        let req = {req}.map(|message| {req_enum_name_send}::{variant_name}(::std::boxed::Box::pin(message) as _));
+                        let mut req = {req}.map(|message| {req_enum_name_send}::{variant_name}(::std::boxed::Box::pin(message) as _));
+                        req.extensions_mut().insert({descriptor});
                         let mut cx = self.0.make_cx("{path}");
 
                         let resp = ::volo::Service::call(&self.0, &mut cx, req).await?;
@@ -422,7 +456,8 @@ impl CodegenBackend for VoloGrpcBackend {
                         self,
                         requests: {req_ty},
                     ) -> {resp_ty} {{
-                        let req = {req}.map(|message| {req_enum_name_send}::{variant_name}(::std::boxed::Box::pin(message) as _));
+                        let mut req = {req}.map(|message| {req_enum_name_send}::{variant_name}(::std::boxed::Box::pin(message) as _));
+                        req.extensions_mut().insert({descriptor});
                         let mut cx = self.0.make_cx("{path}");
 
                         let resp = ::volo::client::OneShotService::call(self.0, &mut cx, req).await?;
@@ -432,8 +467,6 @@ impl CodegenBackend for VoloGrpcBackend {
                 )
             );
         });
-
-        let mk_client_name = format!("Mk{generic_client_name}");
 
         let client_methods = client_methods.join("\n");
         let oneshot_client_methods = oneshot_client_methods.join("\n");
@@ -461,28 +494,28 @@ impl CodegenBackend for VoloGrpcBackend {
         let req_send_into_body = crate::join_multi_strs!(
             "",
             |enum_variant_names| -> "Self::{enum_variant_names}(s) => {{
-                ::volo_grpc::codec::encode::encode(s, compression_encoding)
+                ::volo_grpc::codec::encode::encode_with_context(s, compression_encoding, ::volo_grpc::codec::DefaultEncoder::default(), options.limits, options.context, ::std::option::Option::None)
             }},"
         );
 
         let req_recv_from_body = crate::join_multi_strs!(
             "",
             |paths, enum_variant_names| -> "::std::option::Option::Some(\"{paths}\") => {{
-                ::std::result::Result::Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind,compression_encoding)))
+                ::std::result::Result::Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::with_decoder(body, kind,compression_encoding, ::volo_grpc::codec::DefaultDecoder::default()).with_limits(options.limits).with_context(options.context)))
             }},"
         );
 
         let resp_send_into_body = crate::join_multi_strs!(
             "",
             |enum_variant_names| -> "Self::{enum_variant_names}(s) => {{
-                ::volo_grpc::codec::encode::encode(s,compression_encoding)
+                ::volo_grpc::codec::encode::encode_with_context(s, compression_encoding, ::volo_grpc::codec::DefaultEncoder::default(), options.limits, options.context, ::std::option::Option::None)
             }},"
         );
 
         let resp_recv_from_body = crate::join_multi_strs!(
             "",
             |paths, enum_variant_names| -> "::std::option::Option::Some(\"{paths}\") => {{
-                ::std::result::Result::Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::new(body, kind, compression_encoding)))
+                ::std::result::Result::Ok(Self::{enum_variant_names}(::volo_grpc::RecvStream::with_decoder(body, kind, compression_encoding, ::volo_grpc::codec::DefaultDecoder::default()).with_limits(options.limits).with_context(options.context)))
             }}"
         );
 
@@ -494,6 +527,9 @@ impl CodegenBackend for VoloGrpcBackend {
 
             impl ::volo_grpc::SendEntryMessage for {req_enum_name_send} {{
                 fn into_body(self,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Frame<::volo_grpc::codegen::Bytes>, ::volo_grpc::Status>> {{
+                    <Self as ::volo_grpc::SendEntryMessage>::into_body_with_options(self, compression_encoding, ::volo_grpc::message::CodecOptions::new(::volo_grpc::codec::CodecLimits::legacy()))
+                }}
+                fn into_body_with_options(self, compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>, options: ::volo_grpc::message::CodecOptions) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Frame<::volo_grpc::codegen::Bytes>, ::volo_grpc::Status>> {{
                     match self {{
                         {req_send_into_body}
                     }}
@@ -509,6 +545,9 @@ impl CodegenBackend for VoloGrpcBackend {
 
             impl ::volo_grpc::RecvEntryMessage for {req_enum_name_recv} {{
                 fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::body::BoxBody, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status> {{
+                    <Self as ::volo_grpc::RecvEntryMessage>::from_body_with_options(method, body, kind, compression_encoding, ::volo_grpc::message::CodecOptions::new(::volo_grpc::codec::CodecLimits::legacy()))
+                }}
+                fn from_body_with_options(method: ::std::option::Option<&str>, body: ::volo_grpc::body::BoxBody, kind: ::volo_grpc::codec::decode::Kind, compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>, options: ::volo_grpc::message::CodecOptions) -> ::std::result::Result<Self, ::volo_grpc::Status> {{
                     match method {{
                         {req_recv_from_body}
                         _ => ::std::result::Result::Err(::volo_grpc::Status::new(::volo_grpc::Code::Unimplemented, "Method not found.")),
@@ -525,6 +564,9 @@ impl CodegenBackend for VoloGrpcBackend {
 
             impl ::volo_grpc::SendEntryMessage for {resp_enum_name_send} {{
                 fn into_body(self,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Frame<::volo_grpc::codegen::Bytes>, ::volo_grpc::Status>> {{
+                    <Self as ::volo_grpc::SendEntryMessage>::into_body_with_options(self, compression_encoding, ::volo_grpc::message::CodecOptions::new(::volo_grpc::codec::CodecLimits::legacy()))
+                }}
+                fn into_body_with_options(self, compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>, options: ::volo_grpc::message::CodecOptions) -> ::volo_grpc::BoxStream<'static, ::std::result::Result<::volo_grpc::codegen::Frame<::volo_grpc::codegen::Bytes>, ::volo_grpc::Status>> {{
                     match self {{
                         {resp_send_into_body}
                     }}
@@ -539,7 +581,10 @@ impl CodegenBackend for VoloGrpcBackend {
             }}
 
             impl ::volo_grpc::RecvEntryMessage for {resp_enum_name_recv} {{
-                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::body::BoxBody, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status>
+                fn from_body(method: ::std::option::Option<&str>, body: ::volo_grpc::body::BoxBody, kind: ::volo_grpc::codec::decode::Kind,compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>) -> ::std::result::Result<Self, ::volo_grpc::Status> {{
+                    <Self as ::volo_grpc::RecvEntryMessage>::from_body_with_options(method, body, kind, compression_encoding, ::volo_grpc::message::CodecOptions::new(::volo_grpc::codec::CodecLimits::legacy()))
+                }}
+                fn from_body_with_options(method: ::std::option::Option<&str>, body: ::volo_grpc::body::BoxBody, kind: ::volo_grpc::codec::decode::Kind, compression_encoding: ::std::option::Option<::volo_grpc::codec::compression::CompressionEncoding>, options: ::volo_grpc::message::CodecOptions) -> ::std::result::Result<Self, ::volo_grpc::Status>
                 where
                     Self: ::core::marker::Sized,
                 {{
@@ -551,51 +596,12 @@ impl CodegenBackend for VoloGrpcBackend {
             }}"#
         );
 
-        let client_impl = format!(
-            r#"
-            pub struct {client_builder_name} {{}}
-            impl {client_builder_name} {{
-                pub fn new(
-                    service_name: impl AsRef<str>,
-                ) -> ::volo_grpc::client::ClientBuilder<
-                    ::volo::layer::Identity,
-                    ::volo::layer::Identity,
-                    {mk_client_name},
-                    ::volo_grpc::layer::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<(::volo::FastStr)>, ::volo_grpc::client::dns::DnsResolver>,
-                    {req_enum_name_send},
-                    {resp_enum_name_recv},
-                > {{
-                    ::volo_grpc::client::ClientBuilder::new({mk_client_name}, service_name)
-                }}
-            }}
-
-            pub struct {mk_client_name};
-
-            pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, ::volo_grpc::Response<{resp_enum_name_recv}>, ::volo_grpc::Status>>;
-
-            impl<S> ::volo::client::MkClient<::volo_grpc::Client<S>> for {mk_client_name} {{
-                type Target = {generic_client_name}<S>;
-                fn mk_client(&self, service: ::volo_grpc::Client<S>) -> Self::Target {{
-                    {generic_client_name}(service)
-                }}
-            }}
-
-            #[derive(Clone)]
-            pub struct {generic_client_name}<S>(pub ::volo_grpc::Client<S>);
-
-            pub struct {oneshot_client_name}<S>(pub ::volo_grpc::Client<S>);
-
-            impl<S> {generic_client_name}<S> where S: ::volo::service::Service<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + Sync + Send + 'static {{
-                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_grpc::context::ClientContext>>(self, opt: Opt) -> {oneshot_client_name}<::volo::client::WithOptService<S, Opt>> {{
-                    {oneshot_client_name}(self.0.with_opt(opt))
-                }}
-
-                {client_methods}
-            }}
-
-            impl<S: ::volo::client::OneShotService<::volo_grpc::context::ClientContext,::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + Send + Sync + 'static> {oneshot_client_name}<S> {{
-                {oneshot_client_methods}
-            }}"#
+        let client_impl = client_code(
+            &service_name,
+            &req_enum_name_send,
+            &resp_enum_name_recv,
+            &client_methods,
+            &oneshot_client_methods,
         );
 
         let server_impl = format!(
@@ -604,7 +610,7 @@ impl CodegenBackend for VoloGrpcBackend {
                 inner: ::std::sync::Arc<S>,
             }}
 
-            impl<S> Clone for {server_name}<S> {{
+            impl<S> ::core::clone::Clone for {server_name}<S> {{
                 fn clone(&self) -> Self {{
                     {server_name} {{
                         inner: self.inner.clone(),
@@ -645,6 +651,12 @@ impl CodegenBackend for VoloGrpcBackend {
 
             impl<S: {service_name}> ::volo_grpc::server::NamedService for {server_name}<S> {{
                 const NAME: &'static str = "{name}";
+                fn descriptor() -> ::std::option::Option<::volo_grpc::message::ServiceDescriptor> {{
+                    ::std::option::Option::Some(::volo_grpc::message::ServiceDescriptor {{
+                        payload: ::volo_grpc::message::PayloadKind::Protobuf,
+                        methods: &[{descriptors}],
+                    }})
+                }}
             }}"#
         );
 
@@ -738,7 +750,7 @@ impl CodegenBackend for VoloGrpcBackend {
 
         format!(
             "fn {name}(&self, {args}) -> impl ::std::future::Future<Output = \
-             ::std::result::Result<{ret_ty}>> + Send;"
+             ::std::result::Result<{ret_ty}>> + ::core::marker::Send;"
         )
     }
 
@@ -853,6 +865,68 @@ impl CodegenBackend for VoloGrpcBackend {
     fn codegen_impl_enum_message(&self, name: &str) -> String {
         self.inner.codegen_impl_enum_message(name)
     }
+}
+
+/// Shared client/layer plumbing for the Protobuf and Thrift service generators.
+/// Payload-specific method adapters stay in their respective backends.
+pub(crate) fn client_code(
+    service_name: &str,
+    req_enum_name_send: &str,
+    resp_enum_name_recv: &str,
+    client_methods: &str,
+    oneshot_client_methods: &str,
+) -> String {
+    let client_builder_name = format!("{service_name}ClientBuilder");
+    let generic_client_name = format!("{service_name}GenericClient");
+    let client_name = format!("{service_name}Client");
+    let oneshot_client_name = format!("{service_name}OneShotClient");
+    let mk_client_name = format!("Mk{generic_client_name}");
+    format!(
+        r#"
+            pub struct {client_builder_name} {{}}
+            impl {client_builder_name} {{
+                pub fn new(
+                    service_name: impl ::core::convert::AsRef<str>,
+                ) -> ::volo_grpc::client::ClientBuilder<
+                    ::volo::layer::Identity,
+                    ::volo::layer::Identity,
+                    {mk_client_name},
+                    ::volo_grpc::layer::loadbalance::LbConfig<::volo::loadbalance::random::WeightedRandomBalance<(::volo::FastStr)>, ::volo_grpc::client::dns::DnsResolver>,
+                    {req_enum_name_send},
+                    {resp_enum_name_recv},
+                > {{
+                    ::volo_grpc::client::ClientBuilder::new({mk_client_name}, service_name)
+                }}
+            }}
+
+            pub struct {mk_client_name};
+
+            pub type {client_name} = {generic_client_name}<::volo::service::BoxCloneService<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, ::volo_grpc::Response<{resp_enum_name_recv}>, ::volo_grpc::Status>>;
+
+            impl<S> ::volo::client::MkClient<::volo_grpc::Client<S>> for {mk_client_name} {{
+                type Target = {generic_client_name}<S>;
+                fn mk_client(&self, service: ::volo_grpc::Client<S>) -> Self::Target {{
+                    {generic_client_name}(service)
+                }}
+            }}
+
+            #[derive(Clone)]
+            pub struct {generic_client_name}<S>(pub ::volo_grpc::Client<S>);
+
+            pub struct {oneshot_client_name}<S>(pub ::volo_grpc::Client<S>);
+
+            impl<S> {generic_client_name}<S> where S: ::volo::service::Service<::volo_grpc::context::ClientContext, ::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + ::core::marker::Sync + ::core::marker::Send + 'static {{
+                pub fn with_callopt<Opt: ::volo::client::Apply<::volo_grpc::context::ClientContext>>(self, opt: Opt) -> {oneshot_client_name}<::volo::client::WithOptService<S, Opt>> {{
+                    {oneshot_client_name}(self.0.with_opt(opt))
+                }}
+
+                {client_methods}
+            }}
+
+            impl<S: ::volo::client::OneShotService<::volo_grpc::context::ClientContext,::volo_grpc::Request<{req_enum_name_send}>, Response=::volo_grpc::Response<{resp_enum_name_recv}>, Error = ::volo_grpc::Status> + ::core::marker::Send + ::core::marker::Sync + 'static> {oneshot_client_name}<S> {{
+                {oneshot_client_methods}
+            }}"#
+    )
 }
 
 #[cfg(test)]

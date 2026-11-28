@@ -7,11 +7,16 @@ members = [
   "volo-http",
   "volo-macros",
   "volo-thrift",
+  "volo-streamx",
+  "volo-streamx-build",
 
   "examples",
   "examples/volo-gen",
   "benchmark",
   "tests/code-generation",
+  "tests/ttstream-codegen",
+  "tests/thrift-grpc-codegen",
+  "tests/streamx-codegen",
 ]
 resolver = "3"
 
@@ -24,11 +29,11 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.85.0"
 
 [workspace.dependencies]
-pilota = "0.13"
-pilota-build = "0.13"
-pilota-thrift-parser = "0.13"
-pilota-thrift-reflect = "0.2"
-pilota-thrift-fieldmask = "0.2"
+pilota = "0.14.0"
+pilota-build = "0.14.0"
+pilota-thrift-parser = "0.14.0"
+pilota-thrift-reflect = "0.14.0"
+pilota-thrift-fieldmask = "0.14.0"
 motore = "0.4.1"
 metainfo = "0.7.14"
 
@@ -38,7 +43,7 @@ arc-swap = "1"
 async-broadcast = "0.7"
 async-stream = "0.3"
 base64 = "0.22"
-bytes = "1"
+bytes = "1.11.1"
 chrono = { version = "0.4", default-features = false, features = [
   "std",
   "clock",
@@ -52,13 +57,13 @@ dirs = "6"
 faststr = { version = "0.2.21", features = ["serde"] }
 futures = "0.3"
 futures-util = "0.3"
-flate2 = "1"
+flate2 = "1.1.11"
 git2 = { version = "0.20", default-features = false }
 governor = "0.10"
 h2 = "0.4"
 heck = "0.5"
 hex = "0.4"
-hickory-resolver = "0.25"
+hickory-resolver = "0.26.4"
 http = "1"
 http-body = "1"
 http-body-util = "0.1"
@@ -92,7 +97,7 @@ pin-project = "1"
 pretty_env_logger = "0.5"
 proc-macro2 = "1"
 quote = "1"
-rand = "0.9"
+rand = "0.9.3"
 regex = "1"
 reqwest = "0.12"
 run_script = "0.11"
@@ -142,6 +147,15 @@ tungstenite = "0.28"
 tokio-tungstenite = "0.28"
 
 shmipc = "0.3"
+
+[patch.crates-io]
+# Select the companion branch for the streaming generator and runtime;
+# Cargo.lock records the resolved commit for reproducible workspace builds.
+pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-thrift-reflect = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-thrift-fieldmask = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
 
 [profile.release]
 opt-level = 3

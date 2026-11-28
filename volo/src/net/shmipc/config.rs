@@ -14,6 +14,9 @@ pub static DEFAULT_SHMIPC_CONFIG: LazyLock<ArcSwap<Config>> = LazyLock::new(Defa
 tokio::task_local! {
     pub static SESSION_MANAGER_CONFIG: SessionManagerConfig;
     pub static SHMIPC_CONFIG: Config;
+    /// Isolates logical-stream reuse between protocols sharing a physical address.
+    /// Empty (the default) preserves the existing unary pool.
+    pub static SESSION_MANAGER_NAMESPACE: &'static str;
 }
 
 pub(crate) fn session_manager_config() -> SessionManagerConfig {

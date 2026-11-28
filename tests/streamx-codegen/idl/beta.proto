@@ -1,0 +1,8 @@
+syntax = "proto3";
+package beta;
+option go_package = "github.com/cloudwego/volo/tests/interop/kitexstreaming/kitex_gen/streamx/beta";
+message Value { string text = 1; }
+service Echo {
+  rpc Second(Value) returns (Value);
+  rpc BetaStream(Value) returns (stream Value);
+}
