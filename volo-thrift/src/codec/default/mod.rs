@@ -124,6 +124,10 @@ pub struct DefaultEncoder<E, W> {
 impl<E: ZeroCopyEncoder, W: AsyncWrite + AsyncExt + Unpin + Send + Sync + 'static> Encoder
     for DefaultEncoder<E, W>
 {
+    fn into_stream_writer(self) -> Result<Box<dyn super::StreamWrite>, Self> {
+        Ok(Box::new(self.writer))
+    }
+
     #[inline]
     async fn encode<Req: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
@@ -228,6 +232,30 @@ pub struct DefaultDecoder<D, R> {
 impl<D: ZeroCopyDecoder, R: AsyncRead + AsyncExt + Unpin + Send + Sync + 'static> Decoder
     for DefaultDecoder<D, R>
 {
+    async fn probe_ttstream(&mut self) -> Result<bool, std::io::Error> {
+        let prefix = self.reader.fill_buf().await?;
+        if prefix.is_empty() {
+            return Ok(false);
+        }
+        // A known mismatch needs no more input. No bytes are consumed here.
+        if prefix.len() >= 6 && prefix[4..6] != [0x10, 0] {
+            return Ok(false);
+        }
+        match self.reader.fill_buf_at_least(8).await {
+            Ok(prefix) => Ok(crate::transport::ttstream::frame::matches_prefix(prefix)),
+            Err(error)
+                if error.kind() == std::io::ErrorKind::InvalidData
+                    || error.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                Ok(false)
+            }
+            Err(error) => Err(error),
+        }
+    }
+    fn into_stream_reader(self) -> Result<Box<dyn super::StreamRead>, Self> {
+        Ok(Box::new(self.reader))
+    }
+
     #[inline]
     async fn decode<Msg: Send + EntryMessage, Cx: ThriftContext>(
         &mut self,
@@ -342,9 +370,23 @@ where
     type Decoder = DefaultDecoder<MkZC::Decoder, R>;
 
     #[inline]
-    fn make_codec(&self, reader: R, writer: W) -> (Self::Encoder, Self::Decoder) {
-        let (encoder, decoder) = self.make_zero_copy_codec.make_codec();
+    fn supports_streaming(&self) -> bool {
+        true
+    }
 
+    fn supports_buffered(&self) -> bool {
+        true
+    }
+
+    fn make_codec_from_buffered(
+        &self,
+        reader: BufReader<R>,
+        writer: W,
+    ) -> Result<(Self::Encoder, Self::Decoder), std::io::Error> {
+        Ok(self.make_buffered(reader, writer))
+    }
+
+    fn make_codec(&self, reader: R, writer: W) -> (Self::Encoder, Self::Decoder) {
         #[cfg(feature = "shmipc")]
         let reader = if reader.is_shmipc() {
             BufReader::with_capacity(SHMIPC_DECODE_BUFFER_CAPACITY, reader)
@@ -354,6 +396,20 @@ where
         #[cfg(not(feature = "shmipc"))]
         let reader = BufReader::new(reader);
 
+        self.make_buffered(reader, writer)
+    }
+}
+
+impl<MkZC: MakeZeroCopyCodec> DefaultMakeCodec<MkZC> {
+    fn make_buffered<R, W>(
+        &self,
+        reader: BufReader<R>,
+        writer: W,
+    ) -> (
+        DefaultEncoder<MkZC::Encoder, W>,
+        DefaultDecoder<MkZC::Decoder, R>,
+    ) {
+        let (encoder, decoder) = self.make_zero_copy_codec.make_codec();
         (
             DefaultEncoder {
                 encoder,
@@ -396,6 +452,41 @@ mod tests {
         let _framed = DefaultMakeCodec::framed();
         let _ttheader_framed = DefaultMakeCodec::ttheader_framed();
         let _buffered = DefaultMakeCodec::buffered();
+    }
+
+    #[cfg(target_family = "unix")]
+    #[tokio::test]
+    async fn prebuffered_factory_transfers_the_existing_reader_without_another_probe() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        use volo::net::conn::{OwnedReadHalf, OwnedWriteHalf, PeekedConn};
+
+        let (mut peer, accepted) = tokio::net::UnixStream::pair().unwrap();
+        peer.write_all(b"12345678payload").await.unwrap();
+        peer.shutdown().await.unwrap();
+        let parts = PeekedConn::peek8(accepted.into())
+            .await
+            .unwrap()
+            .unwrap()
+            .into_buffered_split(512);
+        let codec = DefaultMakeCodec::default();
+        assert!(<DefaultMakeCodec<_> as MakeCodec<
+            OwnedReadHalf,
+            OwnedWriteHalf,
+        >>::supports_buffered(&codec));
+        let (encoder, decoder) = codec
+            .make_codec_from_buffered(parts.reader, parts.writer)
+            .unwrap();
+        assert_eq!(decoder.reader.buffer(), b"12345678");
+        let mut reader = decoder.into_stream_reader().ok().unwrap();
+        let mut writer = encoder.into_stream_writer().ok().unwrap();
+        let mut actual = Vec::new();
+        reader.read_to_end(&mut actual).await.unwrap();
+        assert_eq!(actual, b"12345678payload");
+        writer.write_all(b"response").await.unwrap();
+        writer.shutdown().await.unwrap();
+        let mut response = Vec::new();
+        peer.read_to_end(&mut response).await.unwrap();
+        assert_eq!(response, b"response");
     }
 
     struct MockReader {

@@ -1,6 +1,6 @@
 [package]
 name = "volo-thrift"
-version = "0.12.7"
+version = "0.13.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
@@ -19,7 +19,7 @@ keywords = ["async", "rpc", "thrift"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.12.4", path = "../volo" }
+volo = { version = "0.13.0", path = "../volo" }
 pilota.workspace = true
 motore.workspace = true
 metainfo.workspace = true
@@ -47,9 +47,13 @@ tokio = { workspace = true, features = [
     "signal",
     "parking_lot",
 ] }
+# The public streaming sender types compile even when the transport is disabled.
+tokio-util.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
+hex.workspace = true
 tracing-subscriber.workspace = true
 volo-gen = { path = "../examples/volo-gen" }
 
@@ -59,8 +63,12 @@ default = []
 multiplex = []
 # unsafe-codec can achieve better performance for thrift binary protocol, but may cause undefined behavior
 # if the thrift message is malformed.
+# TTStream uses buffered output with capacity checks; its decoding stays checked.
 unsafe-codec = []
 # This will use unwrap_unchecked instead of unwrap in some places.
 unsafe_unchecked = ["volo/unsafe_unchecked"]
 
 shmipc = ["volo/shmipc"]
+
+# TTHeader streaming transport; protocol-neutral API types are always available.
+ttstream = []

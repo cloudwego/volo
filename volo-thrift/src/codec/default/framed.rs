@@ -84,6 +84,7 @@ where
         cx: &mut Cx,
         bytes: &mut Bytes,
     ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
+        super::thrift::MessageReadLimit::restrict(cx, self.max_frame_size);
         if bytes.len() < HEADER_DETECT_LENGTH {
             // not enough bytes to detect, must not be Framed, so just forward to inner
             return self.inner.decode(cx, bytes);
@@ -109,6 +110,7 @@ where
         cx: &mut Cx,
         reader: &mut BufReader<R>,
     ) -> Result<Option<ThriftMessage<Msg>>, ThriftException> {
+        super::thrift::MessageReadLimit::restrict(cx, self.max_frame_size);
         // check if is framed
         if let Ok(buf) = reader.fill_buf_at_least(HEADER_DETECT_LENGTH).await {
             if is_framed(buf) {

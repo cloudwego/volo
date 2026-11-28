@@ -1,12 +1,12 @@
 [package]
 name = "volo-grpc"
-version = "0.12.2"
+version = "0.13.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 authors.workspace = true
-rust-version.workspace = true
+rust-version = "1.88.0"
 description = "gRPC framework implementation of volo."
 documentation = "https://docs.rs/volo-grpc"
 readme = "README.md"
@@ -24,7 +24,7 @@ maintenance = { status = "actively-developed" }
 
 [dependencies]
 pilota.workspace = true
-volo = { version = "0.12.2", path = "../volo" }
+volo = { version = "0.13.0", path = "../volo" }
 motore = { workspace = true, features = ["tower"] }
 metainfo.workspace = true
 async-broadcast.workspace = true
@@ -56,11 +56,13 @@ hyper-util = { workspace = true, features = [
 linkedbytes.workspace = true
 matchit.workspace = true
 paste.workspace = true
+parking_lot.workspace = true
 percent-encoding.workspace = true
 pin-project.workspace = true
+serde_json.workspace = true
 tokio = { workspace = true, features = ["time", "rt", "net", "sync", "signal"] }
 tokio-stream.workspace = true
-tokio-util = { workspace = true, features = ["codec", "compat"] }
+tokio-util = { workspace = true, features = ["codec", "compat", "rt"] }
 tonic = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 tonic-web = { workspace = true, optional = true }
@@ -79,12 +81,16 @@ tokio-native-tls = { workspace = true, optional = true }
 zstd = { workspace = true, optional = true }
 
 [dev-dependencies]
+tempfile.workspace = true
 tracing-subscriber.workspace = true
 
 [features]
 default = ["gzip", "zlib"]
-gzip = ["compress"]
-zlib = ["compress"]
+thrift = []
+# Buffered Thrift binary output; all input decoding and output bounds stay checked.
+unsafe-codec = []
+gzip = ["compress", "flate2/zlib-rs"]
+zlib = ["compress", "flate2/zlib-rs"]
 zstd = ["dep:zstd", "compress"]
 compress = ["dep:flate2"]
 

@@ -41,18 +41,12 @@ entries:
     filename: thrift_gen.rs
     protocol: thrift
     split_generated_files: true
-    repos:
-      thrift:
-        url: https://github.com/apache/thrift.git
-        ref: HEAD
-        lock: 9bd1f1bee7bf59080492bbd3213ca1fed57ab4d6
     services:
       - idl:
           source: local
           path: thrift/test.thrift
       - idl:
-          source: git
-          repo: thrift
-          path: test/Service.thrift
+          source: local
+          path: thrift/apache/Service.thrift
     dedups:
       - CommonReq

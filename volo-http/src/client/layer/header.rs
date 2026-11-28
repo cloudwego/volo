@@ -186,10 +186,10 @@ where
         match &self.config {
             Host::None => {}
             Host::Auto => {
-                if !req.headers().contains_key(header::HOST) {
-                    if let Some(val) = gen_host(cx.target()) {
-                        req.headers_mut().insert(header::HOST, val);
-                    }
+                if !req.headers().contains_key(header::HOST)
+                    && let Some(val) = gen_host(cx.target())
+                {
+                    req.headers_mut().insert(header::HOST, val);
                 }
             }
             Host::Force(val) => {

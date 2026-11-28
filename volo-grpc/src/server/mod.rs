@@ -2,22 +2,29 @@
 //!
 //! This module contains the low level component to build a gRPC server.
 
+mod h2;
 mod incoming;
 mod meta;
+mod policy;
+mod prepared;
 mod router;
 mod service;
 
 use std::{fmt, io, time::Duration};
 
-use hyper_util::rt::{TokioExecutor, TokioIo, TokioTimer};
-use incoming::IncomingService;
+use futures_util::{StreamExt, stream::FuturesUnordered};
+#[doc(hidden)]
+pub use h2::serve_detected;
 pub use meta::MetaService;
 use motore::{
     BoxError,
     layer::{Identity, Layer, Stack},
     service::Service,
 };
+#[doc(hidden)]
+pub use prepared::PreparedServer;
 pub use service::ServiceBuilder;
+use tokio_util::task::AbortOnDropHandle;
 use tower::util::BoxCloneService;
 #[cfg(feature = "__tls")]
 use volo::net::tls::ServerTlsConfig;
@@ -28,6 +35,8 @@ use volo::{
 
 pub mod layer;
 pub use self::router::Router;
+#[doc(hidden)]
+pub use self::router::{OriginalGrpcPath, RegisteredRoute, RouteLookup, ServiceRoute};
 use crate::{
     Request, Response, Status,
     body::BoxBody,
@@ -38,10 +47,27 @@ use crate::{
 /// A trait to provide a static reference to the service's
 /// name. This is used for routing service's within the router.
 pub trait NamedService {
+    /// Push bindings need a call owner even without an application hook.
+    /// Existing generated services keep their original lifecycle selection.
+    fn requires_managed_transport() -> bool {
+        false
+    }
+
+    fn stream_hook_factory(
+        &self,
+    ) -> Option<std::sync::Arc<dyn crate::streaming::StreamHookFactory>> {
+        None
+    }
     /// The `Service-Name` as described [here].
     ///
     /// [here]: https://github.com/grpc/grpc/blob/master/doc/PROTOCOL-HTTP2.md#requests
     const NAME: &'static str;
+
+    /// New payload backends supply a descriptor. Existing Protobuf services
+    /// retain their original routing and content-type acceptance behavior.
+    fn descriptor() -> Option<crate::message::ServiceDescriptor> {
+        None
+    }
 }
 
 /// A server for a gRPC service.
@@ -52,6 +78,7 @@ pub struct Server<IL = Identity, OL = tower::layer::util::Identity, SP = Default
     http2_config: Http2Config,
     router: Router,
     span_provider: SP,
+    shutdown_timeout: Duration,
 
     #[cfg(feature = "__tls")]
     tls_config: Option<ServerTlsConfig>,
@@ -72,14 +99,63 @@ impl Server<Identity, tower::layer::util::Identity, DefaultProvider> {
             http2_config: Http2Config::default(),
             router: Router::new(),
             span_provider: DefaultProvider,
+            shutdown_timeout: Duration::from_secs(30),
 
             #[cfg(feature = "__tls")]
             tls_config: None,
         }
     }
+
+    /// Prepares the native layer stack around a shared directory's route facade.
+    #[doc(hidden)]
+    pub fn with_router(router: Router) -> Self {
+        Self {
+            router,
+            ..Self::new()
+        }
+    }
 }
 
 impl<IL, OL, SP> Server<IL, OL, SP> {
+    /// Select the optimized Thrift encoder for all services on this server.
+    /// Off by default; requires the `unsafe-codec` feature. Protobuf is unchanged.
+    pub fn unsafe_codec(mut self, enabled: bool) -> Self {
+        self.router.unsafe_codec = Some(enabled);
+        self
+    }
+
+    #[doc(hidden)]
+    pub fn with_directory(mut self, lookup: std::sync::Arc<dyn RouteLookup>) -> io::Result<Self> {
+        self.router.attach_lookup(lookup)?;
+        Ok(self)
+    }
+    /// Register a whole-call hook factory. Repeated registrations compose in
+    /// order; factories can filter static descriptors before context allocation.
+    pub fn stream_hook(mut self, factory: impl crate::streaming::StreamHookFactory) -> Self {
+        self.router = self.router.with_stream_hook(
+            crate::streaming::HookFactory(std::sync::Arc::new(factory)),
+            false,
+        );
+        self
+    }
+
+    pub fn stream_hook_front(mut self, factory: impl crate::streaming::StreamHookFactory) -> Self {
+        self.router = self.router.with_stream_hook(
+            crate::streaming::HookFactory(std::sync::Arc::new(factory)),
+            true,
+        );
+        self
+    }
+    /// Limits how long existing connections may drain after shutdown starts.
+    ///
+    /// The server stops accepting connections immediately and sends HTTP/2
+    /// GOAWAY. At the deadline it closes remaining connections. Default: 30s.
+    /// A zero duration forces immediate connection teardown.
+    pub fn graceful_shutdown_timeout(mut self, timeout: Duration) -> Self {
+        self.shutdown_timeout = timeout;
+        self
+    }
+
     #[cfg(feature = "__tls")]
     #[cfg_attr(docsrs, doc(cfg(any(feature = "rustls", feature = "native-tls"))))]
     /// Sets the TLS configuration for the server.
@@ -213,6 +289,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             http2_config: self.http2_config,
             router: self.router,
             span_provider: self.span_provider,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -239,6 +316,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             http2_config: self.http2_config,
             router: self.router,
             span_provider: self.span_provider,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -268,6 +346,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             http2_config: self.http2_config,
             router: self.router,
             span_provider: self.span_provider,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -289,6 +368,7 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             http2_config: self.http2_config,
             router: self.router.add_service(s),
             span_provider: self.span_provider,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -296,12 +376,64 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
 
     /// Set a [`SpanProvider`] to the server.
     pub fn span_provider<P: SpanProvider>(self, provider: P) -> Server<IL, OL, P> {
+        self.map_span_provider(|_| provider)
+    }
+
+    /// Compose a provider with the configured native provider before preparation.
+    pub fn map_span_provider<P: SpanProvider>(
+        self,
+        configure: impl FnOnce(SP) -> P,
+    ) -> Server<IL, OL, P> {
         Server {
             inner_layer: self.inner_layer,
             outer_layer: self.outer_layer,
             http2_config: self.http2_config,
             router: self.router,
-            span_provider: provider,
+            span_provider: configure(self.span_provider),
+            shutdown_timeout: self.shutdown_timeout,
+            #[cfg(feature = "__tls")]
+            tls_config: self.tls_config,
+        }
+    }
+
+    /// Prepares native service/layer state without creating a listener.
+    #[doc(hidden)]
+    pub fn prepare(self) -> PreparedServer<OL::Service>
+    where
+        IL: Layer<Router>,
+        IL::Service: Service<ServerContext, Request<BoxBody>, Response = Response<BoxBody>>
+            + Clone
+            + Send
+            + Sync
+            + 'static,
+        <IL::Service as Service<ServerContext, Request<BoxBody>>>::Error: Into<Status>,
+        OL: tower::Layer<
+                tower::util::BoxCloneService<
+                    hyper::Request<BoxBody>,
+                    hyper::Response<BoxBody>,
+                    Status,
+                >,
+            >,
+        OL::Service: tower::Service<hyper::Request<BoxBody>, Response = hyper::Response<BoxBody>>
+            + Clone
+            + Send
+            + 'static,
+        <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Future: Send + 'static,
+        <OL::Service as tower::Service<hyper::Request<BoxBody>>>::Error:
+            Into<Status> + Send + Sync + std::error::Error,
+        SP: SpanProvider,
+    {
+        let managed_transport = self.router.requires_managed_transport();
+        let response_payloads = self.router.response_payloads();
+        let service = self.outer_layer.layer(BoxCloneService::new(
+            MetaService::new(self.inner_layer.layer(self.router), self.span_provider)
+                .with_response_payloads(response_payloads),
+        ));
+        PreparedServer {
+            service,
+            managed_transport,
+            http2_config: self.http2_config,
+            shutdown_timeout: self.shutdown_timeout,
             #[cfg(feature = "__tls")]
             tls_config: self.tls_config,
         }
@@ -341,114 +473,66 @@ impl<IL, OL, SP> Server<IL, OL, SP> {
             Into<Status> + Send + Sync + std::error::Error,
         SP: SpanProvider,
     {
+        let prepared = self.prepare();
+        let shutdown_timeout = prepared.shutdown_timeout();
         let mut incoming = incoming.make_incoming().await?;
         tracing::info!("[VOLO] server start at: {:?}", incoming);
 
-        let service = self
-            .outer_layer
-            .layer(BoxCloneService::new(MetaService::new(
-                self.inner_layer.layer(self.router),
-                self.span_provider,
-            )));
-
         tokio::pin!(signal);
         let (tx, rx) = tokio::sync::watch::channel(());
+        let mut connections = FuturesUnordered::<AbortOnDropHandle<()>>::new();
+        let mut accept_error = None;
 
         loop {
             tokio::select! {
+                biased;
                 _ = &mut signal => {
-                    drop(rx);
                     tracing::info!("[VOLO] graceful shutdown");
-                    let _ = tx.send(());
-                    // Waits for receivers to drop.
-                    tx.closed().await;
-                    return Ok(());
+                    break;
+                },
+                Some(result) = connections.next(), if !connections.is_empty() => {
+                    if let Err(error) = result {
+                        tracing::debug!("[VOLO] connection task ended: {error}");
+                    }
                 },
                 conn = incoming.accept() => {
-                    let conn: Conn = match conn? {
-                        Some(c) => c,
-                        None => return Ok(()),
-                    };
-                    #[cfg(feature = "__tls")]
-                    let conn = {
-                        let Conn {
-                            stream,
-                            info,
-                        } = conn;
-                        // Only perform TLS handshake if either rustls or native-tls is configured
-                        match (stream, self.tls_config.as_ref().map(|o| &o.acceptor)) {
-                            (volo::net::conn::ConnStream::Tcp(tcp), Some(tls_acceptor)) => {
-                                let stream = match tls_acceptor.accept(tcp).await {
-                                    Ok(stream) => stream,
-                                    Err(err) => {
-                                        tracing::debug!("[VOLO] TLS handshake error: {:?}", err);
-                                        continue;
-                                    },
-                                };
-                                Conn {
-                                    stream,
-                                    info,
-                                }
-                            },
-                            (stream, _) => Conn {
-                                stream,
-                                info
-                            },
+                    let conn: Conn = match conn {
+                        Ok(Some(c)) => c,
+                        Ok(None) => break,
+                        Err(error) => {
+                            accept_error = Some(error);
+                            break;
                         }
                     };
-
                     tracing::trace!("[VOLO] recv a connection from: {:?}", conn.info.peer_addr);
-                    let peer_addr = conn.info.peer_addr.clone();
-
-                    let service = IncomingService::new(service.clone(), peer_addr);
-
-                    // init server
-                    let mut server = hyper_util::server::conn::auto::Builder::new(TokioExecutor::new());
-                    if !self.http2_config.accept_http1 {
-                        server = server.http2_only();
-                    }
-                    server
-                        .http2()
-                        .initial_stream_window_size(self.http2_config.init_stream_window_size)
-                        .timer(TokioTimer::new())
-                        .initial_connection_window_size(self.http2_config.init_connection_window_size)
-                        .adaptive_window(self.http2_config.adaptive_window)
-                        .max_concurrent_streams(self.http2_config.max_concurrent_streams)
-                        .keep_alive_interval(self.http2_config.http2_keepalive_interval)
-                        .keep_alive_timeout(self.http2_config.http2_keepalive_timeout)
-                        .max_frame_size(self.http2_config.max_frame_size)
-                        .max_send_buf_size(self.http2_config.max_send_buf_size)
-                        .max_header_list_size(self.http2_config.max_header_list_size);
-
-                    let mut watch = rx.clone();
-                    spawn(async move {
-                        let mut http_conn = std::pin::pin!(server.serve_connection(
-                            TokioIo::new(conn),
-                            hyper::service::service_fn(move |req| {
-                                let mut service = service.clone();
-                                async move {
-                                    tower::Service::call(&mut service, req).await
-                                }
-                            })
-                        ));
-                        loop {
-                            tokio::select! {
-                                _ = watch.changed() => {
-                                    tracing::trace!("[VOLO] closing a pending connection");
-                                    // Graceful shutdown.
-                                    http_conn.as_mut().graceful_shutdown();
-                                },
-                                result = &mut http_conn => {
-                                    if let Err(err) = result {
-                                        tracing::debug!("[VOLO] connection error: {:?}", err);
-                                    }
-                                    break;
-                                },
-                            }
-                        }
-                    });
+                    connections.push(AbortOnDropHandle::new(spawn(
+                        prepared.clone().serve(conn, rx.clone()),
+                    )));
                 },
             }
+        }
+
+        // Accept has stopped. Every connection, including an incomplete TLS
+        // handshake, is registered until its owner exits.
+        drop(rx);
+        let _ = tx.send(());
+        if tokio::time::timeout(shutdown_timeout, tx.closed())
+            .await
+            .is_err()
+        {
+            tracing::debug!("[VOLO] drain deadline reached; closing remaining connections");
+            for connection in connections.iter() {
+                connection.abort();
+            }
+        }
+        while let Some(result) = connections.next().await {
+            if let Err(error) = result {
+                tracing::debug!("[VOLO] connection task ended during shutdown: {error}");
+            }
+        }
+        match accept_error {
+            Some(error) => Err(error.into()),
+            None => Ok(()),
         }
     }
 
@@ -513,6 +597,20 @@ pub struct Http2Config {
     pub(crate) accept_http1: bool,
 }
 
+impl Http2Config {
+    /// Validates the H2 configuration before a mixed-protocol listener is created.
+    #[doc(hidden)]
+    pub fn validate_streamx(&self) -> io::Result<()> {
+        if self.accept_http1 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "StreamX requires accept_http1(false)",
+            ));
+        }
+        Ok(())
+    }
+}
+
 impl Default for Http2Config {
     fn default() -> Self {
         Self {
@@ -529,3 +627,6 @@ impl Default for Http2Config {
         }
     }
 }
+
+#[cfg(all(test, feature = "thrift"))]
+mod runtime_codec_tests;

@@ -1,12 +1,12 @@
 use std::{
     cell::RefCell,
+    future::Future,
     sync::{Arc, atomic::Ordering},
 };
 
 use metainfo::MetaInfo;
 use motore::service::Service;
 use pilota::thrift::ThriftException;
-use tokio::sync::futures::Notified;
 use tracing::*;
 use volo::{net::Address, volo_unreachable};
 
@@ -22,14 +22,48 @@ use crate::{
 
 #[allow(clippy::too_many_arguments)]
 pub async fn serve<Svc, Req, Resp, E, D, SP>(
-    mut encoder: E,
-    mut decoder: D,
-    notified: Notified<'_>,
+    encoder: E,
+    decoder: D,
+    notified: impl Future<Output = ()>,
     exit_mark: Arc<std::sync::atomic::AtomicBool>,
     service: &Svc,
     stat_tracer: Arc<[crate::server::TraceFn]>,
     peer_addr: Option<Address>,
     span_provider: SP,
+) where
+    Svc: Service<ServerContext, Req, Response = Resp>,
+    Svc::Error: Into<ServerError>,
+    Req: EntryMessage,
+    Resp: EntryMessage,
+    E: Encoder,
+    D: Decoder,
+    SP: SpanProvider,
+{
+    serve_with_codec(
+        encoder,
+        decoder,
+        notified,
+        exit_mark,
+        service,
+        stat_tracer,
+        peer_addr,
+        span_provider,
+        Default::default(),
+    )
+    .await;
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn serve_with_codec<Svc, Req, Resp, E, D, SP>(
+    mut encoder: E,
+    mut decoder: D,
+    notified: impl Future<Output = ()>,
+    exit_mark: Arc<std::sync::atomic::AtomicBool>,
+    service: &Svc,
+    stat_tracer: Arc<[crate::server::TraceFn]>,
+    peer_addr: Option<Address>,
+    span_provider: SP,
+    unsafe_codec: Option<bool>,
 ) where
     Svc: Service<ServerContext, Req, Response = Resp>,
     Svc::Error: Into<ServerError>,
@@ -51,11 +85,13 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                     let mut cache = cache.borrow_mut();
                     cache.pop().unwrap_or_default()
                 });
+                cx.rpc_info.config_mut().set_unsafe_codec(unsafe_codec);
                 if let Some(peer_addr) = &peer_addr {
                     cx.rpc_info.caller_mut().set_address(peer_addr.clone());
                 }
 
                 let msg = tokio::select! {
+                    biased;
                     _ = &mut notified => {
                         tracing::trace!(
                             "[VOLO] close conn by notified, peer_addr: {:?}",
@@ -146,7 +182,9 @@ pub async fn serve<Svc, Req, Resp, E, D, SP>(
                             }
                             cx.msg_type = Some(TMessageType::Exception);
                             cx.set_conn_reset_by_ttheader(true);
-                            if !matches!(e, ThriftException::Transport(_)) {
+                            if !matches!(e, ThriftException::Transport(_))
+                                && cx.req_msg_type != Some(TMessageType::OneWay)
+                            {
                                 let msg = ThriftMessage::mk_server_resp(
                                     &cx,
                                     Err::<DummyMessage, _>(

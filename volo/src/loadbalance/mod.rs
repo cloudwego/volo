@@ -3,7 +3,7 @@ pub mod error;
 mod layer;
 pub mod random;
 
-use std::future::Future;
+use std::{future::Future, pin::Pin, sync::Arc};
 
 use self::{error::LoadBalanceError, layer::LoadBalanceLayer};
 use crate::{
@@ -38,6 +38,48 @@ pub trait MkLbLayer {
     type Layer;
 
     fn make(self) -> Self::Layer;
+
+    /// Supplies a shared endpoint resolver for additional protocol entry points.
+    /// Custom unary layers keep their original behavior and may opt in explicitly.
+    fn make_with_resolver(self) -> (Self::Layer, Option<EndpointResolver>)
+    where
+        Self: Sized,
+    {
+        (self.make(), None)
+    }
+}
+
+type ResolveFuture<'a> =
+    Pin<Box<dyn Future<Output = Result<Address, LoadBalanceError>> + Send + 'a>>;
+trait ResolveEndpoint: Send + Sync {
+    fn resolve<'a>(&'a self, endpoint: &'a Endpoint) -> ResolveFuture<'a>;
+}
+/// Selects an address using the same discovery and balancing state as unary calls.
+/// This resolves once; it never replays a streaming request.
+#[derive(Clone)]
+pub struct EndpointResolver(Arc<dyn ResolveEndpoint>);
+impl EndpointResolver {
+    pub async fn resolve(&self, endpoint: &Endpoint) -> Result<Address, LoadBalanceError> {
+        self.0.resolve(endpoint).await
+    }
+}
+struct SharedResolver<D, LB> {
+    state: Arc<layer::SharedState<D, LB>>,
+}
+impl<D: Discover, LB: LoadBalance<D>> ResolveEndpoint for SharedResolver<D, LB> {
+    fn resolve<'a>(&'a self, endpoint: &'a Endpoint) -> ResolveFuture<'a> {
+        Box::pin(async move {
+            if let Some(address) = endpoint.address() {
+                return Ok(address);
+            }
+            self.state
+                .load_balance
+                .get_picker(endpoint, &self.state.discover)
+                .await?
+                .next()
+                .ok_or(LoadBalanceError::Retry)
+        })
+    }
 }
 
 pub struct LbConfig<L, DISC> {
@@ -80,11 +122,18 @@ impl<L, DISC> LbConfig<L, DISC> {
 
 pub struct CustomLayer<L>(pub L);
 
-impl<LB, DISC> MkLbLayer for LbConfig<LB, DISC> {
+impl<LB: LoadBalance<DISC>, DISC: Discover> MkLbLayer for LbConfig<LB, DISC> {
     type Layer = LoadBalanceLayer<DISC, LB>;
 
     fn make(self) -> Self::Layer {
         LoadBalanceLayer::new(self.discover, self.load_balance, self.retry_count)
+    }
+    fn make_with_resolver(self) -> (Self::Layer, Option<EndpointResolver>) {
+        let layer = self.make();
+        let resolver = EndpointResolver(Arc::new(SharedResolver {
+            state: layer.state.clone(),
+        }));
+        (layer, Some(resolver))
     }
 }
 

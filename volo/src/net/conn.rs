@@ -14,9 +14,27 @@ use tokio::{
 
 use super::Address;
 
+mod peeked;
+pub use peeked::{BufferedConnParts, PeekedConn};
+
 #[derive(Clone)]
 pub struct ConnInfo {
     pub peer_addr: Option<Address>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ConnTransport {
+    Tcp,
+    Unix,
+    Tls,
+    Shmipc,
+}
+
+/// A connection's logical transport lease; empty for transports with normal socket Drop.
+#[doc(hidden)]
+pub struct ConnCloseGuard {
+    #[cfg(feature = "shmipc")]
+    _shmipc: Option<super::shmipc::ShmipcCloseGuard>,
 }
 
 #[pin_project(project = IoStreamProj)]
@@ -31,6 +49,17 @@ pub enum ConnStream {
 }
 
 impl ConnStream {
+    pub fn transport(&self) -> ConnTransport {
+        match self {
+            Self::Tcp(_) => ConnTransport::Tcp,
+            #[cfg(target_family = "unix")]
+            Self::Unix(_) => ConnTransport::Unix,
+            #[cfg(feature = "__tls")]
+            Self::Tls(_) => ConnTransport::Tls,
+            #[cfg(feature = "shmipc")]
+            Self::Shmipc(_) => ConnTransport::Shmipc,
+        }
+    }
     pub fn is_tcp(&self) -> bool {
         matches!(self, Self::Tcp(_))
     }
@@ -397,6 +426,16 @@ pub struct Conn {
 }
 
 impl Conn {
+    #[doc(hidden)]
+    pub fn close_guard(&self) -> ConnCloseGuard {
+        ConnCloseGuard {
+            #[cfg(feature = "shmipc")]
+            _shmipc: match &self.stream {
+                ConnStream::Shmipc(stream) => Some(stream.helper().close_guard()),
+                _ => None,
+            },
+        }
+    }
     #[inline]
     pub fn new(stream: ConnStream, info: ConnInfo) -> Self {
         Conn { stream, info }

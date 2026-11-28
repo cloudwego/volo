@@ -1,0 +1,10 @@
+syntax = "proto3";
+package alpha;
+option go_package = "github.com/cloudwego/volo/tests/interop/kitexstreaming/kitex_gen/streamx/alpha";
+message Value { string text = 1; }
+service Echo {
+  rpc First(Value) returns (Value);
+  rpc AlphaStream(Value) returns (stream Value);
+  rpc Upload(stream Value) returns (Value);
+  rpc Talk(stream Value) returns (stream Value);
+}

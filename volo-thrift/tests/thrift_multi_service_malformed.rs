@@ -4,7 +4,6 @@
 
 // Keep this test in volo-thrift so the gate follows the runtime's actual feature
 // selection, including features enabled through other workspace dependencies.
-#![cfg(not(feature = "unsafe-codec"))]
 
 use std::{net::SocketAddr, time::Duration};
 
@@ -64,7 +63,7 @@ async fn malformed_frame_does_not_abort_router_server() {
     let router = Router::new().with_default_service(hello_service);
 
     tokio::spawn(async move {
-        let server = Server::with_router(router);
+        let server = Server::with_router(router).unsafe_codec(false);
         tokio::select! {
             r = server.run(addr) => { let _ = r; }
             _ = rx => {}

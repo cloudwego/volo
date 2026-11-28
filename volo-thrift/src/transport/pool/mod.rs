@@ -300,12 +300,10 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
             if let Some(t) = entry {
                 let value = match t.inner.reserve() {
                     Reservation::Shared(to_reinsert, to_return) => {
-                        if let Some(list) = inner.idle.get_mut(&key) {
-                            list.push_back(Idle {
-                                idle_at: Instant::now(),
-                                inner: to_reinsert,
-                            })
-                        }
+                        inner.idle.entry(key.clone()).or_default().push_back(Idle {
+                            idle_at: Instant::now(),
+                            inner: to_reinsert,
+                        });
                         to_return
                     }
                     Reservation::Unique(unique) => unique,
@@ -384,25 +382,26 @@ impl<K: Key, T: Poolable + Send + 'static> Pool<K, T> {
     }
 
     fn pooled(&self, mut connecting: Connecting<K, T>, value: T) -> Pooled<K, T> {
-        let (value, pool_ref) = {
+        let (value, pool_ref, discarded) = {
             match value.reserve() {
                 Reservation::Shared(to_insert, to_return) => {
                     let mut inner = self.inner.lock().unwrap();
-                    inner.put(connecting.key.clone(), to_insert);
+                    let discarded = inner.put(connecting.key.clone(), to_insert);
                     inner.connected(&connecting.key);
                     connecting.pool = WeakOpt::none();
                     // Shared reservations don't need a reference to the pool,
                     // since the pool always keeps a copy.
-                    (to_return, None)
+                    (to_return, None, discarded)
                 }
                 Reservation::Unique(value) => {
                     // Unique reservations must take a reference to the pool
                     // since they hope to reinsert once the reservation is
                     // completed
-                    (value, Some(Arc::downgrade(&self.inner)))
+                    (value, Some(Arc::downgrade(&self.inner)), Vec::new())
                 }
             }
         };
+        drop(discarded);
         Pooled::new(connecting.key.clone(), value, WeakOpt(pool_ref))
     }
 
@@ -476,10 +475,38 @@ impl<K: Key, T: Poolable> Drop for Checkout<K, T> {
         // if clean needed, remove the corresponding tx from waiters
         if self.clean {
             tracing::trace!("checkout dropped for {:?}", self.key);
-            if let Ok(mut pool) = self.pool.inner.lock() {
-                if let Some(waiters) = pool.waiters.get_mut(&self.key) {
-                    waiters.remove(self.waiter.1);
+            // put() may have delivered this checkout and removed its empty
+            // waiter list. A new list for the same key starts at token zero;
+            // only a still-pending receiver owns the current token. Hold the
+            // pool lock across this check and removal so put cannot race it.
+            let received = if let Ok(mut pool) = self.pool.inner.lock() {
+                match self.waiter.0.try_recv() {
+                    Ok(value) => Some(value),
+                    Err(oneshot::error::TryRecvError::Closed) => None,
+                    Err(oneshot::error::TryRecvError::Empty) => {
+                        if let Some(waiters) = pool.waiters.get_mut(&self.key) {
+                            waiters.remove(self.waiter.1);
+                            if waiters.is_empty() {
+                                pool.waiters.remove(&self.key);
+                            }
+                        }
+                        None
+                    }
                 }
+            } else {
+                None
+            };
+            // Poolable is user-extensible. Its destructor may reenter the pool.
+            if let Some(value) = received {
+                // A delivered connection still belongs to the pool if checkout
+                // was canceled before observing it.
+                let discarded = self
+                    .pool
+                    .inner
+                    .lock()
+                    .ok()
+                    .map(|mut pool| pool.put(self.key.clone(), value));
+                drop(discarded);
             }
         }
     }
@@ -519,9 +546,8 @@ impl<K: Key, T: Poolable> Pooled<K, T> {
         let key = self.key.take().volo_unwrap();
         if let WeakOpt(Some(pool)) = self.pool {
             if let Some(pool) = pool.upgrade() {
-                if let Ok(mut pool) = pool.lock() {
-                    pool.put(key, inner);
-                }
+                let discarded = pool.lock().ok().map(|mut pool| pool.put(key, inner));
+                drop(discarded);
             }
         }
     }
@@ -629,7 +655,9 @@ impl<K: Key, T: Poolable> Inner<K, T> {
 }
 
 impl<K: Key, T: Poolable> Inner<K, T> {
-    fn put(&mut self, key: K, t: T) {
+    // Return unused values so user-defined destructors run outside the pool lock.
+    fn put(&mut self, key: K, t: T) -> Vec<T> {
+        let mut discarded = Vec::new();
         // check the wait queue
         let mut value = Some(t);
         if let Some(waiters) = self.waiters.get_mut(&key) {
@@ -654,7 +682,11 @@ impl<K: Key, T: Poolable> Inner<K, T> {
                             }
                         }
                         Err(t) => {
-                            value = Some(t);
+                            if value.is_some() {
+                                discarded.push(t);
+                            } else {
+                                value = Some(t);
+                            }
                         }
                     }
                 }
@@ -667,12 +699,13 @@ impl<K: Key, T: Poolable> Inner<K, T> {
 
         // check if send to some waiter
         if let Some(t) = value {
-            if t.can_share() && self.idle.contains_key(&key) {
+            if t.can_share() && self.idle.get(&key).is_some_and(|idle| !idle.is_empty()) {
                 tracing::trace!(
                     "[VOLO] put; existing idle Shareable connection for {:?}",
                     key
                 );
-                return;
+                discarded.push(t);
+                return discarded;
             }
             // means doesn't send success
             // then put back to idle list
@@ -682,8 +715,11 @@ impl<K: Key, T: Poolable> Inner<K, T> {
                     inner: t,
                     idle_at: Instant::now(),
                 });
+            } else {
+                discarded.push(t);
             }
         }
+        discarded
     }
 
     /// A `Connecting` task is complete. Not necessarily successfully,
@@ -736,5 +772,136 @@ impl<K: Key, T: Poolable> Future for IdleTask<K, T> {
             }
             return Poll::Ready(());
         }
+    }
+}
+
+#[cfg(test)]
+mod waiter_identity_audit {
+    use super::*;
+
+    struct Transport;
+    impl Poolable for Transport {
+        async fn reusable(&self) -> bool {
+            true
+        }
+    }
+
+    #[tokio::test]
+    async fn completed_old_checkout_must_not_remove_recreated_waiter() {
+        let pool = Pool::<usize, Transport>::new(None);
+        let (old_tx, old_rx) = oneshot::channel();
+        let old_token = pool
+            .inner
+            .lock()
+            .unwrap()
+            .waiters
+            .entry(7)
+            .or_default()
+            .insert(old_tx);
+        let old_checkout = pool.checkout(7, (old_rx, old_token));
+        // Another task returns its connection after the old checkout was last
+        // polled Pending, but before its connector branch returns Ready.
+        pool.inner.lock().unwrap().put(7, Transport);
+        assert!(!pool.inner.lock().unwrap().waiters.contains_key(&7));
+        let (new_tx, mut new_rx) = oneshot::channel();
+        let new_token = pool
+            .inner
+            .lock()
+            .unwrap()
+            .waiters
+            .entry(7)
+            .or_default()
+            .insert(new_tx);
+        assert_eq!(old_token, new_token, "the removed list reset its counter");
+        // select picked the connector result: the old checkout was not repolled.
+        drop(old_checkout);
+        assert!(
+            new_rx.try_recv().is_ok(),
+            "the returned healthy connection must reach the unrelated new waiter"
+        );
+    }
+
+    #[tokio::test]
+    async fn canceled_pending_checkout_removes_only_its_waiter() {
+        let pool = Pool::<usize, Transport>::new(None);
+        let (tx, rx) = oneshot::channel();
+        let token = pool
+            .inner
+            .lock()
+            .unwrap()
+            .waiters
+            .entry(7)
+            .or_default()
+            .insert(tx);
+        let checkout = pool.checkout(7, (rx, token));
+        let (other_tx, mut other_rx) = oneshot::channel();
+        let other = pool
+            .inner
+            .lock()
+            .unwrap()
+            .waiters
+            .entry(7)
+            .or_default()
+            .insert(other_tx);
+        drop(checkout);
+        let inner = pool.inner.lock().unwrap();
+        let waiters = &inner.waiters[&7].inner;
+        assert!(!waiters.contains_key(&token));
+        assert!(waiters.contains_key(&other));
+        assert!(matches!(
+            other_rx.try_recv(),
+            Err(oneshot::error::TryRecvError::Empty)
+        ));
+    }
+
+    struct ReentrantTransport {
+        pool: Weak<Mutex<Inner<usize, Self>>>,
+        dropped: Arc<std::sync::atomic::AtomicBool>,
+    }
+    impl Poolable for ReentrantTransport {
+        async fn reusable(&self) -> bool {
+            true
+        }
+    }
+    impl Drop for ReentrantTransport {
+        fn drop(&mut self) {
+            if let Some(pool) = self.pool.upgrade() {
+                assert!(
+                    pool.try_lock().is_ok(),
+                    "received Poolable dropped with pool lock held"
+                );
+            }
+            self.dropped
+                .store(true, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+    #[tokio::test]
+    async fn received_checkout_value_is_dropped_outside_pool_lock() {
+        let pool = Pool::<usize, ReentrantTransport>::new(None);
+        let dropped = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let (tx, rx) = oneshot::channel();
+        let token = pool
+            .inner
+            .lock()
+            .unwrap()
+            .waiters
+            .entry(7)
+            .or_default()
+            .insert(tx);
+        let checkout = pool.checkout(7, (rx, token));
+        pool.inner.lock().unwrap().put(
+            7,
+            ReentrantTransport {
+                pool: Arc::downgrade(&pool.inner),
+                dropped: dropped.clone(),
+            },
+        );
+        drop(checkout);
+        assert!(!dropped.load(std::sync::atomic::Ordering::SeqCst));
+        // The unused connection is retained for reuse, and an eventual drop is
+        // still outside the lock even for a user-defined Poolable destructor.
+        let idle = pool.inner.lock().unwrap().idle.remove(&7);
+        drop(idle);
+        assert!(dropped.load(std::sync::atomic::Ordering::SeqCst));
     }
 }

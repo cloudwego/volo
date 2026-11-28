@@ -446,8 +446,6 @@ impl<S> Layer<S> for WithOptLayer {
 
 #[cfg(all(test, feature = "multipart"))]
 mod tests {
-    use std::future::Future;
-
     use http::header::CONTENT_TYPE;
     use motore::service::Service;
 
@@ -463,37 +461,31 @@ mod tests {
         type Response = Response;
         type Error = ClientError;
 
-        fn call(
-            &self,
-            _: &mut ClientContext,
-            req: Request,
-        ) -> impl Future<Output = Result<Self::Response>> + Send {
-            async move {
-                assert_eq!(req.method(), Method::POST);
-                assert_eq!(req.uri(), "/upload");
+        async fn call(&self, _: &mut ClientContext, req: Request) -> Result<Self::Response> {
+            assert_eq!(req.method(), Method::POST);
+            assert_eq!(req.uri(), "/upload");
 
-                let content_type = req
-                    .headers()
-                    .get(CONTENT_TYPE)
-                    .expect("multipart should set content-type")
-                    .to_str()
-                    .unwrap()
-                    .to_owned();
-                let boundary = content_type
-                    .strip_prefix("multipart/form-data; boundary=")
-                    .expect("content-type should include multipart boundary")
-                    .to_owned();
+            let content_type = req
+                .headers()
+                .get(CONTENT_TYPE)
+                .expect("multipart should set content-type")
+                .to_str()
+                .unwrap()
+                .to_owned();
+            let boundary = content_type
+                .strip_prefix("multipart/form-data; boundary=")
+                .expect("content-type should include multipart boundary")
+                .to_owned();
 
-                let (_, body) = req.into_parts();
-                let body = body.into_string().await.unwrap();
-                let expected = format!(
-                    "--{boundary}\r\nContent-Disposition: form-data; \
-                     name=\"field\"\r\n\r\nvalue\r\n--{boundary}--\r\n"
-                );
-                assert_eq!(body, expected);
+            let (_, body) = req.into_parts();
+            let body = body.into_string().await.unwrap();
+            let expected = format!(
+                "--{boundary}\r\nContent-Disposition: form-data; \
+                 name=\"field\"\r\n\r\nvalue\r\n--{boundary}--\r\n"
+            );
+            assert_eq!(body, expected);
 
-                Ok(Response::default())
-            }
+            Ok(Response::default())
         }
     }
 

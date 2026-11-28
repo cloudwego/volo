@@ -1,0 +1,3 @@
+syntax = "proto3";
+package boundary.common;
+message Value { string text = 1; }

@@ -14,7 +14,46 @@ use super::{
 
 #[derive(Clone, Debug, Default)]
 pub struct MetadataMap {
-    headers: http::HeaderMap,
+    headers: Headers,
+}
+
+// Ordinary calls keep HeaderMap inline. Managed request snapshots opt into
+// sharing; reads and clones then avoid cloning the header table, while mutations
+// detach with the same value semantics as the original MetadataMap.
+#[derive(Clone, Debug)]
+enum Headers {
+    Owned(http::HeaderMap),
+    Shared(std::sync::Arc<http::HeaderMap>),
+}
+impl Default for Headers {
+    fn default() -> Self {
+        Self::Owned(http::HeaderMap::new())
+    }
+}
+impl std::ops::Deref for Headers {
+    type Target = http::HeaderMap;
+    fn deref(&self) -> &Self::Target {
+        match self {
+            Self::Owned(headers) => headers,
+            Self::Shared(headers) => headers,
+        }
+    }
+}
+impl std::ops::DerefMut for Headers {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            Self::Owned(headers) => headers,
+            Self::Shared(headers) => std::sync::Arc::make_mut(headers),
+        }
+    }
+}
+impl Headers {
+    fn into_headers(self) -> http::HeaderMap {
+        match self {
+            Self::Owned(headers) => headers,
+            Self::Shared(headers) => std::sync::Arc::unwrap_or_clone(headers),
+        }
+    }
 }
 
 /// `MetadataMap` entry iterator.
@@ -210,7 +249,18 @@ impl MetadataMap {
 
     /// Convert an HTTP HeaderMap to a MetadataMap
     pub fn from_headers(headers: http::HeaderMap) -> Self {
-        Self { headers }
+        Self {
+            headers: Headers::Owned(headers),
+        }
+    }
+
+    pub(crate) fn snapshot(&mut self) -> Self {
+        if matches!(self.headers, Headers::Owned(_)) {
+            self.headers = Headers::Shared(std::sync::Arc::new(
+                std::mem::take(&mut self.headers).into_headers(),
+            ));
+        }
+        self.clone()
     }
 
     /// Convert a MetadataMap into a HTTP HeaderMap
@@ -227,14 +277,14 @@ impl MetadataMap {
     /// assert_eq!(http_map.get("x-host").unwrap(), "example.com");
     /// ```
     pub fn into_headers(self) -> http::HeaderMap {
-        self.headers
+        self.headers.into_headers()
     }
 
     pub(crate) fn into_sanitized_headers(mut self) -> http::HeaderMap {
         for r in &Self::GRPC_RESERVED_HEADERS {
             self.headers.remove(*r);
         }
-        self.headers
+        self.headers.into_headers()
     }
 
     /// Get a reference to the underlying HTTP HeaderMap
@@ -267,7 +317,7 @@ impl MetadataMap {
     /// ```
     pub fn with_capacity(capacity: usize) -> Self {
         Self {
-            headers: http::HeaderMap::with_capacity(capacity),
+            headers: Headers::Owned(http::HeaderMap::with_capacity(capacity)),
         }
     }
 
@@ -1232,7 +1282,7 @@ impl MetadataMap {
     }
 
     pub fn merge(&mut self, other: MetadataMap) {
-        self.headers.extend(other.headers);
+        self.headers.extend(other.headers.into_headers());
     }
 }
 
@@ -2461,6 +2511,20 @@ mod as_encoding_agnostic_metadata_key {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn shared_snapshots_detach_on_mutation_and_preserve_repeated_values() {
+        let mut original = MetadataMap::new();
+        original.append("key", "first".parse().unwrap());
+        original.append("key", "second".parse().unwrap());
+        let snapshot = original.snapshot();
+        assert!(std::ptr::eq(original.headers(), snapshot.headers()));
+        original.insert("key", "changed".parse().unwrap());
+        assert!(!std::ptr::eq(original.headers(), snapshot.headers()));
+        assert_eq!(snapshot.get_all("key").iter().count(), 2);
+        assert_eq!(original.get("key").unwrap(), "changed");
+        assert_eq!(snapshot.into_headers().get_all("key").iter().count(), 2);
+    }
 
     #[test]
     fn test_from_headers_takes_http_headers() {

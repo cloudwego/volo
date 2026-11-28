@@ -30,6 +30,23 @@ impl Builder<crate::grpc_backend::MkGrpcBackend, crate::parser::ProtobufParser> 
     }
 }
 
+impl Builder<crate::thrift_grpc_backend::MkThriftGrpcBackend, crate::parser::ThriftParser> {
+    /// Use the same workspace layout and Thrift data graph with gRPC services.
+    pub fn thrift_grpc() -> Self {
+        Self {
+            pilota_builder: pilota_build::Builder::thrift()
+                .with_backend(crate::thrift_grpc_backend::MkThriftGrpcBackend::default()),
+        }
+    }
+
+    pub fn thrift_grpc_options(mut self, options: crate::thrift_grpc_backend::Options) -> Self {
+        self.pilota_builder = self
+            .pilota_builder
+            .with_backend(crate::thrift_grpc_backend::MkThriftGrpcBackend(options));
+        self
+    }
+}
+
 impl WorkspaceConfig {
     pub fn update_repos(&mut self) -> anyhow::Result<()> {
         self.repos

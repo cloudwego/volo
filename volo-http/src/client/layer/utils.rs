@@ -129,10 +129,10 @@ where
         }
         // Since `Host` is one of the outermost layers, it cannot know that `Target` has been
         // modified here, so we need to manually update `Host` here.
-        if !req.headers().contains_key(header::HOST) {
-            if let Some(host) = super::header::gen_host(&self.target) {
-                req.headers_mut().insert(header::HOST, host);
-            }
+        if !req.headers().contains_key(header::HOST)
+            && let Some(host) = super::header::gen_host(&self.target)
+        {
+            req.headers_mut().insert(header::HOST, host);
         }
         self.inner.call(cx, req).await
     }

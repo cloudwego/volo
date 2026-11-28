@@ -100,6 +100,102 @@ pub struct CodegenOption {
     pub config: serde_yaml::Value,
 }
 
+/// Resolve one transport and shared-data policy for an entire Thrift entry.
+/// An omitted setting inherits the entry's explicit setting; two different
+/// explicit settings are rejected, including those on data-only includes.
+pub(crate) fn thrift_grpc_options(
+    services: &[Service],
+) -> anyhow::Result<Option<crate::thrift_grpc_backend::Options>> {
+    resolve_thrift_grpc_configs(
+        services
+            .iter()
+            .map(|service| &service.codegen_option.config),
+        false,
+    )
+}
+
+pub(crate) fn resolve_thrift_grpc_configs<'a>(
+    configs: impl IntoIterator<Item = &'a serde_yaml::Value>,
+    explicit_grpc_builder: bool,
+) -> anyhow::Result<Option<crate::thrift_grpc_backend::Options>> {
+    let configs: Vec<_> = configs.into_iter().collect();
+    let mut transport: Option<String> = None;
+    for config in &configs {
+        let Some(value) = config.get("rpc_transport") else {
+            continue;
+        };
+        let value = value
+            .as_str()
+            .ok_or_else(|| anyhow!("rpc_transport must be a string"))?;
+        if !matches!(value, "grpc" | "ttheader") {
+            anyhow::bail!("unsupported Thrift rpc_transport: {value}; expected grpc or ttheader");
+        }
+        if transport.as_deref().is_some_and(|old| old != value)
+            || (explicit_grpc_builder && value != "grpc")
+        {
+            anyhow::bail!("conflicting rpc_transport settings in the same Thrift generation entry");
+        }
+        transport = Some(value.to_owned());
+    }
+    // Existing plugins own arbitrary YAML config values, including scalars.
+    // Do not interpret new option names unless this entry explicitly uses gRPC.
+    if !explicit_grpc_builder && transport.as_deref() != Some("grpc") {
+        return Ok(None);
+    }
+    #[derive(Deserialize, Default)]
+    struct Config {
+        shared_types_module: Option<String>,
+        wire_package: Option<String>,
+        runtime_crate: Option<String>,
+        #[serde(default)]
+        wire_services: std::collections::BTreeMap<String, String>,
+    }
+    let mut options = crate::thrift_grpc_backend::Options::default();
+    for value in configs {
+        let config: Config = if value.is_mapping() {
+            serde_yaml::from_value(value.clone())?
+        } else {
+            Config::default()
+        };
+        for (target, source, name) in [
+            (
+                &mut options.shared_types_module,
+                config.shared_types_module,
+                "shared_types_module",
+            ),
+            (
+                &mut options.wire_package,
+                config.wire_package,
+                "wire_package",
+            ),
+            (
+                &mut options.runtime_crate,
+                config.runtime_crate,
+                "runtime_crate",
+            ),
+        ] {
+            if let Some(source) = source {
+                if target.as_ref().is_some_and(|old| old != &source) {
+                    anyhow::bail!(
+                        "conflicting {name} settings in the same Thrift generation entry"
+                    );
+                }
+                *target = Some(source);
+            }
+        }
+        for (key, value) in config.wire_services {
+            if options
+                .wire_services
+                .insert(key.clone(), value.clone())
+                .is_some_and(|old| old != value)
+            {
+                anyhow::bail!("conflicting wire service override for {key}");
+            }
+        }
+    }
+    Ok(Some(options))
+}
+
 impl CodegenOption {
     fn is_empty(&self) -> bool {
         self.crate_name.is_none()

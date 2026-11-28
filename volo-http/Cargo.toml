@@ -1,12 +1,12 @@
 [package]
 name = "volo-http"
-version = "0.5.7"
+version = "0.13.0"
 edition.workspace = true
 homepage.workspace = true
 repository.workspace = true
 license.workspace = true
 authors.workspace = true
-rust-version.workspace = true
+rust-version = "1.88.0"
 description = "HTTP framework implementation of volo."
 documentation = "https://docs.rs/volo-http"
 readme = "README.md"
@@ -19,7 +19,7 @@ keywords = ["async", "rpc", "http"]
 maintenance = { status = "actively-developed" }
 
 [dependencies]
-volo = { version = "0.12.2", path = "../volo" }
+volo = { version = "0.13.0", path = "../volo" }
 
 ahash.workspace = true
 bytes.workspace = true

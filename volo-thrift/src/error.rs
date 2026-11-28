@@ -18,6 +18,42 @@ pub enum ServerError {
     Biz(#[from] BizError),
 }
 
+impl From<volo::streaming::RpcError> for ServerError {
+    fn from(error: volo::streaming::RpcError) -> Self {
+        use volo::streaming::RpcError;
+        match error {
+            RpcError::Biz {
+                code,
+                message,
+                extra,
+            } => BizError::with_extra(
+                code,
+                message.into(),
+                extra
+                    .into_iter()
+                    .map(|(key, value)| (key.into(), value.into()))
+                    .collect(),
+            )
+            .into(),
+            RpcError::Application { kind, message } => {
+                ApplicationException::new(ApplicationExceptionKind::from_i32(kind), message).into()
+            }
+            error @ (RpcError::Protocol(_) | RpcError::ProtocolStatus { .. }) => {
+                ApplicationException::new(
+                    ApplicationExceptionKind::PROTOCOL_ERROR,
+                    error.to_string(),
+                )
+                .into()
+            }
+            error => ApplicationException::new(
+                ApplicationExceptionKind::INTERNAL_ERROR,
+                error.to_string(),
+            )
+            .into(),
+        }
+    }
+}
+
 impl From<anyhow::Error> for ServerError {
     fn from(e: anyhow::Error) -> Self {
         e.downcast::<ServerError>().unwrap_or_else(|e| {

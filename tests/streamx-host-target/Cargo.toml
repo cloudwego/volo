@@ -1,0 +1,25 @@
+[workspace]
+members = ["ordinary", "streamx"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+version = "0.0.0"
+publish = false
+
+[workspace.dependencies]
+pilota = "0.14.0"
+volo = { path = "../../volo" }
+volo-thrift = { path = "../../volo-thrift", features = ["ttstream"] }
+volo-grpc = { path = "../../volo-grpc", features = ["thrift"] }
+volo-streamx = { path = "../../volo-streamx" }
+volo-build = { path = "../../volo-build" }
+volo-streamx-build = { path = "../../volo-streamx-build" }
+
+[patch.crates-io]
+# Match the generator and runtime used by the parent workspace.
+pilota = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-build = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-thrift-fieldmask = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-thrift-parser = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }
+pilota-thrift-reflect = { git = "https://github.com/cloudwego/pilota.git", branch = "feat/ttheader-streaming-20261105" }

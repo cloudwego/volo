@@ -1,0 +1,7 @@
+syntax = "proto3";
+package boundary.api;
+import "common.proto";
+service Presence {
+  rpc Get(boundary.common.Value) returns (boundary.common.Value);
+  rpc Watch(boundary.common.Value) returns (stream boundary.common.Value);
+}

@@ -16,8 +16,9 @@ use tokio::sync::{OnceCell, RwLock};
 type SharedInitCell<V, E> = Arc<OnceCell<Result<Arc<V>, Arc<E>>>>;
 type SessionManagerCell = SharedInitCell<SessionManager<Connector>, io::Error>;
 
-pub(crate) static SESSION_MANAGERS: LazyLock<RwLock<HashMap<Address, SessionManagerCell>>> =
-    LazyLock::new(Default::default);
+pub(crate) static SESSION_MANAGERS: LazyLock<
+    RwLock<HashMap<(Address, &'static str), SessionManagerCell>>,
+> = LazyLock::new(Default::default);
 
 async fn get_or_insert_cell<K, V>(
     cells: &RwLock<HashMap<K, Arc<OnceCell<V>>>>,
@@ -268,18 +269,50 @@ impl UnaryService<Address> for ShmipcMakeTransport {
             ));
         }
 
-        let sm = get_or_try_init_shared(&SESSION_MANAGERS, addr.clone(), || async move {
-            let config = super::config::session_manager_config();
-            tracing::debug!("ShmipcMakeTransport: config: {config:?}");
-            SessionManager::new(config, Connector, addr)
-                .await
-                .map_err(Into::<io::Error>::into)
-        })
+        let namespace = super::config::SESSION_MANAGER_NAMESPACE
+            .try_get()
+            .unwrap_or_default();
+        let sm = get_or_try_init_shared(
+            &SESSION_MANAGERS,
+            (addr.clone(), namespace),
+            || async move {
+                let mut config = super::config::session_manager_config();
+                isolate_manager_paths(&mut config, namespace, &addr);
+                tracing::debug!("ShmipcMakeTransport: config: {config:?}");
+                SessionManager::new(config, Connector, addr)
+                    .await
+                    .map_err(Into::<io::Error>::into)
+            },
+        )
         .await
         .map_err(|err| io::Error::new(err.kind(), err.to_string()))?;
 
         sm.get_stream().map(super::Stream::new).map_err(Into::into)
     }
+}
+
+fn isolate_manager_paths(
+    config: &mut super::config::SessionManagerConfig,
+    namespace: &str,
+    addr: &Address,
+) {
+    if namespace.is_empty() {
+        return;
+    }
+    use std::{fmt::Write, hash::Hasher};
+    let mut suffix = String::from("_volo_");
+    for byte in namespace.as_bytes() {
+        write!(suffix, "{byte:02x}").expect("write string");
+    }
+    // Different endpoints use distinct SDK managers as well as distinct paths.
+    let mut hash = std::collections::hash_map::DefaultHasher::new();
+    addr.hash(&mut hash);
+    write!(suffix, "_{:016x}", hash.finish()).expect("write string");
+    config.config_mut().queue_path.push_str(&suffix);
+    config
+        .config_mut()
+        .share_memory_path_prefix
+        .push_str(&suffix);
 }
 
 #[cfg(test)]
@@ -289,6 +322,36 @@ mod tests {
     use tokio::sync::Barrier;
 
     use super::*;
+
+    #[test]
+    fn protocol_namespaces_isolate_both_sdk_paths() {
+        let addr: Address = "127.0.0.1:1"
+            .parse::<std::net::SocketAddr>()
+            .unwrap()
+            .into();
+        let mut unary = super::super::config::SessionManagerConfig::default();
+        let before = unary.config().clone();
+        isolate_manager_paths(&mut unary, "", &addr);
+        assert_eq!(unary.config().queue_path, before.queue_path);
+        let mut streaming = unary.clone();
+        isolate_manager_paths(&mut streaming, "tt/stream", &addr);
+        assert_ne!(streaming.config().queue_path, unary.config().queue_path);
+        assert_ne!(
+            streaming.config().share_memory_path_prefix,
+            unary.config().share_memory_path_prefix
+        );
+        assert!(!streaming.config().queue_path.ends_with("tt/stream"));
+        let mut other = unary.clone();
+        isolate_manager_paths(
+            &mut other,
+            "tt/stream",
+            &"127.0.0.1:2"
+                .parse::<std::net::SocketAddr>()
+                .unwrap()
+                .into(),
+        );
+        assert_ne!(streaming.config().queue_path, other.config().queue_path);
+    }
 
     #[tokio::test]
     async fn same_key_initialization_is_singleflight() {

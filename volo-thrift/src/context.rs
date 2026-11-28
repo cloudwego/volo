@@ -195,6 +195,7 @@ pub struct ClientCxInner {
 
 #[derive(Debug, Clone, Default)]
 pub struct ServerCxInner {
+    pub(crate) unframed: bool,
     pub seq_id: Option<i32>,
     pub req_msg_type: Option<TMessageType>,
     pub msg_type: Option<TMessageType>,
@@ -299,6 +300,9 @@ impl std::ops::DerefMut for ServerContext {
 }
 
 pub trait ThriftContext: volo::context::Context<Config = Config> + Send + 'static {
+    #[doc(hidden)]
+    fn set_unframed(&mut self) {}
+
     fn encode_conn_reset(&self) -> bool;
     fn set_conn_reset_by_ttheader(&mut self, reset: bool);
     fn handle_decoded_msg_ident(&mut self, ident: &TMessageIdentifier);
@@ -366,6 +370,10 @@ impl ThriftContext for ClientContext {
 }
 
 impl ThriftContext for ServerContext {
+    fn set_unframed(&mut self) {
+        self.unframed = true;
+    }
+
     #[inline]
     fn encode_conn_reset(&self) -> bool {
         self.transport.is_conn_reset()
@@ -420,16 +428,27 @@ const DEFAULT_READ_WRITE_TIMEOUT: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct Config {
+    pub(crate) unsafe_codec: Option<bool>,
     rpc_timeout: Option<Duration>,
     connect_timeout: Option<Duration>,
     read_write_timeout: Option<Duration>,
 }
 
 impl Config {
+    /// Whether to use the optional optimized Binary codec (off by default).
+    pub fn unsafe_codec(&self) -> bool {
+        cfg!(feature = "unsafe-codec") && self.unsafe_codec.unwrap_or(false)
+    }
+
+    pub fn set_unsafe_codec(&mut self, enabled: Option<bool>) {
+        self.unsafe_codec = enabled;
+    }
+
     #[inline]
     pub fn new() -> Self {
         Self {
             rpc_timeout: None,
+            unsafe_codec: None,
             connect_timeout: None,
             read_write_timeout: None,
         }
@@ -488,6 +507,9 @@ impl Config {
 
     #[inline]
     pub fn merge(&mut self, other: Self) {
+        if other.unsafe_codec.is_some() {
+            self.unsafe_codec = other.unsafe_codec;
+        }
         if let Some(t) = other.rpc_timeout {
             self.rpc_timeout = Some(t);
         }
@@ -503,6 +525,7 @@ impl Config {
 impl Reusable for Config {
     fn clear(&mut self) {
         self.rpc_timeout = None;
+        self.unsafe_codec = None;
         self.connect_timeout = None;
         self.read_write_timeout = None;
     }
@@ -510,6 +533,10 @@ impl Reusable for Config {
 
 impl ::volo::client::Apply<ClientContext> for CallOpt {
     type Error = crate::ClientError;
+
+    fn rpc_timeout(&self) -> Option<Duration> {
+        self.config.rpc_timeout()
+    }
 
     #[inline]
     fn apply(self, cx: &mut ClientContext) -> Result<(), Self::Error> {

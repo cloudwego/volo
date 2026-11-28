@@ -1,0 +1,9 @@
+syntax = "proto3";
+package streamx.presence;
+message Event { string text = 1; int32 sequence = 2; }
+service PresenceService {
+  rpc Get(Event) returns (Event);
+  rpc Upload(stream Event) returns (Event);
+  rpc Watch(Event) returns (stream Event);
+  rpc Talk(stream Event) returns (stream Event);
+}

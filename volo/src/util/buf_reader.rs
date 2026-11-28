@@ -110,6 +110,13 @@ impl<R: AsyncRead> BufReader<R> {
         }
     }
 
+    pub(crate) fn with_capacity_and_prefix(capacity: usize, inner: R, prefix: &[u8]) -> Self {
+        let mut reader = Self::with_capacity(capacity.max(prefix.len()), inner);
+        reader.buf[..prefix.len()].copy_from_slice(prefix);
+        reader.len = prefix.len();
+        reader
+    }
+
     /// Gets a reference to the underlying reader.
     ///
     /// It is inadvisable to directly read from the underlying reader.
